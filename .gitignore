@@ -1,0 +1,28 @@
+# Maven
+target/
+**/target/
+
+# IntelliJ
+.idea/
+*.iml
+out/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime data
+data/
+
+*.bkp
