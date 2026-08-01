@@ -24,9 +24,6 @@
 
     <modules>
         <module>identity-service</module>
-        <module>workspace-service</module>
-        <module>project-management-service</module>
-        <module>notification-worker</module>
 <!--        <module>api-gateway</module>-->
     </modules>
 

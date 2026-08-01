@@ -12,13 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-/**
- * Public authentication endpoints (no JWT required).
- *
- * POST /api/v1/auth/register  – Create a new user account
- * POST /api/v1/auth/login     – Authenticate and receive JWT tokens
- */
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
