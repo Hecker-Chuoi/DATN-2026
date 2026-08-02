@@ -65,11 +65,13 @@ public class KeycloakService {
      */
     public String createUser(String username, String password, String email,
                              String firstName, String lastName) {
+        // Init Object user of keycloak = userDetail
         UserRepresentation user = buildUserRepresentation(username, email, firstName, lastName);
-
+        // define what field is credential(password,...)
         CredentialRepresentation credential = buildPasswordCredential(password);
         user.setCredentials(Collections.singletonList(credential));
 
+        // call keycloak to create new user
         UsersResource usersResource = getRealmResource().users();
         try (Response response = usersResource.create(user)) {
             int status = response.getStatus();
@@ -100,6 +102,7 @@ public class KeycloakService {
      * @param roleNames      set of role names (e.g. "USER", "ADMIN")
      */
     public void assignRealmRoles(String keycloakUserId, Set<String> roleNames) {
+        // call keycloak to get created user
         RealmResource realmResource = getRealmResource();
         UserResource userResource = realmResource.users().get(keycloakUserId);
 

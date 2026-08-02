@@ -76,9 +76,6 @@ public class User {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // ──────────────────────────────────────────
-    // Enum
-    // ──────────────────────────────────────────
     public enum UserStatus {
         ACTIVE, INACTIVE, SUSPENDED
     }

@@ -79,6 +79,9 @@ public class SecurityConfig {
                 return converter;
         }
 
+        /*
+        cuz spring just read role which starting with 'SCOPE'
+         */
         @Bean
         public Converter<Jwt, Collection<GrantedAuthority>> keycloakGrantedAuthoritiesConverter() {
                 return jwt -> {
