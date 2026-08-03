@@ -24,7 +24,7 @@
 
     <modules>
         <module>identity-service</module>
-<!--        <module>api-gateway</module>-->
+        <module>api-gateway</module>
     </modules>
 
     <dependencyManagement>
