@@ -15,27 +15,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/**
- * Reactive JWT converter that extracts Keycloak realm roles from the JWT token.
- * <p>
- * Keycloak stores roles in the {@code realm_access.roles} claim, not in the
- * standard {@code scope} claim. This converter:
- * <ol>
- *   <li>Extracts default scope-based authorities (SCOPE_xxx)</li>
- *   <li>Extracts Keycloak realm roles from {@code realm_access.roles}</li>
- *   <li>Prefixes realm roles with "ROLE_" for Spring Security compatibility</li>
- *   <li>Filters out Keycloak internal roles (default-roles-*, offline_access, uma_authorization)</li>
- *   <li>Merges both sets into the authentication token</li>
- * </ol>
- * </p>
- * <p>
- * NOTE: Gateway only needs to know the JWT is valid. Role-based authorization
- * (e.g., {@code @PreAuthorize("hasRole('ADMIN')")}) is handled by each
- * downstream service independently.
- * </p>
- *
- * @see SecurityConfig
- */
 @Slf4j
 @Component
 public class KeycloakJwtConverter implements Converter<Jwt, Mono<AbstractAuthenticationToken>> {
@@ -46,14 +25,7 @@ public class KeycloakJwtConverter implements Converter<Jwt, Mono<AbstractAuthent
     private final JwtGrantedAuthoritiesConverter scopeConverter = new JwtGrantedAuthoritiesConverter();
 
     /**
-     * Converts a Keycloak-issued JWT into a reactive {@link AbstractAuthenticationToken}.
-     * <p>
-     * Combines standard scope authorities with Keycloak realm roles.
-     * The principal name is extracted from the JWT "sub" claim (Keycloak user UUID).
-     * </p>
-     *
-     * @param jwt the validated JWT token
-     * @return a {@link Mono} emitting the authentication token with merged authorities
+     * Converts a Keycloak-issued JWT into a reactiv
      */
     @Override
     public Mono<AbstractAuthenticationToken> convert(Jwt jwt) {
@@ -77,20 +49,6 @@ public class KeycloakJwtConverter implements Converter<Jwt, Mono<AbstractAuthent
     /**
      * Extracts roles from Keycloak's {@code realm_access.roles} JWT claim
      * and prefixes each with "ROLE_" for Spring Security's {@code hasRole()} support.
-     * <p>
-     * Example JWT claim:
-     * <pre>
-     * {
-     *   "realm_access": {
-     *     "roles": ["ADMIN", "USER", "default-roles-datn-realm", "offline_access"]
-     *   }
-     * }
-     * </pre>
-     * Result: [ROLE_ADMIN, ROLE_USER] (internal roles filtered out)
-     * </p>
-     *
-     * @param jwt the validated JWT token
-     * @return collection of granted authorities with ROLE_ prefix
      */
     @SuppressWarnings("unchecked")
     private Collection<GrantedAuthority> extractRealmRoles(Jwt jwt) {

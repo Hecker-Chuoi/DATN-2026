@@ -1,122 +1,91 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState } from 'react';
+import { tokenStore } from './api.js';
+import LoginPage from './pages/LoginPage.jsx';
+import RegisterPage from './pages/RegisterPage.jsx';
+import UsersPage from './pages/UsersPage.jsx';
+import GoogleCallback from './pages/GoogleCallback.jsx';
+import './App.css';
 
+/**
+ * App – simple pathname-based routing (no react-router-dom dependency).
+ *
+ * Routes:
+ *   /auth/callback  → GoogleCallback  (Keycloak redirects here after Google login)
+ *   /               → LoginPage       (if not authenticated)
+ *   /               → UsersPage       (if authenticated)
+ *   register view   → RegisterPage    (toggled via state)
+ */
 function App() {
-  const [count, setCount] = useState(0)
+  const [user, setUser] = useState(() => {
+    // Restore session if token exists in sessionStorage
+    const token = tokenStore.get();
+    return token ? { accessToken: token, username: 'User' } : null;
+  });
+  const [view, setView] = useState('login'); // 'login' | 'register'
 
+  const handleLoginSuccess = (userData) => {
+    setUser(userData);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authApi.logout();
+    } catch (err) {
+      console.warn('Backend logout failed or was already cleared:', err);
+    }
+    tokenStore.clear();
+    setUser(null);
+    setView('login');
+    // Clear ?code=... from URL if we came from Google callback
+    window.history.replaceState({}, '', '/');
+  };
+
+  // ── Route: /auth/callback (Google OAuth2 redirect target) ────────
+  if (window.location.pathname === '/auth/callback') {
+    if (user) {
+      // Already authenticated (e.g. page refresh after callback) – skip callback
+      window.history.replaceState({}, '', '/');
+    } else {
+      return (
+        <GoogleCallback
+          onLoginSuccess={(userData) => {
+            handleLoginSuccess(userData);
+            // Clean the ?code=... from URL after successful login
+            window.history.replaceState({}, '', '/');
+          }}
+        />
+      );
+    }
+  }
+
+  // ── Route: / (authenticated) ───────────────────────────────────────
+  if (user) {
+    return (
+      <UsersPage
+        currentUser={user}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // ── Route: /register ─────────────────────────────────────────────
+  if (view === 'register') {
+    return (
+      <RegisterPage
+        onRegisterSuccess={() => setView('login')}
+        onGoLogin={() => setView('login')}
+      />
+    );
+  }
+
+  // ── Route: / (unauthenticated) ───────────────────────────────────
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <LoginPage
+      onLoginSuccess={handleLoginSuccess}
+      onGoRegister={() => setView('register')}
+    />
+  );
 }
 
-export default App
+export default App;
+

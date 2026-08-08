@@ -19,10 +19,6 @@ public class LoggingFilter implements GlobalFilter, Ordered {
 
     /**
      * Logs request details on entry and response details on exit.
-     *
-     * @param exchange the current server exchange
-     * @param chain    the gateway filter chain
-     * @return a {@link Mono} to indicate when request processing is complete
      */
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -59,13 +55,6 @@ public class LoggingFilter implements GlobalFilter, Ordered {
 
     /**
      * Extracts the client IP address from the request.
-     * <p>
-     * Checks the {@code X-Forwarded-For} header first (for proxied requests),
-     * then falls back to the remote address from the connection.
-     * </p>
-     *
-     * @param request the incoming HTTP request
-     * @return client IP address string, or "UNKNOWN" if not determinable
      */
     private String extractClientIp(ServerHttpRequest request) {
         // Check X-Forwarded-For header (set by reverse proxies like Nginx)
@@ -87,8 +76,6 @@ public class LoggingFilter implements GlobalFilter, Ordered {
     /**
      * Runs after CorrelationIdFilter (HIGHEST_PRECEDENCE)
      * so that the Correlation ID is already available.
-     *
-     * @return {@link Ordered#HIGHEST_PRECEDENCE} + 1
      */
     @Override
     public int getOrder() {

@@ -10,11 +10,6 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * User entity synchronized with Keycloak.
- * The backend database stores user profile information alongside
- * the Keycloak user ID for cross-referencing.
- */
 @Entity
 @Table(name = "users",
         uniqueConstraints = {

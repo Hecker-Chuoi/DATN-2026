@@ -20,39 +20,13 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-/**
- * Global exception handler for the API Gateway.
- * <p>
- * Intercepts all unhandled exceptions at the gateway level and returns
- * a consistent JSON error response. This replaces the default Whitelabel
- * error page and ensures the client always receives structured JSON.
- * </p>
- * <p>
- * Handles the following error scenarios:
- * <ul>
- *   <li><b>401 Unauthorized</b> — Missing/invalid/expired JWT token</li>
- *   <li><b>403 Forbidden</b> — Valid JWT but insufficient permissions</li>
- *   <li><b>5xx errors</b> — Downstream service unavailable or internal errors</li>
- * </ul>
- * </p>
- * <p>
- * NOTE: This is a reactive {@link ErrorWebExceptionHandler}, NOT a
- * {@code @RestControllerAdvice} (which is Spring MVC only).
- * The {@code @Order(-1)} ensures this handler runs BEFORE the default
- * Spring Boot error handler.
- * </p>
- */
 @Slf4j
 @Component
-@Order(-1) // Run before DefaultErrorWebExceptionHandler
+@Order(-1)
 public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
 
     private final ObjectMapper objectMapper;
 
-    /**
-     * Constructor injection with pre-configured ObjectMapper.
-     * Registers JavaTimeModule for LocalDateTime serialization.
-     */
     public GlobalExceptionHandler() {
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
@@ -60,14 +34,6 @@ public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
 
     /**
      * Handles all exceptions thrown during request processing.
-     * <p>
-     * Determines the appropriate HTTP status and message based on the
-     * exception type, then writes a JSON {@link ErrorResponse} to the response body.
-     * </p>
-     *
-     * @param exchange the current server exchange
-     * @param ex       the exception that occurred
-     * @return a {@link Mono} that completes when the response is written
      */
     @Override
     public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {

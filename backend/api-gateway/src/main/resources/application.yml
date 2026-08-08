@@ -1,9 +1,5 @@
-# ═══════════════════════════════════════════════════════════════
-# API Gateway Configuration
-# ═══════════════════════════════════════════════════════════════
-
 server:
-  port: 8080
+  port: 8081
 
 spring:
   application:
@@ -15,7 +11,7 @@ spring:
         - id: identity-service
           uri: http://localhost:8082
           predicates:
-            - Path=/api/identity/**
+            - Path=/identity/**
           filters:
             - StripPrefix=1
 

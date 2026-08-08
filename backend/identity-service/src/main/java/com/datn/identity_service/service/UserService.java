@@ -16,14 +16,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Orchestrates user registration, profile retrieval, and admin role management.
- * Acts as the bridge between Keycloak and the backend database (datn_main_db).
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -34,9 +31,6 @@ public class UserService {
     private final UserRepository userRepository;
     private final KeycloakService keycloakService;
 
-    // ──────────────────────────────────────────────────────────────
-    // Registration
-    // ──────────────────────────────────────────────────────────────
 
     /**
      * Registers a new user:
@@ -44,9 +38,6 @@ public class UserService {
      * 2. Create user in Keycloak
      * 3. Assign default role 'USER' in Keycloak
      * 4. Persist user entity in the local database
-     *
-     * @param request registration details
-     * @return saved {@link UserResponse}
      */
     @Transactional
     public UserResponse register(RegisterRequest request) {
@@ -68,7 +59,7 @@ public class UserService {
         );
 
         // 3. Assign default realm role 'USER' in Keycloak
-        keycloakService.assignRealmRoles(keycloakId, DEFAULT_ROLES);
+        keycloakService.assignRealmRoles(keycloakId, Set.of("ADMIN")); //DEFAULT_ROLES
 
         // 4. Persist to local DB
         User user = User.builder()
@@ -87,16 +78,56 @@ public class UserService {
         return UserResponse.from(user);
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // Current User Profile
-    // ──────────────────────────────────────────────────────────────
+    /**
+     * Finds an existing user by Keycloak ID, or creates a new one if first-time Google login.
+     */
+    @Transactional
+    public UserResponse findOrCreateGoogleUser(Map<String, Object> userInfo) {
+        String keycloakId      = (String) userInfo.get("sub");
+        String email           = (String) userInfo.get("email");
+        String givenName       = (String) userInfo.getOrDefault("given_name", "");
+        String familyName      = (String) userInfo.getOrDefault("family_name", "");
+        String preferredUser   = (String) userInfo.getOrDefault("preferred_username", email);
+
+        // 1. Check if user already exists by Keycloak ID (return existing)
+        return userRepository.findByKeycloakId(keycloakId)
+                .map(existingUser -> {
+                    log.debug("Google login: found existing user '{}'", existingUser.getUsername());
+                    return UserResponse.from(existingUser);
+                })
+                .orElseGet(() -> {
+                    // 2. New user: check email uniqueness to avoid conflicts
+                    if (userRepository.existsByEmail(email)) {
+                        // Edge case: email exists under a different keycloakId (manual + Google account)
+                        // Link by email – update the keycloakId
+                        User existingByEmail = userRepository.findByEmail(email)
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+                        log.info("Google login: linking Google account to existing email '{}'", email);
+                        existingByEmail.setKeycloakId(keycloakId);
+                        return UserResponse.from(userRepository.save(existingByEmail));
+                    }
+
+                    // 3. Brand new user – persist to local DB
+                    User newUser = User.builder()
+                            .keycloakId(keycloakId)
+                            .username(preferredUser)
+                            .email(email)
+                            .firstName(givenName)
+                            .lastName(familyName)
+                            .roles(Set.copyOf(DEFAULT_ROLES))
+                            .status(User.UserStatus.ACTIVE)
+                            .build();
+
+                    newUser = userRepository.save(newUser);
+                    log.info("Google login: created new user '{}' (keycloakId='{}')",
+                            newUser.getUsername(), keycloakId);
+                    return UserResponse.from(newUser);
+                });
+    }
+
 
     /**
-     * Returns the profile of the currently authenticated user.
-     * The Keycloak JWT `sub` claim holds the Keycloak user ID.
-     *
-     * @param principal the Spring Security principal (JwtAuthenticationToken)
-     * @return {@link UserResponse}
+     * Returns the profile of the currently authenticated user
      */
     public UserResponse getCurrentUser(Principal principal) {
         String keycloakId = extractKeycloakId(principal);
@@ -107,9 +138,6 @@ public class UserService {
         return UserResponse.from(user);
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // Admin Operations
-    // ──────────────────────────────────────────────────────────────
 
     /**
      * Returns all users from the local database.
@@ -125,10 +153,6 @@ public class UserService {
      * Updates RBAC roles for a user:
      * 1. Update roles in Keycloak realm
      * 2. Update roles in local database
-     *
-     * @param userId  local DB user UUID
-     * @param request new set of roles
-     * @return updated {@link UserResponse}
      */
     @Transactional
     public UserResponse updateUserRoles(UUID userId, UpdateRolesRequest request) {
@@ -146,9 +170,6 @@ public class UserService {
         return UserResponse.from(user);
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // Helpers
-    // ──────────────────────────────────────────────────────────────
 
     private String extractKeycloakId(Principal principal) {
         if (principal instanceof JwtAuthenticationToken jwtToken) {

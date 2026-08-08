@@ -8,34 +8,11 @@ import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
-/**
- * Centralized CORS configuration for the API Gateway.
- * <p>
- * This configuration works alongside the CORS settings defined in
- * {@code application.yml} under {@code spring.cloud.gateway.globalcors}.
- * The {@link CorsWebFilter} bean ensures CORS headers are applied
- * consistently, including for error responses and preflight (OPTIONS) requests.
- * </p>
- * <p>
- * By handling CORS at the Gateway level, downstream services do NOT need
- * to configure CORS individually, avoiding duplication and potential conflicts.
- * </p>
- */
 @Configuration
 public class CorsConfig {
 
     /**
      * Creates a reactive CORS filter that applies CORS headers to all routes.
-     * <p>
-     * This filter handles:
-     * <ul>
-     *   <li>Preflight OPTIONS requests</li>
-     *   <li>Actual CORS requests with proper headers</li>
-     *   <li>Credential support (cookies, Authorization header)</li>
-     * </ul>
-     * </p>
-     *
-     * @return configured {@link CorsWebFilter}
      */
     @Bean
     public CorsWebFilter corsWebFilter() {
@@ -43,8 +20,8 @@ public class CorsConfig {
 
         // Allowed origins — frontend development servers
         corsConfig.setAllowedOrigins(List.of(
-                "http://localhost:3000",    // React / Next.js default
-                "http://localhost:5173"     // Vite default
+                "http://localhost:3000",
+                "http://localhost:5173"
         ));
 
         // Allowed HTTP methods

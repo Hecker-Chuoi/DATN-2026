@@ -7,11 +7,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Keycloak Admin Client configuration.
- * Provides a {@link Keycloak} bean to interact with Keycloak's Admin REST API
- * (create users, assign roles, manage realm, etc.)
- */
 @Configuration
 public class KeycloakConfig {
 

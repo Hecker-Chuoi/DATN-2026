@@ -8,9 +8,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-/**
- * Unified error response DTO for the API Gateway.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -28,14 +25,6 @@ public class ErrorResponse {
 
     private LocalDateTime timestamp;
 
-    /**
-     * Factory method to create a standardized error response.
-     *
-     * @param status  HTTP status code
-     * @param message error message
-     * @param path    request path
-     * @return constructed {@link ErrorResponse}
-     */
     public static ErrorResponse of(int status, String message, String path) {
         return ErrorResponse.builder()
                 .success(false)

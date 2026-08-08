@@ -9,30 +9,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-/**
- * Global filter that tracks request processing time.
- * <p>
- * This filter records the start time of each request as an exchange attribute.
- * Other filters (e.g., {@link LoggingFilter}) can use this attribute to
- * calculate and log the total execution time.
- * </p>
- *
- * <h3>How it works:</h3>
- * <ol>
- *   <li><b>Pre-filter:</b> Stores {@code System.currentTimeMillis()} in exchange attributes</li>
- *   <li><b>Post-filter:</b> Calculates and logs the elapsed time. Also logs a WARNING
- *       if the request takes longer than the configured threshold (default: 3000ms)</li>
- * </ol>
- *
- * <h3>Order:</h3>
- * <p>
- * Runs after {@link CorrelationIdFilter} and {@link LoggingFilter}
- * (order = HIGHEST_PRECEDENCE + 2). The start time is stored early in the chain,
- * and the post-filter calculation happens after the response is received.
- * </p>
- *
- * @see GatewayConstant#REQUEST_START_TIME_ATTR
- */
 @Slf4j
 @Component
 public class RequestTimeFilter implements GlobalFilter, Ordered {
@@ -42,10 +18,6 @@ public class RequestTimeFilter implements GlobalFilter, Ordered {
 
     /**
      * Records request start time and logs slow requests.
-     *
-     * @param exchange the current server exchange
-     * @param chain    the gateway filter chain
-     * @return a {@link Mono} to indicate when request processing is complete
      */
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -81,8 +53,6 @@ public class RequestTimeFilter implements GlobalFilter, Ordered {
 
     /**
      * Runs after CorrelationIdFilter and LoggingFilter.
-     *
-     * @return {@link Ordered#HIGHEST_PRECEDENCE} + 2
      */
     @Override
     public int getOrder() {

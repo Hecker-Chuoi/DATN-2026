@@ -22,13 +22,6 @@ import java.util.stream.Stream;
 
 /**
  * Spring Security configuration.
- * <p>
- * - Stateless (JWT-only, no HTTP sessions)
- * - OAuth2 Resource Server validating Keycloak-issued JWT tokens
- * - Custom JWT converter extracting Keycloak realm_access + resource_access
- * roles
- * - Method-level security enabled (@PreAuthorize / @Secured / @RolesAllowed)
- * </p>
  */
 @Configuration
 @EnableWebSecurity
@@ -101,8 +94,6 @@ public class SecurityConfig {
 
         /**
          * Extract roles from Keycloak JWT claim:
-         * {@code "realm_access": { "roles": ["ADMIN", "USER"] }}
-         * and prefix each with "ROLE_".
          */
         @SuppressWarnings("unchecked")
         private Collection<GrantedAuthority> extractRealmRoles(Jwt jwt) {

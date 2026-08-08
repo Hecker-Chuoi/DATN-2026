@@ -14,27 +14,12 @@ import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * User-facing and admin endpoints (JWT required).
- *
- * GET /api/v1/users/me                    – Get current user's profile  (USER or ADMIN)
- * GET /api/v1/admin/users                 – List all users               (ADMIN only)
- * PUT /api/v1/admin/users/{id}/roles      – Update user roles            (ADMIN only)
- */
 @RestController
 @RequiredArgsConstructor
 public class UserController {
 
     private final UserService userService;
 
-    // ──────────────────────────────────────────────────────────────
-    // User endpoints
-    // ──────────────────────────────────────────────────────────────
-
-    /**
-     * Returns the profile of the currently authenticated user.
-     * Accessible by any authenticated user (USER or ADMIN role).
-     */
     @GetMapping("/api/v1/users/me")
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     public ResponseEntity<ApiResponse<UserResponse>> getMyProfile(Principal principal) {
@@ -42,14 +27,7 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(user));
     }
 
-    // ──────────────────────────────────────────────────────────────
-    // Admin endpoints
-    // ──────────────────────────────────────────────────────────────
 
-    /**
-     * Lists all registered users.
-     * Restricted to ADMIN role only.
-     */
     @GetMapping("/api/v1/admin/users")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
@@ -57,18 +35,10 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(users, "Users retrieved successfully"));
     }
 
-    /**
-     * Assigns / replaces the roles for a specific user.
-     * Restricted to ADMIN role only.
-     * Updates roles both in Keycloak (realm roles) and in the local database.
-     *
-     * @param id      local database UUID of the user
-     * @param request new set of roles
-     */
     @PutMapping("/api/v1/admin/users/{id}/roles")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserResponse>> updateUserRoles(
-            @PathVariable UUID id,
+            @PathVariable("id") UUID id,
             @Valid @RequestBody UpdateRolesRequest request) {
 
         UserResponse updatedUser = userService.updateUserRoles(id, request);

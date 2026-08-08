@@ -30,7 +30,7 @@ spring:
           jwk-set-uri: http://localhost:8088/realms/datn-realm/protocol/openid-connect/certs
           issuer-uri: http://localhost:8088/realms/datn-realm
 
-# ─── Keycloak Admin Client ───────────────────────────────
+# ─── Keycloak Admin Client ──────────────────────────────────────────────
 keycloak:
   server-url: http://localhost:8088
   realm: datn-realm
@@ -40,3 +40,8 @@ keycloak:
     client-id: admin-cli
     # Admin master realm credentials for keycloak-admin-client
     realm: master
+  # ── Client credentials for Authorization Code exchange (Google login) ──
+  # Lấy từ: Keycloak Admin → datn-realm → Clients → datn-backend → Credentials
+  client:
+    client-id: datn-backend
+    client-secret: aHyLbQ4knDq8VdIr5lWZV6i1fOhIK41X
