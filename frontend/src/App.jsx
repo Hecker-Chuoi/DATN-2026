@@ -1,91 +1,89 @@
-import { useState } from 'react';
-import { tokenStore } from './api.js';
+import React, { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { tokenStore, authApi } from './api.js';
+
+import LandingPage from './pages/LandingPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
-import UsersPage from './pages/UsersPage.jsx';
+import AdminDashboard from './pages/AdminDashboard.jsx';
 import GoogleCallback from './pages/GoogleCallback.jsx';
-import './App.css';
 
-/**
- * App – simple pathname-based routing (no react-router-dom dependency).
- *
- * Routes:
- *   /auth/callback  → GoogleCallback  (Keycloak redirects here after Google login)
- *   /               → LoginPage       (if not authenticated)
- *   /               → UsersPage       (if authenticated)
- *   register view   → RegisterPage    (toggled via state)
- */
 function App() {
-  const [user, setUser] = useState(() => {
-    // Restore session if token exists in sessionStorage
-    const token = tokenStore.get();
-    return token ? { accessToken: token, username: 'User' } : null;
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return !!tokenStore.get();
   });
-  const [view, setView] = useState('login'); // 'login' | 'register'
 
-  const handleLoginSuccess = (userData) => {
-    setUser(userData);
+  const handleLoginSuccess = () => {
+    setIsAuthenticated(true);
   };
 
   const handleLogout = async () => {
     try {
       await authApi.logout();
     } catch (err) {
-      console.warn('Backend logout failed or was already cleared:', err);
+      console.warn('Backend logout failed or session already cleared:', err);
     }
     tokenStore.clear();
-    setUser(null);
-    setView('login');
-    // Clear ?code=... from URL if we came from Google callback
-    window.history.replaceState({}, '', '/');
+    setIsAuthenticated(false);
+
+    // Perform Keycloak SSO logout to clear KEYCLOAK_IDENTITY cookie in browser
+    const keycloakLogoutUrl = `http://localhost:8088/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/admin/login')}`;
+    window.location.href = keycloakLogoutUrl;
   };
 
-  // ── Route: /auth/callback (Google OAuth2 redirect target) ────────
-  if (window.location.pathname === '/auth/callback') {
-    if (user) {
-      // Already authenticated (e.g. page refresh after callback) – skip callback
-      window.history.replaceState({}, '', '/');
-    } else {
-      return (
-        <GoogleCallback
-          onLoginSuccess={(userData) => {
-            handleLoginSuccess(userData);
-            // Clean the ?code=... from URL after successful login
-            window.history.replaceState({}, '', '/');
-          }}
-        />
-      );
-    }
-  }
-
-  // ── Route: / (authenticated) ───────────────────────────────────────
-  if (user) {
-    return (
-      <UsersPage
-        currentUser={user}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  // ── Route: /register ─────────────────────────────────────────────
-  if (view === 'register') {
-    return (
-      <RegisterPage
-        onRegisterSuccess={() => setView('login')}
-        onGoLogin={() => setView('login')}
-      />
-    );
-  }
-
-  // ── Route: / (unauthenticated) ───────────────────────────────────
   return (
-    <LoginPage
-      onLoginSuccess={handleLoginSuccess}
-      onGoRegister={() => setView('register')}
-    />
+    <BrowserRouter>
+      <Routes>
+        {/* Route / : Demo Landing Page */}
+        <Route path="/" element={<LandingPage />} />
+
+        {/* Route /admin : Admin Portal Dashboard (Protected) */}
+        <Route
+          path="/admin"
+          element={
+            isAuthenticated ? (
+              <AdminDashboard onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/admin/login" replace />
+            )
+          }
+        />
+
+        {/* Route /admin/login : Login Page */}
+        <Route
+          path="/admin/login"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/admin" replace />
+            ) : (
+              <LoginPage onLoginSuccess={handleLoginSuccess} />
+            )
+          }
+        />
+
+        {/* Route /admin/register : Register Page */}
+        <Route
+          path="/admin/register"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/admin" replace />
+            ) : (
+              <RegisterPage />
+            )
+          }
+        />
+
+        {/* Route /auth/callback : Google OAuth2 Redirect Target */}
+        <Route
+          path="/auth/callback"
+          element={<GoogleCallback onLoginSuccess={handleLoginSuccess} />}
+        />
+
+        {/* Fallback to Home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
 export default App;
-

@@ -37,6 +37,9 @@ public class KeycloakService {
     @Value("${keycloak.server-url}")
     private String serverUrl;
 
+    @Value("${keycloak.public-url:${keycloak.server-url}}")
+    private String publicUrl;
+
     @Value("${keycloak.realm}")
     private String realm;
 
@@ -192,12 +195,13 @@ public class KeycloakService {
             throw new KeycloakException("Invalid redirect URI: " + redirectUri);
         }
 
-        return serverUrl + "/realms/" + realm + "/protocol/openid-connect/auth"
+        return publicUrl + "/realms/" + realm + "/protocol/openid-connect/auth"
                 + "?client_id=" + clientId
                 + "&response_type=code"
                 + "&scope=openid+profile+email"
                 + "&redirect_uri=" + encodedRedirectUri
-                + "&kc_idp_hint=google"; // bypass Keycloak login page, go straight to Google
+                + "&kc_idp_hint=google"
+                + "&prompt=select_account"; // Force Google to present account chooser screen
     }
 
     /**

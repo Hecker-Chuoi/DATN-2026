@@ -127,4 +127,15 @@ export const userApi = {
    * Returns ApiResponse<UserResponse>
    */
   me: () => request('/identity/api/v1/users/me'),
+
+  /**
+   * PUT /identity/api/v1/admin/users/{id}/roles (ADMIN role required)
+   * Body: { roles: ["ADMIN", "USER"] }
+   * Returns ApiResponse<UserResponse>
+   */
+  updateRoles: (id, roles) =>
+    request(`/identity/api/v1/admin/users/${id}/roles`, {
+      method: 'PUT',
+      body: JSON.stringify({ roles }),
+    }),
 };
