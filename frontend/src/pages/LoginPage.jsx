@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authApi } from '../api';
+import { authApi, tokenStore } from '../api';
 import { User, Key, Building2, LogIn, ArrowRight, ShieldCheck, Activity, Award } from 'lucide-react';
 
 export default function LoginPage({ onLoginSuccess }) {
@@ -29,7 +29,11 @@ export default function LoginPage({ onLoginSuccess }) {
     setError(null);
 
     try {
-      await authApi.login(form.username, form.password);
+      const res = await authApi.login(form.username, form.password);
+      const accessToken = res?.data?.access_token;
+      if (accessToken) {
+        tokenStore.set(accessToken);
+      }
       if (onLoginSuccess) onLoginSuccess();
       navigate('/admin');
     } catch (err) {

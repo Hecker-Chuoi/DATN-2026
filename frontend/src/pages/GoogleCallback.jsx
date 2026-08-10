@@ -27,7 +27,7 @@ export default function GoogleCallback({ onLoginSuccess }) {
     authApi
       .googleCallback(code, REDIRECT_URI)
       .then((res) => {
-        const { access_token: accessToken } = res.data;
+        const accessToken = res?.data?.access_token;
         if (accessToken) {
           tokenStore.set(accessToken);
         }
