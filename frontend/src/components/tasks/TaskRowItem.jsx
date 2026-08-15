@@ -9,7 +9,8 @@ import {
   Clock,
   User,
   Plus,
-  Trash2
+  Trash2,
+  Calendar
 } from 'lucide-react';
 
 export default function TaskRowItem({
@@ -17,6 +18,7 @@ export default function TaskRowItem({
   onStatusChange,
   onDelete,
   onAddSubtask,
+  onTaskClick,
   isExpanded,
   onToggleExpand,
   level = 0,
@@ -109,6 +111,7 @@ export default function TaskRowItem({
 
         {/* Task Code */}
         <span
+          onClick={() => onTaskClick && onTaskClick(task.id)}
           style={{
             fontSize: 12,
             fontWeight: 700,
@@ -118,6 +121,7 @@ export default function TaskRowItem({
             borderRadius: 4,
             border: '1px solid #DBEAFE',
             flexShrink: 0,
+            cursor: 'pointer',
           }}
         >
           {task.code}
@@ -125,6 +129,7 @@ export default function TaskRowItem({
 
         {/* Task Title */}
         <span
+          onClick={() => onTaskClick && onTaskClick(task.id)}
           style={{
             color: task.status === 'DONE' ? '#94A3B8' : '#0F172A',
             fontWeight: 500,
@@ -132,6 +137,7 @@ export default function TaskRowItem({
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
+            cursor: 'pointer',
           }}
         >
           {task.title}
@@ -218,6 +224,27 @@ export default function TaskRowItem({
           <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, color: '#64748B' }}>
             <Clock size={12} />
             <span>{task.estimate}h</span>
+          </span>
+        )}
+
+        {/* Due Date Badge */}
+        {task.dueDate && (
+          <span
+            title={`Hạn chót: ${new Date(task.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 11,
+              fontWeight: 600,
+              color: new Date(task.dueDate) < new Date() && task.status !== 'DONE' ? '#DC2626' : '#2563EB',
+              backgroundColor: new Date(task.dueDate) < new Date() && task.status !== 'DONE' ? '#FEF2F2' : '#EFF6FF',
+              padding: '2px 6px',
+              borderRadius: 4,
+            }}
+          >
+            <Calendar size={11} />
+            {new Date(task.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
           </span>
         )}
 

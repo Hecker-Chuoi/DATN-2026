@@ -122,7 +122,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         <NavItem
           to="/my-issues"
           icon={<CheckCircle2 size={17} color="#10B981" />}
-          label="My issues"
+          label="My tasks"
           active={location.pathname === '/my-issues'}
         />
       </div>

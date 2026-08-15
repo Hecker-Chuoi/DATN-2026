@@ -15,6 +15,9 @@ import {
   User,
   Layers,
   Calendar,
+  AlertTriangle,
+  AlertCircle,
+  Flame,
   Smile
 } from 'lucide-react';
 
@@ -54,6 +57,7 @@ export default function TaskBoardView({
   onStatusChange,
   onOpenCreateTask,
   onDeleteTask,
+  onTaskClick,
 }) {
   const [hiddenCols, setHiddenCols] = useState({});
 
@@ -75,13 +79,76 @@ export default function TaskBoardView({
     }
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return null;
+  const getTaskUrgency = (task) => {
+    if (!task.dueDate) return { type: 'NONE' };
+
+    // Chỉ áp dụng cảnh báo background cho TODO và IN_PROGRESS
+    if (task.status === 'DONE' || task.status === 'CANCELLED') {
+      const d = new Date(task.dueDate);
+      return {
+        type: 'COMPLETED',
+        text: d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        cardBg: '#FFFFFF',
+        cardBorder: '#E2E8F0',
+        badgeColor: '#64748B',
+        badgeBg: '#F1F5F9',
+        badgeBorder: '#E2E8F0',
+        title: `Hạn chót: ${d.toLocaleDateString('vi-VN')}`,
+      };
+    }
+
     try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('vi-VN', { month: 'short', year: 'numeric' });
+      const due = new Date(task.dueDate);
+      const now = new Date();
+      const diffHours = (due.getTime() - now.getTime()) / (1000 * 60 * 60);
+      const formatted = due.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+      if (diffHours < 0) {
+        // 1. ĐÃ HẾT HẠN (Overdue) -> Background đỏ hồng rất nhẹ
+        return {
+          type: 'OVERDUE',
+          text: formatted,
+          cardBg: '#FFF1F2',
+          cardBorder: '#FDA4AF',
+          cardShadow: '0 2px 6px rgba(225, 29, 72, 0.08)',
+          badgeColor: '#BE123C',
+          badgeBg: '#FFE4E6',
+          badgeBorder: '#FDA4AF',
+          title: `⚠️ Đã hết hạn: ${formatted}`,
+          isOverdue: true,
+        };
+      } else if (diffHours <= 48) {
+        // 2. SẮP HẾT HẠN (trong 48h) -> Background cam cảnh báo nhẹ, icon warning animation
+        return {
+          type: 'DUE_SOON',
+          text: formatted,
+          cardBg: '#FFFBEB',
+          cardBorder: '#FCD34D',
+          cardShadow: '0 3px 8px rgba(217, 119, 6, 0.12)',
+          badgeColor: '#B45309',
+          badgeBg: '#FEF3C7',
+          badgeBorder: '#FCD34D',
+          title: `🔥 CẢNH BÁO: Sắp hết hạn trong ${Math.round(diffHours)}h (${formatted})!`,
+          isDueSoon: true,
+          hoursLeft: Math.round(diffHours),
+        };
+      } else {
+        // 3. CÒN HẠN BÌNH THƯỜNG (> 48h)
+        return {
+          type: 'ON_TRACK',
+          text: formatted,
+          cardBg: '#FFFFFF',
+          cardBorder: '#E2E8F0',
+          cardShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+          badgeColor: '#16A34A',
+          badgeBg: '#F0FDF4',
+          badgeBorder: '#DCFCE7',
+          title: `Hạn chót: ${formatted}`,
+          isOnTrack: true,
+        };
+      }
     } catch {
-      return dateStr;
+      return { type: 'NONE' };
     }
   };
 
@@ -187,26 +254,28 @@ export default function TaskBoardView({
               ) : (
                 colTasks.map((task) => {
                   const pStyle = getPriorityStyle(task.priority);
+                  const urgency = getTaskUrgency(task);
 
                   return (
                     <div
                       key={task.id}
+                      onClick={() => onTaskClick && onTaskClick(task.id)}
                       style={{
-                        backgroundColor: '#FFFFFF',
+                        backgroundColor: urgency.cardBg || '#FFFFFF',
                         borderRadius: 10,
-                        border: '1px solid #E2E8F0',
+                        border: `1px solid ${urgency.cardBorder || '#E2E8F0'}`,
                         padding: '14px',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                        boxShadow: urgency.cardShadow || '0 1px 3px rgba(0,0,0,0.03)',
                         transition: 'all 0.15s ease',
                         cursor: 'pointer',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = '#BFDBFE';
-                        e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05)';
+                        e.currentTarget.style.borderColor = urgency.isDueSoon ? '#F59E0B' : urgency.isOverdue ? '#F43F5E' : '#BFDBFE';
+                        e.currentTarget.style.boxShadow = urgency.isDueSoon ? '0 4px 12px rgba(217, 119, 6, 0.2)' : '0 4px 6px -1px rgba(0, 0, 0, 0.05)';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = '#E2E8F0';
-                        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.03)';
+                        e.currentTarget.style.borderColor = urgency.cardBorder || '#E2E8F0';
+                        e.currentTarget.style.boxShadow = urgency.cardShadow || '0 1px 3px rgba(0,0,0,0.03)';
                       }}
                     >
                       {/* Top: Code breadcrumb & Assignee Avatar */}
@@ -316,7 +385,7 @@ export default function TaskBoardView({
                           color: '#64748B',
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', minWidth: 0 }}>
                           {/* Priority badge */}
                           <span
                             style={{
@@ -325,8 +394,9 @@ export default function TaskBoardView({
                               color: pStyle.color,
                               backgroundColor: pStyle.bg,
                               border: `1px solid ${pStyle.border}`,
-                              padding: '1px 5px',
+                              padding: '2px 6px',
                               borderRadius: 4,
+                              flexShrink: 0,
                             }}
                           >
                             {task.priority}
@@ -341,45 +411,53 @@ export default function TaskBoardView({
                                 gap: 3,
                                 backgroundColor: '#F8FAFC',
                                 border: '1px solid #E2E8F0',
-                                padding: '1px 6px',
+                                padding: '2px 6px',
                                 borderRadius: 4,
                                 color: '#475569',
                                 fontWeight: 500,
+                                fontSize: 10,
+                                flexShrink: 0,
                               }}
                             >
                               <Layers size={11} color="#64748B" />
                               {task.completedSubtaskCount}/{task.subtaskCount}
                             </span>
                           )}
-
-                          {/* Quick Status Mover Dropdown */}
-                          <select
-                            value={task.status}
-                            onChange={(e) => onStatusChange(task.id, e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 600,
-                              padding: '1px 4px',
-                              borderRadius: 4,
-                              border: '1px solid #E2E8F0',
-                              backgroundColor: '#FFFFFF',
-                              color: '#64748B',
-                              outline: 'none',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            <option value="TODO">TODO</option>
-                            <option value="IN_PROGRESS">IN_PROGRESS</option>
-                            <option value="DONE">DONE</option>
-                            <option value="CANCELLED">CANCELLED</option>
-                          </select>
                         </div>
 
                         {/* Created / Due Date */}
-                        <span style={{ fontSize: 10, color: '#94A3B8', flexShrink: 0 }}>
-                          {task.createdAt ? formatDate(task.createdAt) : ''}
-                        </span>
+                        {(() => {
+                          if (urgency.type === 'NONE') return null;
+                          return (
+                            <span
+                              title={urgency.title}
+                              style={{
+                                fontSize: 10,
+                                color: urgency.badgeColor,
+                                backgroundColor: urgency.badgeBg,
+                                border: `1px solid ${urgency.badgeBorder}`,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                fontWeight: 600,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {urgency.isDueSoon ? (
+                                <span className="animate-pulse" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                                  <Flame size={11} color="#D97706" />
+                                </span>
+                              ) : urgency.isOverdue ? (
+                                <AlertCircle size={10} color="#BE123C" />
+                              ) : (
+                                <Calendar size={10} />
+                              )}
+                              <span>{urgency.text}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
