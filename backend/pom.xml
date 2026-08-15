@@ -25,6 +25,7 @@
     <modules>
         <module>identity-service</module>
         <module>api-gateway</module>
+        <module>work-service</module>
     </modules>
 
     <dependencyManagement>

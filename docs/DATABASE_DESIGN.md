@@ -134,6 +134,7 @@ Hệ thống sử dụng cơ sở dữ liệu quan hệ (PostgreSQL) hỗ trợ 
 | `end_date` | `DATE` | `NULL` | Ngày kết thúc / bàn giao dự kiến |
 | `created_by` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Người tạo dự án |
 | `is_public` | `BOOLEAN` | Default `false` | Trạng thái riêng tư / công khai trong workspace |
+| `is_template` | `BOOLEAN` | Default `false` | Đánh dấu dự án là Template mẫu để tái sử dụng / clone |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian tạo |
 | `updated_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian cập nhật |
 
@@ -345,26 +346,12 @@ Hệ thống sử dụng cơ sở dữ liệu quan hệ (PostgreSQL) hỗ trợ 
 
 ---
 
-### 2.5. Template, Initiative & Blog / Cộng đồng
-
-#### Bảng `templates` (Mẫu dự án/quy trình)
-| Field | Type | Ràng buộc | Ghi chú |
-| :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **PK** | Định danh template |
-| `owner_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Tác giả mẫu |
-| `name` | `VARCHAR(255)` | `NOT NULL` | Tên mẫu dự án |
-| `description` | `TEXT` | `NULL` | Mô tả nội dung template |
-| `is_public` | `BOOLEAN` | Default `false` | Công khai trên Marketplace/Community |
-| `source_project_id`| `UUID` | **FK** $\rightarrow$ `projects(id)`, `NULL` | Dự án nguồn trích xuất cấu trúc |
-| `structure_json` | `JSONB` | `NOT NULL` | Cấu trúc cột Kanban, Task mẫu, nhãn,... |
-| `usage_count` | `INTEGER` | Default `0` | Số lượt sử dụng / nhân bản |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian tạo |
+### 2.5. Sáng kiến, Nhân bản Dự án & Blog / Cộng đồng
 
 #### Bảng `initiatives` (Sáng kiến / Dự án cộng đồng)
 | Field | Type | Ràng buộc | Ghi chú |
 | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | **PK** | Định danh sáng kiến |
-| `project_id` | `UUID` | **FK** $\rightarrow$ `projects(id)`, `NOT NULL` | Dự án gốc phát triển sáng kiến |
 | `title` | `VARCHAR(255)` | `NOT NULL` | Tiêu đề sáng kiến |
 | `description` | `TEXT` | `NULL` | Mô tả chi tiết mục tiêu, giải pháp |
 | `category` | `VARCHAR(100)` | `NOT NULL` | Danh mục (Công nghệ, Giáo dục, Open Source,...) |
@@ -382,12 +369,11 @@ Hệ thống sử dụng cơ sở dữ liệu quan hệ (PostgreSQL) hỗ trợ 
 | `user_id` | `UUID` | **Composite PK**, **FK** $\rightarrow$ `users(id)` | Người bình chọn |
 | `vote_type` | `ENUM` | `NOT NULL` | `up`, `down` |
 
-#### Bảng `project_clones` (Lịch sử nhân bản dự án)
+#### Bảng `project_clones` (Lịch sử nhân bản dự án / Template)
 | Field | Type | Ràng buộc | Ghi chú |
 | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | **PK** | Định danh lượt nhân bản |
-| `initiative_id` | `UUID` | **FK** $\rightarrow$ `initiatives(id)`, `NULL` | Nguồn từ sáng kiến (nếu có) |
-| `template_id` | `UUID` | **FK** $\rightarrow$ `templates(id)`, `NULL` | Nguồn từ template (nếu có) |
+| `source_project_id`| `UUID` | **FK** $\rightarrow$ `projects(id)`, `NOT NULL` | Dự án nguồn / Dự án Template mẫu |
 | `cloned_project_id`| `UUID` | **FK** $\rightarrow$ `projects(id)`, `NOT NULL` | Dự án mới được tạo ra sau nhân bản |
 | `cloned_by` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Người thực hiện nhân bản |
 | `cloned_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời điểm nhân bản |

@@ -24,6 +24,9 @@ cd d:\DATN-2026\backend
 
 # Terminal 2:
 ./mvnw spring-boot:run -pl api-gateway
+
+# Terminal 3:
+./mvnw spring-boot:run -pl work-service
 ```
 
 ### 3. Chạy Frontend
