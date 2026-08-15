@@ -23,6 +23,7 @@
     </properties>
 
     <modules>
+        <module>common</module>
         <module>identity-service</module>
         <module>api-gateway</module>
         <module>work-service</module>
@@ -31,6 +32,13 @@
     <dependencyManagement>
 
         <dependencies>
+
+            <!-- Common Library -->
+            <dependency>
+                <groupId>com.datn</groupId>
+                <artifactId>common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- Spring Boot BOM -->
             <dependency>

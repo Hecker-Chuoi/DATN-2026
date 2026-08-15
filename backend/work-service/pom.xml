@@ -20,6 +20,12 @@
 
     <dependencies>
 
+        <!-- ─── Common Shared Library ─── -->
+        <dependency>
+            <groupId>com.datn</groupId>
+            <artifactId>common</artifactId>
+        </dependency>
+
         <!-- ─── Spring Boot Core & Web ─── -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

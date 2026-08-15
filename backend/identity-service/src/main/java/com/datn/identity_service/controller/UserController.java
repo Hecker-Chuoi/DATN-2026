@@ -1,7 +1,7 @@
 package com.datn.identity_service.controller;
 
 import com.datn.identity_service.dto.request.UpdateRolesRequest;
-import com.datn.identity_service.dto.response.ApiResponse;
+import com.datn.common.dto.ApiResponse;
 import com.datn.identity_service.dto.response.UserResponse;
 import com.datn.identity_service.service.UserService;
 import jakarta.validation.Valid;

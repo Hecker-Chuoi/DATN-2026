@@ -23,6 +23,12 @@
 
     <dependencies>
 
+        <!-- ─── Common Shared Library ─── -->
+        <dependency>
+            <groupId>com.datn</groupId>
+            <artifactId>common</artifactId>
+        </dependency>
+
         <!-- ─── Spring Cloud Gateway (WebFlux-based) ─── -->
         <!-- Provides reactive routing, global filters, predicates, and load balancing.
              This pulls in spring-boot-starter-webflux transitively. -->
