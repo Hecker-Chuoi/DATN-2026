@@ -3,7 +3,7 @@ package com.datn.identity_service.controller;
 import com.datn.identity_service.dto.request.GoogleCallbackRequest;
 import com.datn.identity_service.dto.request.LoginRequest;
 import com.datn.identity_service.dto.request.RegisterRequest;
-import com.datn.identity_service.dto.response.ApiResponse;
+import com.datn.common.dto.ApiResponse;
 import com.datn.identity_service.dto.response.TokenResponse;
 import com.datn.identity_service.dto.response.UserResponse;
 import com.datn.identity_service.service.KeycloakService;

@@ -1,6 +1,6 @@
 package com.datn.identity_service.exception;
 
-import com.datn.identity_service.dto.response.ApiResponse;
+import com.datn.common.dto.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
