@@ -35,6 +35,7 @@ import { projectApi, milestoneApi, taskApi, teamApi, userApi } from '../api.js';
 import TaskBoardView from '../components/tasks/TaskBoardView.jsx';
 import TaskDetailView from '../components/tasks/TaskDetailView.jsx';
 import CreateTaskModal from '../components/modals/CreateTaskModal.jsx';
+import CreateMilestoneModal from '../components/modals/CreateMilestoneModal.jsx';
 
 const STATUS_GROUPS = [
   {
@@ -100,11 +101,13 @@ export default function ProjectDetailPage() {
   const [defaultStatusForNewTask, setDefaultStatusForNewTask] = useState('TODO');
   const [selectedTaskId, setSelectedTaskId] = useState(null);
 
-  // Sidebar Inline Milestone creation
+  // Sidebar Inline Milestone creation & Modal Edit
   const [isAddingMilestone, setIsAddingMilestone] = useState(false);
   const [newMilestoneName, setNewMilestoneName] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState('');
   const [milestoneSubmitting, setMilestoneSubmitting] = useState(false);
+  const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
+  const [selectedMilestoneToEdit, setSelectedMilestoneToEdit] = useState(null);
 
   const fetchProjectData = async () => {
     if (!projectId || projectId === 'undefined') {
@@ -663,12 +666,56 @@ export default function ProjectDetailPage() {
                 <div style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>No milestones yet</div>
               ) : (
                 milestones.map((m) => (
-                  <div key={m.id} onClick={() => setMilestoneFilter(milestoneFilter === m.id ? '' : m.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px', borderRadius: 4, cursor: 'pointer', fontSize: 12, backgroundColor: milestoneFilter === m.id ? '#F5F3FF' : 'transparent', color: milestoneFilter === m.id ? '#7C3AED' : '#334155' }}>
+                  <div
+                    key={m.id}
+                    onClick={() => setMilestoneFilter(milestoneFilter === m.id ? '' : m.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '6px 8px',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      backgroundColor: milestoneFilter === m.id ? '#F5F3FF' : 'transparent',
+                      color: milestoneFilter === m.id ? '#7C3AED' : '#334155',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (milestoneFilter !== m.id) e.currentTarget.style.backgroundColor = '#F8FAFC';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (milestoneFilter !== m.id) e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: '#8B5CF6', fontSize: 12 }}>◆</span>
-                      {m.name}
+                      <span style={{ fontWeight: 500 }}>{m.name}</span>
                     </div>
-                    <MoreHorizontal size={13} color="#94A3B8" />
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedMilestoneToEdit(m);
+                        setIsMilestoneModalOpen(true);
+                      }}
+                      title="Xem & Sửa Cột mốc"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#94A3B8',
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                        borderRadius: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = '#0F172A')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = '#94A3B8')}
+                    >
+                      <MoreHorizontal size={14} />
+                    </button>
                   </div>
                 ))
               )}
@@ -686,6 +733,22 @@ export default function ProjectDetailPage() {
           currentUser={currentUser}
           onClose={() => setSelectedTaskId(null)}
           onTaskUpdated={fetchProjectData}
+        />
+      )}
+
+      {isMilestoneModalOpen && (
+        <CreateMilestoneModal
+          projectId={projectId}
+          milestoneToEdit={selectedMilestoneToEdit}
+          onClose={() => {
+            setIsMilestoneModalOpen(false);
+            setSelectedMilestoneToEdit(null);
+          }}
+          onSuccess={() => {
+            setIsMilestoneModalOpen(false);
+            setSelectedMilestoneToEdit(null);
+            fetchProjectData();
+          }}
         />
       )}
     </div>

@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { X, Flag, Calendar } from 'lucide-react';
+import { X, Flag, Calendar, Trash2 } from 'lucide-react';
 import { milestoneApi } from '../../api.js';
 
 export default function CreateMilestoneModal({ projectId, milestoneToEdit, onClose, onSuccess }) {
   const [name, setName] = useState(milestoneToEdit ? milestoneToEdit.name : '');
   const [description, setDescription] = useState(milestoneToEdit ? milestoneToEdit.description || '' : '');
-  const [dueDate, setDueDate] = useState(
-    milestoneToEdit && milestoneToEdit.dueDate ? milestoneToEdit.dueDate.substring(0, 16) : ''
+  const [targetDate, setTargetDate] = useState(
+    milestoneToEdit && (milestoneToEdit.targetDate || milestoneToEdit.dueDate)
+      ? (milestoneToEdit.targetDate || milestoneToEdit.dueDate).substring(0, 10)
+      : ''
   );
   const [status, setStatus] = useState(milestoneToEdit ? milestoneToEdit.status : 'OPEN');
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleSubmit = async (e) => {
@@ -23,7 +26,7 @@ export default function CreateMilestoneModal({ projectId, milestoneToEdit, onClo
       const payload = {
         name: name.trim(),
         description: description.trim() || null,
-        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+        targetDate: targetDate ? `${targetDate}T23:59:59` : null,
         status,
       };
 
@@ -41,6 +44,21 @@ export default function CreateMilestoneModal({ projectId, milestoneToEdit, onClo
       setErrorMsg(err.message || 'Lỗi khi lưu cột mốc. Vui lòng thử lại.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Bạn có chắc muốn xóa cột mốc "${name}"? Các task thuộc cột mốc này sẽ không bị xóa.`)) {
+      return;
+    }
+    try {
+      setDeleting(true);
+      await milestoneApi.delete(milestoneToEdit.id);
+      onSuccess();
+    } catch (err) {
+      setErrorMsg(err.message || 'Lỗi khi xóa cột mốc');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -161,12 +179,12 @@ export default function CreateMilestoneModal({ projectId, milestoneToEdit, onClo
 
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                Hạn chót (Due Date)
+                Ngày mục tiêu (Target Date)
               </label>
               <input
-                type="datetime-local"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                type="date"
+                value={targetDate}
+                onChange={(e) => setTargetDate(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '7px 10px',
@@ -200,39 +218,65 @@ export default function CreateMilestoneModal({ projectId, milestoneToEdit, onClo
             />
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 6,
-                border: '1px solid #CBD5E1',
-                backgroundColor: '#FFFFFF',
-                color: '#475569',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                padding: '8px 18px',
-                borderRadius: 6,
-                border: 'none',
-                backgroundColor: '#2563EB',
-                color: '#FFFFFF',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: loading ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {loading ? 'Đang lưu...' : milestoneToEdit ? 'Cập nhật' : 'Tạo cột mốc'}
-            </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: milestoneToEdit ? 'space-between' : 'flex-end', gap: 10 }}>
+            {milestoneToEdit && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  border: '1px solid #FCA5A5',
+                  backgroundColor: '#FEF2F2',
+                  color: '#DC2626',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <Trash2 size={13} />
+                <span>{deleting ? 'Đang xóa...' : 'Xóa cột mốc'}</span>
+              </button>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 6,
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#FFFFFF',
+                  color: '#475569',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={loading || deleting}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 6,
+                  border: 'none',
+                  backgroundColor: '#5E6AD2',
+                  color: '#FFFFFF',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: loading || deleting ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {loading ? 'Đang lưu...' : milestoneToEdit ? 'Lưu thay đổi' : 'Tạo cột mốc'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
