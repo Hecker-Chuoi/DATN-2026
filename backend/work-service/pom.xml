@@ -26,6 +26,12 @@
             <artifactId>common</artifactId>
         </dependency>
 
+        <!-- ─── Spring Cloud OpenFeign (Inter-service Communication) ─── -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+
         <!-- ─── Spring Boot Core & Web ─── -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
