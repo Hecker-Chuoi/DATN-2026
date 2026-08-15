@@ -2,6 +2,7 @@ package com.datn.workservice.dto.response;
 
 import com.datn.workservice.entity.Project;
 import com.datn.workservice.enums.ProjectStatus;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,8 +29,13 @@ public class ProjectResponse {
     private LocalDate endDate;
     private UUID createdBy;
     private String createdByName;
+
+    @JsonProperty("isPublic")
     private Boolean isPublic;
+
+    @JsonProperty("isTemplate")
     private Boolean isTemplate;
+
     private long taskCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

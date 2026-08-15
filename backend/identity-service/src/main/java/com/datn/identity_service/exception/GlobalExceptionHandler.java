@@ -45,8 +45,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(KeycloakException.class)
     public ResponseEntity<ApiResponse<Void>> handleKeycloakError(KeycloakException ex) {
-        log.error("Keycloak error: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ApiResponse.error(ex.getMessage()));
+        log.error("Keycloak auth error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
     }
 
     // ─── Security exceptions ──────────────────────────────────────

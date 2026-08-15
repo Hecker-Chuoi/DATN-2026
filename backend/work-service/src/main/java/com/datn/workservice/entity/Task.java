@@ -31,7 +31,7 @@ public class Task {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @Column(nullable = false, length = 50)
+    @Column(nullable = false, length = 120)
     private String code;
 
     @Column(name = "project_id")

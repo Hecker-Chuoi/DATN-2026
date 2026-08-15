@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { authApi, userTokenStore } from '../api.js';
 import { LogIn, ArrowRight, ShieldCheck, Mail, Lock, User } from 'lucide-react';
 
@@ -30,9 +31,11 @@ export default function UserLoginPage({ onLoginSuccess }) {
     try {
       const res = await authApi.login(form.username, form.password);
       const accessToken = res?.data?.access_token;
+      const refreshToken = res?.data?.refresh_token;
       if (accessToken) {
-        userTokenStore.set(accessToken);
+        userTokenStore.set(accessToken, refreshToken);
       }
+      toast.success('Đăng nhập thành công!');
       if (onLoginSuccess) onLoginSuccess();
       navigate('/projects');
     } catch (err) {

@@ -1,14 +1,19 @@
 package com.datn.workservice.controller;
 
 import com.datn.common.dto.ApiResponse;
+import com.datn.common.dto.PageResponse;
 import com.datn.workservice.dto.request.CloneProjectRequest;
 import com.datn.workservice.dto.request.CreateProjectRequest;
+import com.datn.workservice.dto.request.ProjectFilter;
 import com.datn.workservice.dto.request.UpdateProjectRequest;
 import com.datn.workservice.dto.response.ProjectResponse;
 import com.datn.workservice.service.ProjectService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -37,15 +42,21 @@ public class ProjectController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ProjectResponse>>> getAllProjects(
-            @RequestParam(value = "teamId", required = false) UUID teamId) {
-        List<ProjectResponse> projects;
-        if (teamId != null) {
-            projects = projectService.getProjectsByTeam(teamId);
-        } else {
-            projects = projectService.getAllProjects();
-        }
+    public ResponseEntity<ApiResponse<PageResponse<ProjectResponse>>> getAllProjects(
+            ProjectFilter filter,
+            @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        PageResponse<ProjectResponse> projects = projectService.getAllProjects(filter, pageable);
         return ResponseEntity.ok(ApiResponse.success(projects, "Lấy danh sách dự án thành công"));
+    }
+
+    @GetMapping("/my-projects")
+    public ResponseEntity<ApiResponse<PageResponse<ProjectResponse>>> getMyProjects(
+            ProjectFilter filter,
+            @PageableDefault(page = 0, size = 9, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            Principal principal) {
+        UUID currentUserId = extractUserId(principal);
+        PageResponse<ProjectResponse> projects = projectService.getMyProjects(currentUserId, filter, pageable);
+        return ResponseEntity.ok(ApiResponse.success(projects, "Lấy danh sách dự án của tôi thành công"));
     }
 
     @GetMapping("/templates")

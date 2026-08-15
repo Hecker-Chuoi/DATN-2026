@@ -20,7 +20,7 @@ public class CreateProjectRequest {
     private UUID teamId;
 
     @NotBlank(message = "Mã dự án (Key) không được để trống")
-    @Size(min = 2, max = 20, message = "Mã dự án phải từ 2-20 ký tự (VD: PTMS)")
+    @Size(min = 2, max = 100, message = "Mã dự án phải từ 2-100 ký tự (VD: du_an_moi_a1b2c3d4)")
     private String key;
 
     @NotBlank(message = "Tên dự án không được để trống")

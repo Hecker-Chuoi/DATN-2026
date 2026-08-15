@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { authApi, userTokenStore, adminTokenStore } from '../api.js';
 import { RefreshCw, AlertCircle, ShieldCheck } from 'lucide-react';
 
@@ -29,13 +30,15 @@ export default function GoogleCallback({ onLoginSuccess }) {
       .googleCallback(code, redirectUri)
       .then((res) => {
         const accessToken = res?.data?.access_token;
+        const refreshToken = res?.data?.refresh_token;
         if (accessToken) {
           if (isAdminCallback) {
-            adminTokenStore.set(accessToken);
+            adminTokenStore.set(accessToken, refreshToken);
           } else {
-            userTokenStore.set(accessToken);
+            userTokenStore.set(accessToken, refreshToken);
           }
         }
+        toast.success('Đăng nhập Google thành công!');
         if (onLoginSuccess) {
           onLoginSuccess();
         }

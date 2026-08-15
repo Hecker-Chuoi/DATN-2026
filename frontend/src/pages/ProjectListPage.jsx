@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useOutletContext, Link } from 'react-router-dom';
+import { useSearchParams, useOutletContext, Link, useNavigate } from 'react-router-dom';
 import {
   FolderKanban,
   Plus,
@@ -14,7 +14,10 @@ import {
   Globe,
   Lock,
   CheckCircle2,
-  Clock
+  Clock,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { projectApi } from '../api.js';
 import CreateProjectModal from '../components/modals/CreateProjectModal.jsx';
@@ -27,15 +30,42 @@ export default function ProjectListPage() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'active' | 'templates'
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'active'
   const [cloningProject, setCloningProject] = useState(null);
 
-  const fetchProjects = async () => {
+  // Pagination state (0-based index theo Spring Data JPA)
+  const [page, setPage] = useState(0);
+  const [pageSize] = useState(9);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
+
+  const fetchProjects = async (targetPage = page) => {
     try {
       setLoading(true);
-      const res = await projectApi.listAll(teamIdFilter || null);
+      const params = {
+        page: targetPage,
+        size: pageSize,
+        teamId: teamIdFilter || undefined,
+        status: activeTab === 'active' ? 'ACTIVE' : undefined,
+        search: searchTerm.trim() || undefined,
+      };
+
+      const res = await projectApi.listMyProjects(params);
+      console.log('ProjectListPage loaded projects:', res);
+
       if (res && res.data) {
-        setProjects(res.data);
+        if (res.data.content) {
+          setProjects(res.data.content);
+          setTotalPages(res.data.totalPages || 1);
+          setTotalElements(res.data.totalElements || res.data.content.length);
+          setPage(res.data.pageNumber || 0);
+        } else if (Array.isArray(res.data)) {
+          setProjects(res.data);
+          setTotalElements(res.data.length);
+        }
+      } else if (Array.isArray(res)) {
+        setProjects(res);
+        setTotalElements(res.length);
       }
     } catch (err) {
       console.error('Failed to fetch projects:', err);
@@ -45,25 +75,26 @@ export default function ProjectListPage() {
   };
 
   useEffect(() => {
-    fetchProjects();
+    setPage(0);
+    fetchProjects(0);
 
-    const handleProjectCreated = () => fetchProjects();
+    const handleProjectCreated = () => fetchProjects(0);
     window.addEventListener('project-created', handleProjectCreated);
     return () => window.removeEventListener('project-created', handleProjectCreated);
-  }, [teamIdFilter]);
+  }, [teamIdFilter, activeTab]);
 
-  const filteredProjects = projects.filter((p) => {
-    const matchSearch =
-      p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.key?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.description?.toLowerCase().includes(searchTerm.toLowerCase());
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    setPage(0);
+    fetchProjects(0);
+  };
 
-    if (!matchSearch) return false;
-
-    if (activeTab === 'templates') return p.isTemplate;
-    if (activeTab === 'active') return p.status === 'ACTIVE' && !p.isTemplate;
-    return true;
-  });
+  const handlePageChange = (newPage) => {
+    if (newPage >= 0 && newPage < totalPages) {
+      setPage(newPage);
+      fetchProjects(newPage);
+    }
+  };
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
@@ -76,7 +107,7 @@ export default function ProjectListPage() {
               : 'Dự án & Quy trình làm việc'}
           </h1>
           <p style={{ fontSize: 13, color: '#64748B', marginTop: 4, marginBottom: 0 }}>
-            Quản lý các dự án, cột mốc Sprint và các mẫu quy trình làm việc chuẩn hóa.
+            Quản lý các dự án, cột mốc Sprint và các quy trình làm việc chuẩn hóa.
           </p>
         </div>
 
@@ -124,27 +155,20 @@ export default function ProjectListPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <FilterTab
             label="Tất cả dự án"
-            count={projects.length}
+            count={activeTab === 'all' ? totalElements : projects.length}
             active={activeTab === 'all'}
             onClick={() => setActiveTab('all')}
           />
           <FilterTab
             label="Đang hoạt động"
-            count={projects.filter((p) => p.status === 'ACTIVE' && !p.isTemplate).length}
+            count={activeTab === 'active' ? totalElements : projects.filter((p) => p.status === 'ACTIVE').length}
             active={activeTab === 'active'}
             onClick={() => setActiveTab('active')}
           />
-          <FilterTab
-            label="Mẫu Template"
-            icon={<Sparkles size={13} color="#8B5CF6" />}
-            count={projects.filter((p) => p.isTemplate).length}
-            active={activeTab === 'templates'}
-            onClick={() => setActiveTab('templates')}
-          />
         </div>
 
-        {/* Search input */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 260 }}>
+        {/* Search input & Refresh Button */}
+        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 260 }}>
           <div
             style={{
               position: 'relative',
@@ -156,7 +180,7 @@ export default function ProjectListPage() {
             <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: 10 }} />
             <input
               type="text"
-              placeholder="Tìm theo tên hoặc mã key..."
+              placeholder="Tìm theo tên hoặc mã key... (Enter)"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -171,7 +195,29 @@ export default function ProjectListPage() {
               }}
             />
           </div>
-        </div>
+
+          <button
+            type="button"
+            onClick={() => fetchProjects(page)}
+            title="Làm mới danh sách"
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: 6,
+              padding: '6px 10px',
+              color: '#64748B',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: 12,
+              flexShrink: 0,
+            }}
+          >
+            <RefreshCw size={13} />
+            <span>Tải lại</span>
+          </button>
+        </form>
       </div>
 
       {/* ─── Projects Grid ─── */}
@@ -179,7 +225,7 @@ export default function ProjectListPage() {
         <div style={{ padding: '60px 0', textAlign: 'center', color: '#64748B', fontSize: 14 }}>
           Đang tải danh sách dự án...
         </div>
-      ) : filteredProjects.length === 0 ? (
+      ) : projects.length === 0 ? (
         <div
           style={{
             padding: '60px 20px',
@@ -215,21 +261,107 @@ export default function ProjectListPage() {
           </button>
         </div>
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-            gap: 18,
-          }}
-        >
-          {filteredProjects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onClone={() => setCloningProject(project)}
-            />
-          ))}
-        </div>
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+              gap: 18,
+            }}
+          >
+            {projects.map((project, idx) => (
+              <ProjectCard
+                key={project.id || `project-${idx}`}
+                project={project}
+                onClone={() => setCloningProject(project)}
+              />
+            ))}
+          </div>
+
+          {/* ─── Pagination Controls ─── */}
+          {totalPages > 1 && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginTop: 28,
+                padding: '12px 16px',
+                backgroundColor: '#FFFFFF',
+                borderRadius: 10,
+                border: '1px solid #E2E8F0',
+                fontSize: 13,
+                color: '#64748B',
+              }}
+            >
+              <div>
+                Hiển thị trang <b>{page + 1}</b> / <b>{totalPages}</b> (Tổng số <b>{totalElements}</b> dự án)
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  onClick={() => handlePageChange(page - 1)}
+                  disabled={page === 0}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: page === 0 ? '#F1F5F9' : '#FFFFFF',
+                    color: page === 0 ? '#94A3B8' : '#334155',
+                    cursor: page === 0 ? 'not-allowed' : 'pointer',
+                    fontWeight: 500,
+                  }}
+                >
+                  <ChevronLeft size={15} />
+                  <span>Trang trước</span>
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i).map((pIndex) => (
+                  <button
+                    key={`page-btn-${pIndex}`}
+                    onClick={() => handlePageChange(pIndex)}
+                    style={{
+                      minWidth: 32,
+                      height: 32,
+                      borderRadius: 6,
+                      border: pIndex === page ? '1px solid #2563EB' : '1px solid #CBD5E1',
+                      backgroundColor: pIndex === page ? '#2563EB' : '#FFFFFF',
+                      color: pIndex === page ? '#FFFFFF' : '#334155',
+                      fontWeight: pIndex === page ? 700 : 500,
+                      cursor: 'pointer',
+                      fontSize: 12,
+                    }}
+                  >
+                    {pIndex + 1}
+                  </button>
+                ))}
+
+                <button
+                  onClick={() => handlePageChange(page + 1)}
+                  disabled={page >= totalPages - 1}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: page >= totalPages - 1 ? '#F1F5F9' : '#FFFFFF',
+                    color: page >= totalPages - 1 ? '#94A3B8' : '#334155',
+                    cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                    fontWeight: 500,
+                  }}
+                >
+                  <span>Trang sau</span>
+                  <ChevronRight size={15} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* ─── Clone Modal ─── */}
@@ -240,7 +372,7 @@ export default function ProjectListPage() {
           onClose={() => setCloningProject(null)}
           onSuccess={() => {
             setCloningProject(null);
-            fetchProjects();
+            fetchProjects(0);
           }}
         />
       )}
@@ -286,6 +418,7 @@ function FilterTab({ label, count, active, onClick, icon }) {
 }
 
 function ProjectCard({ project, onClone }) {
+  const navigate = useNavigate();
   const getStatusColor = (status) => {
     switch (status) {
       case 'ACTIVE':
@@ -301,10 +434,14 @@ function ProjectCard({ project, onClone }) {
     }
   };
 
-  const statusStyle = getStatusColor(project.status);
+  const statusStyle = getStatusColor(project.status || 'ACTIVE');
+  const pName = project.name || project.title || 'Dự án chưa đặt tên';
+  const pKey = project.key || project.code || 'PRJ';
+  const pId = project.id || project.projectId;
 
   return (
     <div
+      onClick={() => pId && navigate(`/projects/${pId}`)}
       style={{
         backgroundColor: '#FFFFFF',
         borderRadius: 12,
@@ -313,7 +450,7 @@ function ProjectCard({ project, onClone }) {
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
         transition: 'all 0.2s ease',
         cursor: 'pointer',
       }}
@@ -329,43 +466,21 @@ function ProjectCard({ project, onClone }) {
       }}
     >
       <div>
-        {/* Top Header with Key and Template badge */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#2563EB',
-                backgroundColor: '#EFF6FF',
-                padding: '2px 8px',
-                borderRadius: 5,
-                border: '1px solid #DBEAFE',
-                letterSpacing: '0.02em',
-              }}
-            >
-              {project.key}
-            </span>
-
-            {project.isTemplate && (
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: '#7C3AED',
-                  backgroundColor: '#F5F3FF',
-                  padding: '2px 8px',
-                  borderRadius: 5,
-                  border: '1px solid #DDD6FE',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 3,
-                }}
-              >
-                <Sparkles size={11} />
-                Template
-              </span>
-            )}
+        {/* Top Header with Folder Icon and Status */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              backgroundColor: '#EFF6FF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid #DBEAFE',
+            }}
+          >
+            <FolderKanban size={16} color="#2563EB" />
           </div>
 
           <span
@@ -379,13 +494,13 @@ function ProjectCard({ project, onClone }) {
               borderRadius: 12,
             }}
           >
-            {project.status}
+            {project.status || 'ACTIVE'}
           </span>
         </div>
 
         {/* Project Title */}
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: '0 0 6px 0', lineHeight: 1.3 }}>
-          {project.name}
+          {pName}
         </h3>
 
         {/* Description */}

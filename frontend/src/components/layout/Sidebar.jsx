@@ -120,12 +120,6 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
           active={location.pathname.startsWith('/projects')}
         />
         <NavItem
-          to="/marketplace"
-          icon={<Compass size={17} color="#8B5CF6" />}
-          label="Templates Mẫu"
-          active={location.pathname === '/marketplace'}
-        />
-        <NavItem
           to="/my-issues"
           icon={<CheckCircle2 size={17} color="#10B981" />}
           label="My issues"
@@ -190,7 +184,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
               const isCurrentTeam = location.pathname.includes(`/teams/${team.id}`);
 
               return (
-                <div key={team.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                <div key={team.id || `team-${idx}`} style={{ display: 'flex', flexDirection: 'column' }}>
                   {/* Team Accordion Trigger */}
                   <div
                     onClick={() => toggleTeam(team.id)}

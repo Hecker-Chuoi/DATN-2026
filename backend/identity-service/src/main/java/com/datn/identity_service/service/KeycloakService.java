@@ -201,7 +201,7 @@ public class KeycloakService {
                 + "&scope=openid+profile+email"
                 + "&redirect_uri=" + encodedRedirectUri
                 + "&kc_idp_hint=google"
-                + "&prompt=select_account"; // Force Google to present account chooser screen
+                + "&prompt=login"; // Forces Keycloak to ignore existing SSO session and re-authenticate with Google
     }
 
     /**
@@ -250,6 +250,81 @@ public class KeycloakService {
         } catch (HttpClientErrorException e) {
             log.warn("Authorization code exchange failed: {} - {}", e.getStatusCode(), e.getResponseBodyAsString());
             throw new KeycloakException("Failed to exchange authorization code: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Refreshes an expired JWT access token using a Keycloak refresh token.
+     *
+     * @param refreshToken Keycloak refresh token
+     * @return {@link TokenResponse} containing new access_token, refresh_token, etc.
+     */
+    @SuppressWarnings("unchecked")
+    public TokenResponse refreshToken(String refreshToken) {
+        String tokenEndpoint = serverUrl + "/realms/" + realm + "/protocol/openid-connect/token";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> formParams = new LinkedMultiValueMap<>();
+        formParams.add("grant_type", "refresh_token");
+        formParams.add("client_id", clientId);
+        if (clientSecret != null && !clientSecret.isBlank()) {
+            formParams.add("client_secret", clientSecret);
+        }
+        formParams.add("refresh_token", refreshToken);
+
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(formParams, headers);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(tokenEndpoint, request, Map.class);
+            Map<String, Object> body = response.getBody();
+
+            if (body == null) {
+                throw new KeycloakException("Empty response from Keycloak token refresh");
+            }
+
+            return TokenResponse.builder()
+                    .accessToken((String) body.get("access_token"))
+                    .refreshToken((String) body.get("refresh_token"))
+                    .expiresIn(((Number) body.get("expires_in")).longValue())
+                    .refreshExpiresIn(((Number) body.get("refresh_expires_in")).longValue())
+                    .tokenType((String) body.get("token_type"))
+                    .sessionState((String) body.get("session_state"))
+                    .build();
+
+        } catch (HttpClientErrorException e) {
+            log.warn("Token refresh failed: {} - {}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw new KeycloakException("Phiên đăng nhập đã hết hạn: " + e.getResponseBodyAsString());
+        }
+    }
+
+    /**
+     * Terminates user session on Keycloak using refresh token.
+     */
+    public void logout(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return;
+        }
+        String logoutEndpoint = serverUrl + "/realms/" + realm + "/protocol/openid-connect/logout";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> formParams = new LinkedMultiValueMap<>();
+        formParams.add("client_id", clientId);
+        if (clientSecret != null && !clientSecret.isBlank()) {
+            formParams.add("client_secret", clientSecret);
+        }
+        formParams.add("refresh_token", refreshToken);
+
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(formParams, headers);
+
+        try {
+            restTemplate.postForEntity(logoutEndpoint, request, Void.class);
+            log.info("Successfully terminated Keycloak session for refresh token.");
+        } catch (Exception e) {
+            log.warn("Failed to logout from Keycloak: {}", e.getMessage());
         }
     }
 

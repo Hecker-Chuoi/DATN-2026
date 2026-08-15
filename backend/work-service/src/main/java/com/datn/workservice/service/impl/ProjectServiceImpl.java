@@ -1,9 +1,11 @@
 package com.datn.workservice.service.impl;
 
+import com.datn.common.dto.PageResponse;
 import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.dto.request.CloneProjectRequest;
 import com.datn.workservice.dto.request.CreateProjectRequest;
+import com.datn.workservice.dto.request.ProjectFilter;
 import com.datn.workservice.dto.request.UpdateProjectRequest;
 import com.datn.workservice.dto.response.ProjectResponse;
 import com.datn.workservice.entity.*;
@@ -11,8 +13,12 @@ import com.datn.workservice.enums.ProjectStatus;
 import com.datn.workservice.enums.TaskStatus;
 import com.datn.workservice.repository.*;
 import com.datn.workservice.service.ProjectService;
+import com.datn.workservice.specification.ProjectSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +43,9 @@ public class ProjectServiceImpl implements ProjectService {
         UUID creator = currentUserId != null ? currentUserId : UUID.randomUUID();
 
         String key = request.getKey().trim().toUpperCase();
+        if (projectRepository.findByKey(key).isPresent()) {
+            throw new BadRequestException("Mã dự án (Key) '" + key + "' đã tồn tại. Vui lòng chọn mã khác.");
+        }
         if (request.getTeamId() != null && !teamRepository.existsById(request.getTeamId())) {
             throw new ResourceNotFoundException("Team not found with id: " + request.getTeamId());
         }
@@ -59,10 +68,36 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    public List<ProjectResponse> getAllProjects() {
-        return projectRepository.findAll().stream()
+    @Transactional(readOnly = true)
+    public PageResponse<ProjectResponse> getAllProjects(ProjectFilter filter, Pageable pageable) {
+        if (filter == null) {
+            filter = new ProjectFilter();
+        }
+
+        Specification<Project> spec = Specification.allOf();
+
+        if (filter.getIsTemplate() != null) {
+            spec = spec.and(ProjectSpecification.isTemplate(filter.getIsTemplate()));
+        }
+
+        spec = spec.and(ProjectSpecification.search(filter.getSearch()))
+                .and(ProjectSpecification.hasStatus(filter.getStatus()))
+                .and(ProjectSpecification.hasTeamId(filter.getTeamId()));
+
+        Page<Project> page = projectRepository.findAll(spec, pageable);
+        List<ProjectResponse> content = page.getContent().stream()
                 .map(this::enrichProjectResponse)
                 .collect(Collectors.toList());
+
+        return PageResponse.of(
+                content,
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.isLast(),
+                page.isFirst()
+        );
     }
 
     @Override
@@ -84,6 +119,40 @@ public class ProjectServiceImpl implements ProjectService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found with id: " + projectId));
         return enrichProjectResponse(project);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<ProjectResponse> getMyProjects(UUID userId, ProjectFilter filter, Pageable pageable) {
+        if (userId == null) {
+            log.warn("getMyProjects: No authenticated userId found in token, returning empty PageResponse");
+            return PageResponse.of(Collections.emptyList(), pageable.getPageNumber(), pageable.getPageSize(), 0, 0, true, true);
+        }
+
+        if (filter == null) {
+            filter = new ProjectFilter();
+        }
+
+        Specification<Project> spec = ProjectSpecification.isNotTemplate()
+                .and(ProjectSpecification.isAccessibleByUser(userId))
+                .and(ProjectSpecification.search(filter.getSearch()))
+                .and(ProjectSpecification.hasStatus(filter.getStatus()))
+                .and(ProjectSpecification.hasTeamId(filter.getTeamId()));
+
+        Page<Project> page = projectRepository.findAll(spec, pageable);
+        List<ProjectResponse> content = page.getContent().stream()
+                .map(this::enrichProjectResponse)
+                .collect(Collectors.toList());
+
+        return PageResponse.of(
+                content,
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages(),
+                page.isLast(),
+                page.isFirst()
+        );
     }
 
     @Override
@@ -123,6 +192,9 @@ public class ProjectServiceImpl implements ProjectService {
                 .orElseThrow(() -> new ResourceNotFoundException("Source Project/Template not found with id: " + request.getSourceProjectId()));
 
         String newKey = request.getNewKey().trim().toUpperCase();
+        if (projectRepository.findByKey(newKey).isPresent()) {
+            throw new BadRequestException("Mã dự án (Key) '" + newKey + "' đã tồn tại trong hệ thống. Vui lòng chọn mã khác.");
+        }
 
         UUID teamId = request.getTeamId() != null ? request.getTeamId() : source.getTeamId();
 
