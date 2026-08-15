@@ -1,3 +1,47 @@
+server:
+  port: 8082
+
 spring:
   application:
     name: identity-service
+
+  # ─── PostgreSQL (datn_main_db) ───────────────────────────
+  datasource:
+    url: jdbc:postgresql://localhost:5433/datn_main_db
+    username: postgres
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  # ─── OAuth2 Resource Server ──────────────────────────────
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Keycloak JWKS endpoint for signature verification
+          jwk-set-uri: http://localhost:8088/realms/datn-realm/protocol/openid-connect/certs
+          issuer-uri: http://localhost:8088/realms/datn-realm
+
+# ─── Keycloak Admin Client ──────────────────────────────────────────────
+keycloak:
+  server-url: http://localhost:8088
+  realm: datn-realm
+  admin:
+    username: admin
+    password: admin
+    client-id: admin-cli
+    # Admin master realm credentials for keycloak-admin-client
+    realm: master
+  # ── Client credentials for Authorization Code exchange (Google login) ──
+  # Lấy từ: Keycloak Admin → datn-realm → Clients → datn-backend → Credentials
+  client:
+    client-id: datn-backend
+    client-secret: pBchukVams8pHwBHnPvzTY86e3ou2Ym7

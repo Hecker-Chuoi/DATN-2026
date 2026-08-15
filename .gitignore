@@ -6,7 +6,7 @@ target/
 .idea/
 *.iml
 out/
-
+.mvn
 # VS Code
 .vscode/
 
