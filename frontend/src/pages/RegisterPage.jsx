@@ -34,7 +34,7 @@ export default function RegisterPage() {
       await authApi.register(form);
       setSuccess(true);
       setTimeout(() => {
-        navigate('/admin/login');
+        navigate('/login');
       }, 1500);
     } catch (err) {
       setError(err.message || 'Đăng ký thất bại. Vui lòng thử lại!');
@@ -169,7 +169,7 @@ export default function RegisterPage() {
           </form>
 
           <div className="auth-footer">
-            Already Have An Account ? <Link to="/admin/login">Log in here</Link>
+            Already Have An Account ? <Link to="/login">Log in here</Link>
           </div>
         </div>
 

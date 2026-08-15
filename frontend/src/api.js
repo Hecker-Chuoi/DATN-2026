@@ -17,25 +17,42 @@
  */
 
 // Empty string = use Vite proxy (relative path).
-// Vite forwards /identity/** → http://localhost:8081 (API Gateway).
+// Vite forwards /identity/** and /work/** → http://localhost:8081 (API Gateway).
 const GATEWAY = '';
 
-// ─── Token storage (in-memory + sessionStorage) ───────────────────────────────
-// NOTE: for a real app use httpOnly cookies; this is demo-only.
-let _accessToken = sessionStorage.getItem('access_token') || null;
+// ─── Token storage (Lưu trữ localStorage duy trì phiên làm việc lâu dài) ───────
+let _userToken = localStorage.getItem('user_access_token') || null;
+let _adminToken = localStorage.getItem('admin_access_token') || null;
 
-export const tokenStore = {
-  get:    ()      => _accessToken,
-  set:    (token) => { _accessToken = token; sessionStorage.setItem('access_token', token); },
-  clear:  ()      => { _accessToken = null;  sessionStorage.removeItem('access_token'); },
+export const userTokenStore = {
+  get:    ()      => _userToken,
+  set:    (token) => { _userToken = token; localStorage.setItem('user_access_token', token); },
+  clear:  ()      => { _userToken = null;  localStorage.removeItem('user_access_token'); },
 };
+
+export const adminTokenStore = {
+  get:    ()      => _adminToken,
+  set:    (token) => { _adminToken = token; localStorage.setItem('admin_access_token', token); },
+  clear:  ()      => { _adminToken = null;  localStorage.removeItem('admin_access_token'); },
+};
+
+// Tương thích ngược
+export const tokenStore = userTokenStore;
 
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
 
+  // Tự động gán Authorization Bearer tương ứng ngữ cảnh
+  if (path.includes('/admin') && _adminToken) {
+    headers['Authorization'] = `Bearer ${_adminToken}`;
+  } else if (_userToken) {
+    headers['Authorization'] = `Bearer ${_userToken}`;
+  } else if (_adminToken) {
+    headers['Authorization'] = `Bearer ${_adminToken}`;
+  }
+
   // Set credentials: 'include' so the browser automatically sends the httpOnly cookie.
-  // We no longer manually attach the Authorization header.
   const res = await fetch(`${GATEWAY}${path}`, {
     ...options,
     headers,
@@ -47,7 +64,6 @@ async function request(path, options = {}) {
   try { body = await res.json(); } catch { body = null; }
 
   if (!res.ok) {
-    // Prefer backend message, fall back to HTTP status text
     const msg = body?.message || `HTTP ${res.status}: ${res.statusText}`;
     const err  = new Error(msg);
     err.status = res.status;
@@ -139,3 +155,56 @@ export const userApi = {
       body: JSON.stringify({ roles }),
     }),
 };
+
+// ─── Work Service: Team API ───────────────────────────────────────────────────────────────────────
+const WORK_BASE = '/work/api/v1/work';
+
+export const teamApi = {
+  listAll: () => request(`${WORK_BASE}/teams`),
+  getById: (id) => request(`${WORK_BASE}/teams/${id}`),
+  create: (data) =>
+    request(`${WORK_BASE}/teams`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getMembers: (teamId) => request(`${WORK_BASE}/teams/${teamId}/members`),
+  addMember: (teamId, data) =>
+    request(`${WORK_BASE}/teams/${teamId}/members`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  removeMember: (teamId, userId) =>
+    request(`${WORK_BASE}/teams/${teamId}/members/${userId}`, {
+      method: 'DELETE',
+    }),
+};
+
+// ─── Work Service: Project API ────────────────────────────────────────────────────────────────────
+export const projectApi = {
+  listAll: (teamId) => {
+    const query = teamId ? `?teamId=${teamId}` : '';
+    return request(`${WORK_BASE}/projects${query}`);
+  },
+  listTemplates: () => request(`${WORK_BASE}/projects/templates`),
+  getById: (id) => request(`${WORK_BASE}/projects/${id}`),
+  create: (data) =>
+    request(`${WORK_BASE}/projects`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id, data) =>
+    request(`${WORK_BASE}/projects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id) =>
+    request(`${WORK_BASE}/projects/${id}`, {
+      method: 'DELETE',
+    }),
+  clone: (sourceProjectId, data) =>
+    request(`${WORK_BASE}/projects/${sourceProjectId}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+

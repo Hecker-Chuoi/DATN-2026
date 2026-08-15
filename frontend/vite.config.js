@@ -13,6 +13,10 @@ export default defineConfig({
         target: 'http://localhost:8081',
         changeOrigin: true,
       },
+      '/work': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+      },
     },
   },
 })

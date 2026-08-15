@@ -14,5 +14,5 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
     // List<Project> findByWorkspaceIdAndIsTemplate(UUID workspaceId, Boolean isTemplate);
     List<Project> findByTeamId(UUID teamId);
     List<Project> findByIsTemplateTrue();
-    // Optional<Project> findByWorkspaceIdAndKey(UUID workspaceId, String key);
+    Optional<Project> findByKey(String key);
 }

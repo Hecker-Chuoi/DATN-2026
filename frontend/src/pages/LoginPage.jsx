@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authApi, tokenStore } from '../api';
+import { authApi, adminTokenStore } from '../api.js';
 import { User, Key, Building2, LogIn, ArrowRight, ShieldCheck, Activity, Award } from 'lucide-react';
 
 export default function LoginPage({ onLoginSuccess }) {
@@ -32,7 +32,7 @@ export default function LoginPage({ onLoginSuccess }) {
       const res = await authApi.login(form.username, form.password);
       const accessToken = res?.data?.access_token;
       if (accessToken) {
-        tokenStore.set(accessToken);
+        adminTokenStore.set(accessToken);
       }
       if (onLoginSuccess) onLoginSuccess();
       navigate('/admin');
@@ -47,7 +47,7 @@ export default function LoginPage({ onLoginSuccess }) {
     setGoogleLoading(true);
     setError(null);
     try {
-      const redirectUri = `${window.location.origin}/auth/callback`;
+      const redirectUri = `${window.location.origin}/admin/auth/callback`;
       const res = await authApi.googleInit(redirectUri);
       const authUrl = res?.data?.authorizationUrl;
 
@@ -163,7 +163,7 @@ export default function LoginPage({ onLoginSuccess }) {
           </button>
 
           <div className="auth-footer">
-            Don't Have An Account ? <Link to="/admin/register">Register as an owner</Link>
+            Không gian làm việc thành viên ? <Link to="/login">Đăng nhập User Workspace</Link>
           </div>
         </div>
 

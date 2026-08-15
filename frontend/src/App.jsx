@@ -1,32 +1,81 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { tokenStore, authApi } from './api.js';
+import { userTokenStore, adminTokenStore, authApi, userApi } from './api.js';
 
-import LandingPage from './pages/LandingPage.jsx';
+import WorkspaceLayout from './components/layout/WorkspaceLayout.jsx';
+import ProjectListPage from './pages/ProjectListPage.jsx';
+import TeamDetailPage from './pages/TeamDetailPage.jsx';
+import AdminDashboard from './pages/AdminDashboard.jsx';
+import UserLoginPage from './pages/UserLoginPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
-import AdminDashboard from './pages/AdminDashboard.jsx';
 import GoogleCallback from './pages/GoogleCallback.jsx';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return !!tokenStore.get();
+  // ─── User Workspace Auth State ───
+  const [isUserAuth, setIsUserAuth] = useState(() => {
+    return !!userTokenStore.get();
+  });
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // ─── Admin Portal Auth State ───
+  const [isAdminAuth, setIsAdminAuth] = useState(() => {
+    return !!adminTokenStore.get();
   });
 
-  const handleLoginSuccess = () => {
-    setIsAuthenticated(true);
+  const fetchCurrentUser = async () => {
+    try {
+      const res = await userApi.me();
+      if (res && res.data) {
+        setCurrentUser(res.data);
+      }
+    } catch (err) {
+      console.warn('Could not load current user profile:', err);
+    }
   };
 
-  const handleLogout = async () => {
+  useEffect(() => {
+    if (isUserAuth) {
+      fetchCurrentUser();
+    } else {
+      setCurrentUser(null);
+    }
+  }, [isUserAuth]);
+
+  // ─── Handlers for User ───
+  const handleUserLoginSuccess = () => {
+    setIsUserAuth(true);
+    fetchCurrentUser();
+  };
+
+  const handleUserLogout = async () => {
     try {
       await authApi.logout();
     } catch (err) {
-      console.warn('Backend logout failed or session already cleared:', err);
+      console.warn('Backend logout error:', err);
     }
-    tokenStore.clear();
-    setIsAuthenticated(false);
+    userTokenStore.clear();
+    setIsUserAuth(false);
+    setCurrentUser(null);
 
-    // Perform Keycloak SSO logout to clear KEYCLOAK_IDENTITY cookie in browser
+    const keycloakLogoutUrl = `http://localhost:8088/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/login')}`;
+    window.location.href = keycloakLogoutUrl;
+  };
+
+  // ─── Handlers for Admin ───
+  const handleAdminLoginSuccess = () => {
+    setIsAdminAuth(true);
+  };
+
+  const handleAdminLogout = async () => {
+    try {
+      await authApi.logout();
+    } catch (err) {
+      console.warn('Backend logout error:', err);
+    }
+    adminTokenStore.clear();
+    setIsAdminAuth(false);
+
     const keycloakLogoutUrl = `http://localhost:8088/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/admin/login')}`;
     window.location.href = keycloakLogoutUrl;
   };
@@ -34,53 +83,90 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Route / : Demo Landing Page */}
-        <Route path="/" element={<LandingPage />} />
-
-        {/* Route /admin : Admin Portal Dashboard (Protected) */}
+        {/* ─── 1. User Workspace Authentication Routes ─── */}
         <Route
-          path="/admin"
+          path="/login"
           element={
-            isAuthenticated ? (
-              <AdminDashboard onLogout={handleLogout} />
+            isUserAuth ? (
+              <Navigate to="/projects" replace />
             ) : (
-              <Navigate to="/admin/login" replace />
+              <UserLoginPage onLoginSuccess={handleUserLoginSuccess} />
             )
           }
         />
-
-        {/* Route /admin/login : Login Page */}
         <Route
-          path="/admin/login"
+          path="/register"
           element={
-            isAuthenticated ? (
-              <Navigate to="/admin" replace />
-            ) : (
-              <LoginPage onLoginSuccess={handleLoginSuccess} />
-            )
-          }
-        />
-
-        {/* Route /admin/register : Register Page */}
-        <Route
-          path="/admin/register"
-          element={
-            isAuthenticated ? (
-              <Navigate to="/admin" replace />
+            isUserAuth ? (
+              <Navigate to="/projects" replace />
             ) : (
               <RegisterPage />
             )
           }
         />
-
-        {/* Route /auth/callback : Google OAuth2 Redirect Target */}
         <Route
           path="/auth/callback"
-          element={<GoogleCallback onLoginSuccess={handleLoginSuccess} />}
+          element={<GoogleCallback onLoginSuccess={handleUserLoginSuccess} />}
         />
 
-        {/* Fallback to Home */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* ─── 2. User Work Management Portal (Root `/`) ─── */}
+        <Route
+          path="/"
+          element={
+            isUserAuth ? (
+              <WorkspaceLayout currentUser={currentUser} onLogout={handleUserLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        >
+          <Route index element={<Navigate to="/projects" replace />} />
+          <Route path="projects" element={<ProjectListPage />} />
+          <Route path="marketplace" element={<ProjectListPage />} />
+          <Route path="teams/:teamId" element={<TeamDetailPage />} />
+          <Route
+            path="my-issues"
+            element={
+              <div style={{ padding: 40, textAlign: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, border: '1px solid #E2E8F0' }}>
+                <h3 style={{ color: '#0F172A', marginBottom: 6 }}>My Issues</h3>
+                <p style={{ color: '#64748B', fontSize: 13 }}>Danh sách tác vụ của bạn (sẽ hoàn thiện ở Phase 3 & 4).</p>
+              </div>
+            }
+          />
+        </Route>
+
+        {/* ─── 3. System Admin Portal (`/admin/**`) ─── */}
+        <Route
+          path="/admin/login"
+          element={
+            isAdminAuth ? (
+              <Navigate to="/admin" replace />
+            ) : (
+              <LoginPage onLoginSuccess={handleAdminLoginSuccess} />
+            )
+          }
+        />
+        <Route
+          path="/admin/auth/callback"
+          element={<GoogleCallback onLoginSuccess={handleAdminLoginSuccess} />}
+        />
+        <Route
+          path="/admin"
+          element={
+            isAdminAuth ? (
+              <AdminDashboard onLogout={handleAdminLogout} />
+            ) : (
+              <Navigate to="/admin/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/register"
+          element={<Navigate to="/register" replace />}
+        />
+
+        {/* Catch-all fallback */}
+        <Route path="*" element={<Navigate to="/projects" replace />} />
       </Routes>
     </BrowserRouter>
   );
