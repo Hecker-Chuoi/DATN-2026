@@ -169,9 +169,27 @@ function App() {
           <Route
             path="my-issues"
             element={
-              <div style={{ padding: 40, textAlign: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, border: '1px solid #E2E8F0' }}>
-                <h3 style={{ color: '#0F172A', marginBottom: 6 }}>My Issues</h3>
-                <p style={{ color: '#64748B', fontSize: 13 }}>Danh sách tác vụ của bạn (sẽ hoàn thiện ở Phase 3 & 4).</p>
+              <div style={{ backgroundColor: '#FFFFFF', minHeight: '100vh', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <div
+                  style={{
+                    height: 48,
+                    minHeight: 48,
+                    padding: '0 24px',
+                    borderBottom: '1px solid #E2E8F0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: '#FFFFFF',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: '#0F172A',
+                  }}
+                >
+                  <span>My tasks</span>
+                </div>
+                <div style={{ padding: 40, textAlign: 'center' }}>
+                  <h3 style={{ color: '#0F172A', marginBottom: 6, fontSize: 16 }}>My tasks</h3>
+                  <p style={{ color: '#64748B', fontSize: 13 }}>Danh sách tác vụ được giao cho bạn.</p>
+                </div>
               </div>
             }
           />

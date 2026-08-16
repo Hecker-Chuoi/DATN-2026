@@ -98,41 +98,45 @@ export default function TeamDetailPage() {
   }
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto' }}>
-      {/* ─── Header ─── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button
-          onClick={() => navigate('/projects')}
-          style={{
-            background: 'none',
-            border: '1px solid #E2E8F0',
-            borderRadius: 6,
-            padding: '6px 10px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            fontSize: 12,
-            color: '#64748B',
-            cursor: 'pointer',
-            backgroundColor: '#FFFFFF',
-          }}
-        >
-          <ArrowLeft size={14} />
-          <span>Quay lại</span>
-        </button>
-      </div>
-
-      {/* ─── Team Overview Card ─── */}
+    <div style={{ backgroundColor: '#FFFFFF', minHeight: '100vh', display: 'flex', flexDirection: 'column', flex: 1 }}>
+      {/* ════════ 1. TOP HEADER (Unified Header Bar) ════════ */}
       <div
         style={{
+          height: 48,
+          minHeight: 48,
+          padding: '0 24px',
+          borderBottom: '1px solid #E2E8F0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           backgroundColor: '#FFFFFF',
-          borderRadius: 12,
-          border: '1px solid #E2E8F0',
-          padding: 24,
-          marginBottom: 24,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
         }}
       >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
+          <span
+            onClick={() => navigate('/projects')}
+            style={{ color: '#64748B', fontWeight: 500, cursor: 'pointer' }}
+          >
+            Teams
+          </span>
+          <span style={{ color: '#94A3B8' }}>›</span>
+          <span>{team.name}</span>
+        </div>
+      </div>
+
+      {/* ════════ Content Container ════════ */}
+      <div style={{ padding: '24px 32px', maxWidth: 1000, width: '100%' }}>
+        {/* ─── Team Overview Card ─── */}
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 12,
+            border: '1px solid #E2E8F0',
+            padding: 24,
+            marginBottom: 24,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          }}
+        >
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -342,5 +346,6 @@ export default function TeamDetailPage() {
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }

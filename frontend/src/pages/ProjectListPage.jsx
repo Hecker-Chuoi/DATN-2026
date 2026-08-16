@@ -17,7 +17,10 @@ import {
   Clock,
   RefreshCw,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Circle,
+  XCircle,
+  ChevronDown
 } from 'lucide-react';
 import { projectApi } from '../api.js';
 import CreateProjectModal from '../components/modals/CreateProjectModal.jsx';
@@ -25,6 +28,7 @@ import CreateProjectModal from '../components/modals/CreateProjectModal.jsx';
 export default function ProjectListPage() {
   const { teams, onOpenCreateProject } = useOutletContext();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const teamIdFilter = searchParams.get('teamId') || '';
 
   const [projects, setProjects] = useState([]);
@@ -35,7 +39,7 @@ export default function ProjectListPage() {
 
   // Pagination state (0-based index theo Spring Data JPA)
   const [page, setPage] = useState(0);
-  const [pageSize] = useState(9);
+  const [pageSize] = useState(12);
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
 
@@ -96,273 +100,630 @@ export default function ProjectListPage() {
     }
   };
 
+  const currentTeam = teams?.find((t) => t.id === teamIdFilter);
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '---';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'ACTIVE':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 12,
+              fontWeight: 500,
+              color: '#059669',
+              backgroundColor: '#ECFDF5',
+              border: '1px solid #A7F3D0',
+              padding: '2px 8px',
+              borderRadius: 12,
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#10B981' }} />
+            Active
+          </span>
+        );
+      case 'PLANNING':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 12,
+              fontWeight: 500,
+              color: '#2563EB',
+              backgroundColor: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              padding: '2px 8px',
+              borderRadius: 12,
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#3B82F6' }} />
+            Planning
+          </span>
+        );
+      case 'COMPLETED':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 12,
+              fontWeight: 500,
+              color: '#16A34A',
+              backgroundColor: '#F0FDF4',
+              border: '1px solid #BBF7D0',
+              padding: '2px 8px',
+              borderRadius: 12,
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#22C55E' }} />
+            Completed
+          </span>
+        );
+      case 'ON_HOLD':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 12,
+              fontWeight: 500,
+              color: '#D97706',
+              backgroundColor: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              padding: '2px 8px',
+              borderRadius: 12,
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#F59E0B' }} />
+            On Hold
+          </span>
+        );
+      default:
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              fontSize: 12,
+              fontWeight: 500,
+              color: '#64748B',
+              backgroundColor: '#F1F5F9',
+              border: '1px solid #E2E8F0',
+              padding: '2px 8px',
+              borderRadius: 12,
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#94A3B8' }} />
+            {status || 'Draft'}
+          </span>
+        );
+    }
+  };
+
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-      {/* ─── Top Header Section ─── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-            {teamIdFilter
-              ? `Dự án thuộc ${teams.find((t) => t.id === teamIdFilter)?.name || 'Nhóm'}`
-              : 'Dự án & Quy trình làm việc'}
-          </h1>
-          <p style={{ fontSize: 13, color: '#64748B', marginTop: 4, marginBottom: 0 }}>
-            Quản lý các dự án, cột mốc Sprint và các quy trình làm việc chuẩn hóa.
-          </p>
-        </div>
-
-        <button
-          onClick={onOpenCreateProject}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            backgroundColor: '#2563EB',
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: 8,
-            padding: '8px 16px',
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-            boxShadow: '0 2px 4px rgba(37,99,235,0.2)',
-            transition: 'background-color 0.15s ease',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1D4ED8')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2563EB')}
-        >
-          <Plus size={16} />
-          <span>Tạo dự án mới</span>
-        </button>
-      </div>
-
-      {/* ─── Filter Bar & Search ─── */}
+    <div style={{ backgroundColor: '#FFFFFF', height: '100%', maxHeight: '100%', display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+      {/* ════════ 1. TOP HEADER (Unified Header Bar) ════════ */}
       <div
         style={{
+          height: 48,
+          minHeight: 48,
+          flexShrink: 0,
+          padding: '0 24px',
+          borderBottom: '1px solid #E2E8F0',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 16,
           backgroundColor: '#FFFFFF',
-          padding: '12px 16px',
-          borderRadius: 10,
-          border: '1px solid #E2E8F0',
-          marginBottom: 24,
-          boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
         }}
       >
-        {/* Tab Filters */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <FilterTab
-            label="Tất cả dự án"
-            count={activeTab === 'all' ? totalElements : projects.length}
-            active={activeTab === 'all'}
-            onClick={() => setActiveTab('all')}
-          />
-          <FilterTab
-            label="Đang hoạt động"
-            count={activeTab === 'active' ? totalElements : projects.filter((p) => p.status === 'ACTIVE').length}
-            active={activeTab === 'active'}
-            onClick={() => setActiveTab('active')}
-          />
+        {/* Left: Breadcrumbs / Title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
+          {currentTeam ? (
+            <>
+              <span style={{ color: '#64748B', fontWeight: 500 }}>{currentTeam.name}</span>
+              <span style={{ color: '#94A3B8' }}>›</span>
+              <span>Projects</span>
+            </>
+          ) : (
+            <span>Projects</span>
+          )}
         </div>
 
-        {/* Search input & Refresh Button */}
-        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 260 }}>
-          <div
-            style={{
-              position: 'relative',
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: 10 }} />
-            <input
-              type="text"
-              placeholder="Tìm theo tên hoặc mã key... (Enter)"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '6px 12px 6px 32px',
-                borderRadius: 6,
-                border: '1px solid #E2E8F0',
-                fontSize: 13,
-                outline: 'none',
-                color: '#0F172A',
-                backgroundColor: '#F8FAFC',
-              }}
-            />
-          </div>
-
+        {/* Right: Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
-            type="button"
             onClick={() => fetchProjects(page)}
-            title="Làm mới danh sách"
+            title="Tải lại danh sách"
             style={{
-              background: '#FFFFFF',
-              border: '1px solid #E2E8F0',
-              borderRadius: 6,
-              padding: '6px 10px',
+              background: 'none',
+              border: 'none',
               color: '#64748B',
               cursor: 'pointer',
+              padding: '5px',
+              borderRadius: 6,
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
-              fontSize: 12,
-              flexShrink: 0,
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#F1F5F9';
+              e.currentTarget.style.color = '#0F172A';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = '#64748B';
             }}
           >
-            <RefreshCw size={13} />
-            <span>Tải lại</span>
+            <RefreshCw size={15} />
           </button>
-        </form>
-      </div>
 
-      {/* ─── Projects Grid ─── */}
-      {loading ? (
-        <div style={{ padding: '60px 0', textAlign: 'center', color: '#64748B', fontSize: 14 }}>
-          Đang tải danh sách dự án...
-        </div>
-      ) : projects.length === 0 ? (
-        <div
-          style={{
-            padding: '60px 20px',
-            textAlign: 'center',
-            backgroundColor: '#FFFFFF',
-            borderRadius: 12,
-            border: '1px dashed #CBD5E1',
-          }}
-        >
-          <FolderKanban size={40} color="#94A3B8" style={{ margin: '0 auto 12px auto' }} />
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: '#0F172A', marginBottom: 4 }}>
-            Không tìm thấy dự án nào
-          </h3>
-          <p style={{ fontSize: 13, color: '#64748B', maxWidth: 360, margin: '0 auto 16px auto' }}>
-            {searchTerm
-              ? 'Thử tìm kiếm với từ khóa khác'
-              : 'Hãy bắt đầu tạo dự án đầu tiên để tổ chức công việc và theo dõi tiến độ.'}
-          </p>
           <button
             onClick={onOpenCreateProject}
+            title="Tạo dự án mới"
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
               backgroundColor: '#2563EB',
               color: '#FFFFFF',
               border: 'none',
               borderRadius: 6,
-              padding: '7px 16px',
+              padding: '6px 12px',
               fontSize: 13,
               fontWeight: 600,
               cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(37,99,235,0.2)',
+              transition: 'background-color 0.15s ease',
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1D4ED8')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2563EB')}
           >
-            Tạo dự án mới
+            <Plus size={15} />
+            <span>Tạo dự án</span>
           </button>
         </div>
-      ) : (
-        <>
-          <div
+      </div>
+
+      {/* ════════ 2. SUB FILTER BAR (Linear Style Pills & Search) ════════ */}
+      <div
+        style={{
+          flexShrink: 0,
+          padding: '8px 24px',
+          borderBottom: '1px solid #F1F5F9',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: '#FFFFFF',
+          gap: 16,
+        }}
+      >
+        {/* Left: Tab Pills */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={() => setActiveTab('all')}
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-              gap: 18,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '5px 12px',
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#0F172A',
+              backgroundColor: '#F1F5F9',
+              border: 'none',
+              cursor: 'pointer',
             }}
           >
-            {projects.map((project, idx) => (
-              <ProjectCard
-                key={project.id || `project-${idx}`}
-                project={project}
-                onClone={() => setCloningProject(project)}
-              />
-            ))}
-          </div>
+            <span>All projects</span>
+            <span
+              style={{
+                fontSize: 11,
+                padding: '1px 6px',
+                borderRadius: 10,
+                backgroundColor: '#E2E8F0',
+                color: '#0F172A',
+                fontWeight: 600,
+              }}
+            >
+              {totalElements || projects.length}
+            </span>
+          </button>
+        </div>
 
-          {/* ─── Pagination Controls ─── */}
-          {totalPages > 1 && (
+        {/* Right: Search Input */}
+        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: 10 }} />
+            <input
+              type="text"
+              placeholder="Tìm kiếm dự án... (Enter)"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: 220,
+                padding: '5px 10px 5px 30px',
+                borderRadius: 6,
+                border: '1px solid #E2E8F0',
+                fontSize: 12,
+                outline: 'none',
+                color: '#0F172A',
+                backgroundColor: '#F8FAFC',
+                transition: 'border-color 0.15s ease, width 0.2s ease',
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = '#2563EB';
+                e.target.style.backgroundColor = '#FFFFFF';
+                e.target.style.width = '260px';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#E2E8F0';
+                e.target.style.backgroundColor = '#F8FAFC';
+                e.target.style.width = '220px';
+              }}
+            />
+          </div>
+        </form>
+      </div>
+
+      {/* ════════ 3. TABLE LIST HEADER & ROWS (SCROLLABLE) ════════ */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Table Column Headers */}
+        <div
+          style={{
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            padding: '8px 24px',
+            backgroundColor: '#FAFAFA',
+            borderBottom: '1px solid #E2E8F0',
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#64748B',
+            userSelect: 'none',
+          }}
+        >
+          <div style={{ flex: 3.5, minWidth: 240 }}>Tên dự án</div>
+          <div style={{ flex: 1.5, minWidth: 120 }}>Nhóm</div>
+          <div style={{ flex: 1.2, minWidth: 100 }}>Trạng thái</div>
+          <div style={{ flex: 1.2, minWidth: 110 }}>Hạn chót</div>
+          <div style={{ flex: 1, minWidth: 80 }}>Tác vụ</div>
+          <div style={{ flex: 1, minWidth: 90 }}>Quyền xem</div>
+          <div style={{ width: 110, textAlign: 'right' }}>Thao tác</div>
+        </div>
+
+        {/* Loading / Empty / Data Rows (Internal Scroll) */}
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {loading ? (
+            <div style={{ padding: '60px 0', textAlign: 'center', color: '#64748B', fontSize: 13 }}>
+              Đang tải danh sách dự án...
+            </div>
+          ) : projects.length === 0 ? (
             <div
+              style={{
+                padding: '60px 20px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flex: 1,
+              }}
+            >
+              <FolderKanban size={40} color="#94A3B8" style={{ marginBottom: 12 }} />
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: '#0F172A', marginBottom: 4 }}>
+                Không tìm thấy dự án nào
+              </h3>
+              <p style={{ fontSize: 13, color: '#64748B', maxWidth: 360, margin: '0 0 16px 0' }}>
+                {searchTerm
+                  ? 'Thử tìm kiếm với từ khóa khác hoặc xóa bộ lọc.'
+                  : 'Hãy bắt đầu tạo dự án đầu tiên để tổ chức công việc và theo dõi tiến độ.'}
+              </p>
+              <button
+                onClick={onOpenCreateProject}
+                style={{
+                  backgroundColor: '#2563EB',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: 6,
+                  padding: '7px 16px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Tạo dự án mới
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {projects.map((project, idx) => {
+                const pId = project.id || project.projectId;
+                const pName = project.name || project.title || 'Dự án chưa đặt tên';
+                const pKey = project.key || project.code || 'PRJ';
+                const teamName = project.teamName || teams.find((t) => t.id === project.teamId)?.name;
+
+                return (
+                  <div
+                    key={pId || `project-row-${idx}`}
+                    onClick={() => pId && navigate(`/projects/${pId}`)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '12px 24px',
+                      borderBottom: '1px solid #F1F5F9',
+                      backgroundColor: '#FFFFFF',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.12s ease',
+                      fontSize: 13,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#F8FAFC';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#FFFFFF';
+                    }}
+                  >
+                    {/* Column 1: Name + Key + Description */}
+                    <div style={{ flex: 3.5, minWidth: 240, display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden', paddingRight: 12 }}>
+                      <div
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 6,
+                          backgroundColor: '#EFF6FF',
+                          border: '1px solid #DBEAFE',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <FolderKanban size={15} color="#2563EB" />
+                      </div>
+
+                      <div style={{ overflow: 'hidden', minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {pName}
+                          </span>
+                          {pKey && (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: '#64748B',
+                                backgroundColor: '#F1F5F9',
+                                padding: '1px 5px',
+                                borderRadius: 4,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {pKey}
+                            </span>
+                          )}
+                        </div>
+                        {project.description && (
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: '#94A3B8',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              marginTop: 2,
+                            }}
+                          >
+                            {project.description}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Column 2: Team */}
+                    <div style={{ flex: 1.5, minWidth: 120, display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontSize: 12 }}>
+                      {teamName ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#6366F1' }} />
+                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{teamName}</span>
+                        </span>
+                      ) : (
+                        <span style={{ color: '#CBD5E1' }}>---</span>
+                      )}
+                    </div>
+
+                    {/* Column 3: Status */}
+                    <div style={{ flex: 1.2, minWidth: 100 }}>
+                      {getStatusBadge(project.status)}
+                    </div>
+
+                    {/* Column 4: Target Date */}
+                    <div style={{ flex: 1.2, minWidth: 110, display: 'flex', alignItems: 'center', gap: 5, color: '#64748B', fontSize: 12 }}>
+                      <Calendar size={13} color="#94A3B8" />
+                      <span>{formatDate(project.targetDate || project.createdAt)}</span>
+                    </div>
+
+                    {/* Column 5: Tasks Count */}
+                    <div style={{ flex: 1, minWidth: 80, display: 'flex', alignItems: 'center', gap: 5, color: '#64748B', fontSize: 12 }}>
+                      <Layers size={13} color="#94A3B8" />
+                      <span><b>{project.taskCount || 0}</b></span>
+                    </div>
+
+                    {/* Column 6: Visibility */}
+                    <div style={{ flex: 1, minWidth: 90, display: 'flex', alignItems: 'center', gap: 4, color: '#64748B', fontSize: 12 }}>
+                      {project.isPublic ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#10B981' }}>
+                          <Globe size={13} />
+                          <span>Public</span>
+                        </span>
+                      ) : (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#64748B' }}>
+                          <Lock size={13} />
+                          <span>Private</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Column 7: Action (Clone Button) */}
+                    <div
+                      style={{
+                        width: 110,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        gap: 8,
+                      }}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCloningProject(project);
+                        }}
+                        title="Nhân bản cấu trúc dự án này"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          backgroundColor: '#F8FAFC',
+                          border: '1px solid #E2E8F0',
+                          borderRadius: 6,
+                          padding: '4px 8px',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: '#475569',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#EFF6FF';
+                          e.currentTarget.style.color = '#2563EB';
+                          e.currentTarget.style.borderColor = '#BFDBFE';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '#F8FAFC';
+                          e.currentTarget.style.color = '#475569';
+                          e.currentTarget.style.borderColor = '#E2E8F0';
+                        }}
+                      >
+                        <Copy size={12} />
+                        <span>Clone</span>
+                      </button>
+
+                      <ChevronRight size={15} color="#CBD5E1" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ════════ 4. PAGINATION FOOTER (ALWAYS FIXED AT BOTTOM) ════════ */}
+      <div
+        style={{
+          height: 48,
+          minHeight: 48,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 24px',
+          borderTop: '1px solid #E2E8F0',
+          backgroundColor: '#FFFFFF',
+          fontSize: 12,
+          color: '#64748B',
+          userSelect: 'none',
+        }}
+      >
+        <div>
+          Hiển thị trang <b>{page + 1}</b> / <b>{totalPages}</b> (Tổng số <b>{totalElements}</b> dự án)
+        </div>
+
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              onClick={() => handlePageChange(page - 1)}
+              disabled={page === 0}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
-                marginTop: 28,
-                padding: '12px 16px',
-                backgroundColor: '#FFFFFF',
-                borderRadius: 10,
+                gap: 4,
+                padding: '5px 10px',
+                borderRadius: 6,
                 border: '1px solid #E2E8F0',
-                fontSize: 13,
-                color: '#64748B',
+                backgroundColor: page === 0 ? '#F8FAFC' : '#FFFFFF',
+                color: page === 0 ? '#CBD5E1' : '#334155',
+                cursor: page === 0 ? 'not-allowed' : 'pointer',
+                fontSize: 12,
+                fontWeight: 500,
               }}
             >
-              <div>
-                Hiển thị trang <b>{page + 1}</b> / <b>{totalPages}</b> (Tổng số <b>{totalElements}</b> dự án)
-              </div>
+              <ChevronLeft size={14} />
+              <span>Trước</span>
+            </button>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <button
-                  onClick={() => handlePageChange(page - 1)}
-                  disabled={page === 0}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '6px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    backgroundColor: page === 0 ? '#F1F5F9' : '#FFFFFF',
-                    color: page === 0 ? '#94A3B8' : '#334155',
-                    cursor: page === 0 ? 'not-allowed' : 'pointer',
-                    fontWeight: 500,
-                  }}
-                >
-                  <ChevronLeft size={15} />
-                  <span>Trang trước</span>
-                </button>
+            {Array.from({ length: totalPages }, (_, i) => i).map((pIndex) => (
+              <button
+                key={`page-btn-${pIndex}`}
+                onClick={() => handlePageChange(pIndex)}
+                style={{
+                  minWidth: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  border: pIndex === page ? '1px solid #2563EB' : '1px solid #E2E8F0',
+                  backgroundColor: pIndex === page ? '#2563EB' : '#FFFFFF',
+                  color: pIndex === page ? '#FFFFFF' : '#334155',
+                  fontWeight: pIndex === page ? 700 : 500,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                }}
+              >
+                {pIndex + 1}
+              </button>
+            ))}
 
-                {Array.from({ length: totalPages }, (_, i) => i).map((pIndex) => (
-                  <button
-                    key={`page-btn-${pIndex}`}
-                    onClick={() => handlePageChange(pIndex)}
-                    style={{
-                      minWidth: 32,
-                      height: 32,
-                      borderRadius: 6,
-                      border: pIndex === page ? '1px solid #2563EB' : '1px solid #CBD5E1',
-                      backgroundColor: pIndex === page ? '#2563EB' : '#FFFFFF',
-                      color: pIndex === page ? '#FFFFFF' : '#334155',
-                      fontWeight: pIndex === page ? 700 : 500,
-                      cursor: 'pointer',
-                      fontSize: 12,
-                    }}
-                  >
-                    {pIndex + 1}
-                  </button>
-                ))}
-
-                <button
-                  onClick={() => handlePageChange(page + 1)}
-                  disabled={page >= totalPages - 1}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '6px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    backgroundColor: page >= totalPages - 1 ? '#F1F5F9' : '#FFFFFF',
-                    color: page >= totalPages - 1 ? '#94A3B8' : '#334155',
-                    cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
-                    fontWeight: 500,
-                  }}
-                >
-                  <span>Trang sau</span>
-                  <ChevronRight size={15} />
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+            <button
+              onClick={() => handlePageChange(page + 1)}
+              disabled={page >= totalPages - 1}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '5px 10px',
+                borderRadius: 6,
+                border: '1px solid #E2E8F0',
+                backgroundColor: page >= totalPages - 1 ? '#F8FAFC' : '#FFFFFF',
+                color: page >= totalPages - 1 ? '#CBD5E1' : '#334155',
+                cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                fontSize: 12,
+                fontWeight: 500,
+              }}
+            >
+              <span>Sau</span>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* ─── Clone Modal ─── */}
       {cloningProject && (
@@ -380,219 +741,3 @@ export default function ProjectListPage() {
   );
 }
 
-function FilterTab({ label, count, active, onClick, icon }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '6px 12px',
-        borderRadius: 6,
-        fontSize: 13,
-        fontWeight: active ? 600 : 500,
-        color: active ? '#2563EB' : '#64748B',
-        backgroundColor: active ? '#EFF6FF' : 'transparent',
-        border: active ? '1px solid #BFDBFE' : '1px solid transparent',
-        cursor: 'pointer',
-        transition: 'all 0.15s ease',
-      }}
-    >
-      {icon}
-      <span>{label}</span>
-      <span
-        style={{
-          fontSize: 11,
-          padding: '1px 6px',
-          borderRadius: 10,
-          backgroundColor: active ? '#2563EB' : '#F1F5F9',
-          color: active ? '#FFFFFF' : '#64748B',
-          fontWeight: 600,
-        }}
-      >
-        {count}
-      </span>
-    </button>
-  );
-}
-
-function ProjectCard({ project, onClone }) {
-  const navigate = useNavigate();
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'ACTIVE':
-        return { bg: '#ECFDF5', text: '#059669', border: '#A7F3D0' };
-      case 'PLANNING':
-        return { bg: '#EFF6FF', text: '#2563EB', border: '#BFDBFE' };
-      case 'COMPLETED':
-        return { bg: '#F0FDF4', text: '#16A34A', border: '#BBF7D0' };
-      case 'ON_HOLD':
-        return { bg: '#FFFBEB', text: '#D97706', border: '#FDE68A' };
-      default:
-        return { bg: '#F1F5F9', text: '#64748B', border: '#E2E8F0' };
-    }
-  };
-
-  const statusStyle = getStatusColor(project.status || 'ACTIVE');
-  const pName = project.name || project.title || 'Dự án chưa đặt tên';
-  const pKey = project.key || project.code || 'PRJ';
-  const pId = project.id || project.projectId;
-
-  return (
-    <div
-      onClick={() => pId && navigate(`/projects/${pId}`)}
-      style={{
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        border: '1px solid #E2E8F0',
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-        transition: 'all 0.2s ease',
-        cursor: 'pointer',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = '#93C5FD';
-        e.currentTarget.style.boxShadow = '0 6px 12px rgba(37,99,235,0.06)';
-        e.currentTarget.style.transform = 'translateY(-2px)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = '#E2E8F0';
-        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.03)';
-        e.currentTarget.style.transform = 'translateY(0)';
-      }}
-    >
-      <div>
-        {/* Top Header with Folder Icon and Status */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              backgroundColor: '#EFF6FF',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '1px solid #DBEAFE',
-            }}
-          >
-            <FolderKanban size={16} color="#2563EB" />
-          </div>
-
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: statusStyle.text,
-              backgroundColor: statusStyle.bg,
-              border: `1px solid ${statusStyle.border}`,
-              padding: '2px 8px',
-              borderRadius: 12,
-            }}
-          >
-            {project.status || 'ACTIVE'}
-          </span>
-        </div>
-
-        {/* Project Title */}
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: '0 0 6px 0', lineHeight: 1.3 }}>
-          {pName}
-        </h3>
-
-        {/* Description */}
-        <p
-          style={{
-            fontSize: 13,
-            color: '#64748B',
-            margin: '0 0 14px 0',
-            lineHeight: 1.4,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-            minHeight: 36,
-          }}
-        >
-          {project.description || 'Chưa có mô tả chi tiết cho dự án này.'}
-        </p>
-
-        {/* Team Tag */}
-        {project.teamName && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#475569', marginBottom: 12 }}>
-            <Users size={13} color="#64748B" />
-            <span>{project.teamName}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Card Footer */}
-      <div
-        style={{
-          borderTop: '1px solid #F1F5F9',
-          paddingTop: 12,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#64748B' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Layers size={13} color="#94A3B8" />
-            <b>{project.taskCount || 0}</b> tasks
-          </span>
-          {project.isPublic ? (
-            <span title="Công khai" style={{ display: 'flex', alignItems: 'center' }}>
-              <Globe size={13} color="#10B981" />
-            </span>
-          ) : (
-            <span title="Riêng tư" style={{ display: 'flex', alignItems: 'center' }}>
-              <Lock size={13} color="#94A3B8" />
-            </span>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {/* Nút Clone Template */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClone();
-            }}
-            title="Nhân bản cấu trúc dự án này"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              borderRadius: 6,
-              padding: '4px 8px',
-              fontSize: 12,
-              fontWeight: 600,
-              color: '#475569',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#EFF6FF';
-              e.currentTarget.style.color = '#2563EB';
-              e.currentTarget.style.borderColor = '#BFDBFE';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#F8FAFC';
-              e.currentTarget.style.color = '#475569';
-              e.currentTarget.style.borderColor = '#E2E8F0';
-            }}
-          >
-            <Copy size={12} />
-            <span>Clone</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

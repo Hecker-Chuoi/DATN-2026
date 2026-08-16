@@ -13,7 +13,8 @@ import {
   Sparkles,
   Users,
   Building2,
-  Compass
+  Compass,
+  LogOut
 } from 'lucide-react';
 
 const TEAM_COLORS = [
@@ -26,7 +27,7 @@ const TEAM_COLORS = [
   '#6366F1'  // Indigo
 ];
 
-export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreateProject, currentUser }) {
+export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreateProject, currentUser, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [expandedTeams, setExpandedTeams] = useState({ [teams[0]?.id]: true });
@@ -275,11 +276,12 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
             fontWeight: 600,
             fontSize: 13,
             color: '#334155',
+            flexShrink: 0,
           }}
         >
           {currentUser?.username ? currentUser.username.charAt(0).toUpperCase() : 'U'}
         </div>
-        <div style={{ overflow: 'hidden', flex: 1 }}>
+        <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {currentUser?.fullName || currentUser?.username || 'User'}
           </div>
@@ -287,6 +289,35 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
             {currentUser?.email || 'user@work.datn'}
           </div>
         </div>
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            title="Đăng xuất"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#64748B',
+              cursor: 'pointer',
+              padding: '6px',
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#FEE2E2';
+              e.currentTarget.style.color = '#DC2626';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = '#64748B';
+            }}
+          >
+            <LogOut size={16} />
+          </button>
+        )}
       </div>
     </aside>
   );

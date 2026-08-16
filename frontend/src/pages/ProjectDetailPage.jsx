@@ -281,25 +281,27 @@ export default function ProjectDetailPage() {
       {/* ════════ TOP BREADCRUMB & HEADER ════════ */}
       <div
         style={{
-          padding: '12px 24px',
-          borderBottom: '1px solid #F1F5F9',
+          height: 48,
+          minHeight: 48,
+          padding: '0 24px',
+          borderBottom: '1px solid #E2E8F0',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          backgroundColor: '#FFFFFF',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748B' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#64748B' }}>
           <FolderKanban size={15} color="#2563EB" />
-          <span style={{ fontWeight: 500, color: '#334155' }}>
-            {currentTeam?.name || 'Workspace'}
+          <span style={{ fontWeight: 500, color: '#475569' }}>
+            {currentTeam?.name || 'My Workspace'}
           </span>
-          <span>›</span>
-          <Link to="/projects" style={{ color: '#64748B', textDecoration: 'none' }}>
+          <span style={{ color: '#94A3B8' }}>›</span>
+          <Link to="/projects" style={{ color: '#64748B', textDecoration: 'none', fontWeight: 500 }}>
             Projects
           </Link>
-          <span>›</span>
+          <span style={{ color: '#94A3B8' }}>›</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#0F172A', fontWeight: 600 }}>
-            <FolderKanban size={15} color="#2563EB" />
             <span>{project?.name || 'Loading project...'}</span>
           </div>
           <Star size={14} color="#94A3B8" style={{ cursor: 'pointer', marginLeft: 4 }} />

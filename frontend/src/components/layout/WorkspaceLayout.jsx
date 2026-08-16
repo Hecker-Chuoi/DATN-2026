@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
-import Header from './Header.jsx';
 import CreateProjectModal from '../modals/CreateProjectModal.jsx';
 import CreateTeamModal from '../modals/CreateTeamModal.jsx';
 import { teamApi } from '../../api.js';
@@ -43,20 +42,12 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
           setIsCreateProjectOpen(true);
         }}
         currentUser={currentUser}
+        onLogout={onLogout}
       />
 
       {/* ─── Main Content Container ─── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <Header
-          currentUser={currentUser}
-          onLogout={onLogout}
-          onOpenCreateProject={() => {
-            setSelectedTeamForProject(null);
-            setIsCreateProjectOpen(true);
-          }}
-        />
-
-        <main style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', backgroundColor: '#F8FAFC' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#FFFFFF', height: '100%' }}>
+        <main style={{ flex: 1, overflow: 'hidden', backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column', height: '100%' }}>
           <Outlet context={{ teams, refreshTeams: fetchTeams, onOpenCreateProject: () => setIsCreateProjectOpen(true) }} />
         </main>
       </div>
