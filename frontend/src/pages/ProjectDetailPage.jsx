@@ -1399,6 +1399,21 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
+      {isCreateTaskOpen && (
+        <CreateTaskModal
+          projectId={projectId}
+          projectKey={project?.key || 'PRJ'}
+          milestones={milestones}
+          members={members}
+          defaultStatus={defaultStatusForNewTask || 'TODO'}
+          onClose={() => setIsCreateTaskOpen(false)}
+          onSuccess={() => {
+            setIsCreateTaskOpen(false);
+            fetchProjectData();
+          }}
+        />
+      )}
+
       {selectedTaskId && (
         <TaskDetailView
           taskId={selectedTaskId}
