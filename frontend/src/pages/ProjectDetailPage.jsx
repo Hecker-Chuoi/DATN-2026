@@ -29,7 +29,11 @@ import {
   Check,
   AlertTriangle,
   AlertCircle,
-  Flame
+  Flame,
+  TrendingUp,
+  ArrowRight,
+  Target,
+  Sparkles
 } from 'lucide-react';
 import { projectApi, milestoneApi, taskApi, teamApi, userApi } from '../api.js';
 import TaskBoardView from '../components/tasks/TaskBoardView.jsx';
@@ -482,16 +486,640 @@ export default function ProjectDetailPage() {
       {/* ════════ MAIN 2-COLUMN LAYOUT ════════ */}
       <div style={{ display: 'flex', flex: 1, minHeight: 'calc(100vh - 100px)' }}>
         <div style={{ flex: 1, padding: '16px 24px', overflowY: 'auto' }}>
-          {mainSubTab === 'overview' && (
-            <div style={{ maxWidth: 800, padding: 16 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', marginBottom: 12 }}>
-                {project?.name}
-              </h2>
-              <p style={{ fontSize: 14, color: '#475569', lineHeight: 1.6 }}>
-                {project?.description || 'Chưa có mô tả dự án.'}
-              </p>
-            </div>
-          )}
+          {mainSubTab === 'overview' && (() => {
+            const totalTasksCount = tasks.length;
+            const inProgressTasks = tasks.filter((t) => t.status === 'IN_PROGRESS');
+            const doneTasks = tasks.filter((t) => t.status === 'DONE');
+            const todoTasks = tasks.filter((t) => (t.status || 'TODO') === 'TODO');
+            const cancelledTasks = tasks.filter((t) => t.status === 'CANCELLED');
+
+            const now = new Date().getTime();
+            const dueSoonTasks = tasks.filter((t) => {
+              if (t.status === 'DONE' || t.status === 'CANCELLED' || !t.dueDate) return false;
+              const diffHours = (new Date(t.dueDate).getTime() - now) / (1000 * 60 * 60);
+              return diffHours >= 0 && diffHours <= 48;
+            });
+
+            const overdueTasks = tasks.filter((t) => {
+              if (t.status === 'DONE' || t.status === 'CANCELLED' || !t.dueDate) return false;
+              const diffHours = (new Date(t.dueDate).getTime() - now) / (1000 * 60 * 60);
+              return diffHours < 0;
+            });
+
+            const completionRate = totalTasksCount > 0 ? Math.round((doneTasks.length / totalTasksCount) * 100) : 0;
+            const attentionTasks = [...overdueTasks, ...dueSoonTasks];
+
+            return (
+              <div style={{ maxWidth: 980, display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40 }}>
+                {/* ─── 1. Project Header Banner ─── */}
+                <div
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 12,
+                    border: '1px solid #E2E8F0',
+                    padding: '24px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 260 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: '#5E6AD2',
+                            backgroundColor: '#EEF2FF',
+                            padding: '2px 8px',
+                            borderRadius: 4,
+                          }}
+                        >
+                          {project?.key || 'PRJ'}
+                        </span>
+                        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#0F172A' }}>
+                          {project?.name}
+                        </h1>
+                      </div>
+                      <p style={{ margin: 0, fontSize: 14, color: '#475569', lineHeight: 1.6, maxWidth: 680 }}>
+                        {project?.description || 'Chưa có mô tả chi tiết cho dự án.'}
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => setMainSubTab('tasks')}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '8px 14px',
+                          backgroundColor: '#F8FAFC',
+                          border: '1px solid #E2E8F0',
+                          borderRadius: 8,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: '#334155',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F1F5F9')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+                      >
+                        <CheckSquare size={15} color="#5E6AD2" />
+                        <span>Xem tất cả tác vụ</span>
+                        <ArrowRight size={14} color="#64748B" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setDefaultStatusForNewTask('TODO');
+                          setIsCreateTaskOpen(true);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '8px 14px',
+                          backgroundColor: '#5E6AD2',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          borderRadius: 8,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Plus size={15} />
+                        <span>Thêm tác vụ</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ─── 2. Key Metrics Cards (Tổng hợp 4 chỉ số yêu cầu) ─── */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+                  {/* Card 1: Đang làm (In Progress) */}
+                  <div
+                    onClick={() => setMainSubTab('tasks')}
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      border: '1px solid #E2E8F0',
+                      padding: '18px 20px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.borderColor = '#FCD34D';
+                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(217, 119, 6, 0.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.borderColor = '#E2E8F0';
+                      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.02)';
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#64748B' }}>Đang thực hiện</span>
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          backgroundColor: '#FEF3C7',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Clock size={18} color="#D97706" />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{ fontSize: 28, fontWeight: 800, color: '#B45309' }}>
+                        {inProgressTasks.length}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#94A3B8' }}>
+                        / {totalTasksCount} tác vụ
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#B45309', marginTop: 6, fontWeight: 500 }}>
+                      {totalTasksCount > 0 ? Math.round((inProgressTasks.length / totalTasksCount) * 100) : 0}% tổng khối lượng
+                    </div>
+                  </div>
+
+                  {/* Card 2: Sắp hết hạn (Due Soon) */}
+                  <div
+                    onClick={() => setMainSubTab('tasks')}
+                    style={{
+                      backgroundColor: dueSoonTasks.length > 0 ? '#FFFBEB' : '#FFFFFF',
+                      borderRadius: 12,
+                      border: `1px solid ${dueSoonTasks.length > 0 ? '#FCD34D' : '#E2E8F0'}`,
+                      padding: '18px 20px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.borderColor = '#F59E0B';
+                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(217, 119, 6, 0.12)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.borderColor = dueSoonTasks.length > 0 ? '#FCD34D' : '#E2E8F0';
+                      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.02)';
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#B45309' }}>Sắp hết hạn</span>
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          backgroundColor: '#FEF3C7',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Flame size={18} color="#D97706" />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{ fontSize: 28, fontWeight: 800, color: '#B45309' }}>
+                        {dueSoonTasks.length}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#B45309' }}>
+                        tác vụ
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#92400E', marginTop: 6, fontWeight: 500 }}>
+                      {dueSoonTasks.length > 0 ? '🔥 Cần xử lý trong 48h tới' : 'Không có tác vụ gấp'}
+                    </div>
+                  </div>
+
+                  {/* Card 3: Quá hạn (Overdue) */}
+                  <div
+                    onClick={() => setMainSubTab('tasks')}
+                    style={{
+                      backgroundColor: overdueTasks.length > 0 ? '#FFF1F2' : '#FFFFFF',
+                      borderRadius: 12,
+                      border: `1px solid ${overdueTasks.length > 0 ? '#FDA4AF' : '#E2E8F0'}`,
+                      padding: '18px 20px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.borderColor = '#F43F5E';
+                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(225, 29, 72, 0.12)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.borderColor = overdueTasks.length > 0 ? '#FDA4AF' : '#E2E8F0';
+                      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.02)';
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: overdueTasks.length > 0 ? '#BE123C' : '#64748B' }}>
+                        Đã quá hạn
+                      </span>
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          backgroundColor: '#FFE4E6',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <AlertCircle size={18} color="#BE123C" />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{ fontSize: 28, fontWeight: 800, color: '#BE123C' }}>
+                        {overdueTasks.length}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#BE123C' }}>
+                        tác vụ
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#9F1239', marginTop: 6, fontWeight: 500 }}>
+                      {overdueTasks.length > 0 ? '⚠️ Cần kiểm tra & điều chỉnh' : 'Không có tác vụ trễ hạn'}
+                    </div>
+                  </div>
+
+                  {/* Card 4: Đã hoàn thành (Done) */}
+                  <div
+                    onClick={() => setMainSubTab('tasks')}
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      border: '1px solid #E2E8F0',
+                      padding: '18px 20px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.borderColor = '#93C5FD';
+                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(37, 99, 235, 0.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.borderColor = '#E2E8F0';
+                      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.02)';
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#64748B' }}>Đã hoàn thành</span>
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          backgroundColor: '#DBEAFE',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <CheckCircle2 size={18} color="#2563EB" />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{ fontSize: 28, fontWeight: 800, color: '#1D4ED8' }}>
+                        {doneTasks.length}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#94A3B8' }}>
+                        / {totalTasksCount} tác vụ
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: '#1E40AF', marginTop: 6, fontWeight: 500 }}>
+                      Tỷ lệ hoàn thành: {completionRate}%
+                    </div>
+                  </div>
+                </div>
+
+                {/* ─── 3. Overall Project Progress Bar ─── */}
+                <div
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 12,
+                    border: '1px solid #E2E8F0',
+                    padding: '20px 24px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <TrendingUp size={18} color="#5E6AD2" />
+                      <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>
+                        Tiến độ hoàn thành dự án
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 16, fontWeight: 800, color: '#5E6AD2' }}>
+                      {completionRate}%
+                    </span>
+                  </div>
+
+                  {/* Multi-segment Progress Bar */}
+                  <div
+                    style={{
+                      height: 10,
+                      width: '100%',
+                      backgroundColor: '#F1F5F9',
+                      borderRadius: 6,
+                      overflow: 'hidden',
+                      display: 'flex',
+                      marginBottom: 14,
+                    }}
+                  >
+                    {doneTasks.length > 0 && (
+                      <div
+                        title={`Đã hoàn thành: ${doneTasks.length}`}
+                        style={{
+                          width: `${(doneTasks.length / (totalTasksCount || 1)) * 100}%`,
+                          backgroundColor: '#3B82F6',
+                          transition: 'width 0.4s ease',
+                        }}
+                      />
+                    )}
+                    {inProgressTasks.length > 0 && (
+                      <div
+                        title={`Đang tiến hành: ${inProgressTasks.length}`}
+                        style={{
+                          width: `${(inProgressTasks.length / (totalTasksCount || 1)) * 100}%`,
+                          backgroundColor: '#EAB308',
+                          transition: 'width 0.4s ease',
+                        }}
+                      />
+                    )}
+                    {todoTasks.length > 0 && (
+                      <div
+                        title={`Cần làm (Todo): ${todoTasks.length}`}
+                        style={{
+                          width: `${(todoTasks.length / (totalTasksCount || 1)) * 100}%`,
+                          backgroundColor: '#CBD5E1',
+                          transition: 'width 0.4s ease',
+                        }}
+                      />
+                    )}
+                    {cancelledTasks.length > 0 && (
+                      <div
+                        title={`Đã hủy: ${cancelledTasks.length}`}
+                        style={{
+                          width: `${(cancelledTasks.length / (totalTasksCount || 1)) * 100}%`,
+                          backgroundColor: '#94A3B8',
+                          transition: 'width 0.4s ease',
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Breakdown Legend */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 12, color: '#64748B' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#3B82F6' }} />
+                      <span>Đã xong: <b>{doneTasks.length}</b></span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#EAB308' }} />
+                      <span>Đang làm: <b>{inProgressTasks.length}</b></span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#CBD5E1' }} />
+                      <span>Chờ xử lý: <b>{todoTasks.length}</b></span>
+                    </div>
+                    {cancelledTasks.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#94A3B8' }} />
+                        <span>Đã hủy: <b>{cancelledTasks.length}</b></span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ─── 4. Attention Required Tasks (Tác vụ quá hạn & Sắp đến hạn) ─── */}
+                <div
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 12,
+                    border: '1px solid #E2E8F0',
+                    padding: '20px 24px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <AlertCircle size={18} color="#BE123C" />
+                      <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>
+                        Tác vụ cần chú ý ({attentionTasks.length})
+                      </span>
+                    </div>
+                    {attentionTasks.length > 0 && (
+                      <button
+                        onClick={() => setMainSubTab('tasks')}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#5E6AD2',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Xem tất cả trên bảng →
+                      </button>
+                    )}
+                  </div>
+
+                  {attentionTasks.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '24px 16px',
+                        textAlign: 'center',
+                        backgroundColor: '#F8FAFC',
+                        borderRadius: 8,
+                        color: '#64748B',
+                        fontSize: 13,
+                        border: '1px dashed #E2E8F0',
+                      }}
+                    >
+                      🎉 Tuyệt vời! Không có tác vụ nào bị quá hạn hoặc sắp đến hạn cần gấp.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {attentionTasks.slice(0, 5).map((t) => {
+                        const isOver = new Date(t.dueDate).getTime() < now;
+                        const formattedDate = new Date(t.dueDate).toLocaleDateString('vi-VN');
+
+                        return (
+                          <div
+                            key={t.id}
+                            onClick={() => setSelectedTaskId(t.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '10px 14px',
+                              borderRadius: 8,
+                              backgroundColor: isOver ? '#FFF1F2' : '#FFFBEB',
+                              border: `1px solid ${isOver ? '#FDA4AF' : '#FCD34D'}`,
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateX(2px)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateX(0)')}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: isOver ? '#BE123C' : '#B45309',
+                                  backgroundColor: isOver ? '#FFE4E6' : '#FEF3C7',
+                                  padding: '2px 6px',
+                                  borderRadius: 4,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {t.code || `#${t.id}`}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  color: '#0F172A',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}
+                              >
+                                {t.title}
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: isOver ? '#BE123C' : '#B45309',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                }}
+                              >
+                                {isOver ? <AlertCircle size={12} /> : <Flame size={12} />}
+                                {isOver ? `Quá hạn (${formattedDate})` : `Sắp đến hạn (${formattedDate})`}
+                              </span>
+
+                              <div
+                                title={t.assigneeName || 'Chưa gán'}
+                                style={{
+                                  width: 20,
+                                  height: 20,
+                                  borderRadius: '50%',
+                                  backgroundColor: t.assigneeName ? '#DBEAFE' : '#F1F5F9',
+                                  color: t.assigneeName ? '#1E40AF' : '#94A3B8',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {t.assigneeName ? t.assigneeName.charAt(0).toUpperCase() : <User size={10} />}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* ─── 5. Milestone Progress Section ─── */}
+                {milestones.length > 0 && (
+                  <div
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      border: '1px solid #E2E8F0',
+                      padding: '20px 24px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Target size={18} color="#5E6AD2" />
+                        <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>
+                          Tiến độ theo Giai đoạn / Milestones ({milestones.length})
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {milestones.map((m) => {
+                        const mTasks = tasks.filter((t) => t.milestoneId === m.id);
+                        const mDone = mTasks.filter((t) => t.status === 'DONE').length;
+                        const mProgress = mTasks.length > 0 ? Math.round((mDone / mTasks.length) * 100) : 0;
+
+                        return (
+                          <div
+                            key={m.id}
+                            style={{
+                              padding: '12px 14px',
+                              backgroundColor: '#F8FAFC',
+                              borderRadius: 8,
+                              border: '1px solid #E2E8F0',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#5E6AD2' }} />
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>
+                                  {m.title || m.name}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: '#5E6AD2' }}>
+                                {mDone}/{mTasks.length} tasks ({mProgress}%)
+                              </span>
+                            </div>
+
+                            <div
+                              style={{
+                                height: 6,
+                                width: '100%',
+                                backgroundColor: '#E2E8F0',
+                                borderRadius: 3,
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  height: '100%',
+                                  width: `${mProgress}%`,
+                                  backgroundColor: mProgress === 100 ? '#10B981' : '#5E6AD2',
+                                  transition: 'width 0.3s ease',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {mainSubTab === 'activity' && (
             <div style={{ maxWidth: 800, padding: 16, color: '#64748B', fontSize: 13 }}>
