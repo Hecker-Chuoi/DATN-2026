@@ -371,7 +371,52 @@ export default function ProjectDetailPage() {
           })}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* ─── Deadline Color Legend Note ─── */}
+          {mainSubTab === 'tasks' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
+              {/* Sắp đến hạn note (Nền vàng) */}
+              <div
+                title="Tác vụ sắp đến hạn chót trong 48h (Nền vàng)"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  backgroundColor: '#FFFBEB',
+                  border: '1px solid #FCD34D',
+                  color: '#B45309',
+                  fontSize: 11,
+                  fontWeight: 600,
+                }}
+              >
+                <Flame size={12} color="#D97706" />
+                <span>Sắp đến hạn</span>
+              </div>
+
+              {/* Đã hết hạn note (Nền đỏ) */}
+              <div
+                title="Tác vụ đã quá thời hạn chót (Nền đỏ)"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  backgroundColor: '#FFF1F2',
+                  border: '1px solid #FDA4AF',
+                  color: '#BE123C',
+                  fontSize: 11,
+                  fontWeight: 600,
+                }}
+              >
+                <AlertCircle size={12} color="#BE123C" />
+                <span>Đã hết hạn</span>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: 2, borderRadius: 6 }}>
             <button
               onClick={() => setViewType('list')}

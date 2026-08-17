@@ -20,6 +20,7 @@ import {
   Flame,
   Smile
 } from 'lucide-react';
+import ChangeTaskStatusModal from '../modals/ChangeTaskStatusModal.jsx';
 
 const COLUMNS = [
   {
@@ -60,6 +61,7 @@ export default function TaskBoardView({
   onTaskClick,
 }) {
   const [hiddenCols, setHiddenCols] = useState({});
+  const [statusModalTask, setStatusModalTask] = useState(null);
 
   const toggleHideColumn = (colId) => {
     setHiddenCols((prev) => ({ ...prev, [colId]: !prev[colId] }));
@@ -347,19 +349,47 @@ export default function TaskBoardView({
                         </div>
                       </div>
 
-                      {/* Title & Status Icon */}
+                      {/* Title & Status Icon (Nút tương tác mở modal chuyển trạng thái - Không chiếm diện tích & không đẩy rớt dòng) */}
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, marginBottom: 12 }}>
-                        <div style={{ marginTop: 2, flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStatusModalTask(task);
+                          }}
+                          title={`Trạng thái: ${task.status || 'TODO'} (Bấm để chuyển trạng thái)`}
+                          style={{
+                            marginTop: 1,
+                            flexShrink: 0,
+                            background: 'none',
+                            border: 'none',
+                            padding: 2,
+                            borderRadius: '50%',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#E2E8F0';
+                            e.currentTarget.style.transform = 'scale(1.15)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.transform = 'scale(1)';
+                          }}
+                        >
                           {task.status === 'DONE' ? (
-                            <CheckCircle2 size={15} color="#3B82F6" />
+                            <CheckCircle2 size={16} color="#3B82F6" />
                           ) : task.status === 'CANCELLED' ? (
-                            <XCircle size={15} color="#94A3B8" />
+                            <XCircle size={16} color="#94A3B8" />
                           ) : task.status === 'IN_PROGRESS' ? (
-                            <Clock size={15} color="#EAB308" />
+                            <Clock size={16} color="#EAB308" />
                           ) : (
-                            <Circle size={15} color="#CBD5E1" />
+                            <Circle size={16} color="#94A3B8" />
                           )}
-                        </div>
+                        </button>
 
                         <span
                           style={{
@@ -368,6 +398,8 @@ export default function TaskBoardView({
                             color: task.status === 'DONE' ? '#94A3B8' : '#0F172A',
                             textDecoration: task.status === 'DONE' ? 'line-through' : 'none',
                             lineHeight: 1.4,
+                            flex: 1,
+                            wordBreak: 'break-word',
                           }}
                         >
                           {task.title}
@@ -459,6 +491,7 @@ export default function TaskBoardView({
                           );
                         })()}
                       </div>
+
                     </div>
                   );
                 })
@@ -529,6 +562,14 @@ export default function TaskBoardView({
           </div>
         </div>
       )}
+
+      {/* Modal Chuyển trạng thái tác vụ */}
+      <ChangeTaskStatusModal
+        task={statusModalTask}
+        isOpen={Boolean(statusModalTask)}
+        onClose={() => setStatusModalTask(null)}
+        onStatusChange={onStatusChange}
+      />
     </div>
   );
 }
