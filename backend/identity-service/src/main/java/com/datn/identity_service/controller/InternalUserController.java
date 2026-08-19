@@ -44,6 +44,26 @@ public class InternalUserController {
     }
 
     /**
+     * Tìm kiếm User theo Username (dùng khi mời thành viên vào Team/Project)
+     */
+    @GetMapping("/by-username")
+    public ResponseEntity<ApiResponse<UserResponse>> getUserByUsername(@RequestParam("username") String username) {
+        log.debug("Internal API: Fetching user by username={}", username);
+        UserResponse user = userService.getUserByUsername(username);
+        return ResponseEntity.ok(ApiResponse.success(user));
+    }
+
+    /**
+     * Tìm kiếm User theo Email hoặc Username (dùng khi mời thành viên vào Team/Project)
+     */
+    @GetMapping("/by-identifier")
+    public ResponseEntity<ApiResponse<UserResponse>> getUserByIdentifier(@RequestParam("identifier") String identifier) {
+        log.debug("Internal API: Fetching user by identifier={}", identifier);
+        UserResponse user = userService.getUserByIdentifier(identifier);
+        return ResponseEntity.ok(ApiResponse.success(user));
+    }
+
+    /**
      * Truy vấn thông tin hàng loạt User theo danh sách ID
      */
     @PostMapping("/batch")

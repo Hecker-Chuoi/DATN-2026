@@ -23,6 +23,7 @@ import {
   Tag
 } from 'lucide-react';
 import { taskApi } from '../../api.js';
+import toast from 'react-hot-toast';
 
 const STATUS_OPTIONS = [
   { id: 'TODO', label: 'Todo', icon: (s = 14) => <Circle size={s} color="#64748B" /> },
@@ -101,13 +102,19 @@ export default function TaskDetailView({
 
   const handleUpdateField = async (fields) => {
     try {
-      const res = await taskApi.update(taskId, fields);
+      let res;
+      if (Object.prototype.hasOwnProperty.call(fields, 'assigneeId')) {
+        res = await taskApi.assign(taskId, fields.assigneeId);
+        toast.success(fields.assigneeId ? 'Đã gán người thực hiện!' : 'Đã hủy gán người thực hiện!');
+      } else {
+        res = await taskApi.update(taskId, fields);
+      }
       if (res && res.data) {
         setTask(res.data);
       }
       if (onTaskUpdated) onTaskUpdated();
     } catch (err) {
-      alert(err.message || 'Lỗi khi cập nhật tác vụ');
+      toast.error(err.message || 'Lỗi khi cập nhật tác vụ');
     }
   };
 

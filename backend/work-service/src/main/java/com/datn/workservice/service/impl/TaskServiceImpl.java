@@ -14,6 +14,8 @@ import com.datn.workservice.entity.Task;
 import com.datn.workservice.enums.TaskPriority;
 import com.datn.workservice.enums.TaskStatus;
 import com.datn.workservice.enums.TaskType;
+import com.datn.workservice.event.KafkaEventPublisher;
+import com.datn.workservice.event.TaskAssignedEvent;
 import com.datn.workservice.repository.MilestoneRepository;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.TaskRepository;
@@ -35,6 +37,7 @@ public class TaskServiceImpl implements TaskService {
     private final ProjectRepository projectRepository;
     private final MilestoneRepository milestoneRepository;
     private final IdentityClient identityClient;
+    private final KafkaEventPublisher kafkaEventPublisher;
 
     @Override
     @Transactional
@@ -84,6 +87,24 @@ public class TaskServiceImpl implements TaskService {
                 .build();
 
         task = taskRepository.save(task);
+
+        // Bắn sự kiện TaskAssigned nếu có assignee ngay khi tạo
+        if (task.getAssigneeId() != null) {
+            try {
+                kafkaEventPublisher.publishTaskAssigned(TaskAssignedEvent.builder()
+                        .taskId(task.getId())
+                        .projectId(task.getProjectId())
+                        .taskCode(task.getCode())
+                        .taskTitle(task.getTitle())
+                        .assigneeId(task.getAssigneeId())
+                        .assignerId(reporter)
+                        .dueDate(task.getDueDate())
+                        .build());
+            } catch (Exception e) {
+                log.warn("Failed to publish TaskAssignedEvent for new task {}: {}", task.getId(), e.getMessage());
+            }
+        }
+
         return enrichTaskResponse(task);
     }
 
@@ -96,7 +117,7 @@ public class TaskServiceImpl implements TaskService {
         List<Task> tasks = taskRepository.findByProjectId(projectId);
 
         // Áp dụng bộ lọc in-memory
-        return tasks.stream()
+        List<Task> filtered = tasks.stream()
                 .filter(t -> milestoneId == null || Objects.equals(t.getMilestoneId(), milestoneId))
                 .filter(t -> status == null || t.getStatus() == status)
                 .filter(t -> assigneeId == null || Objects.equals(t.getAssigneeId(), assigneeId))
@@ -108,7 +129,35 @@ public class TaskServiceImpl implements TaskService {
                             (t.getDescription() != null && t.getDescription().toLowerCase().contains(s));
                 })
                 .sorted(Comparator.comparing(Task::getPosition, Comparator.nullsLast(Comparator.naturalOrder())))
-                .map(this::enrichTaskResponse)
+                .collect(Collectors.toList());
+
+        if (filtered.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Batch fetch tất cả assignees từ identity-service để tối ưu hiệu năng (tránh N+1)
+        List<UUID> assigneeIds = filtered.stream()
+                .map(Task::getAssigneeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<UUID, UserResponse> userMap = new HashMap<>();
+        if (!assigneeIds.isEmpty()) {
+            try {
+                ApiResponse<List<UserResponse>> usersApi = identityClient.getUsersByIds(assigneeIds);
+                if (usersApi != null && usersApi.getData() != null) {
+                    for (UserResponse u : usersApi.getData()) {
+                        userMap.put(u.getId(), u);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Batch fetch users failed in getTasks: {}", e.getMessage());
+            }
+        }
+
+        return filtered.stream()
+                .map(t -> enrichTaskResponseWithCache(t, userMap))
                 .collect(Collectors.toList());
     }
 
@@ -125,9 +174,34 @@ public class TaskServiceImpl implements TaskService {
             throw new ResourceNotFoundException("Parent task not found with id: " + parentTaskId);
         }
 
-        return taskRepository.findByParentTaskId(parentTaskId).stream()
+        List<Task> subtasks = taskRepository.findByParentTaskId(parentTaskId);
+        if (subtasks.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<UUID> assigneeIds = subtasks.stream()
+                .map(Task::getAssigneeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<UUID, UserResponse> userMap = new HashMap<>();
+        if (!assigneeIds.isEmpty()) {
+            try {
+                ApiResponse<List<UserResponse>> usersApi = identityClient.getUsersByIds(assigneeIds);
+                if (usersApi != null && usersApi.getData() != null) {
+                    for (UserResponse u : usersApi.getData()) {
+                        userMap.put(u.getId(), u);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Batch fetch users failed in getSubtasks: {}", e.getMessage());
+            }
+        }
+
+        return subtasks.stream()
                 .sorted(Comparator.comparing(Task::getPosition, Comparator.nullsLast(Comparator.naturalOrder())))
-                .map(this::enrichTaskResponse)
+                .map(t -> enrichTaskResponseWithCache(t, userMap))
                 .collect(Collectors.toList());
     }
 
@@ -143,7 +217,6 @@ public class TaskServiceImpl implements TaskService {
         if (request.getStatus() != null) task.setStatus(request.getStatus());
         if (request.getPriority() != null) task.setPriority(request.getPriority());
         if (request.getEstimate() != null) task.setEstimate(request.getEstimate());
-        if (request.getAssigneeId() != null) task.setAssigneeId(request.getAssigneeId());
         if (request.getMilestoneId() != null) task.setMilestoneId(request.getMilestoneId());
         if (request.getParentTaskId() != null) {
             if (request.getParentTaskId().equals(taskId)) {
@@ -154,7 +227,42 @@ public class TaskServiceImpl implements TaskService {
         if (request.getDueDate() != null) task.setDueDate(request.getDueDate());
         if (request.getPosition() != null) task.setPosition(request.getPosition());
 
+        // Update assignee if provided
+        if (request.getAssigneeId() != null) {
+            task.setAssigneeId(request.getAssigneeId());
+        }
+
         task = taskRepository.save(task);
+        return enrichTaskResponse(task);
+    }
+
+    @Override
+    @Transactional
+    public TaskResponse assignTask(UUID taskId, UUID assigneeId, UUID assignerId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Task not found with id: " + taskId));
+
+        UUID oldAssigneeId = task.getAssigneeId();
+        task.setAssigneeId(assigneeId);
+        task = taskRepository.save(task);
+
+        // Bắn sự kiện Kafka khi gán người thực hiện mới (và khác null)
+        if (assigneeId != null && !assigneeId.equals(oldAssigneeId)) {
+            try {
+                kafkaEventPublisher.publishTaskAssigned(TaskAssignedEvent.builder()
+                        .taskId(task.getId())
+                        .projectId(task.getProjectId())
+                        .taskCode(task.getCode())
+                        .taskTitle(task.getTitle())
+                        .assigneeId(assigneeId)
+                        .assignerId(assignerId)
+                        .dueDate(task.getDueDate())
+                        .build());
+            } catch (Exception e) {
+                log.warn("Failed to publish TaskAssignedEvent for task {}: {}", taskId, e.getMessage());
+            }
+        }
+
         return enrichTaskResponse(task);
     }
 
@@ -174,6 +282,21 @@ public class TaskServiceImpl implements TaskService {
     }
 
     private TaskResponse enrichTaskResponse(Task task) {
+        Map<UUID, UserResponse> userCache = new HashMap<>();
+        if (task.getAssigneeId() != null) {
+            try {
+                ApiResponse<UserResponse> userApi = identityClient.getUserById(task.getAssigneeId());
+                if (userApi != null && userApi.getData() != null) {
+                    userCache.put(task.getAssigneeId(), userApi.getData());
+                }
+            } catch (Exception e) {
+                log.warn("Could not fetch assignee info for id={}: {}", task.getAssigneeId(), e.getMessage());
+            }
+        }
+        return enrichTaskResponseWithCache(task, userCache);
+    }
+
+    private TaskResponse enrichTaskResponseWithCache(Task task, Map<UUID, UserResponse> userCache) {
         TaskResponse res = TaskResponse.from(task);
 
         // Milestone Name
@@ -188,17 +311,12 @@ public class TaskServiceImpl implements TaskService {
         res.setSubtaskCount(subCount);
         res.setCompletedSubtaskCount(completedSubCount);
 
-        // Assignee info from identity-service
+        // Assignee info from identity-service (qua cache map)
         if (task.getAssigneeId() != null) {
-            try {
-                ApiResponse<UserResponse> userApi = identityClient.getUserById(task.getAssigneeId());
-                if (userApi != null && userApi.getData() != null) {
-                    UserResponse u = userApi.getData();
-                    res.setAssigneeName(u.getFullName());
-                    res.setAssigneeUsername(u.getUsername());
-                }
-            } catch (Exception e) {
-                log.warn("Could not fetch assignee info for id={}: {}", task.getAssigneeId(), e.getMessage());
+            UserResponse u = userCache.get(task.getAssigneeId());
+            if (u != null) {
+                res.setAssigneeName(u.getFullName());
+                res.setAssigneeUsername(u.getUsername());
             }
         }
 

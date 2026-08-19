@@ -18,7 +18,11 @@ public interface TeamService {
 
     TeamMemberResponse addMember(UUID teamId, AddTeamMemberRequest request);
 
+    TeamMemberResponse updateMemberRole(UUID teamId, UUID targetUserId, com.datn.workservice.dto.request.UpdateTeamMemberRoleRequest request, UUID currentUserId);
+
     void removeMember(UUID teamId, UUID userId);
 
     List<TeamMemberResponse> getTeamMembers(UUID teamId);
+
+    String getUserRoleInTeam(UUID teamId, UUID userId);
 }

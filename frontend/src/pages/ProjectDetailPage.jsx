@@ -36,6 +36,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { projectApi, milestoneApi, taskApi, teamApi, userApi } from '../api.js';
+import toast from 'react-hot-toast';
 import TaskBoardView from '../components/tasks/TaskBoardView.jsx';
 import TaskDetailView from '../components/tasks/TaskDetailView.jsx';
 import CreateTaskModal from '../components/modals/CreateTaskModal.jsx';
@@ -104,6 +105,7 @@ export default function ProjectDetailPage() {
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [defaultStatusForNewTask, setDefaultStatusForNewTask] = useState('TODO');
   const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [assigneePopoverTaskId, setAssigneePopoverTaskId] = useState(null);
 
   // Sidebar Inline Milestone creation & Modal Edit
   const [isAddingMilestone, setIsAddingMilestone] = useState(false);
@@ -134,9 +136,9 @@ export default function ProjectDetailPage() {
         setProject(pRes.data);
         if (pRes.data.teamId) {
           try {
-            const teamRes = await teamApi.getById(pRes.data.teamId);
-            if (teamRes && teamRes.data && teamRes.data.members) {
-              setMembers(teamRes.data.members);
+            const teamMembersRes = await teamApi.getMembers(pRes.data.teamId);
+            if (teamMembersRes && teamMembersRes.data) {
+              setMembers(teamMembersRes.data);
             }
           } catch (e) {
             console.warn('Could not load team members:', e);
@@ -150,6 +152,18 @@ export default function ProjectDetailPage() {
       console.error('Failed to load project details:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleQuickAssign = async (e, taskId, newAssigneeId) => {
+    e.stopPropagation();
+    try {
+      await taskApi.assign(taskId, newAssigneeId);
+      toast.success(newAssigneeId ? 'Đã gán người thực hiện!' : 'Đã hủy gán người thực hiện!');
+      setAssigneePopoverTaskId(null);
+      fetchProjectData();
+    } catch (err) {
+      toast.error(err.message || 'Gán tác vụ thất bại');
     }
   };
 
@@ -1236,8 +1250,138 @@ export default function ProjectDetailPage() {
                                   </div>
 
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                    <div style={{ width: 20, height: 20, borderRadius: '50%', backgroundColor: task.assigneeName ? '#DBEAFE' : '#F1F5F9', color: task.assigneeName ? '#1D4ED8' : '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
-                                      {task.assigneeName ? task.assigneeName.charAt(0).toUpperCase() : <User size={11} />}
+                                    {/* Assignee Avatar with Quick Picker Popover */}
+                                    <div style={{ position: 'relative' }}>
+                                      <div
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setAssigneePopoverTaskId(assigneePopoverTaskId === task.id ? null : task.id);
+                                        }}
+                                        title={task.assigneeName ? `Người thực hiện: ${task.assigneeName} (Bấm để đổi)` : 'Chưa gán người thực hiện (Bấm để gán)'}
+                                        style={{
+                                          width: 22,
+                                          height: 22,
+                                          borderRadius: '50%',
+                                          backgroundColor: task.assigneeName ? '#DBEAFE' : '#F1F5F9',
+                                          color: task.assigneeName ? '#1D4ED8' : '#94A3B8',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          fontSize: 10,
+                                          fontWeight: 700,
+                                          cursor: 'pointer',
+                                          border: task.assigneeName ? '1px solid #BFDBFE' : '1px dashed #CBD5E1',
+                                          transition: 'transform 0.15s ease',
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                                      >
+                                        {task.assigneeName ? task.assigneeName.charAt(0).toUpperCase() : <User size={11} />}
+                                      </div>
+
+                                      {assigneePopoverTaskId === task.id && (
+                                        <div
+                                          onClick={(e) => e.stopPropagation()}
+                                          style={{
+                                            position: 'absolute',
+                                            top: '100%',
+                                            right: 0,
+                                            marginTop: 6,
+                                            zIndex: 100,
+                                            backgroundColor: '#FFFFFF',
+                                            borderRadius: 8,
+                                            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1)',
+                                            border: '1px solid #E2E8F0',
+                                            padding: 4,
+                                            minWidth: 200,
+                                            maxHeight: 220,
+                                            overflowY: 'auto',
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              padding: '6px 10px',
+                                              fontSize: 11,
+                                              fontWeight: 700,
+                                              color: '#64748B',
+                                              borderBottom: '1px solid #F1F5F9',
+                                              textTransform: 'uppercase',
+                                              letterSpacing: '0.04em',
+                                            }}
+                                          >
+                                            Gán người thực hiện
+                                          </div>
+                                          <div
+                                            onClick={(e) => handleQuickAssign(e, task.id, null)}
+                                            style={{
+                                              padding: '7px 10px',
+                                              borderRadius: 6,
+                                              cursor: 'pointer',
+                                              fontSize: 12,
+                                              color: '#64748B',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: 6,
+                                            }}
+                                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+                                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                          >
+                                            <XCircle size={13} color="#94A3B8" />
+                                            <span>Hủy gán (Unassigned)</span>
+                                          </div>
+                                          {members.map((m) => {
+                                            const mId = m.id || m.userId;
+                                            const mName = m.fullName || m.username || m.email;
+                                            const isSelected = task.assigneeId === mId;
+                                            return (
+                                              <div
+                                                key={mId}
+                                                onClick={(e) => handleQuickAssign(e, task.id, mId)}
+                                                style={{
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  justifyContent: 'space-between',
+                                                  gap: 8,
+                                                  padding: '7px 10px',
+                                                  borderRadius: 6,
+                                                  cursor: 'pointer',
+                                                  fontSize: 12,
+                                                  color: isSelected ? '#2563EB' : '#1E293B',
+                                                  backgroundColor: isSelected ? '#EFF6FF' : 'transparent',
+                                                  fontWeight: isSelected ? 600 : 400,
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                  if (!isSelected) e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                  if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
+                                                }}
+                                              >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                  <div
+                                                    style={{
+                                                      width: 18,
+                                                      height: 18,
+                                                      borderRadius: '50%',
+                                                      backgroundColor: '#DBEAFE',
+                                                      color: '#1D4ED8',
+                                                      display: 'flex',
+                                                      alignItems: 'center',
+                                                      justifyContent: 'center',
+                                                      fontSize: 9,
+                                                      fontWeight: 700,
+                                                    }}
+                                                  >
+                                                    {m.username ? m.username.charAt(0).toUpperCase() : 'U'}
+                                                  </div>
+                                                  <span>{mName}</span>
+                                                </div>
+                                                {isSelected && <Check size={13} color="#2563EB" />}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
                                     </div>
 
                                     {/* Deadline Badge (Red if overdue, Amber if due soon, Green if valid) */}

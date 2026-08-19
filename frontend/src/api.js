@@ -254,6 +254,12 @@ export const teamApi = {
   create: (data) => apiClient.post(`${WORK_BASE}/teams`, data),
   getMembers: (teamId) => apiClient.get(`${WORK_BASE}/teams/${teamId}/members`),
   addMember: (teamId, data) => apiClient.post(`${WORK_BASE}/teams/${teamId}/members`, data),
+  updateMemberRole: (teamId, userId, roleInTeam) =>
+    apiClient.put(`${WORK_BASE}/teams/${teamId}/members/${userId}/role`, { roleInTeam }),
+  getMemberRole: (teamId, userId) =>
+    apiClient.get(`${WORK_BASE}/teams/${teamId}/members/${userId}/role`),
+  getMyRole: (teamId) =>
+    apiClient.get(`${WORK_BASE}/teams/${teamId}/my-role`),
   removeMember: (teamId, userId) =>
     apiClient.delete(`${WORK_BASE}/teams/${teamId}/members/${userId}`),
 };
@@ -299,6 +305,7 @@ export const taskApi = {
   getSubtasks: (parentTaskId) => apiClient.get(`${WORK_BASE}/tasks/${parentTaskId}/subtasks`),
   create: (data) => apiClient.post(`${WORK_BASE}/tasks`, data),
   update: (id, data) => apiClient.put(`${WORK_BASE}/tasks/${id}`, data),
+  assign: (id, assigneeId) => apiClient.put(`${WORK_BASE}/tasks/${id}/assignee`, { assigneeId }),
   delete: (id) => apiClient.delete(`${WORK_BASE}/tasks/${id}`),
 };
 

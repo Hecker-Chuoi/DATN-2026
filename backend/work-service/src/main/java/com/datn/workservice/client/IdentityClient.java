@@ -35,6 +35,18 @@ public interface IdentityClient {
     ApiResponse<UserResponse> getUserByEmail(@RequestParam("email") String email);
 
     /**
+     * Tìm kiếm User theo Username (dùng khi mời thành viên vào Team)
+     */
+    @GetMapping("/internal/users/by-username")
+    ApiResponse<UserResponse> getUserByUsername(@RequestParam("username") String username);
+
+    /**
+     * Tìm kiếm User theo Email hoặc Username (dùng khi mời thành viên vào Team)
+     */
+    @GetMapping("/internal/users/by-identifier")
+    ApiResponse<UserResponse> getUserByIdentifier(@RequestParam("identifier") String identifier);
+
+    /**
      * Lấy thông tin danh sách nhiều User theo danh sách ID (dùng render Avatar/Tên trên Kanban Board)
      */
     @PostMapping("/internal/users/batch")

@@ -65,6 +65,34 @@ public class TeamController {
         return ResponseEntity.ok(ApiResponse.success(null, "Xóa thành viên khỏi nhóm thành công"));
     }
 
+    @PutMapping("/{teamId}/members/{userId}/role")
+    public ResponseEntity<ApiResponse<TeamMemberResponse>> updateMemberRole(
+            @PathVariable("teamId") UUID teamId,
+            @PathVariable("userId") UUID userId,
+            @Valid @RequestBody com.datn.workservice.dto.request.UpdateTeamMemberRoleRequest request,
+            Principal principal) {
+        UUID currentUserId = extractUserId(principal);
+        TeamMemberResponse updatedMember = teamService.updateMemberRole(teamId, userId, request, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(updatedMember, "Cập nhật quyền thành viên thành công"));
+    }
+
+    @GetMapping("/{teamId}/members/{userId}/role")
+    public ResponseEntity<ApiResponse<String>> getMemberRole(
+            @PathVariable("teamId") UUID teamId,
+            @PathVariable("userId") UUID userId) {
+        String role = teamService.getUserRoleInTeam(teamId, userId);
+        return ResponseEntity.ok(ApiResponse.success(role, "Lấy vai trò thành viên thành công"));
+    }
+
+    @GetMapping("/{teamId}/my-role")
+    public ResponseEntity<ApiResponse<String>> getMyRole(
+            @PathVariable("teamId") UUID teamId,
+            Principal principal) {
+        UUID currentUserId = extractUserId(principal);
+        String role = teamService.getUserRoleInTeam(teamId, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(role, "Lấy vai trò của tôi trong nhóm thành công"));
+    }
+
     @GetMapping("/{teamId}/members")
     public ResponseEntity<ApiResponse<List<TeamMemberResponse>>> getTeamMembers(@PathVariable("teamId") UUID teamId) {
         List<TeamMemberResponse> members = teamService.getTeamMembers(teamId);

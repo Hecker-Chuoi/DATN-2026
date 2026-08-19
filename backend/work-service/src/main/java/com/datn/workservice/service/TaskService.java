@@ -20,5 +20,7 @@ public interface TaskService {
 
     TaskResponse updateTask(UUID taskId, UpdateTaskRequest request);
 
+    TaskResponse assignTask(UUID taskId, UUID assigneeId, UUID assignerId);
+
     void deleteTask(UUID taskId);
 }

@@ -67,6 +67,16 @@ public class TaskController {
         return ResponseEntity.ok(ApiResponse.success(task, "Cập nhật tác vụ thành công"));
     }
 
+    @PutMapping("/{taskId}/assignee")
+    public ResponseEntity<ApiResponse<TaskResponse>> assignTask(
+            @PathVariable("taskId") UUID taskId,
+            @RequestBody com.datn.workservice.dto.request.AssignTaskRequest request,
+            Principal principal) {
+        UUID currentUserId = extractUserId(principal);
+        TaskResponse task = taskService.assignTask(taskId, request != null ? request.getAssigneeId() : null, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(task, "Cập nhật người thực hiện thành công"));
+    }
+
     @DeleteMapping("/{taskId}")
     public ResponseEntity<ApiResponse<Void>> deleteTask(@PathVariable("taskId") UUID taskId) {
         taskService.deleteTask(taskId);
