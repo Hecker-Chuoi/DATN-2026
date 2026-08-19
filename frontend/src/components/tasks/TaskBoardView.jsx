@@ -105,6 +105,8 @@ export default function TaskBoardView({
       const diffHours = (due.getTime() - now.getTime()) / (1000 * 60 * 60);
       const formatted = due.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+      const isOverMilestone = task.milestoneDueDate && due > new Date(task.milestoneDueDate);
+
       if (diffHours < 0) {
         // 1. ĐÃ HẾT HẠN (Overdue) -> Background đỏ hồng rất nhẹ
         return {
@@ -119,8 +121,22 @@ export default function TaskBoardView({
           title: `⚠️ Đã hết hạn: ${formatted}`,
           isOverdue: true,
         };
+      } else if (isOverMilestone) {
+        // 2. VƯỢT HẠN CỘT MỐC (Over Milestone)
+        return {
+          type: 'OVER_MILESTONE',
+          text: formatted,
+          cardBg: '#FFFBEB',
+          cardBorder: '#FDE68A',
+          cardShadow: '0 2px 6px rgba(217, 119, 6, 0.08)',
+          badgeColor: '#B45309',
+          badgeBg: '#FEF3C7',
+          badgeBorder: '#FCD34D',
+          title: `⚠️ Hạn chót (${formatted}) trễ hơn Cột mốc (${new Date(task.milestoneDueDate).toLocaleDateString('vi-VN')})!`,
+          isOverMilestone: true,
+        };
       } else if (diffHours <= 48) {
-        // 2. SẮP HẾT HẠN (trong 48h) -> Background cam cảnh báo nhẹ, icon warning animation
+        // 3. SẮP HẾT HẠN (trong 48h) -> Background cam cảnh báo nhẹ, icon warning animation
         return {
           type: 'DUE_SOON',
           text: formatted,
@@ -135,7 +151,7 @@ export default function TaskBoardView({
           hoursLeft: Math.round(diffHours),
         };
       } else {
-        // 3. CÒN HẠN BÌNH THƯỜNG (> 48h)
+        // 4. CÒN HẠN BÌNH THƯỜNG (> 48h)
         return {
           type: 'ON_TRACK',
           text: formatted,
@@ -483,6 +499,8 @@ export default function TaskBoardView({
                                 </span>
                               ) : urgency.isOverdue ? (
                                 <AlertCircle size={10} color="#BE123C" />
+                              ) : urgency.isOverMilestone ? (
+                                <AlertTriangle size={10} color="#D97706" />
                               ) : (
                                 <Calendar size={10} />
                               )}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useOutletContext, Link } from 'react-router-dom';
 import {
   FolderKanban,
@@ -95,8 +95,18 @@ export default function ProjectDetailPage() {
   // Linear Top Sub-tabs ('overview' | 'activity' | 'tasks')
   const [mainSubTab, setMainSubTab] = useState('tasks');
   const [viewType, setViewType] = useState('board'); // 'list' | 'board'
+  const [showSubtasks, setShowSubtasks] = useState(false); // Mặc định: Không hiển thị Sub-Task
   const [searchTerm, setSearchTerm] = useState('');
   const [milestoneFilter, setMilestoneFilter] = useState('');
+
+  // Lọc tác vụ hiển thị theo chế độ Hiện/Ẩn Sub-task
+  const subtasksCount = useMemo(() => tasks.filter((t) => !!t.parentTaskId).length, [tasks]);
+  const displayTasks = useMemo(() => {
+    if (showSubtasks) {
+      return tasks;
+    }
+    return tasks.filter((t) => !t.parentTaskId);
+  }, [tasks, showSubtasks]);
 
   // Collapsed status groups map
   const [collapsedGroups, setCollapsedGroups] = useState({});
@@ -433,6 +443,47 @@ export default function ProjectDetailPage() {
                 <span>Đã hết hạn</span>
               </div>
             </div>
+          )}
+
+          {/* ─── Sub-tasks Visibility Toggle (Chế độ Hiện / Ẩn Sub-task) ─── */}
+          {mainSubTab === 'tasks' && (
+            <button
+              type="button"
+              onClick={() => setShowSubtasks(!showSubtasks)}
+              title={showSubtasks ? 'Đang hiện tất cả Sub-task (Nhấn để ẩn)' : 'Đang ẩn Sub-task (Nhấn để hiện)'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                borderRadius: 6,
+                border: showSubtasks ? '1px solid #818CF8' : '1px solid #E2E8F0',
+                backgroundColor: showSubtasks ? '#EEF2FF' : '#FFFFFF',
+                color: showSubtasks ? '#4F46E5' : '#475569',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: showSubtasks ? '0 1px 2px rgba(99, 102, 241, 0.1)' : 'none',
+              }}
+            >
+              <Layers size={13} color={showSubtasks ? '#4F46E5' : '#64748B'} />
+              <span>{showSubtasks ? 'Hiện Sub-task' : 'Ẩn Sub-task'}</span>
+              {subtasksCount > 0 && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    padding: '1px 6px',
+                    borderRadius: 10,
+                    backgroundColor: showSubtasks ? '#C7D2FE' : '#F1F5F9',
+                    color: showSubtasks ? '#312E81' : '#64748B',
+                    fontWeight: 700,
+                  }}
+                >
+                  {subtasksCount}
+                </span>
+              )}
+            </button>
           )}
 
           <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: 2, borderRadius: 6 }}>
@@ -1145,7 +1196,7 @@ export default function ProjectDetailPage() {
             <div>
               {viewType === 'board' ? (
                 <TaskBoardView
-                  tasks={tasks}
+                  tasks={displayTasks}
                   onStatusChange={handleTaskStatusChange}
                   onDeleteTask={async (tId) => {
                     if (window.confirm('Xóa tác vụ?')) {
@@ -1162,7 +1213,7 @@ export default function ProjectDetailPage() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {STATUS_GROUPS.map((group) => {
-                    const groupTasks = tasks.filter((t) => (t.status || 'TODO') === group.id);
+                    const groupTasks = displayTasks.filter((t) => (t.status || 'TODO') === group.id);
                     const isCollapsed = !!collapsedGroups[group.id];
 
                     return (

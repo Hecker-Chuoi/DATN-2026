@@ -22,6 +22,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -198,13 +201,45 @@ public class ProjectServiceImpl implements ProjectService {
 
         UUID teamId = request.getTeamId() != null ? request.getTeamId() : source.getTeamId();
 
-        // 1. Tạo Project mới
+        // 1. Tính toán độ lệch ngày động (Dynamic Timeline Offset)
+        LocalDate targetStartDate = request.getStartDate() != null ? request.getStartDate() : LocalDate.now();
+        LocalDate sourceStartDate = source.getStartDate();
+
+        List<Milestone> sourceMilestones = milestoneRepository.findByProjectId(source.getId());
+        List<Task> sourceTasks = taskRepository.findByProjectId(source.getId());
+
+        if (sourceStartDate == null) {
+            // Tìm mốc ngày sớm nhất từ task hoặc milestone nguồn
+            Optional<LocalDate> earliestTaskDate = sourceTasks.stream()
+                    .map(Task::getStartDate)
+                    .filter(Objects::nonNull)
+                    .map(LocalDateTime::toLocalDate)
+                    .min(LocalDate::compareTo);
+            Optional<LocalDate> earliestMsDate = sourceMilestones.stream()
+                    .map(Milestone::getDueDate)
+                    .filter(Objects::nonNull)
+                    .map(LocalDateTime::toLocalDate)
+                    .min(LocalDate::compareTo);
+
+            sourceStartDate = earliestTaskDate.orElse(earliestMsDate.orElse(targetStartDate));
+        }
+
+        long dayOffset = ChronoUnit.DAYS.between(sourceStartDate, targetStartDate);
+
+        LocalDate newEndDate = null;
+        if (source.getEndDate() != null) {
+            newEndDate = source.getEndDate().plusDays(dayOffset);
+        }
+
+        // 2. Tạo Project mới
         Project clonedProject = Project.builder()
                 .teamId(teamId)
                 .key(newKey)
                 .name(request.getNewName().trim())
                 .description(request.getNewDescription() != null ? request.getNewDescription() : source.getDescription())
                 .status(ProjectStatus.PLANNING)
+                .startDate(targetStartDate)
+                .endDate(newEndDate)
                 .createdBy(cloner)
                 .isPublic(request.getIsPublic() != null ? request.getIsPublic() : false)
                 .isTemplate(false)
@@ -212,7 +247,7 @@ public class ProjectServiceImpl implements ProjectService {
 
         clonedProject = projectRepository.save(clonedProject);
 
-        // 2. Sao chép Labels từ nguồn sang dự án mới
+        // 3. Sao chép Labels từ nguồn sang dự án mới
         Map<UUID, UUID> labelMapping = new HashMap<>();
         List<TaskLabel> sourceLabels = taskLabelRepository.findByProjectId(source.getId());
         for (TaskLabel sLabel : sourceLabels) {
@@ -225,44 +260,69 @@ public class ProjectServiceImpl implements ProjectService {
             labelMapping.put(sLabel.getId(), nLabel.getId());
         }
 
-        // 3. Sao chép Milestones từ nguồn sang dự án mới
+        // 4. Sao chép Milestones từ nguồn sang dự án mới (với dueDate tịnh tiến theo dayOffset)
         Map<UUID, UUID> milestoneMapping = new HashMap<>();
-        List<Milestone> sourceMilestones = milestoneRepository.findByProjectId(source.getId());
         for (Milestone sMs : sourceMilestones) {
+            LocalDateTime nDueDate = sMs.getDueDate() != null ? sMs.getDueDate().plusDays(dayOffset) : null;
             Milestone nMs = Milestone.builder()
                     .projectId(clonedProject.getId())
                     .name(sMs.getName())
                     .description(sMs.getDescription())
-                    .dueDate(sMs.getDueDate())
+                    .dueDate(nDueDate)
                     .status(sMs.getStatus())
                     .build();
             nMs = milestoneRepository.save(nMs);
             milestoneMapping.put(sMs.getId(), nMs.getId());
         }
 
-        // 4. Sao chép Tasks mẫu từ nguồn
-        List<Task> sourceTasks = taskRepository.findByProjectId(source.getId());
+        // 5. Sao chép Tasks và Subtasks mẫu từ nguồn (Two-pass clone để bảo toàn quan hệ cha - con & tịnh tiến ngày)
+        Map<UUID, UUID> taskMapping = new HashMap<>();
+        Map<UUID, Task> newTasksByOldId = new HashMap<>();
         int taskSeq = 1;
+
+        // Pass 1: Tạo tất cả tasks và subtasks mới, tịnh tiến startDate & dueDate
         for (Task sTask : sourceTasks) {
             UUID nMilestoneId = sTask.getMilestoneId() != null ? milestoneMapping.get(sTask.getMilestoneId()) : null;
+            LocalDateTime nStartDate = sTask.getStartDate() != null ? sTask.getStartDate().plusDays(dayOffset) : null;
+            LocalDateTime nDueDate = sTask.getDueDate() != null ? sTask.getDueDate().plusDays(dayOffset) : null;
+
             Task nTask = Task.builder()
                     .code(newKey + "-" + (taskSeq++))
                     .projectId(clonedProject.getId())
                     .teamId(teamId)
                     .milestoneId(nMilestoneId)
+                    .parentTaskId(null) // Sẽ được liên kết chính xác ở Pass 2
                     .title(sTask.getTitle())
                     .description(sTask.getDescription())
                     .type(sTask.getType())
                     .status(TaskStatus.TODO)
                     .priority(sTask.getPriority())
                     .estimate(sTask.getEstimate())
+                    .startDate(nStartDate)
+                    .dueDate(nDueDate)
                     .reporterId(cloner)
                     .position(sTask.getPosition() != null ? sTask.getPosition() : (taskSeq * 1000))
                     .build();
-            taskRepository.save(nTask);
+            nTask = taskRepository.save(nTask);
+            taskMapping.put(sTask.getId(), nTask.getId());
+            newTasksByOldId.put(sTask.getId(), nTask);
         }
 
-        // 5. Ghi log lịch sử nhân bản
+        // Pass 2: Ánh xạ lại parentTaskId cho các subtasks sang Task mới tương ứng
+        for (Task sTask : sourceTasks) {
+            if (sTask.getParentTaskId() != null) {
+                UUID newParentId = taskMapping.get(sTask.getParentTaskId());
+                if (newParentId != null) {
+                    Task nTask = newTasksByOldId.get(sTask.getId());
+                    if (nTask != null) {
+                        nTask.setParentTaskId(newParentId);
+                        taskRepository.save(nTask);
+                    }
+                }
+            }
+        }
+
+        // 6. Ghi log lịch sử nhân bản
         ProjectClone cloneLog = ProjectClone.builder()
                 .sourceProjectId(source.getId())
                 .clonedProjectId(clonedProject.getId())
@@ -270,8 +330,8 @@ public class ProjectServiceImpl implements ProjectService {
                 .build();
         projectCloneRepository.save(cloneLog);
 
-        log.info("Successfully cloned project '{}' ({}) into new project '{}' ({})",
-                source.getName(), source.getId(), clonedProject.getName(), clonedProject.getId());
+        log.info("Successfully cloned project '{}' ({}) into new project '{}' ({}) with dayOffset={} days",
+                source.getName(), source.getId(), clonedProject.getName(), clonedProject.getId(), dayOffset);
 
         return enrichProjectResponse(clonedProject);
     }

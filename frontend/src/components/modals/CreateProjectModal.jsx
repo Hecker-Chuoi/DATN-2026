@@ -47,7 +47,7 @@ export default function CreateProjectModal({ teams, initialTeamId, sourceProject
   const [teamId, setTeamId] = useState(initialTeamId || sourceProject?.teamId || teams[0]?.id || '');
   const [isTemplate, setIsTemplate] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
-  const [startDate, setStartDate] = useState('');
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().substring(0, 10));
   const [endDate, setEndDate] = useState('');
 
   const [templateList, setTemplateList] = useState([]);
@@ -129,6 +129,7 @@ export default function CreateProjectModal({ teams, initialTeamId, sourceProject
           newKey: cleanKey,
           newName: name.trim(),
           newDescription: description.trim(),
+          startDate: startDate || null,
           isPublic,
         });
         toast.success('Nhân bản dự án từ mẫu thành công!');
@@ -460,6 +461,87 @@ export default function CreateProjectModal({ teams, initialTeamId, sourceProject
               }}
             />
           </div>
+
+          {/* Date Picker Section */}
+          {mode === 'clone' ? (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: '12px 14px',
+                borderRadius: 8,
+                backgroundColor: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#1E293B' }}>
+                  <Calendar size={14} color="#7C3AED" />
+                  <span>Ngày bắt đầu dự án mới *</span>
+                </label>
+                <span style={{ fontSize: 11, color: '#7C3AED', fontWeight: 600 }}>Tự động tịnh tiến timeline</span>
+              </div>
+
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                required
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  borderRadius: 6,
+                  border: '1px solid #CBD5E1',
+                  fontSize: 13,
+                  backgroundColor: '#FFFFFF',
+                  outline: 'none',
+                  marginBottom: 8,
+                }}
+              />
+
+              <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.4 }}>
+                💡 <strong>Cơ chế dịch chuyển ngày thông minh:</strong> Toàn bộ Cột mốc (Milestones), Công việc chính (Tasks) và Công việc con (Subtasks) của mẫu sẽ tự động cộng thêm số ngày tương ứng từ mốc bắt đầu này, bảo toàn tuyệt đối thời lượng thực hiện.
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                  Ngày bắt đầu
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #CBD5E1',
+                    fontSize: 13,
+                    outline: 'none',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+                  Ngày dự kiến kết thúc
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #CBD5E1',
+                    fontSize: 13,
+                    outline: 'none',
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Options Toggles */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>

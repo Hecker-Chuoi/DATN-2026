@@ -20,7 +20,8 @@ import {
   Trash2,
   Sparkles,
   ChevronDown,
-  Tag
+  Tag,
+  AlertTriangle
 } from 'lucide-react';
 import { taskApi } from '../../api.js';
 import toast from 'react-hot-toast';
@@ -1234,6 +1235,70 @@ export default function TaskDetailView({
                           Xóa ngày hạn chót
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {/* Cảnh báo mềm khi hạn chót Task trễ hơn Cột mốc */}
+                  {task.milestoneDueDate && task.dueDate && new Date(task.dueDate) > new Date(task.milestoneDueDate) && (
+                    <div
+                      style={{
+                        marginTop: 6,
+                        padding: '6px 8px',
+                        borderRadius: 6,
+                        backgroundColor: '#FFFBEB',
+                        border: '1px solid #FDE68A',
+                        fontSize: 11,
+                        color: '#B45309',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700, marginBottom: 2 }}>
+                        <AlertTriangle size={12} color="#D97706" />
+                        <span>Hạn chót trễ hơn Cột mốc!</span>
+                      </div>
+                      <div>Cột mốc kết thúc: <strong>{new Date(task.milestoneDueDate).toLocaleDateString('vi-VN')}</strong></div>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateField({ dueDate: task.milestoneDueDate })}
+                        style={{
+                          marginTop: 4,
+                          width: '100%',
+                          padding: '3px 6px',
+                          borderRadius: 4,
+                          border: '1px solid #F59E0B',
+                          backgroundColor: '#FEF3C7',
+                          color: '#92400E',
+                          fontSize: 10,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Đồng bộ về hạn Cột mốc
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Nút kế thừa hạn chót khi Task chưa có ngày nhưng thuộc Cột mốc */}
+                  {task.milestoneDueDate && !task.dueDate && (
+                    <div style={{ marginTop: 4 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateField({ dueDate: task.milestoneDueDate })}
+                        style={{
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          border: '1px dashed #93C5FD',
+                          backgroundColor: '#EFF6FF',
+                          color: '#2563EB',
+                          fontSize: 10,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          width: '100%',
+                          textAlign: 'left',
+                        }}
+                      >
+                        + Lấy hạn Cột mốc ({new Date(task.milestoneDueDate).toLocaleDateString('vi-VN')})
+                      </button>
                     </div>
                   )}
                 </div>

@@ -23,6 +23,7 @@ public class TaskResponse {
     private UUID teamId;
     private UUID milestoneId;
     private String milestoneName;
+    private LocalDateTime milestoneDueDate;
     private UUID parentTaskId;
     private String code;
     private String title;
@@ -35,6 +36,7 @@ public class TaskResponse {
     private UUID assigneeId;
     private String assigneeName;
     private String assigneeUsername;
+    private LocalDateTime startDate;
     private LocalDateTime dueDate;
     private Integer position;
     private long subtaskCount;
@@ -58,6 +60,7 @@ public class TaskResponse {
                 .estimate(task.getEstimate())
                 .reporterId(task.getReporterId())
                 .assigneeId(task.getAssigneeId())
+                .startDate(task.getStartDate())
                 .dueDate(task.getDueDate())
                 .position(task.getPosition())
                 .createdAt(task.getCreatedAt())

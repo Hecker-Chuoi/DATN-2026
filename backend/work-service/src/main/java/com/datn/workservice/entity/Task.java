@@ -76,6 +76,9 @@ public class Task {
     @Column(name = "reporter_id", nullable = false)
     private UUID reporterId;
 
+    @Column(name = "start_date")
+    private LocalDateTime startDate;
+
     @Column(name = "due_date")
     private LocalDateTime dueDate;
 

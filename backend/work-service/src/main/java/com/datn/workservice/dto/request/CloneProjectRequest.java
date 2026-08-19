@@ -30,6 +30,8 @@ public class CloneProjectRequest {
 
     private String newDescription;
 
+    private java.time.LocalDate startDate;
+
     @Builder.Default
     private Boolean isPublic = false;
 }

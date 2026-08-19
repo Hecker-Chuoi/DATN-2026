@@ -48,6 +48,8 @@ public class CreateTaskRequest {
 
     private UUID assigneeId;
 
+    private LocalDateTime startDate;
+
     private LocalDateTime dueDate;
 
     private Integer position;

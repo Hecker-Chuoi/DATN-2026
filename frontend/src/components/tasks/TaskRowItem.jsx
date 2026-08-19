@@ -10,7 +10,8 @@ import {
   User,
   Plus,
   Trash2,
-  Calendar
+  Calendar,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function TaskRowItem({
@@ -228,25 +229,37 @@ export default function TaskRowItem({
         )}
 
         {/* Due Date Badge */}
-        {task.dueDate && (
-          <span
-            title={`Hạn chót: ${new Date(task.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              fontSize: 11,
-              fontWeight: 600,
-              color: new Date(task.dueDate) < new Date() && task.status !== 'DONE' ? '#DC2626' : '#2563EB',
-              backgroundColor: new Date(task.dueDate) < new Date() && task.status !== 'DONE' ? '#FEF2F2' : '#EFF6FF',
-              padding: '2px 6px',
-              borderRadius: 4,
-            }}
-          >
-            <Calendar size={11} />
-            {new Date(task.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-          </span>
-        )}
+        {task.dueDate && (() => {
+          const isOverdue = new Date(task.dueDate) < new Date() && task.status !== 'DONE';
+          const isOverMilestone = task.milestoneDueDate && new Date(task.dueDate) > new Date(task.milestoneDueDate) && task.status !== 'DONE';
+          const badgeColor = isOverdue ? '#DC2626' : isOverMilestone ? '#D97706' : '#2563EB';
+          const badgeBg = isOverdue ? '#FEF2F2' : isOverMilestone ? '#FFFBEB' : '#EFF6FF';
+          const badgeBorder = isOverMilestone ? '1px solid #FDE68A' : 'none';
+          const title = isOverMilestone
+            ? `⚠️ Hạn chót (${new Date(task.dueDate).toLocaleDateString('vi-VN')}) trễ hơn Cột mốc (${new Date(task.milestoneDueDate).toLocaleDateString('vi-VN')})`
+            : `Hạn chót: ${new Date(task.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+
+          return (
+            <span
+              title={title}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 11,
+                fontWeight: 600,
+                color: badgeColor,
+                backgroundColor: badgeBg,
+                border: badgeBorder,
+                padding: '2px 6px',
+                borderRadius: 4,
+              }}
+            >
+              {isOverMilestone ? <AlertTriangle size={11} color="#D97706" /> : <Calendar size={11} />}
+              {new Date(task.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+            </span>
+          );
+        })()}
 
         {/* Assignee Avatar */}
         <div

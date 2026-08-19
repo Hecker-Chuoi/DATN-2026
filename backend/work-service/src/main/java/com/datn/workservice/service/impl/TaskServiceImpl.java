@@ -82,6 +82,7 @@ public class TaskServiceImpl implements TaskService {
                 .estimate(request.getEstimate())
                 .reporterId(reporter)
                 .assigneeId(request.getAssigneeId())
+                .startDate(request.getStartDate())
                 .dueDate(request.getDueDate())
                 .position(position)
                 .build();
@@ -224,6 +225,7 @@ public class TaskServiceImpl implements TaskService {
             }
             task.setParentTaskId(request.getParentTaskId());
         }
+        if (request.getStartDate() != null) task.setStartDate(request.getStartDate());
         if (request.getDueDate() != null) task.setDueDate(request.getDueDate());
         if (request.getPosition() != null) task.setPosition(request.getPosition());
 
@@ -299,10 +301,12 @@ public class TaskServiceImpl implements TaskService {
     private TaskResponse enrichTaskResponseWithCache(Task task, Map<UUID, UserResponse> userCache) {
         TaskResponse res = TaskResponse.from(task);
 
-        // Milestone Name
+        // Milestone Name & DueDate
         if (task.getMilestoneId() != null) {
-            milestoneRepository.findById(task.getMilestoneId())
-                    .ifPresent(m -> res.setMilestoneName(m.getName()));
+            milestoneRepository.findById(task.getMilestoneId()).ifPresent(m -> {
+                res.setMilestoneName(m.getName());
+                res.setMilestoneDueDate(m.getDueDate());
+            });
         }
 
         // Subtask counts
