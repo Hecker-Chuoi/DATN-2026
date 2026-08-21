@@ -54,8 +54,41 @@ public class AuthController {
                 .body(ApiResponse.success(token, "Login successful"));
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<TokenResponse>> refreshToken(
+            @RequestBody(required = false) Map<String, String> body,
+            @CookieValue(name = "refresh_token", required = false) String cookieRefreshToken) {
+        String refreshToken = body != null ? body.get("refreshToken") : null;
+        if (refreshToken == null || refreshToken.isBlank()) {
+            refreshToken = cookieRefreshToken;
+        }
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Refresh token is required"));
+        }
+
+        TokenResponse token = keycloakService.refreshToken(refreshToken);
+        ResponseCookie cookie = buildAccessTokenCookie(token.getAccessToken(), token.getExpiresIn());
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(ApiResponse.success(token, "Token refreshed successfully"));
+    }
+
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logout() {
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @RequestBody(required = false) Map<String, String> body,
+            @CookieValue(name = "refresh_token", required = false) String cookieRefreshToken) {
+
+        String refreshToken = body != null ? body.get("refreshToken") : null;
+        if (refreshToken == null || refreshToken.isBlank()) {
+            refreshToken = cookieRefreshToken;
+        }
+
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            keycloakService.logout(refreshToken);
+        }
+
         ResponseCookie cookie = buildClearCookie();
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
@@ -67,11 +100,12 @@ public class AuthController {
      */
     @GetMapping("/google/init")
     public ResponseEntity<ApiResponse<Map<String, String>>> googleInit(
-            @RequestParam(name = "redirectUri", required = false) String redirectUri) {
+            @RequestParam(name = "redirectUri", required = false) String redirectUri,
+            @RequestParam(name = "redirect_uri", required = false) String redirect_uri) {
 
-        String uri = (redirectUri != null && !redirectUri.isBlank())
+        String uri = redirectUri != null && !redirectUri.isBlank()
                 ? redirectUri
-                : DEFAULT_REDIRECT_URI;
+                : (redirect_uri != null && !redirect_uri.isBlank() ? redirect_uri : DEFAULT_REDIRECT_URI);
 
         String authorizationUrl = keycloakService.getGoogleAuthorizationUrl(uri);
         return ResponseEntity.ok(

@@ -31,7 +31,7 @@ public class Task {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @Column(nullable = false, length = 50)
+    @Column(nullable = false, length = 120)
     private String code;
 
     @Column(name = "project_id")
@@ -75,6 +75,9 @@ public class Task {
 
     @Column(name = "reporter_id", nullable = false)
     private UUID reporterId;
+
+    @Column(name = "start_date")
+    private LocalDateTime startDate;
 
     @Column(name = "due_date")
     private LocalDateTime dueDate;

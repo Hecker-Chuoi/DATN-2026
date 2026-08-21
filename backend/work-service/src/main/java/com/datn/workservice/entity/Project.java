@@ -30,7 +30,7 @@ public class Project {
     @Column(name = "team_id")
     private UUID teamId;
 
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 100)
     private String key;
 
     @Column(nullable = false, length = 255)

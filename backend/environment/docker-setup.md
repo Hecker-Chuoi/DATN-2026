@@ -20,10 +20,10 @@ Mở IDE hoặc terminal tại `backend/`:
 ```powershell
 cd d:\DATN-2026\backend
 # Terminal 1:
-./mvnw spring-boot:run -pl identity-service
+./mvnw spring-boot:run -pl api-gateway
 
 # Terminal 2:
-./mvnw spring-boot:run -pl api-gateway
+./mvnw spring-boot:run -pl identity-service
 
 # Terminal 3:
 ./mvnw spring-boot:run -pl work-service

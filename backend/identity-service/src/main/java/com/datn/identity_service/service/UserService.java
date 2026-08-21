@@ -171,6 +171,70 @@ public class UserService {
     }
 
 
+    /**
+     * Finds a user by ID (used by internal microservices)
+     */
+     public UserResponse getUserById(UUID id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+        return UserResponse.from(user);
+    }
+
+    /**
+     * Finds a user by email (used by internal microservices)
+     */
+    public UserResponse getUserByEmail(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+        return UserResponse.from(user);
+    }
+
+    /**
+     * Finds a user by username (used by internal microservices)
+     */
+    public UserResponse getUserByUsername(String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
+        return UserResponse.from(user);
+    }
+
+    /**
+     * Finds a user by either email or username (used for team member invitations)
+     */
+    public UserResponse getUserByIdentifier(String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            throw new ResourceNotFoundException("Identifier cannot be blank");
+        }
+        String clean = identifier.trim();
+        if (clean.contains("@")) {
+            return getUserByEmail(clean);
+        }
+        return userRepository.findByUsername(clean)
+                .or(() -> userRepository.findByEmail(clean))
+                .map(UserResponse::from)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with identifier: " + clean));
+    }
+
+    /**
+     * Batch queries users by a list of IDs (used for Kanban/Team rendering)
+     */
+    public List<UserResponse> getUsersByIds(List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return userRepository.findByIdIn(ids)
+                .stream()
+                .map(UserResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Checks if a user exists by ID
+     */
+    public boolean existsById(UUID id) {
+        return userRepository.existsById(id);
+    }
+
     private String extractKeycloakId(Principal principal) {
         if (principal instanceof JwtAuthenticationToken jwtToken) {
             Jwt jwt = jwtToken.getToken();

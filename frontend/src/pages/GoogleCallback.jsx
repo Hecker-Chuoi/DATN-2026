@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authApi, tokenStore } from '../api.js';
+import toast from 'react-hot-toast';
+import { authApi, userTokenStore, adminTokenStore } from '../api.js';
 import { RefreshCw, AlertCircle, ShieldCheck } from 'lucide-react';
-
-const REDIRECT_URI = `${window.location.origin}/auth/callback`;
 
 export default function GoogleCallback({ onLoginSuccess }) {
   const navigate = useNavigate();
@@ -15,6 +14,9 @@ export default function GoogleCallback({ onLoginSuccess }) {
     if (handled.current) return;
     handled.current = true;
 
+    const isAdminCallback = window.location.pathname.includes('/admin');
+    const redirectUri = `${window.location.origin}${window.location.pathname}`;
+
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
 
@@ -25,16 +27,22 @@ export default function GoogleCallback({ onLoginSuccess }) {
     }
 
     authApi
-      .googleCallback(code, REDIRECT_URI)
+      .googleCallback(code, redirectUri)
       .then((res) => {
         const accessToken = res?.data?.access_token;
+        const refreshToken = res?.data?.refresh_token;
         if (accessToken) {
-          tokenStore.set(accessToken);
+          if (isAdminCallback) {
+            adminTokenStore.set(accessToken, refreshToken);
+          } else {
+            userTokenStore.set(accessToken, refreshToken);
+          }
         }
+        toast.success('Đăng nhập Google thành công!');
         if (onLoginSuccess) {
           onLoginSuccess();
         }
-        navigate('/admin');
+        navigate(isAdminCallback ? '/admin' : '/projects');
       })
       .catch((err) => {
         console.error('Google callback error:', err);

@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { userApi, authApi } from '../api';
 import {
   Users, ShieldCheck, Search, RefreshCw, LogOut, UserCheck,
-  Shield, Edit3, X, Check, Server, KeyRound, AlertCircle, LayoutDashboard
+  Shield, Edit3, X, Check, Server, KeyRound, AlertCircle, LayoutDashboard,
+  FolderKanban, Sparkles
 } from 'lucide-react';
+import AdminProjectManagement from '../components/admin/AdminProjectManagement.jsx';
 
 export default function AdminDashboard({ onLogout }) {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('projects'); // 'projects' | 'users'
   const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
@@ -72,14 +75,13 @@ export default function AdminDashboard({ onLogout }) {
   }, [searchQuery, users]);
 
   // Handle Logout
-  const handleLogout = async () => {
-    try {
-      await authApi.logout();
-    } catch (e) {
-      console.warn('Logout error:', e);
+  const handleLogout = () => {
+    if (onLogout) {
+      onLogout();
+    } else {
+      adminTokenStore.clear();
+      navigate('/admin/login');
     }
-    if (onLogout) onLogout();
-    navigate('/admin/login');
   };
 
   // Open Update Role Modal
@@ -138,10 +140,26 @@ export default function AdminDashboard({ onLogout }) {
         </div>
 
         <nav className="sidebar-nav">
-          <a href="#users" className="nav-item active">
+          <button
+            type="button"
+            className={`nav-item ${activeTab === 'projects' ? 'active' : ''}`}
+            onClick={() => setActiveTab('projects')}
+            style={{ width: '100%', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+          >
+            <FolderKanban size={18} />
+            <span>Quản Lý Dự Án</span>
+          </button>
+
+          <button
+            type="button"
+            className={`nav-item ${activeTab === 'users' ? 'active' : ''}`}
+            onClick={() => setActiveTab('users')}
+            style={{ width: '100%', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+          >
             <Users size={18} />
             <span>Quản Lý User</span>
-          </a>
+          </button>
+
           <a href="#keycloak" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang cấu hình Keycloak IAM'); }}>
             <KeyRound size={18} />
             <span>Keycloak IAM</span>
@@ -183,7 +201,9 @@ export default function AdminDashboard({ onLogout }) {
         <header className="admin-header">
           <div>
             <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>Bảng Quản Trị Hệ Thống</span>
-            <h1 style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-heading)' }}>User Management & Roles</h1>
+            <h1 style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-heading)' }}>
+              {activeTab === 'projects' ? 'Project Management & Templates' : 'User Management & Roles'}
+            </h1>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -203,31 +223,65 @@ export default function AdminDashboard({ onLogout }) {
                 ))}
               </div>
             )}
+
+            <button
+              onClick={handleLogout}
+              title="Đăng xuất khỏi hệ thống quản trị"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 14px',
+                borderRadius: 8,
+                border: '1px solid #fee2e2',
+                backgroundColor: '#fff5f5',
+                color: '#dc2626',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 600,
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#fee2e2';
+                e.currentTarget.style.borderColor = '#fca5a5';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#fff5f5';
+                e.currentTarget.style.borderColor = '#fee2e2';
+              }}
+            >
+              <LogOut size={14} />
+              <span>Đăng xuất</span>
+            </button>
           </div>
         </header>
 
         {/* Body Content */}
-        <div className="admin-body">
-          {error && (
-            <div style={{
-              background: '#fef2f2',
-              color: '#dc2626',
-              padding: '16px 20px',
-              borderRadius: 12,
-              fontSize: 14,
-              marginBottom: 24,
-              border: '1px solid #fecaca',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12
-            }}>
-              <AlertCircle size={24} />
-              <div>
-                <div style={{ fontWeight: 700 }}>Không thể tải danh sách người dùng</div>
-                <div>{error}</div>
-              </div>
-            </div>
-          )}
+        <div className="admin-body" style={{ padding: 24 }}>
+          {activeTab === 'projects' ? (
+            <AdminProjectManagement />
+          ) : (
+            <>
+              {error && (
+                <div style={{
+                  background: '#fef2f2',
+                  color: '#dc2626',
+                  padding: '16px 20px',
+                  borderRadius: 12,
+                  fontSize: 14,
+                  marginBottom: 24,
+                  border: '1px solid #fecaca',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12
+                }}>
+                  <AlertCircle size={24} />
+                  <div>
+                    <div style={{ fontWeight: 700 }}>Không thể tải danh sách người dùng</div>
+                    <div>{error}</div>
+                  </div>
+                </div>
+              )}
 
           {/* Table Container Card */}
           <div className="table-card">
@@ -321,6 +375,8 @@ export default function AdminDashboard({ onLogout }) {
               </table>
             )}
           </div>
+          </>
+          )}
         </div>
       </main>
 

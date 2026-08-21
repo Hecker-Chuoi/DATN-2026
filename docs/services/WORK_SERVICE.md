@@ -63,7 +63,7 @@ Service quản lý trực tiếp các thực thể trong CSDL:
 | `GET` | `/api/v1/work/projects/{projectId}` | `project.view` | Xem chi tiết dự án |
 | `PUT` | `/api/v1/work/projects/{projectId}` | `project.edit` | Cập nhật dự án |
 | `DELETE`| `/api/v1/work/projects/{projectId}` | `project.delete` | Lưu trữ / Xóa dự án |
-| `POST` | `/api/v1/work/projects/{projectId}/clone` | `project.create` | **Nhân bản Dự án / Template**: Tạo project mới sao chép toàn bộ Kanban, nhãn và task mẫu |
+| `POST` | `/api/v1/work/projects/{projectId}/clone` | `project.create` | **Nhân bản Dự án / Template**: Tạo project mới sao chép toàn bộ Kanban, nhãn, task & subtask mẫu kèm **tự động tịnh tiến timeline** theo `startDate` |
 | `POST` | `/api/v1/work/projects/{projectId}/milestones` | `project.edit` | Tạo cột mốc mới (Milestone / Sprint) |
 | `GET` | `/api/v1/work/projects/{projectId}/milestones` | `project.view` | Danh sách cột mốc |
 
@@ -173,6 +173,48 @@ Service quản lý trực tiếp các thực thể trong CSDL:
   3. Bất đồng bộ (`@Async`) lưu vào bảng `task_activity_logs`.
 * **Công nghệ sử dụng**: `Spring AOP`, `Hibernate EntityListener`, `PostgreSQL JSONB`.
 * **Tham chiếu**: *GitHub Issue Timeline, Linear Activity History*.
+
+---
+
+### 4.8. Cơ chế Nhân bản Dự án & Tịnh tiến Mốc Thời gian Động (Dynamic Timeline Shifting & Hierarchical Subtask Cloning Engine)
+* **Vấn đề**: Các Template mẫu được thiết kế sẵn cấu trúc Cột mốc (Milestones), Công việc chính (Tasks) và Công việc con (Subtasks) với mốc thời gian logic trong quá khứ hoặc mốc chuẩn. Khi người dùng tạo một dự án thực tế từ Template, hệ thống phải tự động tịnh tiến toàn bộ thời gian của Milestones, Tasks và Subtasks theo **Ngày bắt đầu dự án mới (`startDate`)**, đồng thời bảo toàn trọn vẹn quan hệ phân cấp đa tầng (Parent-Child Task Hierarchies).
+* **Thuật toán & Cơ chế hoạt động**:
+  1. **Tính toán độ lệch ngày ($\Delta \text{days}$ Offset)**:
+     - Lấy mốc bắt đầu nguồn $T_{\text{source\_start}}$ từ Template (hoặc mốc task/milestone sớm nhất).
+     - Người dùng chỉ định ngày bắt đầu dự án mới $T_{\text{target\_start}}$ (mặc định là ngày hiện tại).
+     - Độ lệch thời gian: $\Delta \text{days} = \text{ChronoUnit.DAYS.between}(T_{\text{source\_start}}, T_{\text{target\_start}})$.
+  2. **Tịnh tiến Timeline Dự án & Cột mốc (Milestones)**:
+     - $\text{Project.startDate} = T_{\text{target\_start}}$, $\text{Project.endDate} = \text{Source.endDate} + \Delta \text{days}$.
+     - Với mỗi Cột mốc $M_i$: $\text{Milestone.dueDate} = M_i.\text{dueDate} + \Delta \text{days}$.
+     - Lưu ánh xạ $\text{Map}\langle \text{OldMilestoneId}, \text{NewMilestoneId}\rangle$.
+  3. **Nhân bản Phân cấp 2 Bước (Two-Pass Hierarchical Task & Subtask Cloning)**:
+     - **Pass 1 (Khởi tạo Task & Tịnh tiến ngày)**:
+       - Tạo mới toàn bộ Tasks & Subtasks với mã định danh mới dạng `{NEW_KEY}-{seq}`.
+       - Tịnh tiến: $\text{Task.startDate} = \text{sTask.startDate} + \Delta \text{days}$, $\text{Task.dueDate} = \text{sTask.dueDate} + \Delta \text{days}$.
+       - Ánh xạ Cột mốc mới $\text{Task.milestoneId} = \text{milestoneMapping}(\text{sTask.milestoneId})$.
+       - Đặt lại trạng thái ban đầu: $\text{Task.status} = \text{TODO}$.
+       - Lưu ánh xạ định danh $\text{taskMapping}\langle \text{OldTaskId}, \text{NewTaskId}\rangle$.
+     - **Pass 2 (Tái lập quan hệ phân cấp Subtasks)**:
+       - Duyệt qua các Task nguồn có $\text{parentTaskId} \neq \text{null}$.
+       - Cập nhật Task con mới: $\text{NewSubtask.parentTaskId} = \text{taskMapping}(\text{sTask.parentTaskId})$.
+* **Lợi ích**:
+  - Tự động hóa 100% việc lên lịch trình dự án từ template chỉ với 1 cú click.
+  - Bảo toàn nguyên vẹn cây Subtask và quan hệ tiến độ không bị đứt gãy.
+* **Công nghệ sử dụng**: `Spring Data JPA Transactional`, `Java Time API (ChronoUnit, LocalDateTime)`.
+* **Tham chiếu**: *Asana Project Templates Date Shifting, Jira Issue Hierarchy Clone, Notion Template Duplication*.
+
+---
+
+### 4.9. Giải pháp Xung đột Mốc thời gian Task & Milestone (Milestone Timeline Conflict Resolution & Non-blocking Alert)
+* **Vấn đề**: Khi một Task được gán vào Cột mốc (Milestone / Sprint), có thể phát sinh các trường hợp lệch thời gian (ví dụ: `task.dueDate > milestone.dueDate` do task bị delay hoặc ước lượng vượt quá Sprint). Nếu chặn cứng (Hard Error 400), người dùng sẽ gặp ức chế lớn khi quản lý kế hoạch.
+* **Giải pháp Cảnh báo mềm (Soft Warning & Fast Sync UX)**:
+  1. **Không chặn thao tác**: Cho phép gán task vào milestone bình thường để phản ánh đúng thực tế trễ tiến độ (Overdue Scope).
+  2. **Truyền dẫn thông tin Cột mốc (`milestoneDueDate`)**: `TaskResponse` tự động đính kèm `milestoneDueDate` giúp Client không cần truy vấn thêm.
+  3. **Chỉ báo trực quan thông minh (Visual Warning Badges)**:
+     - Trên **Kanban Board** & **Task List**: Đổi màu badge sang **Vàng Cam** (`#D97706`) với icon `AlertTriangle` và tooltip giải thích: *"⚠️ Hạn chót (dd/MM) trễ hơn Cột mốc (dd/MM)!"*.
+     - Trong **Task Detail View**: Hiển thị hộp cảnh báo kèm nút 1-click **[Đồng bộ về hạn Cột mốc]** để lập tức căn chỉnh deadline của Task bằng với Milestone.
+     - Với Task chưa có ngày: Cung cấp nút 1-click **[+ Lấy hạn Cột mốc]** để lên lịch nhanh chóng.
+* **Tham chiếu**: *Linear Issue Milestone Assignment, Jira Sprint Scope Alerts*.
 
 ---
 
