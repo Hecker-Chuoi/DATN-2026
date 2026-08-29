@@ -4,10 +4,13 @@ WORKDIR /app
 
 # Copy pom files for monorepo dependency caching
 COPY pom.xml ./
+COPY common/pom.xml ./common/
 COPY identity-service/pom.xml ./identity-service/
 COPY api-gateway/pom.xml ./api-gateway/
+COPY work-service/pom.xml ./work-service/
 
-# Copy source code of api-gateway
+# Copy source code of common & api-gateway
+COPY common/src ./common/src
 COPY api-gateway/src ./api-gateway/src
 
 # Build api-gateway JAR package

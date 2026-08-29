@@ -1053,11 +1053,6 @@ export default function AdminProjectManagement() {
         >
           {/* Page Info & Page Size Selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div>
-              Hiển thị <strong>{projects.length > 0 ? page * pageSize + 1 : 0}</strong> -{' '}
-              <strong>{Math.min((page + 1) * pageSize, totalElements)}</strong> trên tổng số{' '}
-              <strong>{totalElements}</strong> dự án
-            </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span>Số dòng:</span>
@@ -1379,7 +1374,7 @@ export default function AdminProjectManagement() {
                 <input
                   type="checkbox"
                   checked={!!editingProject.isTemplate}
-                  onChange={() => {}}
+                  onChange={() => { }}
                   style={{ marginTop: 2, cursor: 'pointer' }}
                 />
                 <div>
@@ -1410,7 +1405,7 @@ export default function AdminProjectManagement() {
                 <input
                   type="checkbox"
                   checked={!!editingProject.isPublic}
-                  onChange={() => {}}
+                  onChange={() => { }}
                   style={{ cursor: 'pointer' }}
                 />
                 <div>
