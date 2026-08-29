@@ -239,10 +239,16 @@ export const authApi = {
 
 // ─── User API ─────────────────────────────────────────────────────────────────
 export const userApi = {
-  listAll: () => apiClient.get('/identity/api/v1/admin/users'),
+  listAll: (params) => apiClient.get('/identity/api/v1/admin/users', { params }),
   me: () => apiClient.get('/identity/api/v1/users/me'),
   updateRoles: (id, roles) =>
     apiClient.put(`/identity/api/v1/admin/users/${id}/roles`, { roles }),
+  adminCreate: (username, password) =>
+    apiClient.post('/identity/api/v1/admin/users', { username, password }),
+  resetPassword: (id, password) =>
+    apiClient.put(`/identity/api/v1/admin/users/${id}/reset-password`, { password }),
+  delete: (id) =>
+    apiClient.delete(`/identity/api/v1/admin/users/${id}`),
 };
 
 // ─── Work Service: Team API ───────────────────────────────────────────────────

@@ -44,4 +44,4 @@ keycloak:
   # Lấy từ: Keycloak Admin → datn-realm → Clients → datn-backend → Credentials
   client:
     client-id: datn-backend
-    client-secret: pBchukVams8pHwBHnPvzTY86e3ou2Ym7
+    client-secret: aHyLbQ4knDq8VdIr5lWZV6i1fOhIK41X
