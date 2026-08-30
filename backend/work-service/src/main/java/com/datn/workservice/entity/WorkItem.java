@@ -107,7 +107,7 @@ public class WorkItem {
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
 
-    @Version
+    @jakarta.persistence.Version
     @Column(nullable = false)
     @Builder.Default
     private Integer version = 0;

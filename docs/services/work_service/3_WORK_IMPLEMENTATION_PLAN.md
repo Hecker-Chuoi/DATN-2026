@@ -1,287 +1,334 @@
-# 📋 KẾ HOẠCH TRIỂN KHAI CHI TIẾT WORK SERVICE (JIRA-GRADE ENGINE)
+# 📋 KẾ HOẠCH TRIỂN KHAI TOÀN DIỆN FULLSTACK WORK SERVICE (JIRA-GRADE)
 ## DỰ ÁN: DATN-2026 — QUẢN LÝ DỰ ÁN & CÔNG VIỆC DOANH NGHIỆP
 
-> **Tài liệu căn cứ:** [`2_WORK_MAIN_DOC.md`](file:///d:/DATN-2026/docs/services/work_service/2_WORK_MAIN_DOC.md)  
-> **Mục tiêu:** Chia nhỏ toàn bộ quá trình tái cấu trúc & hiện thực `work-service` thành **9 Giai đoạn với 24 Bước nhỏ (Actionable Steps)** có thể thực hiện độc lập, kiểm thử cuốn chiếu và bàn giao từng phần.
+> **Tài liệu căn cứ:** [`2_WORK_MAIN_DOC.md`](file:///d:/DATN-2026/docs/services/work_service/2_WORK_MAIN_DOC.md), [`4_WORK_DATABASE_DESIGN.md`](file:///d:/DATN-2026/docs/services/work_service/4_WORK_DATABASE_DESIGN.md), [`5_WORK_SEQUENCE_DIAGRAMS.md`](file:///d:/DATN-2026/docs/services/work_service/5_WORK_SEQUENCE_DIAGRAMS.md).  
+> **Phạm vi triển khai:** **Fullstack (Backend Java 21 / Spring Boot 3.x + Frontend React 19 / Vite / TailwindCSS / Lucide)**.  
+> **Cấu trúc lộ trình:** **9 Giai đoạn với 24 Bước chi tiết (Actionable Steps)** thực thi song hành Backend & Frontend, kiểm thử cuốn chiếu và bàn giao từng phần.
 
 ---
 
-## 🗺️ TỔNG QUAN LỘ TRÌNH TRIỂN KHAI (ROADMAP SUMMARY)
+## 🗺️ TỔNG QUAN LỘ TRÌNH TRIỂN KHAI FULLSTACK
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ GIAI ĐOẠN 1: CSDL & LÕI THỰC THỂ (Database Migration & Core Entity Layer)                              │
-│ ├── Bước 1.1: Migration DDL PostgreSQL (Flyway/Liquibase) tạo 18+ bảng & Indexing (GIN, Sequence)     │
-│ ├── Bước 1.2: Hiện thực bộ JPA Entities & Enums chuẩn hóa theo mô hình Jira                            │
-│ └── Bước 1.3: Xây dựng tầng Spring Data JPA Repositories & BaseSpecification                           │
+│ GIAI ĐOẠN 1: CSDL, LÕI THỰC THỂ & CLIENT TYPES (Database, Entities & Frontend API Base)                │
+│ ├── Bước 1.1: Migration DDL PostgreSQL (Flyway) tạo 25 bảng CSDL & GIN/B-Tree Indexing                 │
+│ ├── Bước 1.2: Bộ JPA Entities & 13 Enums chuẩn hóa theo Jira Model                                     │
+│ └── Bước 1.3: Spring Data Repositories (BE) & Cấu hình API Client + Type/Enum Definitions (FE)         │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ GIAI ĐOẠN 2: THUẬT TOÁN NỀN TẢNG (Core Domain Algorithms & Utilities)                                  │
-│ ├── Bước 2.1: Bộ sinh mã việc nguyên tử theo Project Key (AtomicKeySequenceGenerator)                  │
-│ ├── Bước 2.2: Thuật toán xếp thứ tự kéo thả O(1) (LexoRankService)                                     │
-│ ├── Bước 2.3: Bộ kiểm soát phân cấp nghiêm ngặt 3 tầng (StrictHierarchyValidator)                      │
-│ └── Bước 2.4: Bộ phát hiện chu trình khóa liên kết công việc (DependencyCycleDetector)                 │
+│ GIAI ĐOẠN 2: THUẬT TOÁN NỀN TẢNG & XỬ LÝ CLIENT (Core Algorithms & Optimistic Helpers)                │
+│ ├── Bước 2.1: Bộ sinh mã việc nguyên tử AtomicKeySequenceGenerator (BE)                                │
+│ ├── Bước 2.2: Thuật toán LexoRank O(1) Reordering (BE: LexoRankService + FE: LexoRank Helper)          │
+│ ├── Bước 2.3: Kiểm soát phân cấp nghiêm ngặt 3 tầng (BE: StrictHierarchyValidator + FE: Drag Guards)   │
+│ └── Bước 2.4: Bộ phát hiện chu trình phụ thuộc DFS (BE: DependencyCycleDetector)                       │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ GIAI ĐOẠN 3: DỰ ÁN, LOẠI CÔNG VIỆC & PHÂN QUYỀN RBAC (Project, Work Item Types & RBAC)                 │
+│ GIAI ĐOẠN 3: DỰ ÁN, LOẠI CÔNG VIỆC & PHÂN QUYỀN (Project Management, Types & RBAC)                     │
 │ ├── Bước 3.1: DTOs & Validation Requests/Responses cho Project & WorkItemType                          │
-│ ├── Bước 3.2: Project Service & Controller (Kèm logic Seed dữ liệu mặc định khi tạo mới)               │
-│ └── Bước 3.3: Phân quyền hạt mịn RBAC nội bộ Project (ProjectRole, PermissionGuard AOP)                │
+│ ├── Bước 3.2: Project CRUD & Auto-Seeding (BE) + Màn hình Projects & Modal Tạo mới (FE)                │
+│ └── Bước 3.3: Phân quyền Project RBAC (BE: ProjectRole/PermissionGuard + FE: Project Members/Role Tab)│
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ GIAI ĐOẠN 4: QUY TRÌNH & MÁY TRẠNG THÁI (Dynamic Workflow Engine - FSM)                                │
 │ ├── Bước 4.1: DTOs & Mapping cho Status, Workflow, Transition, Scheme                                  │
-│ ├── Bước 4.2: Máy trạng thái Finite State Machine (Xử lý Condition, Validator, PostFunction)          │
-│ └── Bước 4.3: Workflow Service & Controller (API lấy transition hợp lệ & thực thi chuyển trạng thái)   │
+│ ├── Bước 4.2: Máy trạng thái FSM (BE: Condition, Validator, Post-function Engine)                      │
+│ └── Bước 4.3: Workflow APIs (BE) + Nút Chuyển Trạng thái Động & Workflow Diagram Viewer (FE)            │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ GIAI ĐOẠN 5: QUẢN TRỊ CÔNG VIỆC & TRƯỜNG TÙY CHỈNH (Work Items, Changelogs & Custom Fields)            │
+│ GIAI ĐOẠN 5: QUẢN TRỊ CÔNG VIỆC & TRƯỜNG ĐỘNG (Work Items, Custom Fields & Collaboration)              │
 │ ├── Bước 5.1: DTOs cho Work Item đa năng & JSONB Custom Fields                                         │
-│ ├── Bước 5.2: Work Item Service & Controller (CRUD, Rank Update, Optimistic Lock Reconcile)            │
-│ ├── Bước 5.3: Lắng nghe & Lưu vết kiểm toán tự động (AOP / EntityListener Changelog)                   │
-│ └── Bước 5.4: Quản lý Bình luận, Tệp đính kèm & Liên kết (Comments, Attachments, Links)                │
+│ ├── Bước 5.2: Work Item CRUD & Optimistic Lock (BE) + Modal Chi tiết Issue chuẩn Jira (FE)             │
+│ ├── Bước 5.3: Nhật ký Audit Trail (BE: Changelog EntityListener + FE: Tab Lịch sử thay đổi Timeline)   │
+│ └── Bước 5.4: Comments Threaded, Attachments Dropzone & Linked Issues Widget (BE + FE)                 │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ GIAI ĐOẠN 6: SPRINT, BACKLOG & BẢNG CÔNG VIỆC (Sprint, Backlog & Scrum/Kanban Boards)                  │
-│ ├── Bước 6.1: Sprint Service & Controller (Start, Close Sprint Rollover, Snapshot)                     │
-│ ├── Bước 6.2: Board Engine Service & Controller (Scrum/Kanban Data, WIP Limits, Swimlanes)             │
-│ └── Bước 6.3: Bộ tính toán Báo cáo Agile (Burndown Chart, Velocity, Cumulative Flow Diagram)           │
+│ GIAI ĐOẠN 6: SPRINT, BACKLOG & BẢNG CÔNG VIỆC (Sprint Lifecycle, Boards & Agile Reports)               │
+│ ├── Bước 6.1: Sprint Service (BE) + Màn hình Backlog (FE: Accordion Sprints, Start/Complete Modal)     │
+│ ├── Bước 6.2: Board Engine (BE: WIP Limits, Swimlanes) + Interactive Kanban/Scrum Board (FE: DnD)     │
+│ └── Bước 6.3: Báo cáo Agile (BE: Snapshot Calculator + FE: Burndown, Velocity & CFD Charts)            │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ GIAI ĐOẠN 7: PHÂN HỆ, PHIÊN BẢN & NHÂN BẢN DỰ ÁN (Components, Versions & Project Cloning Engine)       │
-│ ├── Bước 7.1: Components (Auto-assign Lead) & Versions (Auto Release Notes Generator)                  │
-│ ├── Bước 7.2: Labels Service (On-the-fly Normalization)                                                │
-│ └── Bước 7.3: Two-Pass Dynamic Timeline Shifting Project Cloning Engine (Nhân bản từ Template)         │
+│ GIAI ĐOẠN 7: PHÂN HỆ, PHIÊN BẢN & NHÂN BẢN DỰ ÁN (Components, Versions & Template Cloning)             │
+│ ├── Bước 7.1: Components (Auto-lead) & Versions (BE) + Tab Quản lý Phân hệ & Release Notes (FE)        │
+│ ├── Bước 7.2: Labels Service (BE) + On-the-fly Tag Input & Badge Color Picker (FE)                     │
+│ └── Bước 7.3: Two-Pass Timeline Shifting Engine (BE) + Modal Chọn Template Dự án Thông minh (FE)       │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ GIAI ĐOẠN 8: TRUY VẤN JQL, TỰ ĐỘNG HÓA & REALTIME (JQL, Automation, WebSocket & Outbox)                │
-│ ├── Bước 8.1: JQL Parser Engine (AST -> JPA Criteria / JSONB query) & Saved Filters                    │
-│ ├── Bước 8.2: Lightweight Event-Driven Automation Engine (Trigger -> Condition -> Action)              │
-│ ├── Bước 8.3: STOMP WebSocket + Redis Pub/Sub Backplane & Ephemeral Live Presence                      │
-│ └── Bước 8.4: Transactional Outbox Poller & Kafka Event Publisher                                      │
+│ GIAI ĐOẠN 8: TRUY VẤN JQL, TỰ ĐỘNG HÓA & REALTIME (JQL Engine, Automation & Realtime Collab)           │
+│ ├── Bước 8.1: JQL Parser Engine (BE) + Thanh Tìm kiếm JQL Thông minh & Filter Sidebar (FE)             │
+│ ├── Bước 8.2: Automation Engine (BE) + Giao diện Cấu hình Rule Tự động hóa Trigger -> Action (FE)      │
+│ ├── Bước 8.3: STOMP WebSocket & Presence (BE) + Live Card Sync & Avatars Đang Xem Issue (FE)           │
+│ └── Bước 8.4: Transactional Outbox & Kafka Event Publisher (BE)                                        │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ GIAI ĐOẠN 9: KIỂM THỬ TÍCH HỢP & HOÀN TẤT TÀI LIỆU (Integration Testing & Documentation)               │
-│ ├── Bước 9.1: Bộ kiểm thử tự động Unit Tests & Integration Tests (Postman Collection / MockMvc)        │
-│ └── Bước 9.2: Swagger / OpenAPI 3.0 UI Document & Cập nhật README bàn giao                             │
+│ GIAI ĐOẠN 9: KIỂM THỬ E2E, TỐI ƯU HÓA & TÀI LIỆU (Integration Testing, UX Polish & Docs)               │
+│ ├── Bước 9.1: Kiểm thử Tích hợp E2E (BE MockMvc / Postman + FE Optimistic UI Rollback on 409 Conflict) │
+│ └── Bước 9.2: Swagger / OpenAPI 3.0 Documentation & Hoàn tất Bàn giao Hệ thống                         │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🛠️ CHI TIẾT TỪNG GIAI ĐOẠN & CÁC BƯỚC THỰC THI (ACTIONABLE STEPS)
+## 🛠️ CHI TIẾT 9 GIAI ĐOẠN & CÁC BƯỚC THỰC THI (ACTIONABLE STEPS)
 
 ---
 
-### GIAI ĐOẠN 1: CSDL & LÕI THỰC THỂ (DATABASE & ENTITIES)
+### GIAI ĐOẠN 1: CSDL, LÕI THỰC THỂ & CLIENT TYPES (DATABASE & FRONTEND BASE)
 
-#### 🔹 Bước 1.1: Migration DDL PostgreSQL tạo 18+ bảng & Indexing
-* **Mục tiêu:** Tạo file Migration script chuẩn cho PostgreSQL 16 (Flyway: `V1__init_work_jira_schema.sql`).
-* **Nhiệm vụ cụ thể:**
-  1. Tạo toàn bộ 18 bảng: `projects`, `project_roles`, `role_assignments`, `permission_scheme_entries`, `work_item_types`, `statuses`, `workflows`, `workflow_transitions`, `workflow_schemes`, `workflow_scheme_mappings`, `sprints`, `sprint_report_snapshots`, `components`, `versions`, `labels`, `work_items`, `work_item_component_maps`, `work_item_label_maps`, `work_item_links`, `boards`, `board_columns`, `board_column_statuses`, `board_swimlanes`, `work_item_changelogs`, `work_item_comments`, `work_item_attachments`, `custom_field_definitions`, `saved_filters`, `automation_rules`, `outbox_events`, `project_clones`.
-  2. Tạo các Index quan trọng: B-Tree trên `(project_id, rank)`, `(project_id, state)`, và **GIN Index** trên `custom_fields JSONB`.
-* **Tiêu chí nghiệm thu (Definition of Done - DoD):**
-  - Chạy migration không lỗi trên PostgreSQL, sinh đầy đủ bảng và khóa ngoại.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 1.1: Tạo file migration V1__init_work_jira_schema.sql cho PostgreSQL."`
+#### 🔹 Bước 1.1: Migration DDL PostgreSQL tạo 25 bảng & Indexing (Đã xong)
+* **Backend:**
+  - Script Flyway: [`V1__init_work_jira_schema.sql`](file:///d:/DATN-2026/backend/work-service/src/main/resources/db/migration/V1__init_work_jira_schema.sql).
+  - Khởi tạo 25 bảng CSDL kèm ràng buộc khóa ngoại, B-Tree và GIN Index trên `custom_fields JSONB`.
+* **Tiêu chí nghiệm thu (DoD):** Flyway migrate thành công trên PostgreSQL 16.
 
-#### 🔹 Bước 1.2: Hiện thực bộ JPA Entities & Enums chuẩn hóa
-* **Mục tiêu:** Tạo đầy đủ các Java Entity classes tương ứng trong package `com.datn.workservice.entity` và `enums`.
-* **Nhiệm vụ cụ thể:**
-  - Tạo các Enums: `HierarchyLevel`, `StatusCategory` (`TODO`, `IN_PROGRESS`, `DONE`), `WorkItemPriority`, `SprintState` (`FUTURE`, `ACTIVE`, `CLOSED`), `BoardType` (`SCRUM`, `KANBAN`), `SwimlaneStrategy`, `LinkType` (`BLOCKS`, `RELATES_TO`, `DUPLICATES`, `CAUSES`), `CustomFieldType`, `OutboxStatus`.
-  - Tạo các Entity JPA: `Project`, `WorkItem`, `WorkItemType`, `Status`, `Workflow`, `WorkflowTransition`, `WorkflowScheme`, `Sprint`, `SprintReportSnapshot`, `Component`, `Version`, `Label`, `WorkItemLink`, `Board`, `BoardColumn`, `BoardSwimlane`, `WorkItemChangelog`, `WorkItemComment`, `WorkItemAttachment`, `CustomFieldDefinition`, `SavedFilter`, `AutomationRule`, `OutboxEvent`, `ProjectClone`.
-  - Cấu hình `@Version private Integer version` trên `WorkItem` cho Optimistic Locking.
-  - Cấu hình `@Type(JsonBinaryType.class)` hoặc `@JdbcTypeCode(SqlTypes.JSON)` trên các cột JSONB.
+#### 🔹 Bước 1.2: Hiện thực bộ JPA Entities & Enums chuẩn hóa (Đã xong)
+* **Backend:**
+  - 13 Enums trong `com.datn.workservice.enums` (`HierarchyLevel`, `StatusCategory`, `WorkItemPriority`, `SprintState`, `BoardType`...).
+  - 33 JPA Entities trong `com.datn.workservice.entity` (hỗ trợ `@Version` Optimistic Locking, JSONB columns).
+* **Tiêu chí nghiệm thu (DoD):** Clean compile thành công không lỗi mapping.
+
+#### 🔹 Bước 1.3: Xây dựng tầng Repositories & Cấu hình Frontend API Client
+* **Backend:**
+  - Tạo Repositories trong `com.datn.workservice.repository`: `ProjectRepository`, `TeamRepository`, `WorkItemRepository`, `SprintRepository`, `BoardRepository`, `WorkflowRepository`, `StatusRepository`, `ComponentRepository`, `VersionRepository`, `LabelRepository`, `WorkItemLinkRepository`, `WorkItemChangelogRepository`, `CustomFieldDefinitionRepository`, `SavedFilterRepository`, `AutomationRuleRepository`, `OutboxEventRepository`.
+  - Tích hợp `JpaSpecificationExecutor` cho tìm kiếm động.
+* **Frontend:**
+  - Tạo file cấu hình API service: `frontend/src/api/workServiceApi.js`.
+  - Định nghĩa Type Constants & Enums trên FE: `frontend/src/constants/workConstants.js` (`STATUS_CATEGORIES`, `PRIORITY_CONFIG`, `HIERARCHY_LEVELS`, `SPRINT_STATES`, `LINK_TYPES`).
 * **Tiêu chí nghiệm thu (DoD):**
-  - Dự án compile thành công không có lỗi JPA mapping.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 1.2: Tạo bộ Java Entities và Enums cho Work Service."`
-
-#### 🔹 Bước 1.3: Xây dựng tầng Spring Data JPA Repositories
-* **Mục tiêu:** Tạo các Repository interfaces cho toàn bộ các thực thể, tích hợp `JpaSpecificationExecutor`.
-* **Nhiệm vụ cụ thể:**
-  - Tạo Repositories trong `com.datn.workservice.repository`.
-  - Viết các custom query: Tìm Sprint active, tìm WorkItem theo rank, tìm Column ánh xạ Status, tìm Changelog theo thời gian...
-* **Tiêu chí nghiệm thu (DoD):**
-  - Tất cả các repository kế thừa `JpaRepository` và `JpaSpecificationExecutor`.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 1.3: Tạo các JPA Repositories cho Work Service."`
+  - Tất cả Repository có unit query test; Frontend API module import và gọi được Axios client chuẩn.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 1.3: Tạo các JPA Repositories và cấu hình Frontend API Client."`
 
 ---
 
-### GIAI ĐOẠN 2: THUẬT TOÁN NỀN TẢNG (CORE DOMAIN ALGORITHMS & UTILS)
+### GIAI ĐOẠN 2: THUẬT TOÁN NỀN TẢNG & XỬ LÝ CLIENT (CORE DOMAIN ALGORITHMS)
 
 #### 🔹 Bước 2.1: Bộ sinh mã việc nguyên tử theo Project Key (`AtomicKeySequenceGenerator`)
-* **Mục tiêu:** Sinh mã công việc tuần tự không trùng lặp theo từng dự án (`PRJ-1`, `PRJ-2`).
-* **Nhiệm vụ cụ thể:**
-  - Tạo Service `AtomicKeySequenceGenerator` gọi hàm PostgreSQL `nextval('work_item_seq_' || projectKey)`.
-  - Viết hàm tự động tạo Sequence `CREATE SEQUENCE IF NOT EXISTS work_item_seq_KEY` khi tạo Project mới.
-* **Tiêu chí nghiệm thu (DoD):**
-  - Chạy test sinh 100 mã đồng thời không bị trùng mã và không nhảy cách quãng.
+* **Backend:**
+  - Tạo `AtomicKeySequenceGenerator` gọi sequence PostgreSQL `nextval('work_item_seq_' || projectKey)`.
+  - Tự động sinh `CREATE SEQUENCE IF NOT EXISTS work_item_seq_KEY` khi tạo Project.
+* **Tiêu chí nghiệm thu (DoD):** Test 100 luồng đồng thời sinh mã không bị trùng (`SCRUM-1`, `SCRUM-2`...).
 * **Lệnh kích hoạt:** `"Hãy thực hiện Bước 2.1: Xây dựng AtomicKeySequenceGenerator."`
 
-#### 🔹 Bước 2.2: Thuật toán xếp thứ tự kéo thả $O(1)$ (`LexoRankService`)
-* **Mục tiêu:** Sinh chuỗi LexoRank (Base-36) để chèn phần tử vào giữa 2 phần tử bất kỳ mà chỉ cần update 1 bản ghi.
-* **Nhiệm vụ cụ thể:**
-  - Tạo `LexoRankService` với các phương thức: `generateInitialRank()`, `calculateBetween(String prevRank, String nextRank)`, `calculateBefore(String rank)`, `calculateAfter(String rank)`.
-* **Tiêu chí nghiệm thu (DoD):**
-  - Unit test chèn hàng trăm lần liên tiếp vẫn sinh ra chuỗi có thứ tự từ điển (`Comparable.compareTo`) tăng dần chính xác.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 2.2: Xây dựng LexoRankService."`
+#### 🔹 Bước 2.2: Thuật toán xếp thứ tự kéo thả $O(1)$ (`LexoRankService` & FE Helper)
+* **Backend:**
+  - `LexoRankService` với `calculateBetween(prevRank, nextRank)`, `calculateBefore()`, `calculateAfter()`.
+* **Frontend:**
+  - Tạo tiện ích `frontend/src/utils/lexorankHelper.js` để tính toán tạm thời rank client-side cho Optimistic UI update ngay khi thả card.
+* **Tiêu chí nghiệm thu (DoD):** Chèn hàng trăm lần liên tiếp vẫn sinh chuỗi thứ tự từ điển (`Comparable.compareTo`) tăng dần chính xác.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 2.2: Xây dựng LexoRankService và frontend helper."`
 
-#### 🔹 Bước 2.3: Bộ kiểm soát phân cấp 3 tầng (`StrictHierarchyValidator`)
-* **Mục tiêu:** Enforce quy tắc phân cấp: Epic (1) $\rightarrow$ Story/Task/Bug (0) $\rightarrow$ Sub-task (-1).
-* **Nhiệm vụ cụ thể:**
-  - Chặn Sub-task có con, chặn Epic có cha, chặn gắn cha sai cấp độ.
-  - Chống chu trình (A là cha B, B là cha A).
-* **Tiêu chí nghiệm thu (DoD):**
-  - Ném `BadRequestException` hoặc `InvalidHierarchyException` rõ ràng khi vi phạm.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 2.3: Xây dựng StrictHierarchyValidator."`
+#### 🔹 Bước 2.3: Bộ kiểm soát phân cấp 3 tầng (`StrictHierarchyValidator` & FE Drag Guards)
+* **Backend:**
+  - Kiểm tra tính hợp lệ: Epic (1) $\rightarrow$ Story/Task/Bug (0) $\rightarrow$ Sub-task (-1). Chặn gắn cha sai cấp hoặc tự làm cha chính mình.
+* **Frontend:**
+  - Thêm Drag Validation Guards trong UI: Không cho phép kéo Subtask ra ngoài làm Epic, chỉ cho phép kéo Subtask vào các Story/Task.
+* **Tiêu chí nghiệm thu (DoD):** Ném lỗi `InvalidHierarchyException` rõ ràng; UI hiển thị icon cấm thả (Drop Disabled) khi kéo sai cấp.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 2.3: Xây dựng StrictHierarchyValidator và UI drag guards."`
 
 #### 🔹 Bước 2.4: Bộ phát hiện chu trình liên kết (`DependencyCycleDetector`)
-* **Mục tiêu:** Chặn tạo liên kết kiểu `BLOCKS` tạo thành vòng tròn kín.
-* **Nhiệm vụ cụ thể:**
-  - Sử dụng thuật toán DFS duyệt đồ thị liên kết `work_item_links`.
-* **Tiêu chí nghiệm thu (DoD):**
-  - Báo lỗi ngay lập tức khi phát hiện chu trình khóa $A \rightarrow B \rightarrow C \rightarrow A$.
+* **Backend:**
+  - Thuật toán DFS duyệt đồ thị `work_item_links` để chặn chu trình khóa $A \rightarrow B \rightarrow C \rightarrow A$.
+* **Tiêu chí nghiệm thu (DoD):** Ném `CyclicDependencyException` khi phát hiện chu trình deadlock.
 * **Lệnh kích hoạt:** `"Hãy thực hiện Bước 2.4: Xây dựng DependencyCycleDetector."`
 
 ---
 
-### GIAI ĐOẠN 3: DỰ ÁN, LOẠI CÔNG VIỆC & PHÂN QUYỀN RBAC (PROJECT & RBAC)
+### GIAI ĐOẠN 3: DỰ ÁN, LOẠI CÔNG VIỆC & PHÂN QUYỀN (PROJECT & RBAC)
 
 #### 🔹 Bước 3.1: DTOs & Validation Requests/Responses cho Project & WorkItemType
-* **Mục tiêu:** Tạo các class Request/Response DTOs chuẩn Jakarta Validation (`@NotBlank`, `@Size`).
+* **Backend:** Request/Response DTOs cho Project, Team, WorkItemType kèm Jakarta Validation.
+* **Frontend:** Viết Zod Schema / Form Validation cho Form tạo dự án.
 * **Lệnh kích hoạt:** `"Hãy thực hiện Bước 3.1: Tạo DTOs cho Project và WorkItemType."`
 
-#### 🔹 Bước 3.2: Project Service & Controller (Kèm logic Seed dữ liệu mặc định)
-* **Mục tiêu:** CRUD Project và tự động khởi tạo hệ sinh thái ban đầu khi tạo một Project mới:
-  1. Tạo sequence mã task: `work_item_seq_{KEY}`.
-  2. Tạo 5 WorkItemTypes chuẩn: `Epic`, `Story`, `Task`, `Bug`, `Sub-task`.
-  3. Tạo Workflow mặc định kèm các trạng thái: `To Do`, `In Progress`, `In Review`, `Done`.
-  4. Tạo Board mặc định (Scrum hoặc Kanban tùy `project_type`) với 4 cột ánh xạ tương ứng.
-  5. Tạo 4 Project Roles mặc định: `Project Admin`, `PM`, `Developer`, `Viewer`.
-* **Tiêu chí nghiệm thu (DoD):**
-  - Gọi API `POST /api/v1/work/projects` tạo ra đầy đủ cả Project lẫn hệ sinh thái mặc định đi kèm.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 3.2: Xây dựng ProjectService và ProjectController kèm logic Seed mặc định."`
+#### 🔹 Bước 3.2: Project Service & Controller (BE) + Màn hình Danh sách & Tạo Dự án (FE)
+* **Backend:**
+  - `ProjectService` & `ProjectController`: CRUD dự án.
+  - Tự động seed hệ sinh thái mặc định khi tạo mới (Sequence, 5 Types, Default Workflow, Board, Roles).
+* **Frontend:**
+  - Xây dựng trang danh sách dự án: `frontend/src/pages/ProjectsPage.jsx`.
+  - Modal tạo dự án mới: `frontend/src/components/project/CreateProjectModal.jsx` (Chọn Icon, Key, Loại Scrum/Kanban, Lead).
+* **Tiêu chí nghiệm thu (DoD):** Tạo dự án từ Frontend thành công, điều hướng ngay vào Board làm việc của dự án mới.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 3.2: Xây dựng ProjectService và Màn hình Quản lý Dự án."`
 
-#### 🔹 Bước 3.3: Phân quyền hạt mịn RBAC nội bộ Project (`ProjectPermissionGuard`)
-* **Mục tiêu:** Xây dựng AOP Aspect / Security Guard kiểm tra quyền hạn của User trong Project tương ứng trước khi cho phép gọi API.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 3.3: Xây dựng ProjectPermissionGuard và RoleAssignmentService."`
+#### 🔹 Bước 3.3: Phân quyền hạt mịn RBAC nội bộ Project (BE + FE)
+* **Backend:** `ProjectPermissionGuard` (AOP Aspect) kiểm tra quyền `@RequireProjectPermission(PermissionKey.XXX)`.
+* **Frontend:**
+  - Component `frontend/src/components/project/ProjectMembersTab.jsx` quản lý thành viên & gán Role.
+  - Custom Hook `useProjectPermission(permissionKey)` ẩn/hiện các nút thao tác tương ứng (Create Issue, Start Sprint, Settings...).
+* **Tiêu chí nghiệm thu (DoD):** User không có quyền sẽ bị chặn ở cả tầng UI và trả về `403 FORBIDDEN` ở API.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 3.3: Xây dựng Project RBAC và giao diện phân quyền."`
 
 ---
 
 ### GIAI ĐOẠN 4: QUY TRÌNH & MÁY TRẠNG THÁI (DYNAMIC WORKFLOW ENGINE)
 
 #### 🔹 Bước 4.1: DTOs & Mapping cho Workflow, Status, Transition
+* **Backend:** DTOs cho Workflow, Transition, Conditions/Validators config JSONB.
+* **Frontend:** Type definitions cho Workflow transitions.
 * **Lệnh kích hoạt:** `"Hãy thực hiện Bước 4.1: Tạo DTOs cho Workflow và Status."`
 
 #### 🔹 Bước 4.2: Máy trạng thái Finite State Machine (`WorkflowEngine`)
-* **Mục tiêu:** Xử lý logic chuyển đổi trạng thái:
-  - **Kiểm tra Condition**: Người dùng có quyền chuyển không? Có phải Assignee không?
-  - **Kiểm tra Validator**: Có thiếu trường bắt buộc không? Các sub-tasks đã Done hết chưa?
-  - **Thực thi Post-function**: Tự động gán `resolved_at`, tự động chuyển trạng thái Story cha khi tất cả Sub-tasks Done.
+* **Backend:** Xử lý luồng chuyển đổi trạng thái: Condition $\rightarrow$ Validator $\rightarrow$ Post-Function.
+* **Tiêu chí nghiệm thu (DoD):** Chuyển trạng thái hợp lệ cập nhật đúng `resolved_at` và ngăn chặn chuyển trái phép.
 * **Lệnh kích hoạt:** `"Hãy thực hiện Bước 4.2: Xây dựng Finite State Machine WorkflowEngine."`
 
-#### 🔹 Bước 4.3: Workflow Service & Controller
-* **Mục tiêu:**
+#### 🔹 Bước 4.3: Workflow APIs & Giao diện Chuyển Trạng thái (BE + FE)
+* **Backend:**
   - `GET /api/v1/work/items/{itemId}/transitions`: Lấy danh sách nút chuyển hợp lệ cho user hiện tại.
-  - `POST /api/v1/work/items/{itemId}/transitions`: Thực hiện chuyển trạng thái.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 4.3: Xây dựng WorkflowService và WorkflowController."`
+  - `POST /api/v1/work/items/{itemId}/transitions/{transitionId}`: Thực hiện chuyển đổi.
+* **Frontend:**
+  - Component `frontend/src/components/workflow/StatusTransitionDropdown.jsx` (Nút chuyển trạng thái động hiển thị đúng các bước hợp lệ).
+  - Modal xem sơ đồ quy trình trực quan: `frontend/src/components/workflow/WorkflowDiagramModal.jsx`.
+* **Tiêu chí nghiệm thu (DoD):** Bấm nút trên Dropdown đổi trạng thái thành công, card trên Board tự nhảy sang cột mới.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 4.3: Xây dựng Workflow Controller và Status Transition Dropdown."`
 
 ---
 
-### GIAI ĐOẠN 5: QUẢN TRỊ CÔNG VIỆC, LỊCH SỬ & TRƯỜNG TÙY CHỈNH (WORK ITEMS)
+### GIAI ĐOẠN 5: QUẢN TRỊ CÔNG VIỆC & TRƯỜNG ĐỘNG (WORK ITEMS & COLLABORATION)
 
-#### 🔹 Bước 5.1: DTOs cho Work Item & Custom Fields
+#### 🔹 Bước 5.1: DTOs cho Work Item đa năng & JSONB Custom Fields
+* **Backend:** Request/Response DTOs cho WorkItem, CustomFieldDefinition, LinkedIssues.
+* **Frontend:** State management & Form helpers cho Custom Fields.
 * **Lệnh kích hoạt:** `"Hãy thực hiện Bước 5.1: Tạo DTOs cho WorkItem và CustomFields."`
 
-#### 🔹 Bước 5.2: Work Item Service & Controller (CRUD, Rank, Optimistic Lock)
-* **Mục tiêu:**
-  - `POST /api/v1/work/items`: Tạo mới việc, tự gán mã tuần tự, gán rank cuối danh sách.
-  - `GET /api/v1/work/items`: Tìm kiếm phân trang lọc động theo `Specification`.
-  - `PUT /api/v1/work/items/{itemId}`: Sửa việc, kiểm tra `@Version` bắt `409 Conflict`.
-  - `PATCH /api/v1/work/items/{itemId}/rank`: Kéo thả cập nhật LexoRank.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 5.2: Xây dựng WorkItemService và WorkItemController."`
+#### 🔹 Bước 5.2: Work Item CRUD & Modal Chi tiết Công việc (BE + FE)
+* **Backend:**
+  - `WorkItemService` & `WorkItemController` (CRUD, Rank Update, Optimistic Locking check `@Version`).
+* **Frontend:**
+  - Modal chi tiết công việc chuẩn Jira: `frontend/src/components/workitem/WorkItemDetailModal.jsx`.
+  - Trình render trường tùy chỉnh động: `frontend/src/components/workitem/DynamicCustomFieldsRenderer.jsx` (hỗ trợ Text, Number, Select, Date, User, Checkbox).
+  - Hiển thị Breadcrumbs: `Project / Epic / Parent Story / Item Code`.
+* **Tiêu chí nghiệm thu (DoD):** Mở xem, chỉnh sửa inline (Title, Assignee, Story Points, Estimate Time, Custom Fields) mượt mà với debounce autosave.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 5.2: Xây dựng WorkItemService và Modal Chi tiết Công việc."`
 
-#### 🔹 Bước 5.3: Lắng nghe & Lưu vết kiểm toán tự động (AOP / EntityListener Changelog)
-* **Mục tiêu:** Tự động so sánh `old_state` và `new_state` khi WorkItem thay đổi $\rightarrow$ Ghi vào `work_item_changelogs`.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 5.3: Xây dựng cơ chế Changelog Audit Logging tự động."`
+#### 🔹 Bước 5.3: Nhật ký Audit Trail & Tab Lịch sử Thay đổi (BE + FE)
+* **Backend:** Tự động bắt sự kiện `@EntityListeners(WorkItemChangelogListener.class)` ghi vết mọi trường thay đổi vào `work_item_changelogs`.
+* **Frontend:** Component `frontend/src/components/workitem/ChangelogTimelineTab.jsx` hiển thị dòng thời gian ai đã đổi gì lúc nào.
+* **Tiêu chí nghiệm thu (DoD):** Thay đổi Assignee/Status lập tức xuất hiện trong timeline lịch sử.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 5.3: Xây dựng Changelog Audit Logging và UI Timeline."`
 
-#### 🔹 Bước 5.4: Quản lý Bình luận, Tệp đính kèm & Liên kết (Comments, Attachments, Links)
-* **Mục tiêu:** APIs thảo luận cây bình luận, upload tệp đính kèm, tạo liên kết kiểu `BLOCKS`, `RELATES_TO`.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 5.4: Xây dựng Service & Controller cho Comments, Attachments và WorkItemLinks."`
+#### 🔹 Bước 5.4: Comments Cây, Attachments Dropzone & Linked Issues Widget (BE + FE)
+* **Backend:** APIs cho thảo luận cây đa cấp, tải tệp đính kèm, tạo liên kết `BLOCKS` / `RELATES_TO`.
+* **Frontend:**
+  - Cây bình luận: `frontend/src/components/workitem/CommentsThread.jsx` (hỗ trợ rich text / markdown, reply lồng nhau).
+  - Kéo thả tệp tin: `frontend/src/components/workitem/AttachmentsDropzone.jsx` (preview hình ảnh, tải về).
+  - Widget liên kết: `frontend/src/components/workitem/IssueLinksWidget.jsx` (tìm kiếm issue theo mã để link, hiển thị trạng thái blocker).
+* **Tiêu chí nghiệm thu (DoD):** Thêm comment, upload file và liên kết 2 issue thành công trên giao diện.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 5.4: Xây dựng Comments, Attachments và Linked Issues Widget."`
 
 ---
 
 ### GIAI ĐOẠN 6: SPRINT, BACKLOG & BẢNG CÔNG VIỆC (SPRINT & BOARDS)
 
-#### 🔹 Bước 6.1: Sprint Service & Controller (Start, Close Rollover, Snapshot)
-* **Mục tiêu:**
-  - `POST /sprints/{id}/start`: Bắt đầu sprint (`ACTIVE` — đảm bảo chỉ 1 sprint active).
-  - `POST /sprints/{id}/close`: Đóng sprint, chuyển task tồn đọng sang Next Sprint / Backlog, ghi bản ghi `sprint_report_snapshots`.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 6.1: Xây dựng SprintService và SprintController."`
+#### 🔹 Bước 6.1: Sprint Lifecycle (BE) & Màn hình Backlog (FE)
+* **Backend:**
+  - `SprintService` & `SprintController` (`createSprint`, `startSprint` [đảm bảo chỉ 1 active], `completeSprint` [chốt sổ snapshot, dồn việc dở dang sang sprint sau]).
+* **Frontend:**
+  - Màn hình Backlog: `frontend/src/pages/BacklogPage.jsx`.
+  - Danh sách Accordion Sprints và Backlog Pool (kéo thả công việc giữa các Sprint).
+  - Modal bắt đầu Sprint: `StartSprintModal.jsx` (chọn ngày, nhập Goal).
+  - Modal hoàn thành Sprint: `CompleteSprintModal.jsx` (tổng kết số task hoàn thành, chọn Sprint đích dồn việc).
+* **Tiêu chí nghiệm thu (DoD):** Quản lý chu kỳ Sprint từ Backlog $\rightarrow$ Active $\rightarrow$ Closed mượt mà.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 6.1: Xây dựng SprintService và Màn hình Backlog."`
 
-#### 🔹 Bước 6.2: Board Engine Service & Controller (Scrum/Kanban Data, WIP, Swimlanes)
-* **Mục tiêu:**
-  - `GET /boards/{boardId}/data`: Gom nhóm thẻ theo Cột và Swimlane (Active Sprint cho Scrum hoặc toàn bộ cho Kanban).
-  - Kiểm tra và gắn cờ cảnh báo khi vi phạm WIP Limit.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 6.2: Xây dựng BoardService và BoardController."`
+#### 🔹 Bước 6.2: Board Engine (BE) & Bảng Kanban/Scrum Board Tương tác cao (FE)
+* **Backend:**
+  - `BoardService` & `BoardController`: Lấy dữ liệu Board theo Cột và Swimlane, kiểm tra WIP Limit.
+* **Frontend:**
+  - Màn hình Board làm việc: `frontend/src/pages/ActiveBoardPage.jsx`.
+  - Kéo thả mượt mà với `@hello-pangea/dnd` cập nhật LexoRank $O(1)$.
+  - Cảnh báo trực quan WIP Limit (đổi màu header cột vàng khi chạm ngưỡng, đỏ khi vượt mức).
+  - Chế độ phân làn Swimlanes (Theo Epic, Theo Assignee, Theo Priority).
+* **Tiêu chí nghiệm thu (DoD):** Kéo thả card giữa các cột đổi trạng thái tức thì, vị trí giữ nguyên sau khi F5.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 6.2: Xây dựng BoardService và Interactive Board Component."`
 
-#### 🔹 Bước 6.3: Bộ tính toán Báo cáo Agile (Burndown Chart, Velocity, CFD)
-* **Mục tiêu:**
-  - API trả về dữ liệu biểu đồ Burndown Chart (Đường lý tưởng vs Đường thực tế từ changelog).
-  - API biểu đồ Velocity qua các Sprint.
-  - API biểu đồ Luồng tích lũy Cumulative Flow Diagram (CFD).
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 6.3: Xây dựng AgileReportService và ReportController."`
+#### 🔹 Bước 6.3: Bộ Báo cáo Agile Thông minh (BE + FE)
+* **Backend:**
+  - `AgileReportService`: Tính toán dữ liệu Burndown Chart (Đường lý tưởng vs Thực tế), Velocity qua các Sprint, Cumulative Flow Diagram (CFD).
+* **Frontend:**
+  - Màn hình Báo cáo: `frontend/src/pages/AgileReportsPage.jsx`.
+  - Vẽ biểu đồ chuyên nghiệp với `Recharts` / `Chart.js`:
+    - **Burndown Chart:** Thể hiện tiến độ đốt Story Points theo từng ngày trong Sprint.
+    - **Velocity Chart:** Biểu đồ cột so sánh điểm cam kết (Commitment) vs Hoàn thành (Delivered).
+    - **CFD Chart:** Biểu đồ diện tích tích lũy phát hiện nút thắt cổ chai (Bottlenecks).
+* **Tiêu chí nghiệm thu (DoD):** Biểu đồ hiển thị chính xác số liệu từ các Snapshot đã chốt sổ.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 6.3: Xây dựng AgileReportService và Màn hình Báo cáo Agile."`
 
 ---
 
 ### GIAI ĐOẠN 7: PHÂN HỆ, PHIÊN BẢN & NHÂN BẢN DỰ ÁN (COMPONENTS & CLONING)
 
-#### 🔹 Bước 7.1: Components (Auto-assign Lead) & Versions (Release Notes Generator)
-* **Mục tiêu:** Quản lý Component (gán Lead mặc định) và Version (sinh Release Notes Markdown tự động khi bấm Release).
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 7.1: Xây dựng ComponentService và VersionService."`
+#### 🔹 Bước 7.1: Components (Auto-lead) & Versions Release Notes (BE + FE)
+* **Backend:**
+  - Quản lý Component (tự gán Lead khi tạo issue).
+  - Quản lý Release Version (tự động sinh Release Notes Markdown từ danh sách issues đã Done).
+* **Frontend:**
+  - Tab quản lý phân hệ: `frontend/src/components/project/ComponentsTab.jsx`.
+  - Tab quản lý phiên bản: `frontend/src/components/project/ReleasesTab.jsx` (Nút bấm "Generate & Copy Release Notes").
+* **Tiêu chí nghiệm thu (DoD):** Tạo issue gắn Component tự điền Assignee; bấm Release tự sinh bản tin phát hành đầy đủ.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 7.1: Xây dựng Components, Versions và Release Notes Generator."`
 
-#### 🔹 Bước 7.2: Labels Service (On-the-fly Normalization)
-* **Mục tiêu:** Tự động tạo nhãn mới nếu chưa có khi user nhập on-the-fly.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 7.2: Xây dựng LabelService."`
+#### 🔹 Bước 7.2: Labels Service & Tag Input Component (BE + FE)
+* **Backend:** Tự động chuẩn hóa và lưu nhãn mới on-the-fly.
+* **Frontend:** Component `frontend/src/components/common/LabelTagInput.jsx` (gợi ý nhãn có sẵn, tạo nhãn mới với mã màu ngẫu nhiên).
+* **Tiêu chí nghiệm thu (DoD):** Gõ nhãn mới lưu ngay vào danh mục nhãn của dự án.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 7.2: Xây dựng Labels Service và Tag Input Component."`
 
-#### 🔹 Bước 7.3: Two-Pass Dynamic Timeline Shifting Project Cloning Engine
-* **Mục tiêu:** Nhân bản dự án từ Template:
-  - Tính $\Delta\text{days} = \text{TargetStartDate} - \text{TemplateStartDate}$.
-  - Pass 1: Clone toàn bộ cấu trúc, tịnh tiến ngày, reset status về `TODO`, lưu `Map<OldId, NewId>`.
-  - Pass 2: Tái lập quan hệ cha-con 3 tầng (`parent_id`) và liên kết `work_item_links`.
-  - Lưu bản ghi lịch sử vào `project_clones`.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 7.3: Xây dựng ProjectCloningService (Two-Pass Dynamic Shifting)."`
+#### 🔹 Bước 7.3: Two-Pass Dynamic Timeline Shifting Cloning Engine & Template Modal (BE + FE)
+* **Backend:**
+  - `ProjectCloningService`: Nhân bản sâu toàn bộ Dự án mẫu (Pass 1: cấu trúc + tịnh tiến $\Delta\text{days}$; Pass 2: tái lập quan hệ cha-con 3 cấp và links).
+* **Frontend:**
+  - Modal chọn Template: `frontend/src/components/project/TemplateSelectorModal.jsx`.
+  - Xem trước cấu trúc Template (Scrum E-Commerce, Microservices Cloud Migration, Marketing Launch), chọn ngày bắt đầu mong muốn $\rightarrow$ Hệ thống tự động dịch chuyển toàn bộ timeline.
+* **Tiêu chí nghiệm thu (DoD):** Nhân bản thành công dự án mới với hàng chục Task/Subtask/Sprint có timeline thực tế tính từ ngày người dùng chọn.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 7.3: Xây dựng Two-Pass Project Cloning Engine và Template Selector Modal."`
 
 ---
 
 ### GIAI ĐOẠN 8: TRUY VẤN JQL, TỰ ĐỘNG HÓA & REALTIME (JQL, AUTOMATION, REALTIME)
 
-#### 🔹 Bước 8.1: JQL Parser Engine & Saved Filters
-* **Mục tiêu:** Chuyển đổi chuỗi JQL (`project = "PRJ" AND status != "Done" AND assignee = currentUser()`) thành JPA Specification.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 8.1: Xây dựng JqlQueryParser và SavedFilterService."`
+#### 🔹 Bước 8.1: JQL Parser Engine & Thanh Tìm kiếm Thông minh (BE + FE)
+* **Backend:** `JqlQueryParser` chuyển đổi chuỗi JQL (`project = "SCRUM" AND priority = "HIGH"`) thành `Specification<WorkItem>` truy vấn kết hợp chỉ mục GIN JSONB.
+* **Frontend:**
+  - Thanh tìm kiếm JQL: `frontend/src/components/search/JqlSearchBar.jsx` (Auto-complete từ khóa `status`, `assignee`, `priority`...).
+  - Filter Sidebar: Bộ lọc trực quan bằng checkbox kết hợp chuyển đổi 2 chiều với JQL query.
+* **Tiêu chí nghiệm thu (DoD):** Tìm kiếm lọc kết quả siêu tốc $< 50\text{ms}$ với cả trường chuẩn lẫn trường tùy biến JSONB.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 8.1: Xây dựng JQL Parser Engine và Thanh Tìm kiếm JQL."`
 
-#### 🔹 Bước 8.2: Lightweight Event-Driven Automation Engine
-* **Mục tiêu:** Xử lý tự động hóa: Trigger $\rightarrow$ Condition $\rightarrow$ Action (VD: Subtasks xong hết $\rightarrow$ Đổi status Story cha sang Done).
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 8.2: Xây dựng AutomationEngineService."`
+#### 🔹 Bước 8.2: Automation Rule Engine & Giao diện Cấu hình Rule (BE + FE)
+* **Backend:** Event-driven Automation Engine: Lắng nghe sự kiện `ISSUE_TRANSITIONED` $\rightarrow$ Đánh giá Condition $\rightarrow$ Kích hoạt Action (VD: Đóng mọi Subtasks khi Story cha Done).
+* **Frontend:** Modal cấu hình Automation: `frontend/src/components/automation/AutomationRulesModal.jsx` (dạng `WHEN [Trigger] IF [Condition] THEN [Action]`).
+* **Tiêu chí nghiệm thu (DoD):** Cấu hình rule trên UI, kích hoạt sự kiện backend tự động thực thi hành động tương ứng.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 8.2: Xây dựng Automation Engine và Giao diện Cấu hình Rule."`
 
-#### 🔹 Bước 8.3: STOMP WebSocket + Redis Pub/Sub Backplane & Live Presence
-* **Mục tiêu:**
-  - Đồng bộ kéo thả thẻ Kanban real-time đa người dùng qua STOMP `/topic/project/{id}/board`.
-  - Hiển thị avatar những ai đang xem task (Live Presence) qua Redis Key TTL 15s.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 8.3: Xây dựng WebSocketSTOMP, RedisPubSub và RedisPresenceService."`
+#### 🔹 Bước 8.3: STOMP WebSocket & Live Presence (BE + FE)
+* **Backend:** WebSocket STOMP endpoint `/ws/work` + Redis Pub/Sub Backplane đồng bộ multi-instance.
+* **Frontend:**
+  - Custom Hook `frontend/src/hooks/useWorkRealtime.js` kết nối STOMP.
+  - Tự động cập nhật vị trí Card khi người khác kéo thả.
+  - Hiển thị Avatar những ai đang mở cùng xem Work Item (Live Presence).
+* **Tiêu chí nghiệm thu (DoD):** Mở 2 tab trình duyệt, kéo thả ở Tab 1 $\rightarrow$ Tab 2 tự động cập nhật không cần reload.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 8.3: Xây dựng Realtime WebSocket STOMP và Live Presence."`
 
-#### 🔹 Bước 8.4: Transactional Outbox Poller & Kafka Event Publisher
-* **Mục tiêu:** Ghi `outbox_events` trong transaction $\rightarrow$ Poller quét phát event lên Kafka Topic `work-events-topic`.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 8.4: Xây dựng Transactional Outbox Poller và KafkaEventPublisher."`
-
----
-
-### GIAI ĐOẠN 9: KIỂM THỬ TÍCH HỢP & HOÀN TẤT TÀI LIỆU (TESTING & DOCS)
-
-#### 🔹 Bước 9.1: Bộ kiểm thử tự động Unit Tests & Integration Tests
-* **Mục tiêu:** Viết bộ test kiểm thử luồng trọn vẹn: Tạo Project $\rightarrow$ Tạo Epic/Story/Subtask $\rightarrow$ Kéo thả Sprint $\rightarrow$ Chuyển trạng thái Workflow $\rightarrow$ Đóng Sprint & Kiểm tra Burndown.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 9.1: Viết bộ Unit & Integration Tests cho Work Service."`
-
-#### 🔹 Bước 9.2: Swagger / OpenAPI 3.0 UI Document & README
-* **Mục tiêu:** Cấu hình OpenAPI Springdoc, hiển thị trực quan toàn bộ API groups trên Swagger UI `http://localhost:8083/swagger-ui.html`.
-* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 9.2: Cấu hình Springdoc OpenAPI 3.0 và hoàn thiện tài liệu."`
+#### 🔹 Bước 8.4: Transactional Outbox Poller & Kafka Event Publisher (BE)
+* **Backend:** Quét `outbox_events` định kỳ và gửi tin nhắn JSON chuẩn hóa lên Apache Kafka Topic `work-events-topic`.
+* **Tiêu chí nghiệm thu (DoD):** Mọi thay đổi quan trọng đều phát sinh sự kiện Kafka chống mất mát tin cậy.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 8.4: Xây dựng Transactional Outbox Poller và Kafka Publisher."`
 
 ---
 
-## 🚀 HƯỚNG DẪN BẮT ĐẦU THỰC HIỆN
+### GIAI ĐOẠN 9: KIỂM THỬ E2E, TỐI ƯU HÓA & TÀI LIỆU (TESTING & DOCS)
 
-Bạn có thể bắt đầu bất cứ lúc nào bằng cách yêu cầu thực hiện từng bước theo cú pháp:
-> **"Hãy thực hiện Bước 1.1: Tạo file migration V1__init_work_jira_schema.sql"**
+#### 🔹 Bước 9.1: Bộ kiểm thử tích hợp E2E & Xử lý 409 Conflict Rollback (BE + FE)
+* **Backend:** Bộ Integration Tests kiểm thử trọn vẹn luồng đời dự án (MockMvc / JUnit 5).
+* **Frontend:**
+  - Kiểm thử cơ chế Optimistic UI Rollback: Khi Client kéo thẻ với version cũ $\rightarrow$ Backend trả về `409 Conflict` $\rightarrow$ UI tự động bật toast cảnh báo và hoàn trả thẻ về vị trí cũ an toàn.
+* **Tiêu chí nghiệm thu (DoD):** 100% kịch bản kiểm thử vượt qua mà không phát sinh lỗi đồng thời.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 9.1: Viết bộ E2E Tests và hoàn thiện cơ chế Optimistic Rollback."`
+
+#### 🔹 Bước 9.2: Swagger / OpenAPI 3.0 UI Document & Cập nhật README bàn giao
+* **Backend:** Cấu hình Springdoc OpenAPI 3.0 hiển thị toàn bộ API groups trên Swagger UI `http://localhost:8083/swagger-ui.html`.
+* **Tài liệu:** Cập nhật README và tài liệu hướng dẫn vận hành hệ thống.
+* **Lệnh kích hoạt:** `"Hãy thực hiện Bước 9.2: Hoàn thiện Swagger OpenAPI 3.0 và tài liệu bàn giao."`
+
+---
+
+## 🚀 HƯỚNG DẪN BẮT ĐẦU THỰC HIỆN TIẾP THEO
+
+Bước tiếp theo trong lộ trình triển khai:
+> **"Hãy thực hiện Bước 1.3: Tạo các JPA Repositories và cấu hình Frontend API Client."**
 
 Tôi sẽ tiến hành code từng bước một cách cẩn thận, chạy kiểm thử, báo cáo kết quả và đợi bạn duyệt trước khi chuyển sang bước tiếp theo!

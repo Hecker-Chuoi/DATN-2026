@@ -1,16 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
-import CreateProjectModal from '../modals/CreateProjectModal.jsx';
-import CreateTeamModal from '../modals/CreateTeamModal.jsx';
 import { teamApi } from '../../api.js';
 
 export default function WorkspaceLayout({ currentUser, onLogout }) {
   const [teams, setTeams] = useState([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
-  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
-  const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
-  const [selectedTeamForProject, setSelectedTeamForProject] = useState(null);
 
   const fetchTeams = async () => {
     try {
@@ -31,52 +26,61 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
   }, []);
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', backgroundColor: '#F8FAFC', color: '#0F172A', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+    <div
+      style={{
+        display: 'flex',
+        height: '100vh',
+        width: '100vw',
+        overflow: 'hidden',
+        backgroundColor: '#F8FAFC',
+        color: '#0F172A',
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      }}
+    >
       {/* ─── Left Sidebar (Linear Style Accordion) ─── */}
       <Sidebar
         teams={teams}
         loading={loadingTeams}
-        onOpenCreateTeam={() => setIsCreateTeamOpen(true)}
+        onOpenCreateTeam={() => {
+          console.log('Open create team modal');
+        }}
         onOpenCreateProject={(teamId) => {
-          setSelectedTeamForProject(teamId || null);
-          setIsCreateProjectOpen(true);
+          console.log('Open create project modal for team', teamId);
         }}
         currentUser={currentUser}
         onLogout={onLogout}
       />
 
       {/* ─── Main Content Container ─── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#FFFFFF', height: '100%' }}>
-        <main style={{ flex: 1, overflow: 'hidden', backgroundColor: '#FFFFFF', display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <Outlet context={{ teams, refreshTeams: fetchTeams, onOpenCreateProject: () => setIsCreateProjectOpen(true) }} />
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          backgroundColor: '#FFFFFF',
+          height: '100%',
+        }}
+      >
+        <main
+          style={{
+            flex: 1,
+            overflow: 'hidden',
+            backgroundColor: '#FFFFFF',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+          }}
+        >
+          <Outlet
+            context={{
+              teams,
+              refreshTeams: fetchTeams,
+              onOpenCreateProject: () => console.log('Create project'),
+            }}
+          />
         </main>
       </div>
-
-      {/* ─── Modals ─── */}
-      {isCreateProjectOpen && (
-        <CreateProjectModal
-          teams={teams}
-          initialTeamId={selectedTeamForProject}
-          onClose={() => setIsCreateProjectOpen(false)}
-          onSuccess={() => {
-            setIsCreateProjectOpen(false);
-            fetchTeams();
-            // Broadcast event or navigate
-            window.dispatchEvent(new CustomEvent('project-created'));
-          }}
-        />
-      )}
-
-      {isCreateTeamOpen && (
-        <CreateTeamModal
-          currentUser={currentUser}
-          onClose={() => setIsCreateTeamOpen(false)}
-          onSuccess={() => {
-            setIsCreateTeamOpen(false);
-            fetchTeams();
-          }}
-        />
-      )}
     </div>
   );
 }
