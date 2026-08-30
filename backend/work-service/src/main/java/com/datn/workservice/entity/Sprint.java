@@ -1,6 +1,6 @@
 package com.datn.workservice.entity;
 
-import com.datn.workservice.enums.MilestoneStatus;
+import com.datn.workservice.enums.SprintState;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -10,13 +10,13 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "milestones")
+@Table(name = "sprints")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Milestone {
+public class Sprint {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -30,21 +30,27 @@ public class Milestone {
     private String name;
 
     @Column(columnDefinition = "TEXT")
-    private String description;
-
-    @Column(name = "due_date")
-    private LocalDateTime dueDate;
+    private String goal;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
+    @Column(nullable = false, length = 50)
     @Builder.Default
-    private MilestoneStatus status = MilestoneStatus.OPEN;
+    private SprintState state = SprintState.FUTURE;
+
+    @Column(name = "start_date")
+    private LocalDateTime startDate;
+
+    @Column(name = "end_date")
+    private LocalDateTime endDate;
+
+    @Column(name = "completed_date")
+    private LocalDateTime completedDate;
 
     @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 }

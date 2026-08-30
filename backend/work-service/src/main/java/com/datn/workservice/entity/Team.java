@@ -22,14 +22,11 @@ public class Team {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    // @Column(name = "workspace_id", nullable = false)
-    // private UUID workspaceId;
+    @Column(name = "workspace_id", nullable = false)
+    private UUID workspaceId;
 
     @Column(nullable = false, length = 255)
     private String name;
-
-    @Column(name = "key", length = 20)
-    private String key;
 
     @Column(columnDefinition = "TEXT")
     private String description;
@@ -38,10 +35,10 @@ public class Team {
     private UUID ownerId;
 
     @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 }

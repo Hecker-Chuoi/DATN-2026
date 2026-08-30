@@ -31,6 +31,6 @@ public class ProjectClone {
     private UUID clonedBy;
 
     @CreationTimestamp
-    @Column(name = "cloned_at", updatable = false)
+    @Column(name = "cloned_at", updatable = false, nullable = false)
     private LocalDateTime clonedAt;
 }

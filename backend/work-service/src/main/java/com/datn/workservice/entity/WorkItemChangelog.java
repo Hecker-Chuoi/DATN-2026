@@ -8,30 +8,24 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "task_activity_logs",
-        indexes = {
-                @Index(name = "idx_work_task_activity_task_id", columnList = "task_id")
-        })
+@Table(name = "work_item_changelogs")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TaskActivityLog {
+public class WorkItemChangelog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "task_id", nullable = false)
-    private UUID taskId;
+    @Column(name = "work_item_id", nullable = false)
+    private UUID workItemId;
 
-    @Column(name = "user_id")
-    private UUID userId;
-
-    @Column(nullable = false, length = 100)
-    private String action;
+    @Column(name = "field_name", nullable = false, length = 100)
+    private String fieldName;
 
     @Column(name = "old_value", columnDefinition = "TEXT")
     private String oldValue;
@@ -39,7 +33,10 @@ public class TaskActivityLog {
     @Column(name = "new_value", columnDefinition = "TEXT")
     private String newValue;
 
+    @Column(name = "changed_by", nullable = false)
+    private UUID changedBy;
+
     @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "changed_at", updatable = false, nullable = false)
+    private LocalDateTime changedAt;
 }

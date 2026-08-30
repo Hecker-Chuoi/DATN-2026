@@ -1,8 +1,9 @@
 package com.datn.workservice.enums;
 
-public enum TaskPriority {
+public enum WorkItemPriority {
+    LOWEST,
     LOW,
     MEDIUM,
     HIGH,
-    URGENT
+    HIGHEST
 }

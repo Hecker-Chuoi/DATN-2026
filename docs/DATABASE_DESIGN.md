@@ -10,12 +10,14 @@
     - [2.1.2. Bảng `workspace_members` (Thành viên Workspace)](#212-bảng-workspace_members-thành-viên-workspace)
     - [2.1.3. Bảng `users` (Người dùng)](#213-bảng-users-người-dùng)
     - [2.1.4. Phân quyền RBAC (`roles`, `permissions`, `role_permissions`, `user_roles`)](#214-phân-quyền-rbac-roles-permissions-role_permissions-user_roles)
-  - [2.2. Team - Project - Task / Issue](#22-team---project---task--issue)
-    - [2.2.1. Bảng `teams` & `team_members`](#221-bảng-teams--team_members)
-    - [2.2.2. Bảng `projects` (Dự án)](#222-bảng-projects-dự-án)
-    - [2.2.3. Bảng `milestones` (Cột mốc)](#223-bảng-milestones-cột-mốc)
-    - [2.2.4. Bảng `tasks` (Issues / Tác vụ)](#224-bảng-tasks-issues--tác-vụ)
-    - [2.2.5. Các bảng mở rộng của Task](#225-các-bảng-mở-rộng-của-task)
+  - [2.2. Phân hệ Quản trị Công việc (Work Service — Jira-Grade Engine)](#22-phân-hệ-quản-trị-công-việc-work-service--jira-grade-engine)
+    - [2.2.1. Đội nhóm (`teams`, `team_members`)](#221-đội-nhóm-teams-team_members)
+    - [2.2.2. Dự án & Phân quyền Dự án (`projects`, `project_roles`, `role_assignments`, `permission_scheme_entries`)](#222-dự-án--phân-quyền-dự-án-projects-project_roles-role_assignments-permission_scheme_entries)
+    - [2.2.3. Loại công việc & Máy trạng thái (`work_item_types`, `statuses`, `workflows`, `workflow_transitions`, `workflow_schemes`, `workflow_scheme_mappings`)](#223-loại-công-việc--máy-trạng-thái-work_item_types-statuses-workflows-workflow_transitions-workflow_schemes-workflow_scheme_mappings)
+    - [2.2.4. Agile Scrum, Sprint, Phân hệ & Phiên bản (`sprints`, `sprint_report_snapshots`, `components`, `versions`, `labels`)](#224-agile-scrum-sprint-phân-hệ--phiên-bản-sprints-sprint_report_snapshots-components-versions-labels)
+    - [2.2.5. Thực thể Trọng tâm Work Items (`work_items`, `work_item_component_maps`, `work_item_label_maps`, `work_item_links`)](#225-thực-thể-trọng-tâm-work-items-work_items-work_item_component_maps-work_item_label_maps-work_item_links)
+    - [2.2.6. Bảng trực quan (`boards`, `board_columns`, `board_column_statuses`, `board_swimlanes`)](#226-bảng-trực-quan-boards-board_columns-board_column_statuses-board_swimlanes)
+    - [2.2.7. Nhật ký Audit, Cộng tác & Mở rộng (`work_item_changelogs`, `work_item_comments`, `work_item_attachments`, `custom_field_definitions`, `saved_filters`, `automation_rules`, `outbox_events`)](#227-nhật-ký-audit-cộng-tác--mở-rộng-work_item_changelogs-work_item_comments-work_item_attachments-custom_field_definitions-saved_filters-automation_rules-outbox_events)
   - [2.3. Tích hợp & Thông báo (Integration & Notification)](#23-tích-hợp--thông-báo-integration--notification)
   - [2.4. AI Agent & Tự động hóa](#24-ai-agent--tự-động-hóa)
   - [2.5. Template, Initiative & Blog / Cộng đồng](#25-template-initiative--blog--cộng-đồng)
@@ -98,141 +100,258 @@ Hệ thống sử dụng cơ sở dữ liệu quan hệ (PostgreSQL) hỗ trợ 
 
 ---
 
-### 2.2. Team - Project - Task / Issue
+### 2.2. Phân hệ Quản trị Công việc (Work Service — Jira-Grade Engine)
 
-#### 2.2.1. Bảng `teams` & `team_members`
+#### 2.2.1. Đội nhóm (`teams`, `team_members`)
 
 ##### Bảng `teams`
 | Field | Type | Ràng buộc | Ghi chú |
 | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **PK** | Định danh nhóm |
+| `id` | `UUID` | **PK**, Default `gen_random_uuid()` | Định danh nhóm làm việc |
 | `workspace_id` | `UUID` | **FK** $\rightarrow$ `workspaces(id)`, `NOT NULL` | Workspace trực thuộc |
 | `name` | `VARCHAR(255)` | `NOT NULL` | Tên nhóm / phòng ban |
 | `description` | `TEXT` | `NULL` | Mô tả nhóm |
 | `owner_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Trưởng nhóm / Người tạo |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian tạo |
+| `updated_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian cập nhật |
 
 ##### Bảng `team_members`
 | Field | Type | Ràng buộc | Ghi chú |
 | :--- | :--- | :--- | :--- |
-| `team_id` | `UUID` | **Composite PK**, **FK** $\rightarrow$ `teams(id)` | Nhóm trực thuộc |
-| `user_id` | `UUID` | **Composite PK**, **FK** $\rightarrow$ `users(id)` | Thành viên nhóm |
-| `role_in_team` | `VARCHAR(50)` | Default `'member'` | Vai trò trong nhóm (leader, member,...) |
+| `id` | `UUID` | **PK**, Default `gen_random_uuid()` | Định danh bản ghi thành viên |
+| `team_id` | `UUID` | **FK** $\rightarrow$ `teams(id)`, `NOT NULL` | Nhóm trực thuộc (ON DELETE CASCADE) |
+| `user_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Thành viên nhóm |
+| `role` | `VARCHAR(50)` | Default `'MEMBER'`, `NOT NULL` | Vai trò trong nhóm: `LEADER`, `MEMBER`, `VIEWER` |
 | `joined_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời điểm gia nhập nhóm |
 
-#### 2.2.2. Bảng `projects` (Dự án)
+*Ràng buộc duy nhất*: `UNIQUE(team_id, user_id)`.
+
+---
+
+#### 2.2.2. Dự án & Phân quyền Dự án (`projects`, `project_roles`, `role_assignments`, `permission_scheme_entries`)
+
+##### Bảng `projects` (Dự án trung tâm)
 | Field | Type | Ràng buộc | Ghi chú |
 | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **PK** | Định danh dự án |
+| `id` | `UUID` | **PK**, Default `gen_random_uuid()` | Định danh dự án |
 | `workspace_id` | `UUID` | **FK** $\rightarrow$ `workspaces(id)`, `NOT NULL` | Workspace trực thuộc |
-| `team_id` | `UUID` | **FK** $\rightarrow$ `teams(id)`, `NULL` | Team phụ trách (nếu có) |
-| `key` | `VARCHAR(20)` | `NOT NULL` | Mã tiền tố dự án (ví dụ: `PTMS` $\rightarrow$ `PTMS-101`) |
+| `team_id` | `UUID` | **FK** $\rightarrow$ `teams(id)`, `NULL` | Nhóm phụ trách (ON DELETE SET NULL) |
 | `name` | `VARCHAR(255)` | `NOT NULL` | Tên dự án |
+| `key` | `VARCHAR(20)` | `UNIQUE`, `NOT NULL` | Mã tiền tố dự án (ví dụ: `SCRUM`, `PROJ`) |
 | `description` | `TEXT` | `NULL` | Mô tả chi tiết dự án |
-| `status` | `ENUM` | `NOT NULL`, Default `'planning'` | `planning`, `active`, `on_hold`, `completed`, `archived` |
-| `start_date` | `DATE` | `NULL` | Ngày bắt đầu dự án |
-| `end_date` | `DATE` | `NULL` | Ngày kết thúc / bàn giao dự kiến |
+| `icon_url` | `VARCHAR(500)` | `NULL` | Biểu tượng dự án |
+| `lead_user_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Trưởng dự án (Project Lead) |
+| `default_assignee_type` | `VARCHAR(50)` | Default `'PROJECT_LEADER'` | Người nhận việc mặc định: `PROJECT_LEADER`, `UNASSIGNED` |
+| `project_type` | `VARCHAR(50)` | Default `'SOFTWARE_SCRUM'` | `SOFTWARE_SCRUM`, `SOFTWARE_KANBAN`, `BUSINESS` |
+| `is_template` | `BOOLEAN` | Default `false` | Cờ đánh dấu Template mẫu để clone |
+| `start_date` | `DATE` | `NULL` | Ngày bắt đầu |
+| `end_date` | `DATE` | `NULL` | Ngày kết thúc dự kiến |
 | `created_by` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Người tạo dự án |
-| `is_public` | `BOOLEAN` | Default `false` | Trạng thái riêng tư / công khai trong workspace |
-| `is_template` | `BOOLEAN` | Default `false` | Đánh dấu dự án là Template mẫu để tái sử dụng / clone |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian tạo |
 | `updated_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian cập nhật |
+| `deleted_at` | `TIMESTAMP WITH TIME ZONE` | `NULL` | Soft delete |
 
-#### 2.2.3. Bảng `milestones` (Cột mốc)
+##### Bảng `project_roles` (Vai trò trong dự án)
 | Field | Type | Ràng buộc | Ghi chú |
 | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **PK** | Định danh cột mốc |
-| `project_id` | `UUID` | **FK** $\rightarrow$ `projects(id)`, `NOT NULL` | Dự án trực thuộc |
-| `name` | `VARCHAR(255)` | `NOT NULL` | Tên cột mốc / Sprint |
-| `description` | `TEXT` | `NULL` | Mô tả chi tiết cột mốc |
-| `due_date` | `TIMESTAMP WITH TIME ZONE` | `NULL` | Hạn hoàn thành cột mốc |
-| `status` | `ENUM` | Default `'open'` | `open`, `in_progress`, `closed` |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian tạo |
+| `id` | `UUID` | **PK** | Định danh vai trò dự án |
+| `project_id` | `UUID` | **FK** $\rightarrow$ `projects(id)`, `NULL` | Dự án áp dụng (`NULL`: vai trò hệ thống mặc định) |
+| `name` | `VARCHAR(100)` | `NOT NULL` | `Administrator`, `Project Manager`, `Developer`, `QA`, `Viewer` |
+| `description` | `TEXT` | `NULL` | Mô tả vai trò |
 
-#### 2.2.4. Bảng `tasks` (Issues / Tác vụ)
+##### Bảng `role_assignments` (Gán vai trò cho người dùng trong dự án)
 | Field | Type | Ràng buộc | Ghi chú |
 | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **PK** | Định danh tác vụ |
-| `code` | `VARCHAR(50)` | `NOT NULL` | Unique trong project (ví dụ: `PTMS-101`) |
+| `id` | `UUID` | **PK** | Định danh bản ghi gán quyền |
 | `project_id` | `UUID` | **FK** $\rightarrow$ `projects(id)`, `NOT NULL` | Dự án trực thuộc |
-| `milestone_id` | `UUID` | **FK** $\rightarrow$ `milestones(id)`, `NULL` | Cột mốc liên kết |
-| `parent_task_id` | `UUID` | **FK** $\rightarrow$ `tasks(id)`, `NULL` | Self-reference (cây sub-task đa cấp) |
-| `title` | `VARCHAR(500)` | `NOT NULL` | Tiêu đề công việc |
-| `description` | `TEXT` | `NULL` | Nội dung và tài liệu mô tả công việc |
-| `type` | `ENUM` | `NOT NULL`, Default `'task'` | `task`, `bug`, `story`, `epic` |
-| `status` | `ENUM` | `NOT NULL`, Default `'todo'` | `todo`, `in_progress`, `in_review`, `done`, `cancelled` |
-| `priority` | `ENUM` | `NOT NULL`, Default `'medium'` | `low`, `medium`, `high`, `urgent` |
+| `user_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Người dùng được gán |
+| `role_id` | `UUID` | **FK** $\rightarrow$ `project_roles(id)`, `NOT NULL` | Vai trò được cấp |
+| `assigned_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời điểm gán |
+
+*Ràng buộc duy nhất*: `UNIQUE(project_id, user_id, role_id)`.
+
+##### Bảng `permission_scheme_entries` (Ma trận quyền hạn hạt mịn)
+| Field | Type | Ràng buộc | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID` | **PK** | Định danh mục phân quyền |
+| `project_id` | `UUID` | **FK** $\rightarrow$ `projects(id)`, `NOT NULL` | Dự án áp dụng |
+| `role_id` | `UUID` | **FK** $\rightarrow$ `project_roles(id)`, `NOT NULL` | Vai trò được cấp quyền |
+| `permission_key` | `VARCHAR(100)` | `NOT NULL` | Quyền hạt mịn (`CREATE_ISSUE`, `TRANSITION_ISSUE`, `SPRINT_MANAGE`...) |
+
+*Ràng buộc duy nhất*: `UNIQUE(project_id, role_id, permission_key)`.
+
+---
+
+#### 2.2.3. Loại công việc & Máy trạng thái (`work_item_types`, `statuses`, `workflows`, `workflow_transitions`, `workflow_schemes`, `workflow_scheme_mappings`)
+
+##### Bảng `work_item_types` (Định nghĩa loại công việc & phân cấp)
+| Field | Type | Ràng buộc | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID` | **PK** | Định danh loại công việc |
+| `project_id` | `UUID` | **FK** $\rightarrow$ `projects(id)`, `NULL` | Dự án sở hữu (`NULL`: kiểu toàn cục) |
+| `name` | `VARCHAR(100)` | `NOT NULL` | `Epic`, `User Story`, `Task`, `Bug`, `Sub-task` |
+| `code` | `VARCHAR(50)` | `NOT NULL` | `EPIC`, `STORY`, `TASK`, `BUG`, `SUBTASK` |
+| `hierarchy_level`| `INTEGER` | `NOT NULL` | `1`: Epic, `0`: Standard Story/Task/Bug, `-1`: Subtask |
+| `is_subtask` | `BOOLEAN` | Default `false` | Cờ đánh dấu công việc con |
+| `is_system_default` | `BOOLEAN` | Default `false` | Kiểu mặc định của hệ thống |
+
+##### Bảng `statuses` (Trạng thái công việc)
+| Field | Type | Ràng buộc | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID` | **PK** | Định danh trạng thái |
+| `name` | `VARCHAR(100)` | `NOT NULL` | `To Do`, `In Progress`, `In Review`, `Done` |
+| `category` | `VARCHAR(50)` | `NOT NULL` | Danh mục: `TODO`, `IN_PROGRESS`, `DONE` (Dùng tính Burndown) |
+| `color_hex` | `VARCHAR(20)` | `NULL` | Mã màu hiển thị |
+
+##### Bảng `workflows` (Định nghĩa quy trình làm việc)
+| Field | Type | Ràng buộc | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID` | **PK** | Định danh quy trình |
+| `project_id` | `UUID` | **FK** $\rightarrow$ `projects(id)`, `NULL` | Dự án sở hữu |
+| `name` | `VARCHAR(255)` | `NOT NULL` | Tên quy trình (VD: `Software Development Workflow`) |
+| `is_default` | `BOOLEAN` | Default `false` | Quy trình mặc định |
+
+##### Bảng `workflow_transitions` (Bước chuyển trạng thái)
+| Field | Type | Ràng buộc | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID` | **PK** | Định danh bước chuyển |
+| `workflow_id` | `UUID` | **FK** $\rightarrow$ `workflows(id)`, `NOT NULL` | Quy trình trực thuộc |
+| `from_status_id`| `UUID` | **FK** $\rightarrow$ `statuses(id)`, `NULL` | Trạng thái nguồn (`NULL`: cho phép chuyển từ mọi trạng thái) |
+| `to_status_id` | `UUID` | **FK** $\rightarrow$ `statuses(id)`, `NOT NULL` | Trạng thái đích đến |
+| `name` | `VARCHAR(150)` | `NOT NULL` | Tên thao tác (VD: `Start Progress`, `Submit Review`, `Close`) |
+| `conditions_config` | `JSONB` | `NULL` | Điều kiện ai được bấm chuyển |
+| `validators_config` | `JSONB` | `NULL` | Kiểm tra điều kiện bắt buộc (VD: mọi subtask phải Done) |
+| `post_functions_config`| `JSONB` | `NULL` | Hành động tự động sau khi chuyển (gán ngày resolve, notify...) |
+
+##### Bảng `workflow_schemes` & `workflow_scheme_mappings`
+* `workflow_schemes`: Bộ sơ đồ quy trình (`id`, `project_id`, `name`, `description`).
+* `workflow_scheme_mappings`: Ánh xạ Loại công việc nào dùng Quy trình nào (`scheme_id`, `work_item_type_id`, `workflow_id`).
+
+---
+
+#### 2.2.4. Agile Scrum, Sprint, Phân hệ & Phiên bản (`sprints`, `sprint_report_snapshots`, `components`, `versions`, `labels`)
+
+##### Bảng `sprints` (Chu kỳ lặp Agile Scrum)
+| Field | Type | Ràng buộc | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID` | **PK** | Định danh Sprint |
+| `project_id` | `UUID` | **FK** $\rightarrow$ `projects(id)`, `NOT NULL` | Dự án trực thuộc |
+| `name` | `VARCHAR(255)` | `NOT NULL` | Tên Sprint (VD: `Sprint 1: Architecture & Core Auth`) |
+| `goal` | `TEXT` | `NULL` | Mục tiêu Sprint |
+| `state` | `VARCHAR(50)` | Default `'FUTURE'`, `NOT NULL` | Vòng đời: `FUTURE`, `ACTIVE`, `CLOSED` |
+| `start_date` | `TIMESTAMP WITH TIME ZONE`| `NULL` | Ngày bắt đầu Sprint |
+| `end_date` | `TIMESTAMP WITH TIME ZONE`| `NULL` | Ngày kết thúc Sprint |
+| `completed_date` | `TIMESTAMP WITH TIME ZONE`| `NULL` | Thời điểm thực tế đóng Sprint |
+
+##### Bảng `sprint_report_snapshots` (Báo cáo chốt sổ Sprint cố định)
+| Field | Type | Ràng buộc | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID` | **PK** | Định danh bản ghi snapshot |
+| `sprint_id` | `UUID` | **FK** $\rightarrow$ `sprints(id)`, `UNIQUE` | Sprint được tổng kết |
+| `total_story_points` | `DECIMAL(10,2)` | Default `0` | Tổng điểm Story Points |
+| `completed_story_points`| `DECIMAL(10,2)`| Default `0` | Số điểm đã hoàn thành |
+| `incomplete_story_points`| `DECIMAL(10,2)`| Default `0` | Số điểm dở dang |
+| `snapshot_data` | `JSONB` | `NOT NULL` | Dữ liệu chi tiết lưu vết để vẽ Burndown & Velocity vĩnh viễn |
+| `closed_by` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Người đóng Sprint |
+| `closed_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời điểm chốt sổ |
+
+##### Bảng `components`, `versions`, `labels`
+* `components`: Phân hệ kỹ thuật (`id`, `project_id`, `name`, `description`, `lead_user_id` [auto-assignee]).
+* `versions`: Phiên bản phát hành release (`id`, `project_id`, `name`, `description`, `release_date`, `is_released`, `is_archived`).
+* `labels`: Nhãn phân loại (`id`, `project_id`, `name`, `color_hex`).
+
+---
+
+#### 2.2.5. Thực thể Trọng tâm Work Items (`work_items`, `work_item_component_maps`, `work_item_label_maps`, `work_item_links`)
+
+##### Bảng `work_items` (BẢNG CÔNG VIỆC TRUNG TÂM — SINGLE TABLE INHERITANCE)
+| Field | Type | Ràng buộc | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID` | **PK**, Default `gen_random_uuid()` | Định danh công việc |
+| `project_id` | `UUID` | **FK** $\rightarrow$ `projects(id)`, `NOT NULL` | Dự án trực thuộc |
+| `type_id` | `UUID` | **FK** $\rightarrow$ `work_item_types(id)`, `NOT NULL`| Loại: Epic, Story, Task, Bug, Subtask |
+| `status_id` | `UUID` | **FK** $\rightarrow$ `statuses(id)`, `NOT NULL` | Trạng thái hiện tại |
+| `parent_id` | `UUID` | **FK** $\rightarrow$ `work_items(id)`, `NULL` | Tự tham chiếu Parent Issue (Epic $\rightarrow$ Story/Task hoặc Story $\rightarrow$ Subtask) |
+| `sprint_id` | `UUID` | **FK** $\rightarrow$ `sprints(id)`, `NULL` | Sprint liên kết (`NULL`: Backlog) |
+| `code` | `VARCHAR(50)` | `NOT NULL` | Mã hiển thị (Unique theo Project, ví dụ `SCRUM-101`) |
+| `summary` | `VARCHAR(500)` | `NOT NULL` | Tiêu đề tóm tắt công việc |
+| `description` | `TEXT` | `NULL` | Mô tả chi tiết |
+| `priority` | `VARCHAR(50)` | Default `'MEDIUM'`, `NOT NULL` | `LOWEST`, `LOW`, `MEDIUM`, `HIGH`, `HIGHEST` |
+| `resolution` | `VARCHAR(100)` | `NULL` | `DONE`, `WONT_DO`, `DUPLICATE`, `CANNOT_REPRODUCE` |
+| `reporter_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Người tạo / giao việc |
 | `assignee_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NULL` | Người thực hiện (ON DELETE SET NULL) |
-| `reporter_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Người giao / báo cáo task |
-| `due_date` | `TIMESTAMP WITH TIME ZONE` | `NULL` | Hạn hoàn thành |
-| `is_recurring` | `BOOLEAN` | Default `false` | Bật/tắt cấu hình lặp lại |
-| `recurrence_rule` | `VARCHAR(255)` | `NULL` | RRULE quy tắc lặp (ví dụ: FREQ=WEEKLY;INTERVAL=1) |
-| `github_issue_url` | `VARCHAR(500)` | `NULL` | Liên kết Issue GitHub tương ứng |
-| `branch` | `VARCHAR(255)` | `NULL` | Nhánh Git liên kết thực hiện task |
-| `position` | `INTEGER` | Default `0` | Thứ tự kéo thả trên giao diện Kanban |
-| `version` | `INTEGER` | Default `1` | Optimistic locking chống ghi đè dữ liệu đồng thời |
+| `story_points` | `DECIMAL(6,2)` | `NULL` | Điểm ước lượng Agile |
+| `original_estimate_seconds`| `BIGINT` | Default `0` | Thời gian ước tính ban đầu (giây) |
+| `remaining_estimate_seconds`| `BIGINT` | Default `0` | Thời gian còn lại (giây) |
+| `time_spent_seconds` | `BIGINT` | Default `0` | Tổng thời gian thực tế đã log (giây) |
+| `rank` | `VARCHAR(255)` | `NOT NULL` | Chuỗi thứ tự kéo thả LexoRank (ví dụ: `0|i00002:`) |
+| `component_id` | `UUID` | **FK** $\rightarrow$ `components(id)`, `NULL` | Phân hệ kỹ thuật chính |
+| `fix_version_id` | `UUID` | **FK** $\rightarrow$ `versions(id)`, `NULL` | Phiên bản sửa đổi / phát hành |
+| `custom_fields` | `JSONB` | Default `'{}'` | Dữ liệu các trường tùy biến linh hoạt |
+| `start_date` | `DATE` | `NULL` | Ngày bắt đầu |
+| `due_date` | `DATE` | `NULL` | Hạn hoàn thành |
+| `resolved_at` | `TIMESTAMP WITH TIME ZONE`| `NULL` | Thời điểm giải quyết xong |
+| `version` | `INTEGER` | Default `0` | Optimistic locking chống Lost Update |
+| `created_at` | `TIMESTAMP WITH TIME ZONE`| Default `CURRENT_TIMESTAMP` | Thời gian tạo |
+| `updated_at` | `TIMESTAMP WITH TIME ZONE`| Default `CURRENT_TIMESTAMP` | Thời gian cập nhật |
+| `deleted_at` | `TIMESTAMP WITH TIME ZONE`| `NULL` | Soft delete |
+
+*Chỉ mục tối ưu*: B-Tree trên `(project_id, rank)`, `(project_id, deleted_at)`, `status_id`, `assignee_id`, `sprint_id`; GIN Index trên `custom_fields`.
+
+##### Bảng `work_item_links` (Liên kết & Phụ thuộc giữa các công việc)
+| Field | Type | Ràng buộc | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID` | **PK** | Định danh liên kết |
+| `source_item_id` | `UUID` | **FK** $\rightarrow$ `work_items(id)`, `NOT NULL` | Công việc nguồn |
+| `target_item_id` | `UUID` | **FK** $\rightarrow$ `work_items(id)`, `NOT NULL` | Công việc đích |
+| `link_type` | `VARCHAR(50)` | `NOT NULL` | `BLOCKS`, `RELATES_TO`, `DUPLICATES`, `CAUSES` |
+| `created_by` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Người tạo liên kết |
 | `created_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian tạo |
-| `updated_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian cập nhật |
 
-#### 2.2.5. Các bảng mở rộng của Task
+*Ràng buộc*: `CHECK (source_item_id <> target_item_id)`, `UNIQUE(source_item_id, target_item_id, link_type)`.
 
-##### Bảng `task_labels` (Nhãn dán)
+---
+
+#### 2.2.6. Bảng trực quan (`boards`, `board_columns`, `board_column_statuses`, `board_swimlanes`)
+
+##### Bảng `boards` (Bảng làm việc Scrum / Kanban)
 | Field | Type | Ràng buộc | Ghi chú |
 | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **PK** | Định danh nhãn |
-| `project_id` | `UUID` | **FK** $\rightarrow$ `projects(id)`, `NOT NULL` | Dự án sở hữu nhãn |
-| `name` | `VARCHAR(100)` | `NOT NULL` | Tên nhãn (VD: Frontend, Backend, UI/UX) |
-| `color` | `VARCHAR(20)` | Default `'#6B7280'` | Mã màu hiển thị (HEX code) |
+| `id` | `UUID` | **PK** | Định danh bảng |
+| `project_id` | `UUID` | **FK** $\rightarrow$ `projects(id)`, `NOT NULL` | Dự án trực thuộc |
+| `name` | `VARCHAR(255)` | `NOT NULL` | Tên bảng (VD: `Sprint Board`, `Team Kanban`) |
+| `type` | `VARCHAR(50)` | Default `'SCRUM'`, `NOT NULL` | `SCRUM`, `KANBAN` |
+| `filter_jql` | `TEXT` | `NULL` | Bộ lọc JQL tùy biến cho bảng |
 
-##### Bảng `task_label_map` (Gán nhãn vào Task)
+##### Bảng `board_columns`, `board_column_statuses`, `board_swimlanes`
+* `board_columns`: Cột hiển thị trên Board (`id`, `board_id`, `name`, `column_order`, `min_wip_limit`, `max_wip_limit`).
+* `board_column_statuses`: Ánh xạ 1 Cột chứa nhiều Status thực tế (`column_id`, `status_id` - Composite PK).
+* `board_swimlanes`: Phân nhóm ngang (`id`, `board_id`, `name`, `strategy` [`BY_EPIC`, `BY_ASSIGNEE`, `BY_PRIORITY`, `CUSTOM_JQL`], `swimlane_order`).
+
+---
+
+#### 2.2.7. Nhật ký Audit, Cộng tác & Mở rộng (`work_item_changelogs`, `work_item_comments`, `work_item_attachments`, `custom_field_definitions`, `saved_filters`, `automation_rules`, `outbox_events`)
+
+##### Bảng `work_item_changelogs` (Audit Trail)
 | Field | Type | Ràng buộc | Ghi chú |
 | :--- | :--- | :--- | :--- |
-| `task_id` | `UUID` | **Composite PK**, **FK** $\rightarrow$ `tasks(id)` | Task được gắn nhãn |
-| `label_id` | `UUID` | **Composite PK**, **FK** $\rightarrow$ `task_labels(id)` | Nhãn được gắn |
+| `id` | `UUID` | **PK** | Định danh bản ghi log |
+| `work_item_id` | `UUID` | **FK** $\rightarrow$ `work_items(id)`, `NOT NULL` | Công việc bị thay đổi |
+| `field_name` | `VARCHAR(100)` | `NOT NULL` | Tên trường (`status`, `assignee`, `story_points`...) |
+| `old_value` | `TEXT` | `NULL` | Giá trị trước thay đổi |
+| `new_value` | `TEXT` | `NULL` | Giá trị sau thay đổi |
+| `changed_by` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Người thực hiện |
+| `changed_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời điểm thay đổi |
 
-##### Bảng `task_watchers` (Người theo dõi Task)
-| Field | Type | Ràng buộc | Ghi chú |
-| :--- | :--- | :--- | :--- |
-| `task_id` | `UUID` | **Composite PK**, **FK** $\rightarrow$ `tasks(id)` | Task được theo dõi |
-| `user_id` | `UUID` | **Composite PK**, **FK** $\rightarrow$ `users(id)` | Người theo dõi tiến độ |
+##### Các bảng mở rộng khác
+* `work_item_comments`: Thảo luận cây phân cấp (`id`, `work_item_id`, `parent_comment_id`, `author_id`, `body`).
+* `work_item_attachments`: Tệp đính kèm (`id`, `work_item_id`, `file_name`, `file_url`, `file_size`, `content_type`, `uploaded_by`).
+* `custom_field_definitions`: Định nghĩa trường động (`id`, `project_id`, `field_key`, `name`, `field_type`, `options JSONB`, `validation_rules JSONB`).
+* `saved_filters`: Bộ lọc JQL lưu trữ (`id`, `project_id`, `name`, `jql_query`, `owner_id`, `is_shared`).
+* `automation_rules`: Quy tắc tự động hóa (`id`, `project_id`, `name`, `trigger_type`, `conditions_config JSONB`, `actions_config JSONB`, `is_active`).
+* `outbox_events`: Transactional Outbox gửi tin cậy lên Kafka (`id`, `aggregate_type`, `aggregate_id`, `event_type`, `payload JSONB`, `status`, `retry_count`).
 
-##### Bảng `task_comments` (Bình luận thảo luận Task)
-| Field | Type | Ràng buộc | Ghi chú |
-| :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **PK** | Định danh bình luận |
-| `task_id` | `UUID` | **FK** $\rightarrow$ `tasks(id)`, `NOT NULL` | Task chứa bình luận |
-| `user_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `SET NULL` | Người viết bình luận |
-| `content` | `TEXT` | `NOT NULL` | Nội dung bình luận (hỗ trợ Markdown) |
-| `parent_comment_id`| `UUID` | **FK** $\rightarrow$ `task_comments(id)`, `NULL` | Trả lời bình luận khác (cấu trúc phân cấp) |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian tạo bình luận |
-
-##### Bảng `task_attachments` (Tệp đính kèm Task)
-| Field | Type | Ràng buộc | Ghi chú |
-| :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **PK** | Định danh tệp đính kèm |
-| `task_id` | `UUID` | **FK** $\rightarrow$ `tasks(id)`, `NOT NULL` | Task chứa tệp đính kèm (ON DELETE CASCADE) |
-| `file_url` | `VARCHAR(500)` | `NOT NULL` | URL truy cập tệp lưu trên Cloud Storage / MinIO |
-| `file_name` | `VARCHAR(255)` | `NOT NULL` | Tên gốc của tệp tin |
-| `uploaded_by` | `UUID` | **FK** $\rightarrow$ `users(id)`, `SET NULL` | Người tải lên |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian tải lên |
-
-##### Bảng `task_dependencies` (Mối quan hệ phụ thuộc Task)
-| Field | Type | Ràng buộc | Ghi chú |
-| :--- | :--- | :--- | :--- |
-| `task_id` | `UUID` | **FK** $\rightarrow$ `tasks(id)`, `NOT NULL` | Task hiện tại |
-| `depends_on_task_id`| `UUID` | **FK** $\rightarrow$ `tasks(id)`, `NOT NULL` | Task phụ thuộc |
-| `type` | `ENUM` | `NOT NULL` | Loại liên kết: `blocks`, `relates_to`, `duplicates` |
-
-##### Bảng `task_activity_logs` (Nhật ký thay đổi Task)
-| Field | Type | Ràng buộc | Ghi chú |
-| :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **PK** | Định danh bản ghi audit log |
-| `task_id` | `UUID` | **FK** $\rightarrow$ `tasks(id)`, `NOT NULL` | Task bị thay đổi |
-| `user_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `SET NULL` | Người thực hiện hành động |
-| `action` | `VARCHAR(100)` | `NOT NULL` | Loại hành động (`UPDATE_STATUS`, `REASSIGN`, `EDIT_DESC`,...) |
-| `old_value` | `JSONB` | `NULL` | Giá trị trước khi thay đổi |
-| `new_value` | `JSONB` | `NULL` | Giá trị sau khi thay đổi |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian ghi nhận thay đổi |
+---
 
 ---
 
@@ -431,16 +550,19 @@ Hệ thống sử dụng cơ sở dữ liệu quan hệ (PostgreSQL) hỗ trợ 
 | `workspaces` | `teams` | **1 - N** | Workspace đóng vai trò bao bọc toàn bộ các Teams. |
 | `workspaces` | `projects` | **1 - N** | Tất cả Dự án đều gói gọn trong phạm vi 1 Workspace. |
 | `users` | `user_roles` | **1 - N** | Người dùng có nhiều vai trò theo từng phạm vi (`workspace`/`team`/`project`). |
-| `teams` | `users` (qua `team_members`) | **N - N** | Người dùng có thể tham gia nhiều Team trong workspace. |
+| `teams` | `users` (qua `team_members`) | **N - N** | Người dùng tham gia nhiều Team với vai trò (`LEADER`, `MEMBER`, `VIEWER`). |
 | `teams` | `projects` | **1 - N** | Team quản lý và triển khai các dự án được giao. |
-| `projects` | `milestones` | **1 - N** | Dự án chia ra các cột mốc bàn giao / sprint. |
-| `projects` | `tasks` | **1 - N** | Dự án chứa danh sách các tác vụ/lỗi cần xử lý. |
-| `milestones` | `tasks` | **1 - N** | Milestone gom nhóm các Task liên quan (nullable). |
-| `tasks` | `tasks` (self-referencing) | **1 - N** | Cấu trúc công việc cha - con (Sub-task đa cấp). |
-| `tasks` | `tasks` (qua `task_dependencies`) | **N - N** | Thiết lập phụ thuộc công việc (`blocks`, `relates_to`, `duplicates`). |
-| `tasks` | `task_comments` / `attachments` / `activity_logs` | **1 - N** | Lưu vết bình luận, tệp tin và lịch sử thay đổi của task. |
+| `projects` | `project_roles` / `role_assignments` | **1 - N** | Quản trị phân quyền hạt mịn (Project RBAC & Permission Scheme). |
+| `projects` | `sprints` | **1 - N** | Quản lý chu kỳ lặp Agile Scrum (`FUTURE`, `ACTIVE`, `CLOSED`). |
+| `sprints` | `sprint_report_snapshots` | **1 - 1** | Báo cáo chốt sổ cố định phục vụ vẽ Burndown & Velocity vĩnh viễn. |
+| `projects` | `work_items` | **1 - N** | Thực thể hợp nhất chứa Epic (1), Story/Task/Bug (0), Sub-task (-1). |
+| `work_items` | `work_items` (self-referencing) | **1 - N** | Cấu trúc phân cấp cha - con (`parent_id`). |
+| `work_items` | `work_item_links` | **N - N** | Mối quan hệ liên kết & phụ thuộc (`BLOCKS`, `RELATES_TO`, `DUPLICATES`, `CAUSES`). |
+| `projects` | `boards` | **1 - N** | Bảng trực quan Scrum / Kanban hỗ trợ WIP Limits & Swimlanes. |
+| `work_items` | `work_item_changelogs` / `comments` / `attachments` | **1 - N** | Lưu vết lịch sử thay đổi từng trường (Audit Trail), bình luận và tệp đính kèm. |
+| `projects` | `custom_field_definitions` | **1 - N** | Định nghĩa trường động lưu trữ dưới dạng JSONB (PostgreSQL GIN Indexed). |
 | `ai_conversations`| `ai_messages` | **1 - N** | Lưu trữ hội thoại và lượng token sử dụng với AI Agent. |
-| `initiatives` / `templates` | `project_clones` | **1 - N** | Theo dõi lượt nhân bản Sáng kiến/Template thành dự án mới. |
+| `initiatives` / `templates` | `project_clones` | **1 - N** | Theo dõi lượt nhân bản Sáng kiến/Template thành dự án mới (Timeline shift $\Delta\text{days}$). |
 
 ```mermaid
 erDiagram
@@ -449,20 +571,19 @@ erDiagram
     workspaces ||--o{ projects : contains
     users ||--o{ workspace_members : joins
     users ||--o{ team_members : belongs_to
-    users ||--o{ user_roles : assigned
     teams ||--o{ team_members : has
     teams ||--o{ projects : manages
-    projects ||--o{ milestones : has
-    projects ||--o{ tasks : contains
-    milestones ||--o{ tasks : groups
-    tasks ||--o{ tasks : subtasks
-    tasks ||--o{ task_comments : has
-    tasks ||--o{ task_attachments : has
-    tasks ||--o{ task_activity_logs : tracks
-    tasks ||--o{ task_dependencies : depends
+    projects ||--o{ sprints : plans
+    sprints ||--o| sprint_report_snapshots : generates
+    projects ||--o{ work_items : contains
+    projects ||--o{ boards : visualizes
+    work_items ||--o{ work_items : subtasks
+    work_items ||--o{ work_item_comments : has
+    work_items ||--o{ work_item_attachments : has
+    work_items ||--o{ work_item_changelogs : tracks
+    work_items ||--o{ work_item_links : links
     ai_conversations ||--o{ ai_messages : contains
     initiatives ||--o{ project_clones : cloned_as
-    templates ||--o{ project_clones : instantiated_as
 ```
 
 ---
@@ -470,13 +591,17 @@ erDiagram
 ## 4. QUY TẮC RÀNG BUỘC & DỮ LIỆU (DATABASE RULES)
 
 1. **Khóa chính kép (Composite Primary Key)**:
-   - Sử dụng khóa chính kép trực tiếp từ 2 cột Foreign Key cho tất cả các bảng quan hệ $N-N$: `workspace_members`, `team_members`, `task_label_map`, `post_tags`, `initiative_votes`, `post_votes`, `role_permissions`.
+   - Sử dụng khóa chính kép trực tiếp từ 2 cột Foreign Key cho tất cả các bảng quan hệ $N-N$: `workspace_members`, `team_members`, `work_item_component_maps`, `work_item_label_maps`, `board_column_statuses`, `workflow_scheme_mappings`, `post_tags`, `initiative_votes`, `post_votes`, `role_permissions`.
    - Giúp đảm bảo tính toàn vẹn dữ liệu (tránh trùng lặp quan hệ), không tạo thừa cột ID tự tăng và tối ưu hóa hiệu năng truy vấn chỉ mục (B-Tree Indexing).
 
 2. **Quy tắc xóa dữ liệu (ON DELETE Constraint)**:
-   - **FK trỏ tới `users`**: Đặt `ON DELETE SET NULL` (hoặc Soft Delete) cho các trường `assignee_id`, `created_by`, `uploaded_by`, `user_id` trong Task, Comments, Activity Logs để bảo toàn lịch sử tác vụ khi tài khoản bị vô hiệu hóa hoặc xóa.
-   - **Tự tham chiếu (Self-referencing FK)** (`tasks.parent_task_id`, `task_dependencies`): Đặt `ON DELETE RESTRICT` hoặc `ON DELETE SET NULL` nhằm ngăn ngừa việc xóa lan truyền ngoài ý muốn ngắt kết nối cả cây tác vụ con.
-   - **Các bảng phụ thuộc hoàn toàn vào User/Project** (`ai_api_keys`, `task_attachments`, `task_activity_logs`, `workspace_members`): Đặt `ON DELETE CASCADE` để dọn dẹp sạch dữ liệu rác khi đối tượng cha bị xóa hoàn toàn.
+   - **FK trỏ tới `users`**: Đặt `ON DELETE SET NULL` (hoặc Soft Delete) cho các trường `assignee_id`, `created_by`, `uploaded_by`, `user_id` trong Work Items, Comments, Changelogs để bảo toàn lịch sử tác vụ khi tài khoản bị vô hiệu hóa hoặc xóa.
+   - **Tự tham chiếu (Self-referencing FK)** (`work_items.parent_id`, `work_item_links`): Đặt `ON DELETE SET NULL` hoặc `ON DELETE CASCADE` có kiểm soát nhằm ngăn ngừa việc xóa lan truyền ngoài ý muốn ngắt kết nối cả cây tác vụ con.
+   - **Các bảng phụ thuộc hoàn toàn vào Project** (`sprints`, `boards`, `work_items`, `components`, `versions`, `labels`, `work_item_attachments`, `work_item_changelogs`): Đặt `ON DELETE CASCADE` để dọn dẹp sạch dữ liệu rác khi Project bị xóa hoàn toàn.
 
 3. **Kiểm soát đồng thời (Concurrency Control)**:
-   - Cột `version` (INTEGER) trong bảng `tasks` áp dụng cơ chế **Optimistic Locking** để ngăn chặn hiện tượng mất mát dữ liệu (Lost Update) khi có nhiều thành viên cùng kéo thả Kanban hoặc chỉnh sửa cùng lúc.
+   - Cột `version` (INTEGER) trong bảng `work_items` áp dụng cơ chế **Optimistic Locking** (`@Version`) để ngăn chặn hiện tượng mất mát dữ liệu (Lost Update) khi có nhiều thành viên cùng kéo thả Kanban hoặc chỉnh sửa cùng lúc (`409 CONFLICT`).
+
+4. **Trường dữ liệu động (JSONB & GIN Indexing)**:
+   - Cột `custom_fields` (JSONB) trong bảng `work_items` lưu trữ không giới hạn các thuộc tính tùy chỉnh của doanh nghiệp.
+   - Sử dụng PostgreSQL GIN Index (`CREATE INDEX idx_work_items_custom_fields_gin ON work_items USING gin (custom_fields);`) để đảm bảo tốc độ truy vấn tìm kiếm và lọc động luôn dưới 50ms ngay cả khi bảng đạt hàng triệu bản ghi.

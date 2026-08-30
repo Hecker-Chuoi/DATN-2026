@@ -1,7 +1,8 @@
 package com.datn.workservice.enums;
 
-public enum DependencyType {
+public enum LinkType {
     BLOCKS,
     RELATES_TO,
-    DUPLICATES
+    DUPLICATES,
+    CAUSES
 }

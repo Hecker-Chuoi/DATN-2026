@@ -1,15 +1,17 @@
 package com.datn.workservice.entity;
 
+import com.datn.workservice.enums.TeamRole;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "team_members")
+@Table(name = "team_members", uniqueConstraints = {
+    @UniqueConstraint(name = "uq_team_member", columnNames = {"team_id", "user_id"})
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,30 +19,23 @@ import java.util.UUID;
 @Builder
 public class TeamMember {
 
-    @EmbeddedId
-    private TeamMemberId id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(updatable = false, nullable = false)
+    private UUID id;
 
-    @Column(name = "role_in_team", length = 50)
+    @Column(name = "team_id", nullable = false)
+    private UUID teamId;
+
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
     @Builder.Default
-    private String roleInTeam = "member";
+    private TeamRole role = TeamRole.MEMBER;
 
     @CreationTimestamp
-    @Column(name = "joined_at", updatable = false)
+    @Column(name = "joined_at", updatable = false, nullable = false)
     private LocalDateTime joinedAt;
-
-    @Embeddable
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @EqualsAndHashCode
-    @Builder
-    public static class TeamMemberId implements Serializable {
-
-        @Column(name = "team_id", nullable = false)
-        private UUID teamId;
-
-        @Column(name = "user_id", nullable = false)
-        private UUID userId;
-    }
 }

@@ -1,7 +1,7 @@
 package com.datn.workservice.enums;
 
-public enum MilestoneStatus {
-    OPEN,
+public enum StatusCategory {
+    TODO,
     IN_PROGRESS,
-    CLOSED
+    DONE
 }

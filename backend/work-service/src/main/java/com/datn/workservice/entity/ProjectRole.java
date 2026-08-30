@@ -8,32 +8,29 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "task_attachments")
+@Table(name = "project_roles")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TaskAttachment {
+public class ProjectRole {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "task_id", nullable = false)
-    private UUID taskId;
+    @Column(name = "project_id")
+    private UUID projectId;
 
-    @Column(name = "file_url", nullable = false, length = 500)
-    private String fileUrl;
+    @Column(nullable = false, length = 100)
+    private String name;
 
-    @Column(name = "file_name", nullable = false, length = 255)
-    private String fileName;
-
-    @Column(name = "uploaded_by")
-    private UUID uploadedBy;
+    @Column(columnDefinition = "TEXT")
+    private String description;
 
     @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
 }
