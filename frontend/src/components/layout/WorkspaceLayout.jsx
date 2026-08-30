@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import { teamApi } from '../../api.js';
+import CreateProjectModal from '../project/CreateProjectModal.jsx';
 
 export default function WorkspaceLayout({ currentUser, onLogout }) {
   const [teams, setTeams] = useState([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
+  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  const [selectedTeamIdForProject, setSelectedTeamIdForProject] = useState(null);
 
   const fetchTeams = async () => {
     try {
@@ -24,6 +27,11 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
   useEffect(() => {
     fetchTeams();
   }, []);
+
+  const handleOpenCreateProject = (teamId = null) => {
+    setSelectedTeamIdForProject(teamId);
+    setIsCreateProjectModalOpen(true);
+  };
 
   return (
     <div
@@ -44,9 +52,7 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
         onOpenCreateTeam={() => {
           console.log('Open create team modal');
         }}
-        onOpenCreateProject={(teamId) => {
-          console.log('Open create project modal for team', teamId);
-        }}
+        onOpenCreateProject={handleOpenCreateProject}
         currentUser={currentUser}
         onLogout={onLogout}
       />
@@ -76,11 +82,22 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
             context={{
               teams,
               refreshTeams: fetchTeams,
-              onOpenCreateProject: () => console.log('Create project'),
+              onOpenCreateProject: handleOpenCreateProject,
             }}
           />
         </main>
       </div>
+
+      {/* ─── Global Create Project Modal ─── */}
+      <CreateProjectModal
+        isOpen={isCreateProjectModalOpen}
+        onClose={() => setIsCreateProjectModalOpen(false)}
+        teams={teams}
+        defaultTeamId={selectedTeamIdForProject}
+        onProjectCreated={() => {
+          fetchTeams();
+        }}
+      />
     </div>
   );
 }
