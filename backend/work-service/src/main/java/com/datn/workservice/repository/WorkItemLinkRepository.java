@@ -11,8 +11,8 @@ import java.util.UUID;
 @Repository
 public interface WorkItemLinkRepository extends JpaRepository<WorkItemLink, UUID> {
     List<WorkItemLink> findBySourceItemId(UUID sourceItemId);
-    List<WorkItemLink> findByTargetItemId(UUID targetItemId);
     List<WorkItemLink> findBySourceItemIdOrTargetItemId(UUID sourceItemId, UUID targetItemId);
+    List<WorkItemLink> findByLinkType(LinkType linkType);
     boolean existsBySourceItemIdAndTargetItemIdAndLinkType(UUID sourceItemId, UUID targetItemId, LinkType linkType);
     void deleteBySourceItemIdAndTargetItemIdAndLinkType(UUID sourceItemId, UUID targetItemId, LinkType linkType);
 }
