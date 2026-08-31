@@ -6,14 +6,15 @@ import {
   ListTodo,
   Layers,
   Sparkles,
-  RefreshCw,
   Users,
   ShieldCheck,
-  Settings
+  Settings,
+  GitBranch
 } from 'lucide-react';
 import { projectApi } from '../api.js';
 import { useProjectPermission } from '../hooks/useProjectPermission.js';
 import ProjectMembersTab from '../components/project/ProjectMembersTab.jsx';
+import ProjectWorkflowTab from '../components/project/ProjectWorkflowTab.jsx';
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
@@ -167,6 +168,25 @@ export default function ProjectDetailPage() {
             <span>Roadmap</span>
           </button>
           <button
+            onClick={() => setActiveTab('workflow')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 6,
+              border: 'none',
+              backgroundColor: activeTab === 'workflow' ? '#EFF6FF' : 'transparent',
+              color: activeTab === 'workflow' ? '#2563EB' : '#64748B',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <GitBranch size={14} />
+            <span>Workflow & Statuses</span>
+          </button>
+          <button
             onClick={() => setActiveTab('members')}
             style={{
               padding: '6px 12px',
@@ -196,6 +216,12 @@ export default function ProjectDetailPage() {
             project={project}
             isAdmin={isAdmin}
             onMembersUpdated={fetchProject}
+          />
+        ) : activeTab === 'workflow' ? (
+          <ProjectWorkflowTab
+            projectId={projectId}
+            project={project}
+            isAdmin={isAdmin}
           />
         ) : (
           <div

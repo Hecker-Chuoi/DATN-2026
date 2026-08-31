@@ -287,8 +287,24 @@ export const workItemApi = {
   update: (id, data) => apiClient.put(`${WORK_BASE}/items/${id}`, data),
   updateRank: (id, data) => apiClient.patch(`${WORK_BASE}/items/${id}/rank`, data),
   delete: (id) => apiClient.delete(`${WORK_BASE}/items/${id}`),
-  getTransitions: (id) => apiClient.get(`${WORK_BASE}/items/${id}/transitions`),
-  executeTransition: (id, data) => apiClient.post(`${WORK_BASE}/items/${id}/transitions`, data),
+  getTransitions: (id) => apiClient.get(`${WORK_BASE}/work-items/${id}/transitions`),
+  executeTransition: (id, transitionId, data) =>
+    apiClient.post(`${WORK_BASE}/work-items/${id}/transitions/${transitionId}`, data),
+};
+
+// ─── 3.1. Workflow Engine & FSM Schemes API ──────────────────────────────────
+export const workflowApi = {
+  getProjectWorkflow: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/workflow`),
+  getProjectWorkflows: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/workflows`),
+  getProjectWorkflowScheme: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/workflow/scheme`),
+  updateProjectWorkflowScheme: (projectId, data) => apiClient.put(`${WORK_BASE}/projects/${projectId}/workflow/scheme`, data),
+  getProjectStatuses: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/statuses`),
+  createStatus: (data) => apiClient.post(`${WORK_BASE}/statuses`, data),
+  getWorkflowById: (workflowId) => apiClient.get(`${WORK_BASE}/workflows/${workflowId}`),
+  createTransition: (workflowId, data) => apiClient.post(`${WORK_BASE}/workflows/${workflowId}/transitions`, data),
+  deleteTransition: (workflowId, transitionId) => apiClient.delete(`${WORK_BASE}/workflows/${workflowId}/transitions/${transitionId}`),
+  getTransitions: (workItemId) => apiClient.get(`${WORK_BASE}/work-items/${workItemId}/transitions`),
+  executeTransition: (workItemId, transitionId, data) => apiClient.post(`${WORK_BASE}/work-items/${workItemId}/transitions/${transitionId}`, data),
 };
 
 // ─── 4. Boards & Backlog API ──────────────────────────────────────────────────
