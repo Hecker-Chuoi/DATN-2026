@@ -2,6 +2,8 @@ package com.datn.identity_service.service;
 
 import com.datn.identity_service.dto.request.RegisterRequest;
 import com.datn.identity_service.dto.request.UpdateRolesRequest;
+import com.datn.identity_service.dto.request.AdminCreateUserRequest;
+import com.datn.identity_service.dto.request.ResetPasswordRequest;
 import com.datn.identity_service.dto.response.UserResponse;
 import com.datn.identity_service.entity.User;
 import com.datn.identity_service.exception.ResourceNotFoundException;
@@ -13,6 +15,9 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import com.datn.common.dto.PageResponse;
 
 import java.security.Principal;
 import java.util.List;
@@ -127,26 +132,57 @@ public class UserService {
 
 
     /**
-     * Returns the profile of the currently authenticated user
+     * Returns the profile of the currently authenticated user.
+     * Looks up by email first if present to unify Google and manual logins.
      */
+    @Transactional
     public UserResponse getCurrentUser(Principal principal) {
         String keycloakId = extractKeycloakId(principal);
-
-        User user = userRepository.findByKeycloakId(keycloakId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found for keycloakId: " + keycloakId));
-
+        String email = extractEmail(principal);
+ 
+        User user = null;
+        if (email != null && !email.isBlank()) {
+            user = userRepository.findByEmail(email).orElse(null);
+        }
+ 
+        if (user == null) {
+            user = userRepository.findByKeycloakId(keycloakId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found for keycloakId: " + keycloakId));
+        } else if (!keycloakId.equals(user.getKeycloakId())) {
+            log.info("Linking new Keycloak ID '{}' to existing user '{}' with email '{}'", keycloakId, user.getUsername(), email);
+            user.setKeycloakId(keycloakId);
+            user = userRepository.save(user);
+        }
+ 
         return UserResponse.from(user);
     }
 
 
     /**
-     * Returns all users from the local database.
+     * Returns paginated and sorted users, with optional search query.
      */
-    public List<UserResponse> getAllUsers() {
-        return userRepository.findAll()
-                .stream()
+    public PageResponse<UserResponse> getAllUsers(String search, Pageable pageable) {
+        Page<User> userPage;
+        if (search != null && !search.isBlank()) {
+            String q = "%" + search.trim().toLowerCase() + "%";
+            userPage = userRepository.searchUsers(q, pageable);
+        } else {
+            userPage = userRepository.findAll(pageable);
+        }
+ 
+        List<UserResponse> content = userPage.getContent().stream()
                 .map(UserResponse::from)
                 .collect(Collectors.toList());
+ 
+        return PageResponse.of(
+                content,
+                userPage.getNumber(),
+                userPage.getSize(),
+                userPage.getTotalElements(),
+                userPage.getTotalPages(),
+                userPage.isLast(),
+                userPage.isFirst()
+        );
     }
 
     /**
@@ -237,11 +273,99 @@ public class UserService {
         return userRepository.existsById(id);
     }
 
+    /**
+     * Admin creates a new user with only username and password.
+     */
+    @Transactional
+    public UserResponse adminCreateUser(AdminCreateUserRequest request) {
+        String username = request.getUsername().trim();
+        if (userRepository.existsByUsername(username)) {
+            throw new UserAlreadyExistsException("Username '" + username + "' is already taken");
+        }
+        
+        String email = username.toLowerCase() + "@local.com";
+        if (userRepository.existsByEmail(email)) {
+            throw new UserAlreadyExistsException("Generated email '" + email + "' is already registered");
+        }
+ 
+        // 1. Create in Keycloak
+        String keycloakId = keycloakService.createUser(
+                username,
+                request.getPassword(),
+                email,
+                "",
+                ""
+        );
+ 
+        // 2. Assign default roles
+        keycloakService.assignRealmRoles(keycloakId, DEFAULT_ROLES);
+ 
+        // 3. Persist to local DB
+        User user = User.builder()
+                .keycloakId(keycloakId)
+                .username(username)
+                .email(email)
+                .firstName("")
+                .lastName("")
+                .roles(Set.copyOf(DEFAULT_ROLES))
+                .status(User.UserStatus.ACTIVE)
+                .build();
+ 
+        user = userRepository.save(user);
+        log.info("Admin created user: username='{}', keycloakId='{}'", user.getUsername(), keycloakId);
+ 
+        return UserResponse.from(user);
+    }
+ 
+    /**
+     * Admin resets user password.
+     */
+    @Transactional
+    public void resetPassword(UUID userId, ResetPasswordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+ 
+        keycloakService.resetUserPassword(user.getKeycloakId(), request.getPassword());
+        log.info("Admin reset password for user '{}'", user.getUsername());
+    }
+ 
+    /**
+     * Soft deletes user: sets status to SUSPENDED, disables Keycloak account,
+     * and deletes memberships and unassigns tasks.
+     */
+    @Transactional
+    public void deleteUser(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+ 
+        // 1. Disable in Keycloak
+        keycloakService.updateUserEnabledStatus(user.getKeycloakId(), false);
+ 
+        // 2. Set status to SUSPENDED in DB
+        user.setStatus(User.UserStatus.SUSPENDED);
+        userRepository.save(user);
+ 
+        // 3. Cleanup DB references (team memberships, watchers, assignee)
+        userRepository.deleteTeamMembershipsByUserId(userId);
+        userRepository.deleteTaskWatchersByUserId(userId);
+        userRepository.unassignTasksByUserId(userId);
+ 
+        log.info("Soft-deleted and cleaned up user '{}'", user.getUsername());
+    }
+
     private String extractKeycloakId(Principal principal) {
         if (principal instanceof JwtAuthenticationToken jwtToken) {
             Jwt jwt = jwtToken.getToken();
             return jwt.getSubject(); // 'sub' = Keycloak user UUID
         }
         throw new IllegalStateException("Unexpected principal type: " + principal.getClass());
+    }
+ 
+    private String extractEmail(Principal principal) {
+        if (principal instanceof JwtAuthenticationToken jwtToken) {
+            Jwt jwt = jwtToken.getToken();
+            return jwt.getClaimAsString("email");
+        }
+        return null;
     }
 }

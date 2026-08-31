@@ -358,7 +358,54 @@ public class KeycloakService {
             throw new KeycloakException("Failed to fetch user info from Keycloak");
         }
     }
-
+ 
+    /**
+     * Updates Keycloak user enabled status.
+     */
+    public void updateUserEnabledStatus(String keycloakUserId, boolean enabled) {
+        try {
+            RealmResource realmResource = getRealmResource();
+            UserResource userResource = realmResource.users().get(keycloakUserId);
+            UserRepresentation user = userResource.toRepresentation();
+            user.setEnabled(enabled);
+            userResource.update(user);
+            log.info("Updated Keycloak user '{}' enabled status to: {}", keycloakUserId, enabled);
+        } catch (Exception e) {
+            log.error("Failed to update Keycloak user enabled status: {}", e.getMessage(), e);
+            throw new KeycloakException("Failed to update Keycloak user status: " + e.getMessage());
+        }
+    }
+ 
+    /**
+     * Resets a Keycloak user's password.
+     */
+    public void resetUserPassword(String keycloakUserId, String newPassword) {
+        try {
+            RealmResource realmResource = getRealmResource();
+            UserResource userResource = realmResource.users().get(keycloakUserId);
+            CredentialRepresentation credential = buildPasswordCredential(newPassword);
+            userResource.resetPassword(credential);
+            log.info("Reset password for Keycloak user '{}'", keycloakUserId);
+        } catch (Exception e) {
+            log.error("Failed to reset Keycloak password: {}", e.getMessage(), e);
+            throw new KeycloakException("Failed to reset password in Keycloak: " + e.getMessage());
+        }
+    }
+ 
+    /**
+     * Deletes a user from Keycloak.
+     */
+    public void deleteUser(String keycloakUserId) {
+        try {
+            RealmResource realmResource = getRealmResource();
+            realmResource.users().delete(keycloakUserId);
+            log.info("Deleted Keycloak user with id '{}'", keycloakUserId);
+        } catch (Exception e) {
+            log.error("Failed to delete Keycloak user: {}", e.getMessage(), e);
+            throw new KeycloakException("Failed to delete user in Keycloak: " + e.getMessage());
+        }
+    }
+ 
     // ──────────────────────────────────────────────────────────────
     // Private helpers
     // ──────────────────────────────────────────────────────────────
