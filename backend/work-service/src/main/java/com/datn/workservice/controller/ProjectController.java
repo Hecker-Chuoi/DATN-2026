@@ -6,6 +6,8 @@ import com.datn.workservice.dto.request.CreateProjectRequest;
 import com.datn.workservice.dto.request.UpdateProjectRequest;
 import com.datn.workservice.dto.response.ProjectDetailResponse;
 import com.datn.workservice.dto.response.ProjectResponse;
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireProjectPermission;
 import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.service.ProjectService;
 import jakarta.validation.Valid;
@@ -60,6 +62,7 @@ public class ProjectController {
     }
 
     @GetMapping("/{projectId}")
+    @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectById(
             @PathVariable("projectId") UUID projectId
     ) {
@@ -76,6 +79,7 @@ public class ProjectController {
     }
 
     @PutMapping("/{projectId}")
+    @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
     public ResponseEntity<ApiResponse<ProjectResponse>> updateProject(
             @PathVariable("projectId") UUID projectId,
             @Valid @RequestBody UpdateProjectRequest request
@@ -86,6 +90,7 @@ public class ProjectController {
     }
 
     @DeleteMapping("/{projectId}")
+    @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
     public ResponseEntity<ApiResponse<Void>> deleteProject(
             @PathVariable("projectId") UUID projectId
     ) {
@@ -95,6 +100,7 @@ public class ProjectController {
     }
 
     @PostMapping("/{projectId}/restore")
+    @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
     public ResponseEntity<ApiResponse<ProjectResponse>> restoreProject(
             @PathVariable("projectId") UUID projectId
     ) {

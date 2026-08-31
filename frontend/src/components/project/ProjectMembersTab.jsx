@@ -9,7 +9,9 @@ import {
   X,
   AlertCircle,
   Sparkles,
-  Info
+  Info,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi, userApi } from '../../api.js';
@@ -20,11 +22,90 @@ const ROLE_COLORS = {
   VIEWER: { bg: '#F8FAFC', text: '#475569', border: '#E2E8F0' },
 };
 
+const PERMISSION_DEFINITIONS = [
+  {
+    category: '1. Quản trị Dự án & Vòng đời Agile',
+    permissions: [
+      {
+        key: 'PROJECT_ADMIN',
+        name: 'Toàn quyền Quản trị Dự án (Project Admin)',
+        desc: 'Cấu hình thông tin dự án, quản lý thành viên, gán vai trò và xóa dự án.',
+        roles: ['ADMINISTRATOR'],
+      },
+      {
+        key: 'PROJECT_VIEW',
+        name: 'Xem Dự án & Bảng biểu (Project View)',
+        desc: 'Xem tổng quan dự án, danh sách công việc, bảng Kanban/Scrum và báo cáo.',
+        roles: ['ADMINISTRATOR', 'MEMBER', 'VIEWER'],
+      },
+      {
+        key: 'SPRINT_MANAGE',
+        name: 'Quản lý Sprint Agile (Sprint Manage)',
+        desc: 'Lập kế hoạch Backlog, tạo Sprint mới, Bắt đầu và Hoàn thành Sprint.',
+        roles: ['ADMINISTRATOR'],
+      },
+      {
+        key: 'RELEASE_MANAGE',
+        name: 'Quản lý Phiên bản Phát hành (Release Manage)',
+        desc: 'Tạo đợt Release Version, chốt danh sách issue đã xong và sinh Release Notes.',
+        roles: ['ADMINISTRATOR'],
+      },
+    ],
+  },
+  {
+    category: '2. Quản lý & Thao tác Công việc (Work Items)',
+    permissions: [
+      {
+        key: 'ISSUE_CREATE',
+        name: 'Tạo Công việc Mới (Issue Create)',
+        desc: 'Tạo mới Epic, Story, Task, Bug và Sub-task trong dự án.',
+        roles: ['ADMINISTRATOR', 'MEMBER'],
+      },
+      {
+        key: 'ISSUE_EDIT',
+        name: 'Chỉnh sửa Công việc (Issue Edit)',
+        desc: 'Cập nhật tiêu đề, mô tả, Story Points, thời gian ước lượng và Custom Fields.',
+        roles: ['ADMINISTRATOR', 'MEMBER'],
+      },
+      {
+        key: 'ISSUE_TRANSITION',
+        name: 'Chuyển Trạng thái / Kéo thả (Issue Transition)',
+        desc: 'Kéo thả thẻ trên Board và thực hiện các bước chuyển quy trình (To Do -> In Progress -> Done).',
+        roles: ['ADMINISTRATOR', 'MEMBER'],
+      },
+      {
+        key: 'ISSUE_ASSIGN',
+        name: 'Phân công Người xử lý (Issue Assign)',
+        desc: 'Gán hoặc đổi người chịu trách nhiệm (Assignee) cho công việc.',
+        roles: ['ADMINISTRATOR', 'MEMBER'],
+      },
+      {
+        key: 'ISSUE_DELETE',
+        name: 'Xóa Công việc (Issue Delete)',
+        desc: 'Xóa vĩnh viễn hoặc chuyển công việc vào thùng rác dự án.',
+        roles: ['ADMINISTRATOR'],
+      },
+    ],
+  },
+  {
+    category: '3. Cộng tác & Thảo luận',
+    permissions: [
+      {
+        key: 'COMMENT_CREATE',
+        name: 'Bình luận & Đính kèm (Comment & Attach)',
+        desc: 'Gửi bình luận trao đổi dạng cây phân cấp và tải lên tài liệu đính kèm.',
+        roles: ['ADMINISTRATOR', 'MEMBER'],
+      },
+    ],
+  },
+];
+
 export default function ProjectMembersTab({ projectId, project, isAdmin, onMembersUpdated }) {
   const [members, setMembers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showDetailedMatrix, setShowDetailedMatrix] = useState(false);
 
   // Add Member Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -386,40 +467,197 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
         )}
       </div>
 
-      {/* ─── Permission Matrix Legend Info Card ─── */}
+      {/* ─── Permission Matrix Legend Info Card & Detailed View ─── */}
       <div
         style={{
           marginTop: 24,
-          padding: '16px 20px',
+          padding: '18px 20px',
           borderRadius: 10,
           backgroundColor: '#FFFFFF',
           border: '1px solid #E2E8F0',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>
-          <Shield size={16} color="#2563EB" />
-          <span>Bảng tóm tắt Quyền hạn theo Vai trò (Granular RBAC)</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
+            <Shield size={18} color="#2563EB" />
+            <span>Phân quyền hạt mịn theo Vai trò (Granular Project RBAC)</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowDetailedMatrix(!showDetailedMatrix)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '5px 12px',
+              borderRadius: 6,
+              border: '1px solid #CBD5E1',
+              backgroundColor: showDetailedMatrix ? '#EFF6FF' : '#FFFFFF',
+              color: showDetailedMatrix ? '#2563EB' : '#475569',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <span>{showDetailedMatrix ? 'Thu gọn tóm tắt' : 'Xem chi tiết 10 quyền hạn'}</span>
+            {showDetailedMatrix ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 12 }}>
-          <div style={{ padding: 10, backgroundColor: '#FAF5FF', borderRadius: 8, border: '1px solid #E9D5FF' }}>
-            <div style={{ fontWeight: 700, color: '#7E22CE', marginBottom: 4 }}>Administrator (10/10)</div>
+
+        {/* Summary 3 Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 12, marginBottom: showDetailedMatrix ? 16 : 0 }}>
+          <div style={{ padding: 12, backgroundColor: '#FAF5FF', borderRadius: 8, border: '1px solid #E9D5FF' }}>
+            <div style={{ fontWeight: 700, color: '#7E22CE', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Administrator</span>
+              <span style={{ fontSize: 11, backgroundColor: '#F3E8FF', padding: '1px 6px', borderRadius: 10 }}>10 / 10 quyền</span>
+            </div>
             <div style={{ color: '#6B21A8', lineHeight: 1.4 }}>
               Toàn quyền cấu hình dự án, thành viên, workflow, board, sprint và xóa công việc.
             </div>
           </div>
-          <div style={{ padding: 10, backgroundColor: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
-            <div style={{ fontWeight: 700, color: '#1D4ED8', marginBottom: 4 }}>Member (6 quyền)</div>
+          <div style={{ padding: 12, backgroundColor: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
+            <div style={{ fontWeight: 700, color: '#1D4ED8', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Member</span>
+              <span style={{ fontSize: 11, backgroundColor: '#DBEAFE', padding: '1px 6px', borderRadius: 10 }}>6 / 10 quyền</span>
+            </div>
             <div style={{ color: '#1E40AF', lineHeight: 1.4 }}>
-              Xem dự án, tạo task, chỉnh sửa, kéo thả trạng thái và thêm bình luận.
+              Xem dự án, tạo task, chỉnh sửa, phân công, kéo thả trạng thái và thêm bình luận.
             </div>
           </div>
-          <div style={{ padding: 10, backgroundColor: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
-            <div style={{ fontWeight: 700, color: '#475569', marginBottom: 4 }}>Viewer (1 quyền)</div>
+          <div style={{ padding: 12, backgroundColor: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
+            <div style={{ fontWeight: 700, color: '#475569', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Viewer</span>
+              <span style={{ fontSize: 11, backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: 10 }}>1 / 10 quyền</span>
+            </div>
             <div style={{ color: '#64748B', lineHeight: 1.4 }}>
               Chỉ đọc: Xem danh sách công việc, bảng Kanban và báo cáo mà không thể chỉnh sửa.
             </div>
           </div>
         </div>
+
+        {/* Detailed Permission Matrix Table */}
+        {showDetailedMatrix && (
+          <div
+            style={{
+              marginTop: 16,
+              borderRadius: 8,
+              border: '1px solid #E2E8F0',
+              overflow: 'hidden',
+              backgroundColor: '#FFFFFF',
+            }}
+          >
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '2.5fr 1fr 1fr 1fr',
+                padding: '10px 16px',
+                backgroundColor: '#F1F5F9',
+                borderBottom: '1px solid #E2E8F0',
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#334155',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
+              <span>Tên Quyền Hạn (Permission Key) & Mô Tả</span>
+              <span style={{ textAlign: 'center', color: '#7E22CE' }}>Administrator</span>
+              <span style={{ textAlign: 'center', color: '#1D4ED8' }}>Member</span>
+              <span style={{ textAlign: 'center', color: '#475569' }}>Viewer</span>
+            </div>
+
+            {PERMISSION_DEFINITIONS.map((group, groupIdx) => (
+              <div key={groupIdx}>
+                {/* Category Header */}
+                <div
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#F8FAFC',
+                    borderBottom: '1px solid #E2E8F0',
+                    borderTop: groupIdx > 0 ? '1px solid #E2E8F0' : 'none',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#2563EB',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Sparkles size={13} />
+                  <span>{group.category}</span>
+                </div>
+
+                {/* Rows */}
+                {group.permissions.map((p) => {
+                  const hasAdmin = p.roles.includes('ADMINISTRATOR');
+                  const hasMember = p.roles.includes('MEMBER');
+                  const hasViewer = p.roles.includes('VIEWER');
+
+                  return (
+                    <div
+                      key={p.key}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '2.5fr 1fr 1fr 1fr',
+                        padding: '10px 16px',
+                        borderBottom: '1px solid #F1F5F9',
+                        alignItems: 'center',
+                        fontSize: 12,
+                      }}
+                    >
+                      {/* Permission Name & Desc */}
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>{p.name}</span>
+                          <code style={{ fontSize: 10, backgroundColor: '#F1F5F9', padding: '1px 5px', borderRadius: 4, color: '#64748B' }}>
+                            {p.key}
+                          </code>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{p.desc}</div>
+                      </div>
+
+                      {/* Admin Check */}
+                      <div style={{ textAlign: 'center' }}>
+                        {hasAdmin ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#16A34A', fontWeight: 600, fontSize: 11 }}>
+                            <Check size={14} strokeWidth={2.5} /> Được phép
+                          </span>
+                        ) : (
+                          <span style={{ color: '#CBD5E1' }}>—</span>
+                        )}
+                      </div>
+
+                      {/* Member Check */}
+                      <div style={{ textAlign: 'center' }}>
+                        {hasMember ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#16A34A', fontWeight: 600, fontSize: 11 }}>
+                            <Check size={14} strokeWidth={2.5} /> Được phép
+                          </span>
+                        ) : (
+                          <span style={{ color: '#CBD5E1' }}>—</span>
+                        )}
+                      </div>
+
+                      {/* Viewer Check */}
+                      <div style={{ textAlign: 'center' }}>
+                        {hasViewer ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#16A34A', fontWeight: 600, fontSize: 11 }}>
+                            <Check size={14} strokeWidth={2.5} /> Được phép
+                          </span>
+                        ) : (
+                          <span style={{ color: '#CBD5E1' }}>—</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ─── Add Member Modal ─── */}

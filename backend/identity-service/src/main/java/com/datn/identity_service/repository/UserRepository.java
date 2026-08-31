@@ -21,4 +21,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByEmail(String email);
 
     java.util.List<User> findByIdIn(java.util.List<UUID> ids);
+
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.id IN :ids OR u.keycloakId IN :keycloakIds")
+    java.util.List<User> findByIdsOrKeycloakIds(
+            @org.springframework.data.repository.query.Param("ids") java.util.List<UUID> ids,
+            @org.springframework.data.repository.query.Param("keycloakIds") java.util.List<String> keycloakIds
+    );
 }

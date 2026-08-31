@@ -174,8 +174,9 @@ public class UserService {
     /**
      * Finds a user by ID (used by internal microservices)
      */
-     public UserResponse getUserById(UUID id) {
+    public UserResponse getUserById(UUID id) {
         User user = userRepository.findById(id)
+                .or(() -> userRepository.findByKeycloakId(id.toString()))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
         return UserResponse.from(user);
     }
@@ -222,7 +223,8 @@ public class UserService {
         if (ids == null || ids.isEmpty()) {
             return List.of();
         }
-        return userRepository.findByIdIn(ids)
+        List<String> keycloakIds = ids.stream().map(UUID::toString).toList();
+        return userRepository.findByIdsOrKeycloakIds(ids, keycloakIds)
                 .stream()
                 .map(UserResponse::from)
                 .collect(Collectors.toList());
