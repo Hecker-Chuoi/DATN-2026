@@ -287,6 +287,76 @@ export const CUSTOM_FIELD_TYPES = {
   URL: 'URL',
 };
 
+// ─── Workflow Engine Types & FSM Configuration ──────────────────────────────
+export const WORKFLOW_CONDITION_TYPES = {
+  ASSIGNEE_ONLY: {
+    code: 'ASSIGNEE_ONLY',
+    name: 'Chỉ người được giao việc (Assignee Only)',
+    desc: 'Chỉ thành viên đang được chỉ định xử lý issue mới nhìn thấy và bấm được nút chuyển trạng thái.',
+  },
+  PERMISSION_REQUIRED: {
+    code: 'PERMISSION_REQUIRED',
+    name: 'Yêu cầu quyền hạn dự án (Permission Required)',
+    desc: 'Yêu cầu người thực hiện có quyền hạn cụ thể (ví dụ: ISSUE_TRANSITION, SPRINT_MANAGE).',
+  },
+  ROLE_REQUIRED: {
+    code: 'ROLE_REQUIRED',
+    name: 'Yêu cầu vai trò nội bộ (Role Required)',
+    desc: 'Chỉ thành viên có vai trò cụ thể trong dự án (ví dụ: ADMINISTRATOR, LEAD) mới được phép.',
+  },
+  ONLY_CREATOR: {
+    code: 'ONLY_CREATOR',
+    name: 'Chỉ người tạo (Reporter Only)',
+    desc: 'Chỉ người khởi tạo issue mới được phép thực hiện bước chuyển này.',
+  },
+};
+
+export const WORKFLOW_VALIDATOR_TYPES = {
+  FIELD_REQUIRED: {
+    code: 'FIELD_REQUIRED',
+    name: 'Bắt buộc điền trường dữ liệu (Field Required)',
+    desc: 'Kiểm tra và bắt buộc nhập các trường chỉ định (ví dụ: resolution, fixVersionId) trước khi chuyển.',
+  },
+  ALL_SUBTASKS_DONE: {
+    code: 'ALL_SUBTASKS_DONE',
+    name: 'Toàn bộ Subtask phải hoàn thành (All Subtasks Done)',
+    desc: 'Bắt buộc toàn bộ các nhiệm vụ con (Sub-tasks) phải ở trạng thái DONE trước khi đóng Story/Task cha.',
+  },
+  ESTIMATE_REQUIRED: {
+    code: 'ESTIMATE_REQUIRED',
+    name: 'Bắt buộc có ước lượng (Estimate Required)',
+    desc: 'Yêu cầu phải có điểm Story Points hoặc thời gian ước lượng trước khi bắt đầu xử lý.',
+  },
+};
+
+export const WORKFLOW_POST_FUNCTION_TYPES = {
+  SET_RESOLVED_TIME: {
+    code: 'SET_RESOLVED_TIME',
+    name: 'Ghi nhận thời gian giải quyết (Set Resolved Time)',
+    desc: 'Tự động gán trường resolved_at = thời điểm hiện tại khi issue chuyển sang trạng thái DONE.',
+  },
+  CLEAR_RESOLUTION: {
+    code: 'CLEAR_RESOLUTION',
+    name: 'Xóa kết quả giải quyết (Clear Resolution)',
+    desc: 'Tự động xóa resolution và resolved_at khi issue được mở lại (Reopened).',
+  },
+  AUTO_ASSIGN_LEAD: {
+    code: 'AUTO_ASSIGN_LEAD',
+    name: 'Tự động gán cho Trưởng dự án / Component (Auto Assign Lead)',
+    desc: 'Tự động gán assignee cho người phụ trách khi chuyển trạng thái (ví dụ khi cần Review).',
+  },
+  AUTO_TRANSITION_PARENT: {
+    code: 'AUTO_TRANSITION_PARENT',
+    name: 'Tự động chuyển trạng thái Item Cha (Auto Transition Parent)',
+    desc: 'Tự động cập nhật trạng thái Story cha khi các Sub-task con hoàn thành.',
+  },
+  EMIT_AUDIT_LOG: {
+    code: 'EMIT_AUDIT_LOG',
+    name: 'Ghi nhật ký thay đổi (Emit Changelog)',
+    desc: 'Ghi vết lịch sử chuyển đổi trạng thái vào bảng work_item_changelogs.',
+  },
+};
+
 // ─── Helper Functions ───────────────────────────────────────────────────────
 export function getPriorityConfig(priority) {
   return PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.MEDIUM;
@@ -311,3 +381,4 @@ export function isHierarchyValid(parentLevel, childLevel) {
   if (parentLevel === HIERARCHY_LEVELS.STANDARD && childLevel === HIERARCHY_LEVELS.SUBTASK) return true;
   return false;
 }
+
