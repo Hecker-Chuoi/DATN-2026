@@ -62,6 +62,8 @@ class ProjectServiceTest {
     @Mock
     private RoleAssignmentRepository roleAssignmentRepository;
     @Mock
+    private PermissionSchemeEntryRepository permissionSchemeEntryRepository;
+    @Mock
     private WorkItemRepository workItemRepository;
     @Mock
     private AtomicKeySequenceGenerator atomicKeySequenceGenerator;

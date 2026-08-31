@@ -18,7 +18,10 @@ export const workProjectApi = {
   clone: (sourceProjectId, data) =>
     apiClient.post(`${WORK_BASE}/projects/${sourceProjectId}/clone`, data),
   getMembers: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/members`),
+  getMyPermissions: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/permissions/my`),
   addMember: (projectId, data) => apiClient.post(`${WORK_BASE}/projects/${projectId}/members`, data),
+  updateMemberRole: (projectId, userId, roleId) =>
+    apiClient.put(`${WORK_BASE}/projects/${projectId}/members/${userId}/role`, { roleId }),
   removeMember: (projectId, userId) =>
     apiClient.delete(`${WORK_BASE}/projects/${projectId}/members/${userId}`),
   getRoles: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/roles`),

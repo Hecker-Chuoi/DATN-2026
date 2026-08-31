@@ -14,6 +14,7 @@ import com.datn.workservice.dto.response.WorkItemTypeResponse;
 import com.datn.workservice.entity.*;
 import com.datn.workservice.enums.BoardType;
 import com.datn.workservice.enums.DefaultAssigneeType;
+import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.enums.ProjectType;
 import com.datn.workservice.enums.StatusCategory;
 import com.datn.workservice.repository.*;
@@ -50,6 +51,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final BoardColumnStatusRepository boardColumnStatusRepository;
     private final ProjectRoleRepository projectRoleRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
+    private final PermissionSchemeEntryRepository permissionSchemeEntryRepository;
     private final WorkItemRepository workItemRepository;
 
     private final AtomicKeySequenceGenerator atomicKeySequenceGenerator;
@@ -345,24 +347,64 @@ public class ProjectServiceImpl implements ProjectService {
         );
         boardColumnStatusRepository.saveAll(columnStatuses);
 
-        // 7. Default Project Roles & Assignment
+        // 7. Default Project Roles & Permissions
         ProjectRole adminRole = projectRoleRepository.save(ProjectRole.builder()
                 .projectId(project.getId())
                 .name("ADMINISTRATOR")
                 .description("Full administrative access to project settings, members, workflows and items")
                 .build());
 
-        projectRoleRepository.save(ProjectRole.builder()
+        ProjectRole memberRole = projectRoleRepository.save(ProjectRole.builder()
                 .projectId(project.getId())
                 .name("MEMBER")
                 .description("Standard member who can view, create, edit, and transition work items")
                 .build());
 
-        projectRoleRepository.save(ProjectRole.builder()
+        ProjectRole viewerRole = projectRoleRepository.save(ProjectRole.builder()
                 .projectId(project.getId())
                 .name("VIEWER")
                 .description("Read-only access to project work items and boards")
                 .build());
+
+        // Seed permission entries for ADMINISTRATOR (All 10 permissions)
+        List<PermissionSchemeEntry> adminEntries = Arrays.stream(PermissionKey.values())
+                .map(pk -> PermissionSchemeEntry.builder()
+                        .projectId(project.getId())
+                        .roleId(adminRole.getId())
+                        .permissionKey(pk.name())
+                        .build())
+                .toList();
+
+        // Seed permission entries for MEMBER
+        List<PermissionSchemeEntry> memberEntries = List.of(
+                PermissionKey.PROJECT_VIEW,
+                PermissionKey.ISSUE_CREATE,
+                PermissionKey.ISSUE_EDIT,
+                PermissionKey.ISSUE_TRANSITION,
+                PermissionKey.ISSUE_ASSIGN,
+                PermissionKey.COMMENT_CREATE
+        ).stream()
+                .map(pk -> PermissionSchemeEntry.builder()
+                        .projectId(project.getId())
+                        .roleId(memberRole.getId())
+                        .permissionKey(pk.name())
+                        .build())
+                .toList();
+
+        // Seed permission entries for VIEWER
+        List<PermissionSchemeEntry> viewerEntries = List.of(
+                PermissionSchemeEntry.builder()
+                        .projectId(project.getId())
+                        .roleId(viewerRole.getId())
+                        .permissionKey(PermissionKey.PROJECT_VIEW.name())
+                        .build()
+        );
+
+        List<PermissionSchemeEntry> allEntries = new ArrayList<>();
+        allEntries.addAll(adminEntries);
+        allEntries.addAll(memberEntries);
+        allEntries.addAll(viewerEntries);
+        permissionSchemeEntryRepository.saveAll(allEntries);
 
         // Assign Lead / Creator as ADMINISTRATOR
         Set<UUID> adminUserIds = new HashSet<>();

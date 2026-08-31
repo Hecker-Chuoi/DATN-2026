@@ -1,29 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FolderKanban, Kanban, ListTodo, Layers, Sparkles, RefreshCw } from 'lucide-react';
+import {
+  FolderKanban,
+  Kanban,
+  ListTodo,
+  Layers,
+  Sparkles,
+  RefreshCw,
+  Users,
+  ShieldCheck,
+  Settings
+} from 'lucide-react';
 import { projectApi } from '../api.js';
+import { useProjectPermission } from '../hooks/useProjectPermission.js';
+import ProjectMembersTab from '../components/project/ProjectMembersTab.jsx';
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('board'); // 'board' | 'backlog' | 'roadmap'
+  const [activeTab, setActiveTab] = useState('board'); // 'board' | 'backlog' | 'roadmap' | 'members'
+
+  const { isAdmin, canCreateIssue, canManageSprint, permissions } = useProjectPermission(projectId);
+
+  const fetchProject = async () => {
+    try {
+      setLoading(true);
+      const res = await projectApi.getById(projectId);
+      if (res && res.data) {
+        setProject(res.data);
+      }
+    } catch (err) {
+      console.warn('Could not load project detail:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchProject = async () => {
-      try {
-        setLoading(true);
-        const res = await projectApi.getById(projectId);
-        if (res && res.data) {
-          setProject(res.data);
-        }
-      } catch (err) {
-        console.warn('Could not load project detail:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     if (projectId) {
       fetchProject();
     }
@@ -60,13 +75,34 @@ export default function ProjectDetailPage() {
             <span
               style={{
                 fontSize: 11,
-                color: '#64748B',
-                backgroundColor: '#F1F5F9',
+                fontWeight: 700,
+                color: '#2563EB',
+                backgroundColor: '#EFF6FF',
                 padding: '2px 6px',
                 borderRadius: 4,
+                border: '1px solid #BFDBFE',
               }}
             >
               {project.key}
+            </span>
+          )}
+          {isAdmin && (
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: '#7E22CE',
+                backgroundColor: '#FAF5FF',
+                padding: '2px 6px',
+                borderRadius: 10,
+                border: '1px solid #E9D5FF',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+              }}
+            >
+              <ShieldCheck size={11} />
+              ADMIN
             </span>
           )}
         </div>
@@ -130,30 +166,59 @@ export default function ProjectDetailPage() {
             <Layers size={14} />
             <span>Roadmap</span>
           </button>
+          <button
+            onClick={() => setActiveTab('members')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 6,
+              border: 'none',
+              backgroundColor: activeTab === 'members' ? '#EFF6FF' : 'transparent',
+              color: activeTab === 'members' ? '#2563EB' : '#64748B',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Users size={14} />
+            <span>Members & Roles</span>
+          </button>
         </div>
       </div>
 
-      {/* ─── Body Placeholder ─── */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 40,
-          textAlign: 'center',
-          backgroundColor: '#F8FAFC',
-        }}
-      >
-        <div style={{ maxWidth: 460 }}>
-          <Sparkles size={36} color="#2563EB" style={{ marginBottom: 12 }} />
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>
-            Jira-Grade Work View ({activeTab.toUpperCase()})
-          </h3>
-          <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>
-            Khu vực hiển thị Scrum/Kanban Board, Backlog và Sprints sẽ được triển khai kết nối theo các bước trong Kế hoạch Triển khai (Giai đoạn 6).
-          </p>
-        </div>
+      {/* ─── Body Content ─── */}
+      <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#F8FAFC' }}>
+        {activeTab === 'members' ? (
+          <ProjectMembersTab
+            projectId={projectId}
+            project={project}
+            isAdmin={isAdmin}
+            onMembersUpdated={fetchProject}
+          />
+        ) : (
+          <div
+            style={{
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 40,
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ maxWidth: 460 }}>
+              <Sparkles size={36} color="#2563EB" style={{ marginBottom: 12 }} />
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>
+                Jira-Grade Work View ({activeTab.toUpperCase()})
+              </h3>
+              <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>
+                Khu vực hiển thị Scrum/Kanban Board, Backlog và Sprints sẽ được triển khai kết nối theo các bước trong Kế hoạch Triển khai (Giai đoạn 4 & 6).
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

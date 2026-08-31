@@ -61,7 +61,7 @@ public class ProjectController {
 
     @GetMapping("/{projectId}")
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectById(
-            @PathVariable UUID projectId
+            @PathVariable("projectId") UUID projectId
     ) {
         ProjectDetailResponse response = projectService.getProjectById(projectId);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -69,7 +69,7 @@ public class ProjectController {
 
     @GetMapping("/key/{key}")
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectByKey(
-            @PathVariable String key
+            @PathVariable("key") String key
     ) {
         ProjectDetailResponse response = projectService.getProjectByKey(key);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -77,7 +77,7 @@ public class ProjectController {
 
     @PutMapping("/{projectId}")
     public ResponseEntity<ApiResponse<ProjectResponse>> updateProject(
-            @PathVariable UUID projectId,
+            @PathVariable("projectId") UUID projectId,
             @Valid @RequestBody UpdateProjectRequest request
     ) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
@@ -87,7 +87,7 @@ public class ProjectController {
 
     @DeleteMapping("/{projectId}")
     public ResponseEntity<ApiResponse<Void>> deleteProject(
-            @PathVariable UUID projectId
+            @PathVariable("projectId") UUID projectId
     ) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
         projectService.deleteProject(projectId, currentUserId);
@@ -96,7 +96,7 @@ public class ProjectController {
 
     @PostMapping("/{projectId}/restore")
     public ResponseEntity<ApiResponse<ProjectResponse>> restoreProject(
-            @PathVariable UUID projectId
+            @PathVariable("projectId") UUID projectId
     ) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
         ProjectResponse response = projectService.restoreProject(projectId, currentUserId);

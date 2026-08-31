@@ -14,6 +14,10 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.UndeclaredThrowableException;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -32,8 +36,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(NoResourceFoundException ex) {
+        log.warn("No resource found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("API endpoint không tồn tại: " + ex.getResourcePath()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("Illegal argument: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException ex) {
+        log.warn("Unauthorized: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(ex.getMessage()));
     }
 
@@ -50,14 +68,52 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+        log.warn("Access denied: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiResponse.error("Access denied: insufficient permissions"));
+                .body(ApiResponse.error(ex.getMessage() != null ? ex.getMessage() : "Access denied: insufficient permissions"));
     }
 
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex) {
+        log.warn("Authentication error: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error("Authentication required"));
+    }
+
+    @ExceptionHandler(UndeclaredThrowableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUndeclaredThrowable(UndeclaredThrowableException ex) {
+        Throwable undeclared = ex.getUndeclaredThrowable();
+        if (undeclared instanceof AccessDeniedException ade) {
+            return handleAccessDenied(ade);
+        }
+        if (undeclared instanceof BadRequestException bre) {
+            return handleBadRequest(bre);
+        }
+        if (undeclared instanceof ResourceNotFoundException rnfe) {
+            return handleNotFound(rnfe);
+        }
+        if (undeclared instanceof UnauthorizedException ue) {
+            return handleUnauthorized(ue);
+        }
+        return handleGeneral(ex);
+    }
+
+    @ExceptionHandler(InvocationTargetException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvocationTarget(InvocationTargetException ex) {
+        Throwable target = ex.getTargetException();
+        if (target instanceof AccessDeniedException ade) {
+            return handleAccessDenied(ade);
+        }
+        if (target instanceof BadRequestException bre) {
+            return handleBadRequest(bre);
+        }
+        if (target instanceof ResourceNotFoundException rnfe) {
+            return handleNotFound(rnfe);
+        }
+        if (target instanceof UnauthorizedException ue) {
+            return handleUnauthorized(ue);
+        }
+        return handleGeneral(ex);
     }
 
     @ExceptionHandler(Exception.class)
