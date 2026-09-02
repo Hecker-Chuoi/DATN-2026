@@ -141,8 +141,50 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_NUM_PARTITIONS: 3
+  # ─────────────────────────────────────────────
+  # 7. MinIO Object Storage (S3-compatible)
+  # ─────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"  # S3 API
+      - "9001:9001"  # MinIO Console UI
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
     volumes:
-      - kafka_data:/var/lib/kafka/data
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-net
+
+  # ─────────────────────────────────────────────
+  # 7.1 MinIO Auto-Init (Bucket & Download Policy)
+  # ─────────────────────────────────────────────
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadminpassword); do
+        echo 'Waiting for MinIO...';
+        sleep 2;
+      done;
+      /usr/bin/mc mb --ignore-existing myminio/work-attachments;
+      /usr/bin/mc anonymous set download myminio/work-attachments;
+      echo 'MinIO work-attachments bucket initialized!';
+      exit 0;
+      "
     networks:
       - app-net
 
@@ -151,6 +193,7 @@ volumes:
   app_db_data:
   redis_data:
   kafka_data:
+  minio_data:
 
 networks:
   app-net:

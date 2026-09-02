@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Share2,
-  MoreHorizontal,
   Bookmark,
   CheckSquare,
   AlertCircle,
   CircleDot,
   GitCommitHorizontal,
   ChevronDown,
-  ChevronUp,
   Plus,
   Clock,
   Calendar,
@@ -23,10 +21,23 @@ import {
   MessageSquare,
   History,
   FileText,
-  User
+  User,
+  Paperclip,
+  UploadCloud,
+  Download,
+  Trash2,
+  Edit2,
+  CornerDownRight,
+  Link2,
+  ExternalLink,
+  Image as ImageIcon,
+  FileArchive,
+  Code as CodeIcon,
+  Search,
+  Check
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { workItemApi, workflowApi } from '../../api.js';
+import { workItemApi } from '../../api.js';
 import MemberSelect from '../common/MemberSelect.jsx';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 
@@ -38,10 +49,13 @@ const TYPE_ICONS = {
   SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Sub-task' },
 };
 
-export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpdated, members = [] }) {
+export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [] }) {
+  const [currentId, setCurrentId] = useState(initialItemId);
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('comments'); // 'comments' | 'history' | 'worklog'
+  const [activeTab, setActiveTab] = useState('comments'); // 'comments' | 'history' | 'attachments'
+
+  // Inline edit state
   const [isEditingSummary, setIsEditingSummary] = useState(false);
   const [summaryDraft, setSummaryDraft] = useState('');
   const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -50,15 +64,40 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
-  const [commentDraft, setCommentDraft] = useState('');
+
+  // Collaboration state
   const [comments, setComments] = useState([]);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [replyParentId, setReplyParentId] = useState(null);
+  const [replyDraft, setReplyDraft] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentDraft, setEditingCommentDraft] = useState('');
+
+  const [attachments, setAttachments] = useState([]);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const [links, setLinks] = useState([]);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkRelationType, setLinkRelationType] = useState('RELATES_TO');
+  const [linkSearchQuery, setLinkSearchQuery] = useState('');
+  const [linkSearchResults, setLinkSearchResults] = useState([]);
+  const [selectedTargetItem, setSelectedTargetItem] = useState(null);
+  const [isSearchingLinks, setIsSearchingLinks] = useState(false);
+  const [isCreatingLink, setIsCreatingLink] = useState(false);
+
   const [changelogs, setChangelogs] = useState([]);
 
-  const fetchDetail = async () => {
-    if (!itemId) return;
+  useEffect(() => {
+    setCurrentId(initialItemId);
+  }, [initialItemId]);
+
+  const fetchDetail = async (idToFetch = currentId) => {
+    if (!idToFetch) return;
     try {
       setLoading(true);
-      const res = await workItemApi.getById(itemId);
+      const res = await workItemApi.getById(idToFetch);
       if (res && res.data) {
         setItem(res.data);
         setSummaryDraft(res.data.summary || '');
@@ -72,39 +111,67 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
     }
   };
 
-  const fetchComments = async () => {
-    if (!itemId) return;
+  const fetchComments = async (idToFetch = currentId) => {
+    if (!idToFetch) return;
     try {
-      const res = await workItemApi.getComments(itemId);
+      const res = await workItemApi.getComments(idToFetch);
       if (res && res.data) {
         setComments(res.data);
       }
     } catch (err) {
-      // Graceful ignore
+      console.debug('Comments fetch error:', err);
     }
   };
 
-  const fetchChangelogs = async () => {
-    if (!itemId) return;
+  const fetchAttachments = async (idToFetch = currentId) => {
+    if (!idToFetch) return;
     try {
-      const res = await workItemApi.getChangelogs(itemId);
+      const res = await workItemApi.getAttachments(idToFetch);
+      if (res && res.data) {
+        setAttachments(res.data);
+      }
+    } catch (err) {
+      console.debug('Attachments fetch error:', err);
+    }
+  };
+
+  const fetchLinks = async (idToFetch = currentId) => {
+    if (!idToFetch) return;
+    try {
+      const res = await workItemApi.getLinks(idToFetch);
+      if (res && res.data) {
+        setLinks(res.data);
+      }
+    } catch (err) {
+      console.debug('Links fetch error:', err);
+    }
+  };
+
+  const fetchChangelogs = async (idToFetch = currentId) => {
+    if (!idToFetch) return;
+    try {
+      const res = await workItemApi.getChangelogs(idToFetch);
       if (res && res.data) {
         setChangelogs(res.data);
       }
     } catch (err) {
-      // Graceful ignore
+      console.debug('Changelogs fetch error:', err);
     }
   };
 
   useEffect(() => {
-    if (isOpen && itemId) {
-      fetchDetail();
-      fetchComments();
-      fetchChangelogs();
+    if (isOpen && currentId) {
+      fetchDetail(currentId);
+      fetchComments(currentId);
+      fetchAttachments(currentId);
+      fetchLinks(currentId);
+      fetchChangelogs(currentId);
     }
-  }, [isOpen, itemId]);
+  }, [isOpen, currentId]);
 
   if (!isOpen) return null;
+
+  // ─── WorkItem Basic Mutators ──────────────────────────────────────────────
 
   const handleSaveSummary = async () => {
     if (!summaryDraft.trim() || summaryDraft === item?.summary) {
@@ -112,10 +179,11 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
       return;
     }
     try {
-      const res = await workItemApi.update(itemId, { summary: summaryDraft.trim() });
+      const res = await workItemApi.update(currentId, { summary: summaryDraft.trim() });
       if (res && res.data) {
         setItem(res.data);
         toast.success('Đã cập nhật tiêu đề');
+        fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
@@ -127,10 +195,11 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
 
   const handleSaveDescription = async () => {
     try {
-      const res = await workItemApi.update(itemId, { description: descriptionDraft });
+      const res = await workItemApi.update(currentId, { description: descriptionDraft });
       if (res && res.data) {
         setItem(res.data);
         toast.success('Đã cập nhật mô tả');
+        fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
@@ -144,11 +213,11 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
     if (!transitionId) return;
     try {
       setShowStatusDropdown(false);
-      const res = await workItemApi.executeTransition(itemId, transitionId, { comment: '' });
+      const res = await workItemApi.executeTransition(currentId, transitionId, { comment: '' });
       if (res && res.data) {
         toast.success('Đã chuyển trạng thái thành công');
-        fetchDetail();
-        fetchChangelogs();
+        fetchDetail(currentId);
+        fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
@@ -160,10 +229,11 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
   const handleUpdatePriority = async (newPriority) => {
     try {
       setShowPriorityDropdown(false);
-      const res = await workItemApi.update(itemId, { priority: newPriority });
+      const res = await workItemApi.update(currentId, { priority: newPriority });
       if (res && res.data) {
         setItem(res.data);
         toast.success('Đã cập nhật độ ưu tiên');
+        fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
@@ -173,10 +243,11 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
 
   const handleUpdateAssignee = async (newAssigneeId) => {
     try {
-      const res = await workItemApi.update(itemId, { assigneeId: newAssigneeId || null });
+      const res = await workItemApi.update(currentId, { assigneeId: newAssigneeId || null });
       if (res && res.data) {
         setItem(res.data);
         toast.success('Đã cập nhật người thực hiện');
+        fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
@@ -189,10 +260,11 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
     const num = parseFloat(val);
     if (isNaN(num) && val !== '') return;
     try {
-      const res = await workItemApi.update(itemId, { storyPoints: val === '' ? null : num });
+      const res = await workItemApi.update(currentId, { storyPoints: val === '' ? null : num });
       if (res && res.data) {
         setItem(res.data);
         toast.success('Đã cập nhật Story Points');
+        fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
@@ -202,10 +274,11 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
 
   const handleUpdateDueDate = async (newDate) => {
     try {
-      const res = await workItemApi.update(itemId, { dueDate: newDate || null });
+      const res = await workItemApi.update(currentId, { dueDate: newDate || null });
       if (res && res.data) {
         setItem(res.data);
         toast.success('Đã cập nhật hạn chót');
+        fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
@@ -218,50 +291,225 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
     e.preventDefault();
     if (!newSubtaskTitle.trim()) return;
     try {
-      await workItemApi.createSubtask(itemId, { summary: newSubtaskTitle.trim() });
+      await workItemApi.createSubtask(currentId, { summary: newSubtaskTitle.trim() });
       toast.success('Đã thêm Sub-task mới');
       setNewSubtaskTitle('');
       setIsAddingSubtask(false);
-      fetchDetail();
+      fetchDetail(currentId);
       if (onItemUpdated) onItemUpdated();
     } catch (err) {
       toast.error('Lỗi khi tạo Sub-task');
     }
   };
 
+  // ─── Step 5.4: Comments Logic ──────────────────────────────────────────────
+
   const handleAddComment = async (e) => {
     e.preventDefault();
     if (!commentDraft.trim()) return;
     try {
-      await workItemApi.addComment(itemId, { body: commentDraft.trim() });
+      await workItemApi.addComment(currentId, { body: commentDraft.trim() });
       toast.success('Đã gửi bình luận');
       setCommentDraft('');
-      fetchComments();
+      fetchComments(currentId);
     } catch (err) {
-      toast.error('Lỗi khi gửi bình luận');
+      toast.error(err.response?.data?.message || 'Lỗi khi gửi bình luận');
     }
+  };
+
+  const handleAddReply = async (parentCommentId) => {
+    if (!replyDraft.trim()) return;
+    try {
+      await workItemApi.addComment(currentId, { body: replyDraft.trim(), parentCommentId });
+      toast.success('Đã trả lời bình luận');
+      setReplyDraft('');
+      setReplyParentId(null);
+      fetchComments(currentId);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Lỗi khi gửi phản hồi');
+    }
+  };
+
+  const handleSaveEditComment = async (commentId) => {
+    if (!editingCommentDraft.trim()) return;
+    try {
+      await workItemApi.updateComment(currentId, commentId, { body: editingCommentDraft.trim() });
+      toast.success('Đã cập nhật bình luận');
+      setEditingCommentId(null);
+      setEditingCommentDraft('');
+      fetchComments(currentId);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể cập nhật bình luận');
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa bình luận này?')) return;
+    try {
+      await workItemApi.deleteComment(currentId, commentId);
+      toast.success('Đã xóa bình luận');
+      fetchComments(currentId);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể xóa bình luận');
+    }
+  };
+
+  // ─── Step 5.4: Attachments Logic ───────────────────────────────────────────
+
+  const handleFileUpload = async (files) => {
+    if (!files || files.length === 0) return;
+    setIsUploadingFile(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const formData = new FormData();
+        formData.append('file', files[i]);
+        await workItemApi.uploadAttachment(currentId, formData);
+      }
+      toast.success('Đã tải lên tệp đính kèm');
+      fetchAttachments(currentId);
+      fetchChangelogs(currentId);
+    } catch (err) {
+      console.error('File upload error:', err);
+      toast.error(err.response?.data?.message || 'Không thể tải lên tệp tin');
+    } finally {
+      setIsUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa tệp đính kèm này?')) return;
+    try {
+      await workItemApi.deleteAttachment(currentId, attachmentId);
+      toast.success('Đã xóa tệp đính kèm');
+      fetchAttachments(currentId);
+      fetchChangelogs(currentId);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể xóa tệp tin');
+    }
+  };
+
+  const getFileIcon = (contentType = '', fileName = '') => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (contentType.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext)) {
+      return ImageIcon;
+    }
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+      return FileArchive;
+    }
+    if (['js', 'jsx', 'ts', 'tsx', 'json', 'html', 'css', 'java', 'py', 'sql'].includes(ext)) {
+      return CodeIcon;
+    }
+    return FileText;
+  };
+
+  // ─── Step 5.4: Linked Issues Logic ─────────────────────────────────────────
+
+  const handleSearchLinkCandidates = async (query) => {
+    setLinkSearchQuery(query);
+    if (!query.trim() || !item?.projectId) {
+      setLinkSearchResults([]);
+      return;
+    }
+    setIsSearchingLinks(true);
+    try {
+      const res = await workItemApi.listAll({
+        projectId: item.projectId,
+        search: query.trim(),
+        size: 10,
+      });
+      const list = res?.data?.content || res?.data || [];
+      // Exclude current item
+      setLinkSearchResults(list.filter((it) => it.id !== currentId));
+    } catch (err) {
+      console.debug('Failed to search link candidates:', err);
+    } finally {
+      setIsSearchingLinks(false);
+    }
+  };
+
+  const handleCreateLink = async () => {
+    if (!selectedTargetItem) {
+      toast.error('Vui lòng chọn một công việc để liên kết');
+      return;
+    }
+    setIsCreatingLink(true);
+    try {
+      await workItemApi.createLink(currentId, {
+        targetItemId: selectedTargetItem.id,
+        linkType: linkRelationType,
+      });
+      toast.success('Đã liên kết công việc thành công');
+      setShowLinkModal(false);
+      setSelectedTargetItem(null);
+      setLinkSearchQuery('');
+      setLinkSearchResults([]);
+      fetchLinks(currentId);
+      fetchChangelogs(currentId);
+    } catch (err) {
+      console.error('Link creation error:', err);
+      toast.error(err.response?.data?.message || err.message || 'Không thể tạo liên kết công việc');
+    } finally {
+      setIsCreatingLink(false);
+    }
+  };
+
+  const handleDeleteLink = async (linkId) => {
+    if (!window.confirm('Bạn có chắc muốn gỡ bỏ liên kết này?')) return;
+    try {
+      await workItemApi.deleteLink(currentId, linkId);
+      toast.success('Đã xóa liên kết');
+      fetchLinks(currentId);
+      fetchChangelogs(currentId);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể xóa liên kết');
+    }
+  };
+
+  // ─── Helpers ───────────────────────────────────────────────────────────────
+
+  const formatRelativeTime = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffSeconds = Math.floor((now - date) / 1000);
+
+    if (diffSeconds < 60) return 'Vừa xong';
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    if (diffMinutes < 60) return `${diffMinutes} phút trước`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours} giờ trước`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays} ngày trước`;
+    return date.toLocaleDateString('vi-VN');
   };
 
   const priorityInfo = getPriorityConfig(item?.priority);
   const PriorityIcon = priorityInfo.icon;
-
   const todayStr = new Date().toISOString().substring(0, 10);
   const isOverdue = item?.dueDate && item.dueDate < todayStr && item?.statusCategory !== 'DONE';
-
   const typeCode = item?.typeCode?.toUpperCase() || 'TASK';
   const typeInfo = TYPE_ICONS[typeCode] || TYPE_ICONS.TASK;
   const TypeIcon = typeInfo.icon;
 
   const subtaskTotal = item?.subtasks?.length || 0;
-  const subtaskDone = item?.subtasks?.filter(s => s.statusCategory === 'DONE').length || 0;
+  const subtaskDone = item?.subtasks?.filter((s) => s.statusCategory === 'DONE').length || 0;
   const progressPercent = subtaskTotal > 0 ? (subtaskDone / subtaskTotal) * 100 : 0;
+
+  // Group links by relationship description
+  const groupedLinks = links.reduce((acc, link) => {
+    const groupKey = link.relationshipDescription || 'Liên kết';
+    if (!acc[groupKey]) acc[groupKey] = [];
+    acc[groupKey].push(link);
+    return acc;
+  }, {});
 
   return (
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.5)',
+        backgroundColor: 'rgba(15, 23, 42, 0.55)',
         backdropFilter: 'blur(4px)',
         zIndex: 50,
         display: 'flex',
@@ -276,21 +524,22 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
           backgroundColor: '#FFFFFF',
           borderRadius: 12,
           width: '100%',
-          maxWidth: 1080,
-          height: '90vh',
+          maxWidth: 1160,
+          height: '92vh',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           overflow: 'hidden',
+          position: 'relative',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ─── Top Header Bar ─── */}
         <div
           style={{
-            height: 52,
-            minHeight: 52,
-            padding: '0 20px',
+            height: 54,
+            minHeight: 54,
+            padding: '0 24px',
             borderBottom: '1px solid #E2E8F0',
             display: 'flex',
             alignItems: 'center',
@@ -306,7 +555,6 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
               <span style={{ fontWeight: 700, color: '#2563EB', fontSize: 14 }}>{item?.code || '...'}</span>
             </div>
 
-            {/* Prominent Issue Type Badge */}
             <div
               style={{
                 display: 'inline-flex',
@@ -320,13 +568,11 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                 fontSize: 12,
                 fontWeight: 700,
               }}
-              title={`Loại công việc: ${item?.typeName || typeInfo.label}`}
             >
               <TypeIcon size={14} color={typeInfo.color} />
               <span>{item?.typeName || typeInfo.label}</span>
             </div>
 
-            {/* Parent tag if belongs to Epic or Story */}
             {item?.parentCode && (
               <div
                 style={{
@@ -340,13 +586,17 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                   padding: '2px 8px',
                   borderRadius: 4,
                   fontWeight: 600,
+                  cursor: 'pointer',
                 }}
-                title={`Công việc cha: ${item.parentSummary || item.parentCode}`}
+                onClick={() => {
+                  if (item.parentId) setCurrentId(item.parentId);
+                }}
+                title={`Mở công việc cha: ${item.parentSummary || item.parentCode}`}
               >
                 <span>Cha:</span>
                 <span style={{ fontWeight: 700 }}>{item.parentCode}</span>
                 {item.parentSummary && (
-                  <span style={{ color: '#64748B', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: '#64748B', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     - {item.parentSummary}
                   </span>
                 )}
@@ -355,7 +605,27 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
           </div>
 
           {/* Action Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => setShowLinkModal(true)}
+              style={{
+                border: '1px solid #CBD5E1',
+                backgroundColor: '#FFFFFF',
+                padding: '5px 10px',
+                borderRadius: 6,
+                cursor: 'pointer',
+                color: '#334155',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+              title="Thêm liên kết công việc"
+            >
+              <Link2 size={14} color="#2563EB" />
+              <span>Link issue</span>
+            </button>
             <button
               onClick={() => {
                 navigator.clipboard.writeText(window.location.href);
@@ -400,10 +670,10 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
           </div>
         ) : (
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            {/* ─── Left Column: Main Content (65% Width) ─── */}
+            {/* ─── Left Column: Main Content (64% Width) ─── */}
             <div
               style={{
-                flex: '0 0 65%',
+                flex: '0 0 64%',
                 padding: '24px 28px',
                 overflowY: 'auto',
                 borderRight: '1px solid #E2E8F0',
@@ -412,7 +682,7 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                 gap: 24,
               }}
             >
-              {/* Summary (Inline Editable) */}
+              {/* Summary */}
               <div>
                 {isEditingSummary ? (
                   <input
@@ -475,7 +745,7 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                 {isEditingDescription ? (
                   <div>
                     <textarea
-                      rows={6}
+                      rows={5}
                       value={descriptionDraft}
                       onChange={(e) => setDescriptionDraft(e.target.value)}
                       placeholder="Thêm mô tả, tiêu chí nghiệm thu, link tài liệu (Hỗ trợ Markdown)..."
@@ -536,7 +806,7 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                       fontSize: 13,
                       color: item?.description ? '#334155' : '#94A3B8',
                       cursor: 'pointer',
-                      minHeight: 64,
+                      minHeight: 56,
                       lineHeight: 1.6,
                       whiteSpace: 'pre-wrap',
                       border: '1px solid #E2E8F0',
@@ -547,8 +817,125 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                 )}
               </div>
 
+              {/* ─── Linked Issues Section (Step 5.4) ─── */}
+              {links.length > 0 && (
+                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Link2 size={16} color="#2563EB" />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Linked Issues</span>
+                      <span style={{ fontSize: 11, backgroundColor: '#EFF6FF', color: '#2563EB', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
+                        {links.length}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setShowLinkModal(true)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#2563EB',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 3,
+                      }}
+                    >
+                      <Plus size={13} /> Thêm liên kết
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {Object.entries(groupedLinks).map(([groupTitle, groupItems]) => (
+                      <div key={groupTitle} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
+                          {groupTitle} ({groupItems.length})
+                        </span>
+                        {groupItems.map((lnk) => {
+                          const linkedTypeCode = lnk.linkedItemTypeCode?.toUpperCase() || 'TASK';
+                          const LIcon = (TYPE_ICONS[linkedTypeCode] || TYPE_ICONS.TASK).icon;
+                          const isDone = lnk.linkedItemStatusCategory === 'DONE';
+
+                          return (
+                            <div
+                              key={lnk.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '8px 12px',
+                                backgroundColor: '#F8FAFC',
+                                borderRadius: 6,
+                                border: '1px solid #E2E8F0',
+                                fontSize: 13,
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                                <LIcon size={15} color={lnk.linkedItemTypeColor || '#0052CC'} />
+                                <span
+                                  onClick={() => setCurrentId(lnk.linkedItemId)}
+                                  style={{
+                                    fontWeight: 700,
+                                    color: '#2563EB',
+                                    cursor: 'pointer',
+                                    fontSize: 12,
+                                  }}
+                                  title="Xem công việc này"
+                                >
+                                  {lnk.linkedItemCode}
+                                </span>
+                                <span
+                                  style={{
+                                    color: isDone ? '#94A3B8' : '#0F172A',
+                                    textDecoration: isDone ? 'line-through' : 'none',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {lnk.linkedItemSummary}
+                                </span>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    padding: '2px 8px',
+                                    borderRadius: 4,
+                                    backgroundColor: lnk.linkedItemStatusColorHex ? `${lnk.linkedItemStatusColorHex}15` : '#EFF6FF',
+                                    color: lnk.linkedItemStatusColorHex || '#2563EB',
+                                  }}
+                                >
+                                  {lnk.linkedItemStatusName || 'TO DO'}
+                                </span>
+                                <button
+                                  onClick={() => handleDeleteLink(lnk.id)}
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    cursor: 'pointer',
+                                    color: '#94A3B8',
+                                    padding: 2,
+                                  }}
+                                  title="Gỡ bỏ liên kết"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Sub-tasks Section */}
-              <div>
+              <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Sub-tasks</span>
@@ -579,7 +966,6 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                   )}
                 </div>
 
-                {/* Progress Bar */}
                 {subtaskTotal > 0 && (
                   <div
                     style={{
@@ -601,7 +987,6 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                   </div>
                 )}
 
-                {/* Subtask List */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {item?.subtasks?.map((sub) => {
                     const isDone = sub.statusCategory === 'DONE';
@@ -625,7 +1010,12 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                             color={isDone ? '#10B981' : '#94A3B8'}
                             style={{ cursor: 'pointer' }}
                           />
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#2563EB' }}>{sub.code}</span>
+                          <span
+                            onClick={() => setCurrentId(sub.id)}
+                            style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', cursor: 'pointer' }}
+                          >
+                            {sub.code}
+                          </span>
                           <span
                             style={{
                               color: isDone ? '#94A3B8' : '#0F172A',
@@ -635,26 +1025,23 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                             {sub.summary}
                           </span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              padding: '2px 8px',
-                              borderRadius: 4,
-                              backgroundColor: sub.statusColorHex ? `${sub.statusColorHex}15` : '#EFF6FF',
-                              color: sub.statusColorHex || '#2563EB',
-                            }}
-                          >
-                            {sub.statusName || 'TO DO'}
-                          </span>
-                        </div>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            padding: '2px 8px',
+                            borderRadius: 4,
+                            backgroundColor: sub.statusColorHex ? `${sub.statusColorHex}15` : '#EFF6FF',
+                            color: sub.statusColorHex || '#2563EB',
+                          }}
+                        >
+                          {sub.statusName || 'TO DO'}
+                        </span>
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Inline Add Subtask Form */}
                 {isAddingSubtask && (
                   <form onSubmit={handleAddSubtask} style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                     <input
@@ -707,9 +1094,9 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                 )}
               </div>
 
-              {/* Activity Section */}
+              {/* ─── Activity Tabs (Comments, Attachments, History) ─── */}
               <div style={{ marginTop: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, borderBottom: '1px solid #E2E8F0', paddingBottom: 8, marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20, borderBottom: '1px solid #E2E8F0', paddingBottom: 8, marginBottom: 16 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Activity:</span>
                   <button
                     onClick={() => setActiveTab('comments')}
@@ -725,6 +1112,21 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                     }}
                   >
                     Comments ({comments.length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('attachments')}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: activeTab === 'attachments' ? '#2563EB' : '#64748B',
+                      cursor: 'pointer',
+                      borderBottom: activeTab === 'attachments' ? '2px solid #2563EB' : 'none',
+                      paddingBottom: 4,
+                    }}
+                  >
+                    Attachments ({attachments.length})
                   </button>
                   <button
                     onClick={() => setActiveTab('history')}
@@ -743,15 +1145,15 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                   </button>
                 </div>
 
+                {/* TAB 1: Threaded Comments (Step 5.4) */}
                 {activeTab === 'comments' && (
                   <div>
-                    {/* Add Comment Input */}
-                    <form onSubmit={handleAddComment} style={{ marginBottom: 16 }}>
+                    <form onSubmit={handleAddComment} style={{ marginBottom: 20 }}>
                       <textarea
                         rows={3}
                         value={commentDraft}
                         onChange={(e) => setCommentDraft(e.target.value)}
-                        placeholder="Viết bình luận hoặc gắn thẻ @đồng nghiệp..."
+                        placeholder="Thêm bình luận trao đổi (Hỗ trợ Markdown)..."
                         style={{
                           width: '100%',
                           fontSize: 13,
@@ -786,75 +1188,457 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                       </button>
                     </form>
 
-                    {/* Comments List */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {comments.map((c) => (
-                        <div
-                          key={c.id}
-                          style={{
-                            padding: 12,
-                            backgroundColor: '#F8FAFC',
-                            borderRadius: 8,
-                            border: '1px solid #E2E8F0',
-                            fontSize: 13,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <div
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      {comments.length === 0 ? (
+                        <div style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>
+                          Chưa có bình luận nào. Hãy là người đầu tiên trao đổi!
+                        </div>
+                      ) : (
+                        comments.map((c) => (
+                          <div
+                            key={c.id}
+                            style={{
+                              padding: 14,
+                              backgroundColor: '#F8FAFC',
+                              borderRadius: 8,
+                              border: '1px solid #E2E8F0',
+                              fontSize: 13,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div
+                                  style={{
+                                    width: 26,
+                                    height: 26,
+                                    borderRadius: 13,
+                                    backgroundColor: '#2563EB',
+                                    color: '#FFF',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {c.authorName ? c.authorName.charAt(0).toUpperCase() : 'U'}
+                                </div>
+                                <span style={{ fontWeight: 700, color: '#0F172A' }}>{c.authorName || 'Người dùng'}</span>
+                                {c.isEdited && (
+                                  <span style={{ fontSize: 10, color: '#94A3B8', fontStyle: 'italic' }}>(đã sửa)</span>
+                                )}
+                              </div>
+                              <span style={{ fontSize: 11, color: '#94A3B8' }}>{formatRelativeTime(c.createdAt)}</span>
+                            </div>
+
+                            {editingCommentId === c.id ? (
+                              <div style={{ marginTop: 8 }}>
+                                <textarea
+                                  rows={3}
+                                  value={editingCommentDraft}
+                                  onChange={(e) => setEditingCommentDraft(e.target.value)}
+                                  style={{
+                                    width: '100%',
+                                    fontSize: 13,
+                                    padding: 8,
+                                    borderRadius: 6,
+                                    border: '1px solid #2563EB',
+                                    outline: 'none',
+                                    fontFamily: 'inherit',
+                                  }}
+                                />
+                                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                                  <button
+                                    onClick={() => handleSaveEditComment(c.id)}
+                                    style={{
+                                      backgroundColor: '#2563EB',
+                                      color: '#FFF',
+                                      border: 'none',
+                                      padding: '4px 10px',
+                                      borderRadius: 4,
+                                      fontSize: 12,
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Lưu
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingCommentId(null)}
+                                    style={{
+                                      backgroundColor: '#F1F5F9',
+                                      color: '#475569',
+                                      border: 'none',
+                                      padding: '4px 10px',
+                                      borderRadius: 4,
+                                      fontSize: 12,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Hủy
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{ color: '#334155', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{c.body}</div>
+                            )}
+
+                            {/* Comment Actions */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontSize: 11, color: '#64748B' }}>
+                              <button
+                                onClick={() => {
+                                  setReplyParentId(replyParentId === c.id ? null : c.id);
+                                  setReplyDraft('');
+                                }}
                                 style={{
-                                  width: 24,
-                                  height: 24,
-                                  borderRadius: 12,
-                                  backgroundColor: '#2563EB',
-                                  color: '#FFF',
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: '#2563EB',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
                                   display: 'flex',
                                   alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: 11,
-                                  fontWeight: 700,
+                                  gap: 3,
+                                  padding: 0,
                                 }}
                               >
-                                {c.authorName ? c.authorName.charAt(0).toUpperCase() : 'U'}
-                              </div>
-                              <span style={{ fontWeight: 700, color: '#0F172A' }}>{c.authorName || 'Người dùng'}</span>
+                                <CornerDownRight size={12} /> Trả lời
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingCommentId(c.id);
+                                  setEditingCommentDraft(c.body);
+                                }}
+                                style={{ border: 'none', background: 'transparent', color: '#64748B', cursor: 'pointer', padding: 0 }}
+                              >
+                                Chỉnh sửa
+                              </button>
+                              <button
+                                onClick={() => handleDeleteComment(c.id)}
+                                style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
+                              >
+                                Xóa
+                              </button>
                             </div>
-                            <span style={{ fontSize: 11, color: '#94A3B8' }}>{c.createdAt?.substring(0, 10)}</span>
+
+                            {/* Inline Reply Form */}
+                            {replyParentId === c.id && (
+                              <div style={{ marginTop: 10, paddingLeft: 12, borderLeft: '2px solid #BFDBFE' }}>
+                                <textarea
+                                  rows={2}
+                                  value={replyDraft}
+                                  onChange={(e) => setReplyDraft(e.target.value)}
+                                  placeholder={`Trả lời ${c.authorName}...`}
+                                  autoFocus
+                                  style={{
+                                    width: '100%',
+                                    fontSize: 12,
+                                    padding: 8,
+                                    borderRadius: 6,
+                                    border: '1px solid #CBD5E1',
+                                    outline: 'none',
+                                    fontFamily: 'inherit',
+                                  }}
+                                />
+                                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                                  <button
+                                    onClick={() => handleAddReply(c.id)}
+                                    disabled={!replyDraft.trim()}
+                                    style={{
+                                      backgroundColor: '#2563EB',
+                                      color: '#FFF',
+                                      border: 'none',
+                                      padding: '4px 10px',
+                                      borderRadius: 4,
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Phản hồi
+                                  </button>
+                                  <button
+                                    onClick={() => setReplyParentId(null)}
+                                    style={{
+                                      backgroundColor: '#F1F5F9',
+                                      color: '#475569',
+                                      border: 'none',
+                                      padding: '4px 10px',
+                                      borderRadius: 4,
+                                      fontSize: 11,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Hủy
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Threaded Nested Replies */}
+                            {c.replies && c.replies.length > 0 && (
+                              <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10, paddingLeft: 16, borderLeft: '2px solid #E2E8F0' }}>
+                                {c.replies.map((reply) => (
+                                  <div
+                                    key={reply.id}
+                                    style={{
+                                      padding: 10,
+                                      backgroundColor: '#FFFFFF',
+                                      borderRadius: 6,
+                                      border: '1px solid #E2E8F0',
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <div
+                                          style={{
+                                            width: 22,
+                                            height: 22,
+                                            borderRadius: 11,
+                                            backgroundColor: '#3B82F6',
+                                            color: '#FFF',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: 10,
+                                            fontWeight: 700,
+                                          }}
+                                        >
+                                          {reply.authorName ? reply.authorName.charAt(0).toUpperCase() : 'U'}
+                                        </div>
+                                        <span style={{ fontWeight: 700, fontSize: 12, color: '#0F172A' }}>{reply.authorName}</span>
+                                      </div>
+                                      <span style={{ fontSize: 10, color: '#94A3B8' }}>{formatRelativeTime(reply.createdAt)}</span>
+                                    </div>
+                                    <div style={{ color: '#334155', fontSize: 12, lineHeight: 1.4 }}>{reply.body}</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: 10, color: '#64748B' }}>
+                                      <button
+                                        onClick={() => handleDeleteComment(reply.id)}
+                                        style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
+                                      >
+                                        Xóa
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <div style={{ color: '#334155', lineHeight: 1.5 }}>{c.body}</div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
                 )}
 
-                {activeTab === 'history' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {changelogs.map((log) => (
-                      <div
-                        key={log.id}
-                        style={{
-                          padding: '8px 12px',
-                          borderLeft: '3px solid #2563EB',
-                          backgroundColor: '#F8FAFC',
-                          fontSize: 12,
-                          color: '#475569',
-                        }}
-                      >
-                        <span style={{ fontWeight: 700, color: '#0F172A' }}>{log.authorName || 'Người dùng'}</span>{' '}
-                        đã thay đổi <b>{log.fieldName}</b> từ <span style={{ color: '#DE350B' }}>"{log.oldValue || 'trống'}"</span> sang{' '}
-                        <span style={{ color: '#00875A' }}>"{log.newValue || 'trống'}"</span>
+                {/* TAB 2: Attachments Dropzone (Step 5.4) */}
+                {activeTab === 'attachments' && (
+                  <div>
+                    {/* Drag-and-drop Dropzone */}
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDraggingOver(true);
+                      }}
+                      onDragLeave={() => setIsDraggingOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDraggingOver(false);
+                        handleFileUpload(e.dataTransfer.files);
+                      }}
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        border: `2px dashed ${isDraggingOver ? '#2563EB' : '#CBD5E1'}`,
+                        backgroundColor: isDraggingOver ? '#EFF6FF' : '#F8FAFC',
+                        borderRadius: 8,
+                        padding: '24px 16px',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        marginBottom: 16,
+                      }}
+                    >
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        multiple
+                        onChange={(e) => handleFileUpload(e.target.files)}
+                        style={{ display: 'none' }}
+                      />
+                      <UploadCloud size={32} color="#2563EB" style={{ margin: '0 auto 8px' }} />
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
+                        {isUploadingFile ? 'Đang tải lên tệp...' : 'Kéo thả tệp vào đây hoặc Bấm để tải lên'}
                       </div>
-                    ))}
+                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                        Hỗ trợ hình ảnh (PNG, JPG, SVG), tài liệu PDF, DOCX, ZIP tối đa 50MB
+                      </div>
+                    </div>
+
+                    {/* Attachment List / Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                      {attachments.map((att) => {
+                        const FIcon = getFileIcon(att.contentType, att.fileName);
+                        const isImg = att.contentType?.startsWith('image/');
+
+                        return (
+                          <div
+                            key={att.id}
+                            style={{
+                              border: '1px solid #E2E8F0',
+                              borderRadius: 8,
+                              overflow: 'hidden',
+                              backgroundColor: '#FFFFFF',
+                              display: 'flex',
+                              flexDirection: 'column',
+                            }}
+                          >
+                            {isImg ? (
+                              <div
+                                style={{
+                                  height: 100,
+                                  backgroundColor: '#0F172A',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                <img
+                                  src={att.fileUrl}
+                                  alt={att.fileName}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  height: 60,
+                                  backgroundColor: '#F1F5F9',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <FIcon size={28} color="#64748B" />
+                              </div>
+                            )}
+
+                            <div style={{ padding: 10, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                              <div>
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    color: '#0F172A',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                  title={att.fileName}
+                                >
+                                  {att.fileName}
+                                </div>
+                                <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                                  {att.formattedFileSize} • {formatRelativeTime(att.uploadedAt)}
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 8, borderTop: '1px solid #F1F5F9', paddingTop: 6 }}>
+                                <a
+                                  href={att.downloadUrl || att.fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{
+                                    color: '#2563EB',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    fontSize: 11,
+                                    textDecoration: 'none',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  <Download size={12} /> Tải về
+                                </a>
+                                <button
+                                  onClick={() => handleDeleteAttachment(att.id)}
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#DC2626',
+                                    cursor: 'pointer',
+                                    padding: 2,
+                                  }}
+                                  title="Xóa tệp"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 3: Audit Trail / History Timeline (Step 5.3) */}
+                {activeTab === 'history' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {changelogs.length === 0 ? (
+                      <div style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>
+                        Chưa có lịch sử thay đổi nào được ghi nhận.
+                      </div>
+                    ) : (
+                      changelogs.map((log) => (
+                        <div
+                          key={log.id}
+                          style={{
+                            padding: '10px 14px',
+                            borderLeft: '3px solid #2563EB',
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: '0 6px 6px 0',
+                            fontSize: 12,
+                            color: '#334155',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ fontWeight: 700, color: '#0F172A' }}>{log.authorName || 'Người dùng'}</span>
+                            <span style={{ fontSize: 11, color: '#94A3B8' }}>{formatRelativeTime(log.changedAt)}</span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span>đã thay đổi</span>
+                            <span style={{ fontWeight: 700, color: '#1E293B', backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: 4 }}>
+                              {log.fieldDisplayName || log.fieldName}
+                            </span>
+                            {log.oldValue && (
+                              <>
+                                <span>từ</span>
+                                <span style={{ color: '#DC2626', textDecoration: 'line-through', backgroundColor: '#FEF2F2', padding: '1px 6px', borderRadius: 4 }}>
+                                  {log.oldValue}
+                                </span>
+                              </>
+                            )}
+                            <span>thành</span>
+                            <span style={{ color: '#059669', fontWeight: 600, backgroundColor: '#ECFDF5', padding: '1px 6px', borderRadius: 4 }}>
+                              {log.newValue || '(trống)'}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* ─── Right Sidebar Column: Metadata & Attributes (35% Width) ─── */}
+            {/* ─── Right Sidebar Column: Metadata & Attributes (36% Width) ─── */}
             <div
               style={{
-                flex: '0 0 35%',
+                flex: '0 0 36%',
                 padding: '24px 20px',
                 overflowY: 'auto',
                 backgroundColor: '#FAFAFA',
@@ -888,7 +1672,6 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                     <ChevronDown size={14} color="#64748B" />
                   </button>
 
-                  {/* Dropdown transitions */}
                   {showStatusDropdown && (
                     <div
                       style={{
@@ -991,10 +1774,7 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                         return (
                           <div
                             key={pKey}
-                            onClick={() => {
-                              handleUpdatePriority(pKey);
-                              setShowPriorityDropdown(false);
-                            }}
+                            onClick={() => handleUpdatePriority(pKey)}
                             style={{
                               padding: '9px 12px',
                               fontSize: 13,
@@ -1042,7 +1822,7 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                 </div>
               </div>
 
-              {/* Due Date (Hạn chót) Section */}
+              {/* Due Date Section */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Hạn chót (Due Date)</span>
@@ -1142,6 +1922,182 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
               <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11, color: '#64748B' }}>
                 <div>Created: {item?.createdAt?.substring(0, 10)}</div>
                 <div>Updated: {item?.updatedAt?.substring(0, 10)}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Link Issue Modal (Step 5.4) ─── */}
+        {showLinkModal && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.4)',
+              backdropFilter: 'blur(2px)',
+              zIndex: 60,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            onClick={() => setShowLinkModal(false)}
+          >
+            <div
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 10,
+                width: 480,
+                padding: 20,
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Liên kết công việc (Link issue)</h3>
+                <button
+                  onClick={() => setShowLinkModal(false)}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748B' }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>
+                  Loại quan hệ (Relationship)
+                </label>
+                <select
+                  value={linkRelationType}
+                  onChange={(e) => setLinkRelationType(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    border: '1px solid #CBD5E1',
+                    fontSize: 13,
+                    outline: 'none',
+                    fontWeight: 600,
+                  }}
+                >
+                  <option value="BLOCKS">Chặn (blocks)</option>
+                  <option value="RELATES_TO">Liên quan đến (relates to)</option>
+                  <option value="DUPLICATES">Trùng lặp với (duplicates)</option>
+                  <option value="CAUSES">Gây ra (causes)</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>
+                  Tìm kiếm công việc cần liên kết
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    value={linkSearchQuery}
+                    onChange={(e) => handleSearchLinkCandidates(e.target.value)}
+                    placeholder="Nhập mã (DATN-102) hoặc tiêu đề..."
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px 8px 32px',
+                      borderRadius: 6,
+                      border: '1px solid #CBD5E1',
+                      fontSize: 13,
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: 10, top: 11 }} />
+                </div>
+
+                {/* Search Results Dropdown */}
+                {linkSearchResults.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      maxHeight: 180,
+                      overflowY: 'auto',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: 6,
+                      backgroundColor: '#FFFFFF',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                  >
+                    {linkSearchResults.map((candidate) => {
+                      const isSelected = selectedTargetItem?.id === candidate.id;
+                      return (
+                        <div
+                          key={candidate.id}
+                          onClick={() => {
+                            setSelectedTargetItem(candidate);
+                            setLinkSearchQuery(`${candidate.code} - ${candidate.summary}`);
+                            setLinkSearchResults([]);
+                          }}
+                          style={{
+                            padding: '8px 12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            fontSize: 12,
+                            cursor: 'pointer',
+                            backgroundColor: isSelected ? '#EFF6FF' : 'transparent',
+                            borderBottom: '1px solid #F1F5F9',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 700, color: '#2563EB' }}>{candidate.code}</span>
+                            <span style={{ color: '#0F172A' }}>{candidate.summary}</span>
+                          </div>
+                          <span style={{ fontSize: 10, color: '#64748B' }}>{candidate.statusName}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {selectedTargetItem && (
+                <div style={{ padding: 10, backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, fontSize: 12, color: '#166534' }}>
+                  Đã chọn: <b>{selectedTargetItem.code}</b> - {selectedTargetItem.summary}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowLinkModal(false)}
+                  style={{
+                    backgroundColor: '#F1F5F9',
+                    color: '#475569',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateLink}
+                  disabled={!selectedTargetItem || isCreatingLink}
+                  style={{
+                    backgroundColor: selectedTargetItem && !isCreatingLink ? '#2563EB' : '#94A3B8',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: selectedTargetItem && !isCreatingLink ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  {isCreatingLink ? 'Đang tạo...' : 'Liên kết'}
+                </button>
               </div>
             </div>
           </div>

@@ -331,6 +331,23 @@ export const workItemApi = {
   },
   getComments: (id) => apiClient.get(`${WORK_BASE}/items/${id}/comments`),
   addComment: (id, data) => apiClient.post(`${WORK_BASE}/items/${id}/comments`, data),
+  updateComment: (id, commentId, data) =>
+    apiClient.put(`${WORK_BASE}/items/${id}/comments/${commentId}`, data),
+  deleteComment: (id, commentId) =>
+    apiClient.delete(`${WORK_BASE}/items/${id}/comments/${commentId}`),
+
+  getAttachments: (id) => apiClient.get(`${WORK_BASE}/items/${id}/attachments`),
+  uploadAttachment: (id, formData) =>
+    apiClient.post(`${WORK_BASE}/items/${id}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  deleteAttachment: (id, attachmentId) =>
+    apiClient.delete(`${WORK_BASE}/items/${id}/attachments/${attachmentId}`),
+
+  getLinks: (id) => apiClient.get(`${WORK_BASE}/items/${id}/links`),
+  createLink: (id, data) => apiClient.post(`${WORK_BASE}/items/${id}/links`, data),
+  deleteLink: (id, linkId) => apiClient.delete(`${WORK_BASE}/items/${id}/links/${linkId}`),
+
   getChangelogs: (id) => apiClient.get(`${WORK_BASE}/items/${id}/changelogs`),
 };
 

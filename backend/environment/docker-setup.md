@@ -84,6 +84,7 @@ Các dịch vụ sẽ mở tại các cổng:
 - **pgAdmin 4**: [http://localhost:5050](http://localhost:5050) (Tài khoản: `admin@admin.com` / `admin`)
 - **Redis**: `localhost:6380`
 - **Apache Kafka**: `localhost:9092`
+- **MinIO S3 Storage**: `localhost:9000` (API) & [http://localhost:9001](http://localhost:9001) (Console UI - User: `minioadmin` / `minioadminpassword`)
 
 ---
 

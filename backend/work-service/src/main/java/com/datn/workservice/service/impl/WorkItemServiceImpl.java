@@ -49,6 +49,7 @@ public class WorkItemServiceImpl implements WorkItemService {
     private final AtomicKeySequenceGenerator atomicKeySequenceGenerator;
     private final LexoRankService lexoRankService;
     private final StrictHierarchyValidator strictHierarchyValidator;
+    private final com.datn.workservice.service.WorkItemAuditService workItemAuditService;
 
     @Override
     @Transactional
@@ -112,6 +113,15 @@ public class WorkItemServiceImpl implements WorkItemService {
                     .toList();
             workItemLabelMapRepository.saveAll(labelMaps);
         }
+
+        // Record initial creation changelog
+        workItemAuditService.recordCustomEvent(
+                saved.getId(),
+                "SUMMARY",
+                null,
+                "Đã tạo công việc " + saved.getCode() + ": " + saved.getSummary(),
+                userId
+        );
 
         return getWorkItemDetail(saved.getId());
     }
@@ -221,6 +231,33 @@ public class WorkItemServiceImpl implements WorkItemService {
         UUID targetParentId = request.getParentId() != null ? request.getParentId() : item.getParentId();
         strictHierarchyValidator.validateHierarchy(itemId, targetTypeId, targetParentId, item.getProjectId());
 
+        // Snapshot old state for audit diffing
+        WorkItem oldState = WorkItem.builder()
+                .id(item.getId())
+                .projectId(item.getProjectId())
+                .typeId(item.getTypeId())
+                .statusId(item.getStatusId())
+                .parentId(item.getParentId())
+                .sprintId(item.getSprintId())
+                .code(item.getCode())
+                .summary(item.getSummary())
+                .description(item.getDescription())
+                .priority(item.getPriority())
+                .resolution(item.getResolution())
+                .reporterId(item.getReporterId())
+                .assigneeId(item.getAssigneeId())
+                .storyPoints(item.getStoryPoints())
+                .originalEstimateSeconds(item.getOriginalEstimateSeconds())
+                .remainingEstimateSeconds(item.getRemainingEstimateSeconds())
+                .timeSpentSeconds(item.getTimeSpentSeconds())
+                .rank(item.getRank())
+                .componentId(item.getComponentId())
+                .fixVersionId(item.getFixVersionId())
+                .startDate(item.getStartDate())
+                .dueDate(item.getDueDate())
+                .resolvedAt(item.getResolvedAt())
+                .build();
+
         if (request.getSummary() != null && !request.getSummary().isBlank()) {
             item.setSummary(request.getSummary());
         }
@@ -277,6 +314,9 @@ public class WorkItemServiceImpl implements WorkItemService {
         }
 
         WorkItem saved = workItemRepository.save(item);
+
+        // Record diff in audit trail
+        workItemAuditService.recordDiff(oldState, saved, userId);
 
         // Update labels if specified
         if (request.getLabelIds() != null) {
