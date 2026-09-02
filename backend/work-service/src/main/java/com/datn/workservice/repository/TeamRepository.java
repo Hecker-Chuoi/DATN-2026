@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,4 +16,5 @@ public interface TeamRepository extends JpaRepository<Team, UUID>, JpaSpecificat
     List<Team> findByWorkspaceId(UUID workspaceId);
     Page<Team> findByWorkspaceId(UUID workspaceId, Pageable pageable);
     List<Team> findByOwnerId(UUID ownerId);
+    List<Team> findByIdIn(Collection<UUID> ids);
 }

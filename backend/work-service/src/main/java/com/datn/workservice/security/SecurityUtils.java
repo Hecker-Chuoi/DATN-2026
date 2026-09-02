@@ -27,23 +27,25 @@ public final class SecurityUtils {
 
         Object principal = authentication.getPrincipal();
         if (principal instanceof Jwt jwt) {
+            // 1. Prioritize custom claim 'user_id' or 'userId' (PostgreSQL database User ID)
+            String userIdClaim = jwt.getClaimAsString("user_id");
+            if (userIdClaim == null) {
+                userIdClaim = jwt.getClaimAsString("userId");
+            }
+            if (userIdClaim != null && !userIdClaim.isBlank()) {
+                try {
+                    return Optional.of(UUID.fromString(userIdClaim));
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+
+            // 2. Fallback to 'sub' claim (Keycloak User ID)
             String subject = jwt.getSubject();
             if (subject != null && !subject.isBlank()) {
                 try {
                     return Optional.of(UUID.fromString(subject));
                 } catch (IllegalArgumentException e) {
                     log.warn("Invalid UUID in JWT sub claim: {}", subject);
-                }
-            }
-            // Check custom claim 'user_id' or 'userId'
-            String userIdClaim = jwt.getClaimAsString("user_id");
-            if (userIdClaim == null) {
-                userIdClaim = jwt.getClaimAsString("userId");
-            }
-            if (userIdClaim != null) {
-                try {
-                    return Optional.of(UUID.fromString(userIdClaim));
-                } catch (IllegalArgumentException ignored) {
                 }
             }
         }

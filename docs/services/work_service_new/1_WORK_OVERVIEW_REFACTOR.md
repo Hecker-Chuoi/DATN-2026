@@ -8,7 +8,8 @@
 > - [`2_WORK_DATABASE_DESIGN.md`](file:///d:/DATN-2026/docs/services/work_service_new/2_WORK_DATABASE_DESIGN.md) (Thiết kế CSDL 25 bảng & Indexing)  
 > - [`3_WORK_SEQUENCE_DIAGRAMS.md`](file:///d:/DATN-2026/docs/services/work_service_new/3_WORK_SEQUENCE_DIAGRAMS.md) (Sơ đồ tuần tự các luồng nghiệp vụ)  
 > - [`4_WORK_IMPLEMENTATION_PLAN.md`](file:///d:/DATN-2026/docs/services/work_service_new/4_WORK_IMPLEMENTATION_PLAN.md) (Lộ trình triển khai Fullstack 9 giai đoạn)  
-> - [`5_WORK_FRONTEND_UI_JIRA_SPEC.md`](file:///d:/DATN-2026/docs/services/work_service_new/5_WORK_FRONTEND_UI_JIRA_SPEC.md) (Quy chuẩn giao diện Frontend chuẩn Jira Cloud & Ảnh mẫu)
+> - [`5_WORK_FRONTEND_UI_JIRA_SPEC.md`](file:///d:/DATN-2026/docs/services/work_service_new/5_WORK_FRONTEND_UI_JIRA_SPEC.md) (Quy chuẩn giao diện Frontend chuẩn Jira Cloud & Ảnh mẫu)  
+> - [`6_WORK_TESTING_GUIDE_PHASE1_TO_5.2.md`](file:///d:/DATN-2026/docs/services/work_service_new/6_WORK_TESTING_GUIDE_PHASE1_TO_5.2.md) (Hướng dẫn kiểm thử toàn diện từ Giai đoạn 1 đến Bước 5.2)
 
 ---
 

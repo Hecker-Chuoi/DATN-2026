@@ -3,17 +3,19 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import { teamApi } from '../../api.js';
 import CreateProjectModal from '../project/CreateProjectModal.jsx';
+import CreateTeamModal from '../modals/CreateTeamModal.jsx';
 
 export default function WorkspaceLayout({ currentUser, onLogout }) {
   const [teams, setTeams] = useState([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+  const [isCreateTeamModalOpen, setIsCreateTeamModalOpen] = useState(false);
   const [selectedTeamIdForProject, setSelectedTeamIdForProject] = useState(null);
 
   const fetchTeams = async () => {
     try {
       setLoadingTeams(true);
-      const res = await teamApi.listAll();
+      const res = await teamApi.listMine();
       if (res && res.data) {
         setTeams(res.data);
       }
@@ -49,9 +51,7 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
       <Sidebar
         teams={teams}
         loading={loadingTeams}
-        onOpenCreateTeam={() => {
-          console.log('Open create team modal');
-        }}
+        onOpenCreateTeam={() => setIsCreateTeamModalOpen(true)}
         onOpenCreateProject={handleOpenCreateProject}
         currentUser={currentUser}
         onLogout={onLogout}
@@ -83,10 +83,20 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
               teams,
               refreshTeams: fetchTeams,
               onOpenCreateProject: handleOpenCreateProject,
+              onOpenCreateTeam: () => setIsCreateTeamModalOpen(true),
             }}
           />
         </main>
       </div>
+
+      {/* ─── Global Create Team Modal ─── */}
+      <CreateTeamModal
+        isOpen={isCreateTeamModalOpen}
+        onClose={() => setIsCreateTeamModalOpen(false)}
+        onTeamCreated={() => {
+          fetchTeams();
+        }}
+      />
 
       {/* ─── Global Create Project Modal ─── */}
       <CreateProjectModal

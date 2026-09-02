@@ -27,6 +27,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     java.util.List<User> findByIdIn(java.util.List<UUID> ids);
 
+    @Query("SELECT u FROM User u WHERE u.id IN :ids OR u.keycloakId IN :keycloakIds")
+    java.util.List<User> findByIdsOrKeycloakIds(@Param("ids") java.util.List<UUID> ids, @Param("keycloakIds") java.util.List<String> keycloakIds);
+
     @Query("SELECT u FROM User u WHERE " +
            "LOWER(u.username) LIKE LOWER(:search) OR " +
            "LOWER(u.email) LIKE LOWER(:search) OR " +

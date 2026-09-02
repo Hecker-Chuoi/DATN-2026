@@ -11,7 +11,7 @@
 ## 1. TỔNG QUAN SERVICE
 
 `work-service` là dịch vụ lõi trung tâm quản lý toàn bộ công việc, dự án, tiến độ và cộng tác nhóm trong từng Workspace theo mô hình Agile (Scrum & Kanban) chuẩn Enterprise (tương tự Jira Cloud và Linear).
-
+  
 Dịch vụ được thiết kế theo kiến trúc **Jira-Grade Work Engine**, thoát khỏi mô hình Todo/Kanban tĩnh thông thường để trở thành một động cơ quản trị công việc mạnh mẽ với khả năng:
 * Quản lý phân cấp công việc 3 tầng nghiêm ngặt (Epic $\rightarrow$ Story / Task / Bug $\rightarrow$ Sub-task).
 * Máy trạng thái hữu hạn (Dynamic Finite State Machine Workflow) cho phép tùy biến trạng thái, bước chuyển (Transition), điều kiện kiểm tra (Conditions, Validators) và hành động tự động (Post-functions).

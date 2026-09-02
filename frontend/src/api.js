@@ -240,6 +240,7 @@ export const authApi = {
 // ─── User API ─────────────────────────────────────────────────────────────────
 export const userApi = {
   listAll: (params) => apiClient.get('/identity/api/v1/admin/users', { params }),
+  search: (query) => apiClient.get('/identity/api/v1/users/search', { params: { query } }),
   me: () => apiClient.get('/identity/api/v1/users/me'),
   updateRoles: (id, roles) =>
     apiClient.put(`/identity/api/v1/admin/users/${id}/roles`, { roles }),
@@ -256,11 +257,17 @@ const WORK_BASE = '/work/api/v1/work';
 
 // ─── 1. Teams API ─────────────────────────────────────────────────────────────
 export const teamApi = {
-  listAll: () => apiClient.get(`${WORK_BASE}/teams`),
+  listAll: (params) => apiClient.get(`${WORK_BASE}/teams`, { params }),
+  listMine: (params) => apiClient.get(`${WORK_BASE}/teams/my`, { params }),
   getById: (id) => apiClient.get(`${WORK_BASE}/teams/${id}`),
   create: (data) => apiClient.post(`${WORK_BASE}/teams`, data),
+  update: (id, data) => apiClient.put(`${WORK_BASE}/teams/${id}`, data),
+  delete: (id) => apiClient.delete(`${WORK_BASE}/teams/${id}`),
+  leaveTeam: (teamId) => apiClient.post(`${WORK_BASE}/teams/${teamId}/leave`),
   getMembers: (teamId) => apiClient.get(`${WORK_BASE}/teams/${teamId}/members`),
   addMember: (teamId, data) => apiClient.post(`${WORK_BASE}/teams/${teamId}/members`, data),
+  updateMemberRole: (teamId, userId, role) =>
+    apiClient.put(`${WORK_BASE}/teams/${teamId}/members/${userId}/role`, { role }),
   removeMember: (teamId, userId) =>
     apiClient.delete(`${WORK_BASE}/teams/${teamId}/members/${userId}`),
 };
