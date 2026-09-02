@@ -26,15 +26,9 @@ import {
   User
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { workItemApi, workflowApi } from '../../api/workServiceApi.js';
-
-const PRIORITY_ICONS = {
-  HIGHEST: { icon: ArrowUp, color: '#DE350B', label: 'Highest' },
-  HIGH: { icon: ArrowUp, color: '#FF5630', label: 'High' },
-  MEDIUM: { icon: Equal, color: '#FFAB00', label: 'Medium' },
-  LOW: { icon: ArrowDown, color: '#36B37E', label: 'Low' },
-  LOWEST: { icon: ArrowDown, color: '#6B778C', label: 'Lowest' },
-};
+import { workItemApi, workflowApi } from '../../api.js';
+import MemberSelect from '../common/MemberSelect.jsx';
+import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 
 const TYPE_ICONS = {
   EPIC: { icon: Bookmark, color: '#6554C0', label: 'Epic' },
@@ -44,7 +38,7 @@ const TYPE_ICONS = {
   SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Sub-task' },
 };
 
-export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpdated }) {
+export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpdated, members = [] }) {
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('comments'); // 'comments' | 'history' | 'worklog'
@@ -147,17 +141,19 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
   };
 
   const handleExecuteTransition = async (transitionId) => {
+    if (!transitionId) return;
     try {
       setShowStatusDropdown(false);
-      const res = await workItemApi.executeTransition(itemId, { transitionId });
+      const res = await workItemApi.executeTransition(itemId, transitionId, { comment: '' });
       if (res && res.data) {
-        toast.success('Đã chuyển trạng thái');
+        toast.success('Đã chuyển trạng thái thành công');
         fetchDetail();
         fetchChangelogs();
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Không thể chuyển trạng thái');
+      console.error('Failed to transition item:', err);
+      toast.error(err.response?.data?.message || err.message || 'Không thể chuyển trạng thái');
     }
   };
 
@@ -175,6 +171,20 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
     }
   };
 
+  const handleUpdateAssignee = async (newAssigneeId) => {
+    try {
+      const res = await workItemApi.update(itemId, { assigneeId: newAssigneeId || null });
+      if (res && res.data) {
+        setItem(res.data);
+        toast.success('Đã cập nhật người thực hiện');
+        if (onItemUpdated) onItemUpdated(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to update assignee:', err);
+      toast.error('Lỗi khi cập nhật người thực hiện');
+    }
+  };
+
   const handleUpdateStoryPoints = async (val) => {
     const num = parseFloat(val);
     if (isNaN(num) && val !== '') return;
@@ -187,6 +197,20 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
       }
     } catch (err) {
       toast.error('Lỗi cập nhật Story Points');
+    }
+  };
+
+  const handleUpdateDueDate = async (newDate) => {
+    try {
+      const res = await workItemApi.update(itemId, { dueDate: newDate || null });
+      if (res && res.data) {
+        setItem(res.data);
+        toast.success('Đã cập nhật hạn chót');
+        if (onItemUpdated) onItemUpdated(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to update due date:', err);
+      toast.error('Lỗi khi cập nhật hạn chót');
     }
   };
 
@@ -218,8 +242,11 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
     }
   };
 
-  const priorityInfo = PRIORITY_ICONS[item?.priority] || PRIORITY_ICONS.MEDIUM;
+  const priorityInfo = getPriorityConfig(item?.priority);
   const PriorityIcon = priorityInfo.icon;
+
+  const todayStr = new Date().toISOString().substring(0, 10);
+  const isOverdue = item?.dueDate && item.dueDate < todayStr && item?.statusCategory !== 'DONE';
 
   const typeCode = item?.typeCode?.toUpperCase() || 'TASK';
   const typeInfo = TYPE_ICONS[typeCode] || TYPE_ICONS.TASK;
@@ -271,14 +298,60 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
             backgroundColor: '#FAFAFA',
           }}
         >
-          {/* Breadcrumbs */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#64748B' }}>
+          {/* Breadcrumbs & Issue Type Badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#64748B', flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600, color: '#0F172A' }}>{item?.projectKey || 'PROJECT'}</span>
             <span>/</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <TypeIcon size={14} color={typeInfo.color} />
-              <span style={{ fontWeight: 700, color: '#2563EB' }}>{item?.code || '...'}</span>
+              <span style={{ fontWeight: 700, color: '#2563EB', fontSize: 14 }}>{item?.code || '...'}</span>
             </div>
+
+            {/* Prominent Issue Type Badge */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '3px 8px',
+                borderRadius: 6,
+                backgroundColor: typeInfo.color ? `${typeInfo.color}15` : '#EFF6FF',
+                border: `1px solid ${typeInfo.color ? `${typeInfo.color}40` : '#BFDBFE'}`,
+                color: typeInfo.color || '#2563EB',
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+              title={`Loại công việc: ${item?.typeName || typeInfo.label}`}
+            >
+              <TypeIcon size={14} color={typeInfo.color} />
+              <span>{item?.typeName || typeInfo.label}</span>
+            </div>
+
+            {/* Parent tag if belongs to Epic or Story */}
+            {item?.parentCode && (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 11,
+                  color: '#6554C0',
+                  backgroundColor: '#F3F0FF',
+                  border: '1px solid #E9D5FF',
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  fontWeight: 600,
+                }}
+                title={`Công việc cha: ${item.parentSummary || item.parentCode}`}
+              >
+                <span>Cha:</span>
+                <span style={{ fontWeight: 700 }}>{item.parentCode}</span>
+                {item.parentSummary && (
+                  <span style={{ color: '#64748B', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    - {item.parentSummary}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -833,22 +906,28 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                       }}
                     >
                       {item?.availableTransitions?.length > 0 ? (
-                        item.availableTransitions.map((t) => (
-                          <div
-                            key={t.id}
-                            onClick={() => handleExecuteTransition(t.id)}
-                            style={{
-                              padding: '8px 12px',
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: t.toStatusColorHex || '#0F172A',
-                              cursor: 'pointer',
-                              borderBottom: '1px solid #F1F5F9',
-                            }}
-                          >
-                            {t.name} (➔ {t.toStatusName})
-                          </div>
-                        ))
+                        item.availableTransitions.map((t) => {
+                          const tId = t.transitionId || t.id;
+                          return (
+                            <div
+                              key={tId}
+                              onClick={() => handleExecuteTransition(tId)}
+                              style={{
+                                padding: '8px 12px',
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: t.toStatusColorHex || '#0F172A',
+                                cursor: 'pointer',
+                                borderBottom: '1px solid #F1F5F9',
+                                transition: 'background-color 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                            >
+                              {t.name} (➔ {t.toStatusName})
+                            </div>
+                          );
+                        })
                       ) : (
                         <div style={{ padding: 12, fontSize: 12, color: '#94A3B8', textAlign: 'center' }}>
                           Không có bước chuyển hợp lệ
@@ -861,30 +940,32 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
 
               {/* Priority Section */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Priority</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Độ ưu tiên (Priority)</span>
                 <div style={{ position: 'relative', marginTop: 6 }}>
                   <button
                     onClick={() => setShowPriorityDropdown(!showPriorityDropdown)}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
-                      borderRadius: 6,
-                      border: '1px solid #CBD5E1',
-                      backgroundColor: '#FFFFFF',
+                      borderRadius: 8,
+                      border: `1.5px solid ${priorityInfo.borderColor}`,
+                      backgroundColor: priorityInfo.bgColor,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       cursor: 'pointer',
                       fontSize: 13,
-                      fontWeight: 600,
-                      color: '#0F172A',
+                      fontWeight: 700,
+                      color: priorityInfo.color,
+                      transition: 'all 0.15s ease',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <PriorityIcon size={16} color={priorityInfo.color} />
                       <span>{priorityInfo.label}</span>
+                      <span style={{ fontSize: 11, opacity: 0.75, fontWeight: 500 }}>({priorityInfo.subLabel})</span>
                     </div>
-                    <ChevronDown size={14} color="#64748B" />
+                    <ChevronDown size={14} color={priorityInfo.color} />
                   </button>
 
                   {showPriorityDropdown && (
@@ -896,37 +977,112 @@ export default function WorkItemDetailModal({ itemId, isOpen, onClose, onItemUpd
                         right: 0,
                         marginTop: 4,
                         backgroundColor: '#FFFFFF',
-                        borderRadius: 6,
+                        borderRadius: 8,
                         border: '1px solid #E2E8F0',
                         boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
                         zIndex: 20,
+                        overflow: 'hidden',
                       }}
                     >
-                      {Object.keys(PRIORITY_ICONS).map((pKey) => {
-                        const pConf = PRIORITY_ICONS[pKey];
+                      {Object.keys(PRIORITY_CONFIG).map((pKey) => {
+                        const pConf = PRIORITY_CONFIG[pKey];
                         const PIcon = pConf.icon;
+                        const isCurrent = item?.priority === pKey;
                         return (
                           <div
                             key={pKey}
-                            onClick={() => handleUpdatePriority(pKey)}
+                            onClick={() => {
+                              handleUpdatePriority(pKey);
+                              setShowPriorityDropdown(false);
+                            }}
                             style={{
-                              padding: '8px 12px',
+                              padding: '9px 12px',
                               fontSize: 13,
-                              fontWeight: 600,
+                              fontWeight: isCurrent ? 700 : 500,
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: 8,
+                              justifyContent: 'space-between',
+                              backgroundColor: isCurrent ? pConf.bgColor : 'transparent',
+                              color: isCurrent ? pConf.color : '#0F172A',
+                              borderBottom: '1px solid #F1F5F9',
+                              transition: 'background-color 0.1s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isCurrent) e.currentTarget.style.backgroundColor = '#F8FAFC';
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isCurrent) e.currentTarget.style.backgroundColor = 'transparent';
                             }}
                           >
-                            <PIcon size={14} color={pConf.color} />
-                            <span>{pConf.label}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <PIcon size={15} color={pConf.color} />
+                              <span>{pConf.label}</span>
+                              <span style={{ fontSize: 11, color: '#64748B' }}>- {pConf.subLabel}</span>
+                            </div>
+                            {isCurrent && <Check size={14} color={pConf.color} />}
                           </div>
                         );
                       })}
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Assignee Section */}
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Người thực hiện (Assignee)</span>
+                <div style={{ marginTop: 6 }}>
+                  <MemberSelect
+                    members={members}
+                    value={item?.assigneeId || ''}
+                    onChange={handleUpdateAssignee}
+                    placeholder="Chưa gán (Unassigned)"
+                  />
+                </div>
+              </div>
+
+              {/* Due Date (Hạn chót) Section */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Hạn chót (Due Date)</span>
+                  {isOverdue && (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: '#DC2626',
+                        backgroundColor: '#FEF2F2',
+                        border: '1px solid #FECACA',
+                        padding: '1px 6px',
+                        borderRadius: 4,
+                      }}
+                    >
+                      <AlertCircle size={10} /> Quá hạn
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="date"
+                  value={item?.dueDate || ''}
+                  onChange={(e) => handleUpdateDueDate(e.target.value)}
+                  style={{
+                    width: '100%',
+                    marginTop: 6,
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    border: `1px solid ${isOverdue ? '#DC2626' : '#CBD5E1'}`,
+                    backgroundColor: isOverdue ? '#FFF5F5' : '#FFFFFF',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: isOverdue ? '#DC2626' : '#0F172A',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
               </div>
 
               {/* Story Points */}

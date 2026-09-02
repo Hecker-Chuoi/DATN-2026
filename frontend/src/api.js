@@ -294,15 +294,44 @@ export const projectApi = {
 
 // ─── 3. Work Items API (Jira-grade) ───────────────────────────────────────────
 export const workItemApi = {
-  listAll: (params) => apiClient.get(`${WORK_BASE}/items`, { params }),
+  listAll: (params) => {
+    const projectId = params?.projectId;
+    if (projectId) {
+      return apiClient.get(`${WORK_BASE}/projects/${projectId}/items`, { params });
+    }
+    return apiClient.get(`${WORK_BASE}/items`, { params });
+  },
+  listByProject: (projectId, params) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/items`, { params }),
   getById: (id) => apiClient.get(`${WORK_BASE}/items/${id}`),
-  create: (data) => apiClient.post(`${WORK_BASE}/items`, data),
+  getByCode: (code) => apiClient.get(`${WORK_BASE}/items/code/${code}`),
+  create: (projectIdOrData, maybeData) => {
+    if (maybeData) {
+      return apiClient.post(`${WORK_BASE}/projects/${projectIdOrData}/items`, maybeData);
+    }
+    const projectId = projectIdOrData?.projectId;
+    return apiClient.post(`${WORK_BASE}/projects/${projectId}/items`, projectIdOrData);
+  },
   update: (id, data) => apiClient.put(`${WORK_BASE}/items/${id}`, data),
   updateRank: (id, data) => apiClient.patch(`${WORK_BASE}/items/${id}/rank`, data),
   delete: (id) => apiClient.delete(`${WORK_BASE}/items/${id}`),
+  getSubtasks: (id) => apiClient.get(`${WORK_BASE}/items/${id}/subtasks`),
+  createSubtask: (parentId, data) =>
+    apiClient.post(`${WORK_BASE}/items/${parentId}/subtasks`, data),
   getTransitions: (id) => apiClient.get(`${WORK_BASE}/work-items/${id}/transitions`),
-  executeTransition: (id, transitionId, data) =>
-    apiClient.post(`${WORK_BASE}/work-items/${id}/transitions/${transitionId}`, data),
+  executeTransition: (id, transitionIdOrData, maybeData) => {
+    if (typeof transitionIdOrData === 'object' && transitionIdOrData !== null) {
+      const tId = transitionIdOrData.transitionId || transitionIdOrData.id;
+      if (tId) {
+        return apiClient.post(`${WORK_BASE}/work-items/${id}/transitions/${tId}`, transitionIdOrData);
+      }
+      return apiClient.post(`${WORK_BASE}/work-items/${id}/transitions`, transitionIdOrData);
+    }
+    return apiClient.post(`${WORK_BASE}/work-items/${id}/transitions/${transitionIdOrData}`, maybeData || {});
+  },
+  getComments: (id) => apiClient.get(`${WORK_BASE}/items/${id}/comments`),
+  addComment: (id, data) => apiClient.post(`${WORK_BASE}/items/${id}/comments`, data),
+  getChangelogs: (id) => apiClient.get(`${WORK_BASE}/items/${id}/changelogs`),
 };
 
 // ─── 3.1. Workflow Engine & FSM Schemes API ──────────────────────────────────

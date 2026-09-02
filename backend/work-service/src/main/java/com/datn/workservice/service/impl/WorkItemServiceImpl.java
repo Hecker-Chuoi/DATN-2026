@@ -44,6 +44,7 @@ public class WorkItemServiceImpl implements WorkItemService {
     private final LabelRepository labelRepository;
     private final WorkItemLabelMapRepository workItemLabelMapRepository;
     private final WorkflowTransitionRepository workflowTransitionRepository;
+    private final WorkflowRepository workflowRepository;
 
     private final AtomicKeySequenceGenerator atomicKeySequenceGenerator;
     private final LexoRankService lexoRankService;
@@ -166,6 +167,43 @@ public class WorkItemServiceImpl implements WorkItemService {
                 .filter(item -> item.getDeletedAt() == null)
                 .map(this::mapToSummaryResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public WorkItemDetailResponse createSubtask(UUID parentId, com.datn.workservice.dto.request.CreateSubtaskRequest request, UUID userId) {
+        WorkItem parent = workItemRepository.findById(parentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Parent WorkItem not found with ID: " + parentId));
+
+        if (parent.getDeletedAt() != null) {
+            throw new BadRequestException("Cannot create subtask for deleted work item: " + parent.getCode());
+        }
+
+        UUID projectId = parent.getProjectId();
+
+        // Find Subtask type in project
+        List<WorkItemType> types = workItemTypeRepository.findByProjectId(projectId);
+        WorkItemType subtaskType = types.stream()
+                .filter(t -> (t.getHierarchyLevel() != null && t.getHierarchyLevel() == -1)
+                        || "SUBTASK".equalsIgnoreCase(t.getCode())
+                        || Boolean.TRUE.equals(t.getIsSubtask()))
+                .findFirst()
+                .orElseThrow(() -> new BadRequestException("Loại công việc Sub-task chưa được cấu hình cho dự án này"));
+
+        CreateWorkItemRequest fullRequest = CreateWorkItemRequest.builder()
+                .projectId(projectId)
+                .typeId(subtaskType.getId())
+                .parentId(parentId)
+                .summary(request.getSummary())
+                .description(request.getDescription())
+                .priority(request.getPriority() != null ? request.getPriority() : WorkItemPriority.MEDIUM)
+                .assigneeId(request.getAssigneeId())
+                .originalEstimateSeconds(request.getOriginalEstimateSeconds())
+                .dueDate(request.getDueDate())
+                .sprintId(parent.getSprintId()) // inherit parent sprint
+                .build();
+
+        return createWorkItem(projectId, fullRequest, userId);
     }
 
     @Override
@@ -408,8 +446,21 @@ public class WorkItemServiceImpl implements WorkItemService {
 
         List<WorkItemResponse> subtasks = listSubtasks(item.getId());
 
-        // Available transitions
-        List<WorkflowTransition> transitions = workflowTransitionRepository.findByFromStatusId(item.getStatusId());
+        // Available transitions strictly for this item's project workflow
+        Optional<Workflow> projectWorkflow = workflowRepository.findByProjectIdAndIsDefaultTrue(item.getProjectId());
+        if (projectWorkflow.isEmpty()) {
+            List<Workflow> list = workflowRepository.findByProjectId(item.getProjectId());
+            if (!list.isEmpty()) {
+                projectWorkflow = Optional.of(list.get(0));
+            }
+        }
+
+        List<WorkflowTransition> transitions = projectWorkflow.isPresent()
+                ? workflowTransitionRepository.findByWorkflowId(projectWorkflow.get().getId()).stream()
+                    .filter(t -> t.getFromStatusId() == null || t.getFromStatusId().equals(item.getStatusId()))
+                    .toList()
+                : Collections.emptyList();
+
         List<AvailableTransitionResponse> availableTransitions = transitions.stream()
                 .map(t -> {
                     Status toStatus = statusRepository.findById(t.getToStatusId()).orElse(null);

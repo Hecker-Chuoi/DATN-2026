@@ -76,6 +76,18 @@ public class WorkItemController {
         return ResponseEntity.ok(ApiResponse.success(subtasks));
     }
 
+    @PostMapping("/items/{id}/subtasks")
+    public ResponseEntity<ApiResponse<WorkItemDetailResponse>> createSubtask(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.datn.workservice.dto.request.CreateSubtaskRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        UUID userId = extractUserId(jwt);
+        WorkItemDetailResponse response = workItemService.createSubtask(id, request, userId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(response, "Sub-task đã được tạo thành công"));
+    }
+
     @PutMapping("/items/{id}")
     public ResponseEntity<ApiResponse<WorkItemDetailResponse>> updateWorkItem(
             @PathVariable UUID id,

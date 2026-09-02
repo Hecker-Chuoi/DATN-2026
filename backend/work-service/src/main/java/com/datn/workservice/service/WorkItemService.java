@@ -23,6 +23,8 @@ public interface WorkItemService {
 
     List<WorkItemResponse> listSubtasks(UUID parentId);
 
+    WorkItemDetailResponse createSubtask(UUID parentId, com.datn.workservice.dto.request.CreateSubtaskRequest request, UUID userId);
+
     WorkItemDetailResponse updateWorkItem(UUID itemId, UpdateWorkItemRequest request, UUID userId);
 
     void updateRank(UUID itemId, String newRank, UUID userId);

@@ -209,4 +209,7 @@ const workServiceApi = {
   jql: workJqlApi,
 };
 
+export { workflowApi } from '../api';
+
 export default workServiceApi;
+

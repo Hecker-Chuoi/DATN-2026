@@ -21,6 +21,9 @@ import { projectApi } from '../api.js';
 import { useProjectPermission } from '../hooks/useProjectPermission.js';
 import ProjectMembersTab from '../components/project/ProjectMembersTab.jsx';
 import ProjectWorkflowTab from '../components/project/ProjectWorkflowTab.jsx';
+import ProjectBoardView from '../components/boards/ProjectBoardView.jsx';
+import CreateWorkItemModal from '../components/items/CreateWorkItemModal.jsx';
+import WorkItemDetailModal from '../components/items/WorkItemDetailModal.jsx';
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
@@ -29,15 +32,28 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('board'); // 'board' | 'backlog' | 'members' | 'workflow'
   const [isStarred, setIsStarred] = useState(false);
+  const [members, setMembers] = useState([]);
+
+  // Work Item Modals State
+  const [isCreateItemModalOpen, setIsCreateItemModalOpen] = useState(false);
+  const [selectedItemId, setSelectedItemId] = useState(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [boardRefreshKey, setBoardRefreshKey] = useState(0);
 
   const { isAdmin, canCreateIssue, canManageSprint, permissions } = useProjectPermission(projectId);
 
   const fetchProject = async () => {
     try {
       setLoading(true);
-      const res = await projectApi.getById(projectId);
-      if (res && res.data) {
-        setProject(res.data);
+      const [projRes, membersRes] = await Promise.all([
+        projectApi.getById(projectId),
+        projectApi.getMembers(projectId).catch(() => null),
+      ]);
+      if (projRes && projRes.data) {
+        setProject(projRes.data);
+      }
+      if (membersRes && membersRes.data) {
+        setMembers(membersRes.data);
       }
     } catch (err) {
       console.warn('Could not load project detail:', err);
@@ -51,6 +67,19 @@ export default function ProjectDetailPage() {
       fetchProject();
     }
   }, [projectId]);
+
+  const handleOpenDetailModal = (itemId) => {
+    setSelectedItemId(itemId);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleItemCreated = (newItem) => {
+    setBoardRefreshKey((prev) => prev + 1);
+  };
+
+  const handleItemUpdated = (updatedItem) => {
+    setBoardRefreshKey((prev) => prev + 1);
+  };
 
   return (
     <div
@@ -139,7 +168,32 @@ export default function ProjectDetailPage() {
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Nút Tạo Issue nổi bật trên Header */}
+          <button
+            onClick={() => setIsCreateItemModalOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: '#2563EB',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: 6,
+              padding: '5px 12px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(37,99,235,0.2)',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1D4ED8')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2563EB')}
+          >
+            <Plus size={14} />
+            <span>Tạo công việc</span>
+          </button>
+
           <button
             onClick={() => {
               navigator.clipboard.writeText(window.location.href);
@@ -208,30 +262,10 @@ export default function ProjectDetailPage() {
             );
           })}
         </div>
-
-        {/* Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button
-            style={{
-              backgroundColor: '#FFFFFF',
-              border: '1px solid #E2E8F0',
-              padding: '6px 8px',
-              borderRadius: 6,
-              color: '#64748B',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            title="Lọc"
-          >
-            <SlidersHorizontal size={14} />
-          </button>
-        </div>
       </div>
 
       {/* ─── Body Content ─── */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {loading ? (
           <div style={{ padding: 48, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
             Đang tải thông tin dự án...
@@ -239,29 +273,14 @@ export default function ProjectDetailPage() {
         ) : (
           <>
             {activeTab === 'board' && (
-              <div style={{ padding: '32px 24px', textAlign: 'center', color: '#64748B' }}>
-                <div
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 12,
-                    backgroundColor: '#EFF6FF',
-                    color: '#2563EB',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 16px auto',
-                  }}
-                >
-                  <Kanban size={24} />
-                </div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>
-                  Bảng Kanban & Scrum Board
-                </h3>
-                <p style={{ fontSize: 13, color: '#64748B' }}>
-                  Bảng công việc kéo thả thẻ tương tác theo chu kỳ Sprint và trạng thái FSM.
-                </p>
-              </div>
+              <ProjectBoardView
+                projectId={projectId}
+                projectKey={project?.key}
+                canCreate={canCreateIssue || isAdmin}
+                onOpenCreateModal={() => setIsCreateItemModalOpen(true)}
+                onSelectWorkItem={handleOpenDetailModal}
+                refreshKey={boardRefreshKey}
+              />
             )}
 
             {activeTab === 'backlog' && (
@@ -291,19 +310,43 @@ export default function ProjectDetailPage() {
             )}
 
             {activeTab === 'members' && (
-              <div style={{ padding: 24 }}>
+              <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
                 <ProjectMembersTab projectId={projectId} isAdmin={isAdmin} />
               </div>
             )}
 
             {activeTab === 'workflow' && (
-              <div style={{ padding: 24 }}>
+              <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
                 <ProjectWorkflowTab projectId={projectId} isAdmin={isAdmin} />
               </div>
             )}
           </>
         )}
       </div>
+
+      {/* ─── Create Work Item Modal ─── */}
+      <CreateWorkItemModal
+        isOpen={isCreateItemModalOpen}
+        onClose={() => setIsCreateItemModalOpen(false)}
+        projectId={projectId}
+        projectKey={project?.key}
+        projectTypes={project?.workItemTypes || []}
+        members={members}
+        onItemCreated={handleItemCreated}
+      />
+
+      {/* ─── Work Item Detail Modal (2 Columns Jira Spec) ─── */}
+      <WorkItemDetailModal
+        itemId={selectedItemId}
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedItemId(null);
+        }}
+        onItemUpdated={handleItemUpdated}
+        members={members}
+      />
     </div>
   );
 }
+
