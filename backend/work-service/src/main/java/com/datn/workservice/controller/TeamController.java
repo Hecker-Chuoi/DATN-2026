@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -49,6 +50,7 @@ public class TeamController {
     }
 
     @PostMapping("/{teamId}/members")
+    @PreAuthorize("@projectSecurity.hasTeamPermission(#teamId, 'MEMBER_INVITE')")
     public ResponseEntity<ApiResponse<TeamMemberResponse>> addMember(
             @PathVariable("teamId") UUID teamId,
             @Valid @RequestBody AddTeamMemberRequest request) {
@@ -58,6 +60,7 @@ public class TeamController {
     }
 
     @DeleteMapping("/{teamId}/members/{userId}")
+    @PreAuthorize("@projectSecurity.hasTeamPermission(#teamId, 'MEMBER_REMOVE')")
     public ResponseEntity<ApiResponse<Void>> removeMember(
             @PathVariable("teamId") UUID teamId,
             @PathVariable("userId") UUID userId) {
@@ -66,6 +69,7 @@ public class TeamController {
     }
 
     @PutMapping("/{teamId}/members/{userId}/role")
+    @PreAuthorize("@projectSecurity.hasTeamPermission(#teamId, 'MEMBER_ROLE_UPDATE')")
     public ResponseEntity<ApiResponse<TeamMemberResponse>> updateMemberRole(
             @PathVariable("teamId") UUID teamId,
             @PathVariable("userId") UUID userId,

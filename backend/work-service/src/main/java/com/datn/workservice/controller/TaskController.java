@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,6 +28,7 @@ public class TaskController {
     private final TaskService taskService;
 
     @PostMapping
+    @PreAuthorize("@projectSecurity.hasProjectPermission(#request.projectId, 'TASK_CREATE')")
     public ResponseEntity<ApiResponse<TaskResponse>> createTask(
             @Valid @RequestBody CreateTaskRequest request,
             Principal principal) {
@@ -37,6 +39,7 @@ public class TaskController {
     }
 
     @GetMapping
+    @PreAuthorize("@projectSecurity.hasProjectPermission(#projectId, 'TASK_VIEW')")
     public ResponseEntity<ApiResponse<List<TaskResponse>>> getTasks(
             @RequestParam("projectId") UUID projectId,
             @RequestParam(value = "milestoneId", required = false) UUID milestoneId,
@@ -48,18 +51,21 @@ public class TaskController {
     }
 
     @GetMapping("/{taskId}")
+    @PreAuthorize("@projectSecurity.hasTaskPermission(#taskId, 'TASK_VIEW')")
     public ResponseEntity<ApiResponse<TaskResponse>> getTaskById(@PathVariable("taskId") UUID taskId) {
         TaskResponse task = taskService.getTaskById(taskId);
         return ResponseEntity.ok(ApiResponse.success(task));
     }
 
     @GetMapping("/{taskId}/subtasks")
+    @PreAuthorize("@projectSecurity.hasTaskPermission(#taskId, 'TASK_VIEW')")
     public ResponseEntity<ApiResponse<List<TaskResponse>>> getSubtasks(@PathVariable("taskId") UUID taskId) {
         List<TaskResponse> subtasks = taskService.getSubtasks(taskId);
         return ResponseEntity.ok(ApiResponse.success(subtasks, "Lấy danh sách tác vụ con thành công"));
     }
 
     @PutMapping("/{taskId}")
+    @PreAuthorize("@projectSecurity.hasTaskPermission(#taskId, 'TASK_EDIT')")
     public ResponseEntity<ApiResponse<TaskResponse>> updateTask(
             @PathVariable("taskId") UUID taskId,
             @Valid @RequestBody UpdateTaskRequest request) {
@@ -68,6 +74,7 @@ public class TaskController {
     }
 
     @PutMapping("/{taskId}/assignee")
+    @PreAuthorize("@projectSecurity.hasTaskPermission(#taskId, 'TASK_EDIT')")
     public ResponseEntity<ApiResponse<TaskResponse>> assignTask(
             @PathVariable("taskId") UUID taskId,
             @RequestBody com.datn.workservice.dto.request.AssignTaskRequest request,
@@ -78,6 +85,7 @@ public class TaskController {
     }
 
     @DeleteMapping("/{taskId}")
+    @PreAuthorize("@projectSecurity.hasTaskPermission(#taskId, 'TASK_DELETE')")
     public ResponseEntity<ApiResponse<Void>> deleteTask(@PathVariable("taskId") UUID taskId) {
         taskService.deleteTask(taskId);
         return ResponseEntity.ok(ApiResponse.success(null, "Xóa tác vụ thành công"));
