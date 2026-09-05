@@ -4,9 +4,12 @@ import com.datn.common.dto.ApiResponse;
 import com.datn.common.dto.PageResponse;
 import com.datn.workservice.dto.request.CloneProjectRequest;
 import com.datn.workservice.dto.request.CreateProjectRequest;
-import com.datn.workservice.dto.request.ProjectFilter;
 import com.datn.workservice.dto.request.UpdateProjectRequest;
+import com.datn.workservice.dto.response.ProjectDetailResponse;
 import com.datn.workservice.dto.response.ProjectResponse;
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireProjectPermission;
+import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.service.ProjectService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,81 +38,82 @@ public class ProjectController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<ProjectResponse>> createProject(
-            @Valid @RequestBody CreateProjectRequest request,
-            Principal principal) {
-        UUID currentUserId = extractUserId(principal);
-        ProjectResponse project = projectService.createProject(request, currentUserId);
+            @Valid @RequestBody CreateProjectRequest request
+    ) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        ProjectResponse response = projectService.createProject(request, currentUserId);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(project, "Tạo dự án thành công"));
+                .body(ApiResponse.success(response, "Dự án đã được tạo và khởi tạo hệ sinh thái thành công"));
     }
 
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ProjectResponse>>> getAllProjects(
-            ProjectFilter filter,
-            @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        PageResponse<ProjectResponse> projects = projectService.getAllProjects(filter, pageable);
-        return ResponseEntity.ok(ApiResponse.success(projects, "Lấy danh sách dự án thành công"));
-    }
-
-    @GetMapping("/my-projects")
-    public ResponseEntity<ApiResponse<PageResponse<ProjectResponse>>> getMyProjects(
-            ProjectFilter filter,
-            @PageableDefault(page = 0, size = 9, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
-            Principal principal) {
-        UUID currentUserId = extractUserId(principal);
-        PageResponse<ProjectResponse> projects = projectService.getMyProjects(currentUserId, filter, pageable);
-        return ResponseEntity.ok(ApiResponse.success(projects, "Lấy danh sách dự án của tôi thành công"));
+            @RequestParam(required = false) UUID workspaceId,
+            @RequestParam(required = false) UUID teamId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean isTemplate,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        PageResponse<ProjectResponse> response = projectService.getAllProjects(
+                workspaceId, teamId, search, isTemplate, pageable
+        );
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/templates")
-    public ResponseEntity<ApiResponse<List<ProjectResponse>>> getTemplateProjects() {
-        List<ProjectResponse> templates = projectService.getTemplateProjects();
-        return ResponseEntity.ok(ApiResponse.success(templates, "Lấy danh sách dự án mẫu thành công"));
+    public ResponseEntity<ApiResponse<PageResponse<ProjectResponse>>> getTemplates(
+            @RequestParam(required = false) UUID workspaceId,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        PageResponse<ProjectResponse> response = projectService.getTemplates(workspaceId, pageable);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/{projectId}")
     @PreAuthorize("@projectSecurity.hasProjectPermission(#projectId, 'PROJECT_VIEW')")
-    public ResponseEntity<ApiResponse<ProjectResponse>> getProjectById(@PathVariable("projectId") @P("projectId") UUID projectId) {
-        ProjectResponse project = projectService.getProjectById(projectId);
-        return ResponseEntity.ok(ApiResponse.success(project));
+    public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectById(
+            @PathVariable("projectId") UUID projectId
+    ) {
+        ProjectDetailResponse response = projectService.getProjectById(projectId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/key/{key}")
+    public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectByKey(
+            @PathVariable("key") String key
+    ) {
+        ProjectDetailResponse response = projectService.getProjectByKey(key);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PutMapping("/{projectId}")
     @PreAuthorize("@projectSecurity.hasProjectPermission(#projectId, 'PROJECT_EDIT')")
     public ResponseEntity<ApiResponse<ProjectResponse>> updateProject(
-            @PathVariable("projectId") @P("projectId") UUID projectId,
-            @Valid @RequestBody UpdateProjectRequest request) {
-        ProjectResponse project = projectService.updateProject(projectId, request);
-        return ResponseEntity.ok(ApiResponse.success(project, "Cập nhật dự án thành công"));
+            @PathVariable("projectId") UUID projectId,
+            @Valid @RequestBody UpdateProjectRequest request
+    ) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        ProjectResponse response = projectService.updateProject(projectId, request, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật thông tin dự án thành công"));
     }
 
     @DeleteMapping("/{projectId}")
     @PreAuthorize("@projectSecurity.hasProjectPermission(#projectId, 'PROJECT_DELETE')")
-    public ResponseEntity<ApiResponse<Void>> deleteProject(@PathVariable("projectId") @P("projectId") UUID projectId) {
-        projectService.deleteProject(projectId);
-        return ResponseEntity.ok(ApiResponse.success(null, "Xóa dự án thành công"));
+    public ResponseEntity<ApiResponse<Void>> deleteProject(
+            @PathVariable("projectId") UUID projectId
+    ) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        projectService.deleteProject(projectId, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Dự án đã được lưu trữ / chuyển vào thùng rác"));
     }
 
-    @PostMapping("/{projectId}/clone")
-    public ResponseEntity<ApiResponse<ProjectResponse>> cloneProject(
-            @PathVariable("projectId") UUID projectId,
-            @Valid @RequestBody CloneProjectRequest request,
-            Principal principal) {
-        // Đảm bảo sourceProjectId khớp với path variable
-        request.setSourceProjectId(projectId);
-        UUID currentUserId = extractUserId(principal);
-        ProjectResponse cloned = projectService.cloneProject(request, currentUserId);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(cloned, "Nhân bản dự án từ mẫu thành công"));
-    }
-
-    private UUID extractUserId(Principal principal) {
-        if (principal instanceof JwtAuthenticationToken jwtToken) {
-            String sub = jwtToken.getToken().getSubject();
-            try {
-                return UUID.fromString(sub);
-            } catch (Exception ignored) {}
-        }
-        return null;
+    @PostMapping("/{projectId}/restore")
+    @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
+    public ResponseEntity<ApiResponse<ProjectResponse>> restoreProject(
+            @PathVariable("projectId") UUID projectId
+    ) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        ProjectResponse response = projectService.restoreProject(projectId, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(response, "Khôi phục dự án thành công"));
     }
 }

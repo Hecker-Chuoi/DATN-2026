@@ -1,6 +1,7 @@
 package com.datn.workservice.entity;
 
-import com.datn.workservice.enums.ProjectStatus;
+import com.datn.workservice.enums.DefaultAssigneeType;
+import com.datn.workservice.enums.ProjectType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -24,25 +25,40 @@ public class Project {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    // @Column(name = "workspace_id", nullable = false)
-    // private UUID workspaceId;
+    @Column(name = "workspace_id", nullable = false)
+    private UUID workspaceId;
 
     @Column(name = "team_id")
     private UUID teamId;
 
-    @Column(nullable = false, length = 100)
-    private String key;
-
     @Column(nullable = false, length = 255)
     private String name;
+
+    @Column(nullable = false, unique = true, length = 20)
+    private String key;
 
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "icon_url", length = 500)
+    private String iconUrl;
+
+    @Column(name = "lead_user_id", nullable = false)
+    private UUID leadUserId;
+
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
+    @Column(name = "default_assignee_type", nullable = false, length = 50)
     @Builder.Default
-    private ProjectStatus status = ProjectStatus.PLANNING;
+    private DefaultAssigneeType defaultAssigneeType = DefaultAssigneeType.PROJECT_LEADER;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "project_type", nullable = false, length = 50)
+    @Builder.Default
+    private ProjectType projectType = ProjectType.SOFTWARE_SCRUM;
+
+    @Column(name = "is_template", nullable = false)
+    @Builder.Default
+    private Boolean isTemplate = false;
 
     @Column(name = "start_date")
     private LocalDate startDate;
@@ -53,19 +69,14 @@ public class Project {
     @Column(name = "created_by", nullable = false)
     private UUID createdBy;
 
-    @Column(name = "is_public", nullable = false)
-    @Builder.Default
-    private Boolean isPublic = false;
-
-    @Column(name = "is_template", nullable = false)
-    @Builder.Default
-    private Boolean isTemplate = false;
-
     @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 }

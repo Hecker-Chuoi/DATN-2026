@@ -1,12 +1,12 @@
 package com.datn.workservice.security;
 
 import com.datn.workservice.entity.Project;
-import com.datn.workservice.entity.Task;
+import com.datn.workservice.entity.WorkItem;
 import com.datn.workservice.entity.TeamMember;
 import com.datn.workservice.entity.Team;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.RolePermissionRepository;
-import com.datn.workservice.repository.TaskRepository;
+import com.datn.workservice.repository.WorkItemRepository;
 import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.repository.TeamRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ import java.util.UUID;
 public class ProjectSecurity {
 
     private final ProjectRepository projectRepository;
-    private final TaskRepository taskRepository;
+    private final WorkItemRepository workItemRepository;
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final RolePermissionRepository rolePermissionRepository;
@@ -65,34 +65,35 @@ public class ProjectSecurity {
             return false;
         }
 
-        TeamMember member = teamMemberRepository.findByIdTeamIdAndIdUserId(project.getTeamId(), currentUserId).orElse(null);
+        TeamMember member = teamMemberRepository.findByTeamIdAndUserId(project.getTeamId(), currentUserId).orElse(null);
         if (member == null) {
             log.debug("ProjectSecurity: User {} không phải thành viên team {} thuộc project {}", currentUserId, project.getTeamId(), projectId);
             return false;
         }
 
-        // 5. Tầng 2 - Local RBAC Check: Tra cứu vai trò dự án (role_in_team) với permissionCode trong DB
-        boolean hasPerm = rolePermissionRepository.existsByRoleNameIgnoreCaseAndPermissionCodeIgnoreCase(member.getRoleInTeam(), permissionCode);
+        // 5. Tầng 2 - Local RBAC Check: Tra cứu vai trò dự án (role) với permissionCode trong DB
+        String roleName = member.getRole() != null ? member.getRole().name() : "";
+        boolean hasPerm = rolePermissionRepository.existsByRoleNameIgnoreCaseAndPermissionCodeIgnoreCase(roleName, permissionCode);
         if (!hasPerm) {
             log.debug("ProjectSecurity: User {} với vai trò {} không có quyền {} trên project {}",
-                    currentUserId, member.getRoleInTeam(), permissionCode, projectId);
+                    currentUserId, roleName, permissionCode, projectId);
         }
         return hasPerm;
     }
 
     /**
-     * Kiểm tra quyền tác động lên Task thông qua Project chứa Task đó.
+     * Kiểm tra quyền tác động lên Task/WorkItem thông qua Project chứa Task đó.
      */
     public boolean hasTaskPermission(UUID taskId, String permissionCode) {
         if (taskId == null || permissionCode == null) return false;
 
-        Task task = taskRepository.findById(taskId).orElse(null);
-        if (task == null || task.getProjectId() == null) {
-            log.warn("ProjectSecurity: Không tìm thấy Task hoặc Task không thuộc Project nào. Task ID: {}", taskId);
+        WorkItem workItem = workItemRepository.findById(taskId).orElse(null);
+        if (workItem == null || workItem.getProjectId() == null) {
+            log.warn("ProjectSecurity: Không tìm thấy WorkItem hoặc WorkItem không thuộc Project nào. WorkItem ID: {}", taskId);
             return false;
         }
 
-        return hasProjectPermission(task.getProjectId(), permissionCode);
+        return hasProjectPermission(workItem.getProjectId(), permissionCode);
     }
 
     /**
@@ -113,10 +114,11 @@ public class ProjectSecurity {
         if (currentUserId.equals(team.getOwnerId())) return true;
 
         // 3. ReBAC & Local RBAC Check
-        TeamMember member = teamMemberRepository.findByIdTeamIdAndIdUserId(teamId, currentUserId).orElse(null);
+        TeamMember member = teamMemberRepository.findByTeamIdAndUserId(teamId, currentUserId).orElse(null);
         if (member == null) return false;
 
-        return rolePermissionRepository.existsByRoleNameIgnoreCaseAndPermissionCodeIgnoreCase(member.getRoleInTeam(), permissionCode);
+        String roleName = member.getRole() != null ? member.getRole().name() : "";
+        return rolePermissionRepository.existsByRoleNameIgnoreCaseAndPermissionCodeIgnoreCase(roleName, permissionCode);
     }
 
     /**

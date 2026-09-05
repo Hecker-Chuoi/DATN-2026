@@ -1,6 +1,7 @@
 package com.datn.workservice.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
+import com.datn.workservice.enums.TeamRole;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,6 +13,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UpdateTeamMemberRoleRequest {
 
-    @NotBlank(message = "Vai trò không được để trống")
-    private String roleInTeam;
+    @NotNull(message = "Team role is required")
+    private TeamRole role;
 }

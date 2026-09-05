@@ -1,5 +1,7 @@
 package com.datn.workservice.dto.request;
 
+import com.datn.workservice.enums.TeamRole;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,14 +15,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AddTeamMemberRequest {
 
+    @NotNull(message = "User ID is required")
     private UUID userId;
 
-    private String emailOrUsername;
-
-    private String email;
-
-    private String username;
-
     @Builder.Default
-    private String roleInTeam = "member";
+    private TeamRole role = TeamRole.MEMBER;
 }

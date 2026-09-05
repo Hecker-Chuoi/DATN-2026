@@ -12,6 +12,7 @@ import UserLoginPage from './pages/UserLoginPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import GoogleCallback from './pages/GoogleCallback.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
 
 function App() {
   // ─── User Workspace Auth State ───
@@ -92,7 +93,7 @@ function App() {
     <BrowserRouter>
       {/* ─── Global Toast Notifications Container ─── */}
       <Toaster
-        position="top-right"
+        position="bottom-right"
         toastOptions={{
           duration: 3500,
           style: {
@@ -166,6 +167,8 @@ function App() {
           <Route path="projects" element={<ProjectListPage />} />
           <Route path="projects/:projectId" element={<ProjectDetailPage />} />
           <Route path="teams/:teamId" element={<TeamDetailPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="settings" element={<ProfilePage />} />
           <Route
             path="my-issues"
             element={

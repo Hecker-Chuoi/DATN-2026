@@ -78,7 +78,8 @@ public class UserService {
                 .build();
 
         user = userRepository.save(user);
-        log.info("Registered new user: username='{}', keycloakId='{}'", user.getUsername(), keycloakId);
+        keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
+        log.info("Registered new user: username='{}', keycloakId='{}', userId='{}'", user.getUsername(), keycloakId, user.getId());
 
         return UserResponse.from(user);
     }
@@ -92,42 +93,85 @@ public class UserService {
         String email           = (String) userInfo.get("email");
         String givenName       = (String) userInfo.getOrDefault("given_name", "");
         String familyName      = (String) userInfo.getOrDefault("family_name", "");
-        String preferredUser   = (String) userInfo.getOrDefault("preferred_username", email);
+        String name            = (String) userInfo.get("name");
+        String rawUser = (String) userInfo.getOrDefault("preferred_username", email);
+        if ((givenName == null || givenName.isBlank()) && name != null && !name.isBlank()) {
+            String[] parts = name.trim().split("\\s+", 2);
+            givenName = parts[0];
+            familyName = parts.length > 1 ? parts[1] : "";
+        }
+        if (rawUser == null || rawUser.isBlank()) {
+            rawUser = (email != null && email.contains("@")) ? email.substring(0, email.indexOf('@')) : email;
+        }
 
-        // 1. Check if user already exists by Keycloak ID (return existing)
-        return userRepository.findByKeycloakId(keycloakId)
+        final String resolvedUsername = rawUser != null ? rawUser : keycloakId;
+        final String resolvedEmail = email != null ? email : "";
+        final String resolvedGivenName = givenName != null ? givenName : "";
+        final String resolvedFamilyName = familyName != null ? familyName : "";
+
+        // 1. Check if user already exists by Keycloak ID (return existing with auto-sync)
+        UserResponse response = userRepository.findByKeycloakId(keycloakId)
                 .map(existingUser -> {
                     log.debug("Google login: found existing user '{}'", existingUser.getUsername());
+                    boolean updated = false;
+                    if ((existingUser.getEmail() == null || existingUser.getEmail().isBlank()) && !resolvedEmail.isBlank()) {
+                        existingUser.setEmail(resolvedEmail);
+                        updated = true;
+                    }
+                    if ((existingUser.getFirstName() == null || existingUser.getFirstName().isBlank()) && !resolvedGivenName.isBlank()) {
+                        existingUser.setFirstName(resolvedGivenName);
+                        updated = true;
+                    }
+                    if ((existingUser.getLastName() == null || existingUser.getLastName().isBlank()) && !resolvedFamilyName.isBlank()) {
+                        existingUser.setLastName(resolvedFamilyName);
+                        updated = true;
+                    }
+                    if (updated) {
+                        existingUser = userRepository.save(existingUser);
+                    }
                     return UserResponse.from(existingUser);
                 })
                 .orElseGet(() -> {
                     // 2. New user: check email uniqueness to avoid conflicts
-                    if (userRepository.existsByEmail(email)) {
+                    if (!resolvedEmail.isBlank() && userRepository.existsByEmail(resolvedEmail)) {
                         // Edge case: email exists under a different keycloakId (manual + Google account)
                         // Link by email – update the keycloakId
-                        User existingByEmail = userRepository.findByEmail(email)
-                                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
-                        log.info("Google login: linking Google account to existing email '{}'", email);
+                        User existingByEmail = userRepository.findByEmail(resolvedEmail)
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + resolvedEmail));
+                        log.info("Google login: linking Google account to existing email '{}'", resolvedEmail);
                         existingByEmail.setKeycloakId(keycloakId);
+                        if ((existingByEmail.getFirstName() == null || existingByEmail.getFirstName().isBlank()) && !resolvedGivenName.isBlank()) {
+                            existingByEmail.setFirstName(resolvedGivenName);
+                        }
+                        if ((existingByEmail.getLastName() == null || existingByEmail.getLastName().isBlank()) && !resolvedFamilyName.isBlank()) {
+                            existingByEmail.setLastName(resolvedFamilyName);
+                        }
                         return UserResponse.from(userRepository.save(existingByEmail));
                     }
 
                     // 3. Brand new user – persist to local DB
                     User newUser = User.builder()
                             .keycloakId(keycloakId)
-                            .username(preferredUser)
-                            .email(email)
-                            .firstName(givenName)
-                            .lastName(familyName)
+                            .username(resolvedUsername)
+                            .email(resolvedEmail)
+                            .firstName(resolvedGivenName)
+                            .lastName(resolvedFamilyName)
                             .roles(Set.copyOf(DEFAULT_ROLES))
                             .status(User.UserStatus.ACTIVE)
                             .build();
 
                     newUser = userRepository.save(newUser);
-                    log.info("Google login: created new user '{}' (keycloakId='{}')",
-                            newUser.getUsername(), keycloakId);
+                    log.info("Google login: created new user '{}' (keycloakId='{}', userId='{}')",
+                            newUser.getUsername(), keycloakId, newUser.getId());
                     return UserResponse.from(newUser);
                 });
+
+        if (response != null && response.getId() != null) {
+            keycloakService.setUserAttribute(keycloakId, "user_id", response.getId().toString());
+            keycloakService.assignRealmRoles(keycloakId, Set.of("USER"));
+        }
+
+        return response;
     }
 
 
@@ -153,7 +197,11 @@ public class UserService {
             user.setKeycloakId(keycloakId);
             user = userRepository.save(user);
         }
- 
+
+        if (user != null && user.getId() != null) {
+            keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
+        }
+
         return UserResponse.from(user);
     }
 
@@ -210,8 +258,9 @@ public class UserService {
     /**
      * Finds a user by ID (used by internal microservices)
      */
-     public UserResponse getUserById(UUID id) {
+    public UserResponse getUserById(UUID id) {
         User user = userRepository.findById(id)
+                .or(() -> userRepository.findByKeycloakId(id.toString()))
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
         return UserResponse.from(user);
     }
@@ -258,7 +307,8 @@ public class UserService {
         if (ids == null || ids.isEmpty()) {
             return List.of();
         }
-        return userRepository.findByIdIn(ids)
+        List<String> keycloakIds = ids.stream().map(UUID::toString).toList();
+        return userRepository.findByIdsOrKeycloakIds(ids, keycloakIds)
                 .stream()
                 .map(UserResponse::from)
                 .collect(Collectors.toList());
@@ -310,8 +360,9 @@ public class UserService {
                 .build();
  
         user = userRepository.save(user);
-        log.info("Admin created user: username='{}', keycloakId='{}'", user.getUsername(), keycloakId);
- 
+        keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
+        log.info("Admin created user: username='{}', keycloakId='{}', userId='{}'", user.getUsername(), keycloakId, user.getId());
+
         return UserResponse.from(user);
     }
  

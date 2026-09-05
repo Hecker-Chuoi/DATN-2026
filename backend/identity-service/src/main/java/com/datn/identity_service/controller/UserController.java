@@ -26,10 +26,19 @@ public class UserController {
     private final UserService userService;
  
     @GetMapping("/api/v1/users/me")
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<UserResponse>> getMyProfile(Principal principal) {
         UserResponse user = userService.getCurrentUser(principal);
         return ResponseEntity.ok(ApiResponse.success(user));
+    }
+
+    @GetMapping("/api/v1/users/search")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<java.util.List<UserResponse>>> searchUsers(
+            @RequestParam(value = "query", required = false) String query
+    ) {
+        PageResponse<UserResponse> page = userService.getAllUsers(query, org.springframework.data.domain.PageRequest.of(0, 20));
+        return ResponseEntity.ok(ApiResponse.success(page.getContent(), "Users search completed"));
     }
  
     @GetMapping("/api/v1/admin/users")

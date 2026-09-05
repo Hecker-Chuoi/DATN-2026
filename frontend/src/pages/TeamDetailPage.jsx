@@ -3,780 +3,1208 @@ import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   Users,
   UserPlus,
-  Trash2,
-  Shield,
-  ShieldAlert,
-  Crown,
-  Eye,
-  User,
-  Calendar,
+  Star,
+  MoreHorizontal,
+  Link2,
+  SlidersHorizontal,
+  ArrowUpDown,
   Mail,
-  CheckCircle2,
+  Trash2,
+  X,
+  Sparkles,
   AlertCircle,
-  AtSign,
-  UserCheck,
-  ChevronDown,
+  FolderKanban,
+  FileText,
+  Home,
   Check,
-  Lock,
-  Info
+  Search,
+  UserCheck,
+  LogOut,
+  ShieldAlert
 } from 'lucide-react';
-import { teamApi, userApi } from '../api.js';
 import toast from 'react-hot-toast';
-
-export const TEAM_ROLES = [
-  {
-    code: 'TEAM_LEAD',
-    label: 'Trưởng nhóm (Leader)',
-    shortLabel: 'LEAD',
-    description: 'Quản lý toàn bộ hoạt động của Team: duyệt/thêm/xóa thành viên trong Team, tạo và phân bổ các Project cho Team, quản lý tài nguyên chung của Team.',
-    icon: (s = 14) => <Crown size={s} color="#2563EB" />,
-    color: '#2563EB',
-    bg: '#EFF6FF',
-    border: '#BFDBFE',
-    badgeText: 'Trưởng nhóm',
-  },
-  {
-    code: 'TEAM_MEMBER',
-    label: 'Thành viên Team',
-    shortLabel: 'MEMBER',
-    description: 'Nhân sự thuộc Team, có thể tham gia và thao tác trong các Project được gán cho Team.',
-    icon: (s = 14) => <User size={s} color="#0F766E" />,
-    color: '#0F766E',
-    bg: '#F0FDFA',
-    border: '#99F6E4',
-    badgeText: 'Thành viên',
-  },
-  {
-    code: 'TEAM_VIEWER',
-    label: 'Người quan sát Team',
-    shortLabel: 'VIEWER',
-    description: 'Được theo dõi danh sách thành viên và các dự án của Team nhưng không có quyền chỉnh sửa cấu hình hay thành viên của Team.',
-    icon: (s = 14) => <Eye size={s} color="#B45309" />,
-    color: '#B45309',
-    bg: '#FEF3C7',
-    border: '#FDE68A',
-    badgeText: 'Người xem',
-  },
-];
+import { teamApi, userApi } from '../api.js';
 
 export default function TeamDetailPage() {
   const { teamId } = useParams();
   const navigate = useNavigate();
-  const { refreshTeams } = useOutletContext();
+  const outletContext = useOutletContext();
+  const refreshTeams = outletContext?.refreshTeams;
 
+  const [currentUser, setCurrentUser] = useState(null);
   const [team, setTeam] = useState(null);
   const [members, setMembers] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [currentUserRole, setCurrentUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // Add member form state
-  const [identifier, setIdentifier] = useState('');
-  const [newRole, setNewRole] = useState('TEAM_MEMBER');
+  const [activeTab, setActiveTab] = useState('members'); // 'overview' | 'documents' | 'members'
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [memberIdentifier, setMemberIdentifier] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userSuggestions, setUserSuggestions] = useState([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [memberRole, setMemberRole] = useState('MEMBER');
   const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  const [addError, setAddError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isStarred, setIsStarred] = useState(false);
 
-  // Active role change popover for a member
-  const [activeRolePopoverUserId, setActiveRolePopoverUserId] = useState(null);
-  const [updatingRoleUserId, setUpdatingRoleUserId] = useState(null);
+  const searchTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    const fetchMe = async () => {
+      try {
+        const res = await userApi.me();
+        if (res && res.data) {
+          setCurrentUser(res.data);
+        }
+      } catch (err) {
+        console.warn('Could not load current user profile:', err);
+      }
+    };
+    fetchMe();
+  }, []);
+
+  const isCurrentUserOwner = Boolean(
+    currentUser &&
+      team?.ownerId &&
+      (team.ownerId === currentUser.id ||
+        (currentUser.keycloakId && team.ownerId === currentUser.keycloakId))
+  );
+
+  const isCurrentUserLeader = Boolean(
+    currentUser &&
+      members.some(
+        (m) =>
+          (m.userId === currentUser.id ||
+            (currentUser.keycloakId && m.userId === currentUser.keycloakId)) &&
+          m.role === 'LEADER'
+      )
+  );
+
+  const isCurrentUserMember = Boolean(
+    isCurrentUserOwner ||
+      (currentUser &&
+        members.some(
+          (m) =>
+            m.userId === currentUser.id ||
+            (currentUser.keycloakId && m.userId === currentUser.keycloakId)
+        ))
+  );
+
+  const handleUpdateRole = async (userId, newRole) => {
+    try {
+      await teamApi.updateMemberRole(teamId, userId, newRole);
+      toast.success('Đã cập nhật vai trò thành công!');
+      fetchTeamData();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Lỗi khi cập nhật vai trò';
+      toast.error(msg);
+    }
+  };
+
+  const handleLeaveTeam = async () => {
+    if (!window.confirm(`Bạn có chắc chắn muốn rời khỏi nhóm "${team?.name || ''}" không?`)) {
+      return;
+    }
+    try {
+      setSubmitting(true);
+      await teamApi.leaveTeam(teamId);
+      toast.success('Bạn đã rời khỏi nhóm thành công');
+      if (refreshTeams) refreshTeams();
+      navigate('/projects');
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Lỗi khi rời nhóm';
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteTeam = async () => {
+    if (
+      !window.confirm(
+        `Bạn có chắc chắn muốn xóa nhóm "${team?.name || ''}" không? Tất cả thành viên sẽ bị dọn dẹp và dự án sẽ được tách rời. Hành động này KHÔNG THỂ HOÀN TÁC.`
+      )
+    ) {
+      return;
+    }
+    try {
+      setSubmitting(true);
+      await teamApi.delete(teamId);
+      toast.success('Đã xóa nhóm thành công');
+      if (refreshTeams) refreshTeams();
+      navigate('/projects');
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Lỗi khi xóa nhóm';
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const fetchTeamData = async () => {
     try {
       setLoading(true);
-      const [teamRes, membersRes, meRes, myRoleRes] = await Promise.all([
+      const [teamRes, membersRes] = await Promise.all([
         teamApi.getById(teamId),
         teamApi.getMembers(teamId),
-        userApi.me().catch(() => null),
-        teamApi.getMyRole(teamId).catch(() => null),
       ]);
-
       if (teamRes && teamRes.data) setTeam(teamRes.data);
       if (membersRes && membersRes.data) setMembers(membersRes.data);
-      if (meRes && meRes.data) setCurrentUser(meRes.data);
-      if (myRoleRes && myRoleRes.data) setCurrentUserRole(myRoleRes.data);
     } catch (err) {
-      console.error('Failed to load team:', err);
-      setErrorMsg('Không tìm thấy thông tin nhóm.');
+      console.warn('Could not load team details:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTeamData();
+    if (teamId) {
+      fetchTeamData();
+    }
   }, [teamId]);
 
-  // Kiểm tra xem user hiện tại có phải là Team Lead hay không
-  const isCurrentLeader = () => {
-    if (!currentUser) return false;
-    if (team?.ownerId === currentUser.id) return true;
-    if (currentUserRole === 'TEAM_LEAD' || currentUserRole === 'LEADER') return true;
-
-    const myMemberRecord = members.find((m) => m.userId === currentUser.id);
-    if (myMemberRecord) {
-      const r = (myMemberRecord.roleInTeam || '').toUpperCase();
-      return r === 'TEAM_LEAD' || r === 'LEADER';
+  // Live user search effect – only search when user has typed something (debounce 400ms)
+  useEffect(() => {
+    if (!isAddModalOpen) {
+      setUserSuggestions([]);
+      return;
     }
-    return false;
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (selectedUser) return; // User already picked
+
+    const query = memberIdentifier.trim();
+    if (!query) {
+      setUserSuggestions([]);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setIsSearchingUsers(true);
+        const res = await userApi.search(query);
+        if (res && res.data) {
+          const list = Array.isArray(res.data) ? res.data : (res.data.content || []);
+          setUserSuggestions(list);
+        }
+      } catch (err) {
+        setUserSuggestions([]);
+      } finally {
+        setIsSearchingUsers(false);
+      }
+    }, 400);
+
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [memberIdentifier, isAddModalOpen, selectedUser]);
+
+  const handleOpenAddModal = () => {
+    setMemberIdentifier('');
+    setSelectedUser(null);
+    setUserSuggestions([]);
+    setAddError('');
+    setMemberRole('MEMBER');
+    setIsAddModalOpen(true);
+  };
+
+  const handleSelectUser = (user) => {
+    setSelectedUser(user);
+    setMemberIdentifier(user.email || user.username || '');
+    setUserSuggestions([]);
+    setAddError('');
+  };
+
+  const handleClearSelectedUser = () => {
+    setSelectedUser(null);
+    setMemberIdentifier('');
+    setUserSuggestions([]);
   };
 
   const handleAddMember = async (e) => {
     e.preventDefault();
-    const cleanIdentifier = identifier.trim();
-    if (!cleanIdentifier) return;
+    const identifier = selectedUser ? (selectedUser.id || selectedUser.email) : memberIdentifier.trim();
+    if (!identifier) {
+      setAddError('Vui lòng chọn người dùng từ danh sách hoặc nhập Email/Username');
+      return;
+    }
 
     try {
       setSubmitting(true);
-      setErrorMsg('');
-      setSuccessMsg('');
-
+      setAddError('');
       await teamApi.addMember(teamId, {
-        emailOrUsername: cleanIdentifier,
-        roleInTeam: newRole,
+        userId: selectedUser ? selectedUser.id : undefined,
+        email: !selectedUser ? identifier : undefined,
+        role: memberRole,
       });
 
-      const roleObj = TEAM_ROLES.find((r) => r.code === newRole) || TEAM_ROLES[1];
-      toast.success(`Đã thêm "${cleanIdentifier}" vào nhóm với vai trò ${roleObj.label}!`);
-      setSuccessMsg(`Đã thêm thành viên "${cleanIdentifier}" vào nhóm thành công!`);
-      setIdentifier('');
+      toast.success('Đã thêm thành viên vào nhóm!');
+      setIsAddModalOpen(false);
       fetchTeamData();
-      if (refreshTeams) refreshTeams();
     } catch (err) {
-      const msg = err.message || 'Không thể thêm thành viên. Vui lòng kiểm tra lại Email hoặc Username.';
-      setErrorMsg(msg);
+      const msg = err.response?.data?.message || 'Không tìm thấy người dùng hoặc có lỗi xảy ra.';
+      setAddError(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleUpdateRole = async (member, targetRoleCode) => {
-    const currentMemberRole = (member.roleInTeam || 'TEAM_MEMBER').toUpperCase();
-    const currentClean = currentMemberRole === 'LEADER' ? 'TEAM_LEAD' : currentMemberRole === 'VIEWER' ? 'TEAM_VIEWER' : currentMemberRole;
-
-    if (currentClean === targetRoleCode) {
-      setActiveRolePopoverUserId(null);
+  const handleRemoveMember = async (userId, memberName) => {
+    if (!isCurrentUserLeader) {
+      toast.error('Chỉ Trưởng nhóm (Leader) mới có quyền xóa thành viên');
       return;
     }
-
-    const memberName = member.fullName || member.username || member.email || 'thành viên';
-    const targetRoleObj = TEAM_ROLES.find((r) => r.code === targetRoleCode) || TEAM_ROLES[1];
-
+    if (currentUser?.id && userId === currentUser.id) {
+      toast.error('Bạn không thể tự xóa chính mình khỏi nhóm');
+      return;
+    }
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa "${memberName}" khỏi nhóm?`)) {
+      return;
+    }
     try {
-      setUpdatingRoleUserId(member.userId);
-      await teamApi.updateMemberRole(teamId, member.userId, targetRoleCode);
-      toast.success(`Đã đổi vai trò của "${memberName}" thành ${targetRoleObj.label}!`);
-      setActiveRolePopoverUserId(null);
+      await teamApi.removeMember(teamId, userId);
+      toast.success('Đã xóa thành viên khỏi nhóm');
       fetchTeamData();
-      if (refreshTeams) refreshTeams();
     } catch (err) {
-      toast.error(err.message || 'Chuyển đổi vai trò thất bại');
-    } finally {
-      setUpdatingRoleUserId(null);
+      const msg = err.response?.data?.message || err.message || 'Lỗi khi xóa thành viên';
+      toast.error(msg);
     }
   };
 
-  const handleRemoveMember = async (member) => {
-    const memberName = member.fullName || member.username || member.email || 'thành viên này';
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa "${memberName}" khỏi nhóm?`)) return;
-    try {
-      await teamApi.removeMember(teamId, member.userId);
-      toast.success(`Đã xóa "${memberName}" khỏi nhóm!`);
-      fetchTeamData();
-      if (refreshTeams) refreshTeams();
-    } catch (err) {
-      toast.error(err.message || 'Xóa thành viên thất bại.');
+  const filteredMembers = members.filter((m) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (m.fullName && m.fullName.toLowerCase().includes(q)) ||
+      (m.username && m.username.toLowerCase().includes(q)) ||
+      (m.email && m.email.toLowerCase().includes(q))
+    );
+  });
+
+  const getRoleLabel = (role) => {
+    switch (role) {
+      case 'LEADER':
+        return 'Team Leader';
+      case 'VIEWER':
+        return 'Viewer';
+      case 'MEMBER':
+      default:
+        return 'Workspace member';
     }
   };
 
-  const getRoleConfig = (roleStr) => {
-    if (!roleStr) return TEAM_ROLES[1];
-    const upper = roleStr.toUpperCase();
-    if (upper === 'TEAM_LEAD' || upper === 'LEADER' || upper === 'LEAD') return TEAM_ROLES[0];
-    if (upper === 'TEAM_VIEWER' || upper === 'VIEWER') return TEAM_ROLES[2];
-    return TEAM_ROLES[1];
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
-  if (loading) {
-    return (
-      <div style={{ padding: 60, textAlign: 'center', color: '#64748B', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 24, height: 24, border: '3px solid #E2E8F0', borderTopColor: '#2563EB', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-        <span>Đang tải thông tin nhóm...</span>
-      </div>
-    );
-  }
-
-  if (!team) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center' }}>
-        <h3 style={{ fontSize: 18, color: '#0F172A' }}>Không tìm thấy nhóm</h3>
-        <button
-          onClick={() => navigate('/projects')}
-          style={{
-            marginTop: 12,
-            padding: '8px 16px',
-            backgroundColor: '#2563EB',
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontWeight: 600,
-            fontSize: 13,
-          }}
-        >
-          Quay lại danh sách dự án
-        </button>
-      </div>
-    );
-  }
-
-  const userIsLead = isCurrentLeader();
+  const getAvatarBg = (str) => {
+    const colors = ['#2563EB', '#7C3AED', '#DB2777', '#059669', '#D97706', '#0284C7', '#4F46E5'];
+    let hash = 0;
+    for (let i = 0; i < (str || '').length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
 
   return (
-    <div style={{ backgroundColor: '#F8FAFC', minHeight: '100vh', display: 'flex', flexDirection: 'column', flex: 1 }}>
-      {/* ════════ 1. TOP HEADER (Unified Header Bar) ════════ */}
+    <div
+      style={{
+        backgroundColor: '#FFFFFF',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'hidden',
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      }}
+    >
+      {/* ─── Top Header Breadcrumbs Bar ─── */}
       <div
         style={{
           height: 48,
           minHeight: 48,
           padding: '0 24px',
-          borderBottom: '1px solid #E2E8F0',
+          borderBottom: '1px solid #F1F5F9',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           backgroundColor: '#FFFFFF',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
-          <span
-            onClick={() => navigate('/projects')}
-            style={{ color: '#64748B', fontWeight: 500, cursor: 'pointer' }}
-          >
-            Teams
-          </span>
-          <span style={{ color: '#94A3B8' }}>›</span>
-          <span>{team.name}</span>
-        </div>
-
-        {userIsLead && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div
             style={{
+              width: 24,
+              height: 24,
+              borderRadius: 6,
+              backgroundColor: '#FDF2F8',
+              color: '#DB2777',
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
-              fontSize: 12,
-              fontWeight: 600,
-              color: '#2563EB',
-              backgroundColor: '#EFF6FF',
-              padding: '4px 10px',
-              borderRadius: 6,
-              border: '1px solid #DBEAFE',
+              justifyContent: 'center',
             }}
           >
-            <Crown size={14} />
-            <span>Bạn là Trưởng nhóm (Leader)</span>
+            <Home size={14} />
+          </div>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
+            {team?.name || 'Nhóm'}
+          </span>
+          <button
+            onClick={() => setIsStarred(!isStarred)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: isStarred ? '#EAB308' : '#94A3B8',
+              padding: 2,
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            title={isStarred ? 'Bỏ yêu thích' : 'Yêu thích'}
+          >
+            <Star size={15} fill={isStarred ? '#EAB308' : 'none'} />
+          </button>
+          <button
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#94A3B8',
+              padding: 2,
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <MoreHorizontal size={16} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isCurrentUserOwner && (
+            <button
+              onClick={handleDeleteTeam}
+              disabled={submitting}
+              style={{
+                backgroundColor: '#FEF2F2',
+                color: '#DC2626',
+                border: '1px solid #FEE2E2',
+                padding: '5px 10px',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: submitting ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#FEE2E2';
+                e.currentTarget.style.borderColor = '#FCA5A5';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#FEF2F2';
+                e.currentTarget.style.borderColor = '#FEE2E2';
+              }}
+              title="Xóa nhóm (Chỉ dành cho Chủ sở hữu)"
+            >
+              <Trash2 size={13} />
+              <span>Xóa nhóm</span>
+            </button>
+          )}
+
+          {!isCurrentUserOwner && isCurrentUserMember && (
+            <button
+              onClick={handleLeaveTeam}
+              disabled={submitting}
+              style={{
+                backgroundColor: '#FFF1F2',
+                color: '#E11D48',
+                border: '1px solid #FFE4E6',
+                padding: '5px 10px',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: submitting ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#FFE4E6';
+                e.currentTarget.style.borderColor = '#FDA4AF';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#FFF1F2';
+                e.currentTarget.style.borderColor = '#FFE4E6';
+              }}
+              title="Rời khỏi nhóm này"
+            >
+              <LogOut size={13} />
+              <span>Rời nhóm</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              toast.success('Đã sao chép liên kết');
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#64748B',
+              padding: 6,
+              borderRadius: 4,
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            title="Sao chép liên kết"
+          >
+            <Link2 size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* ─── Subheader / Navigation Tabs Bar ─── */}
+      <div
+        style={{
+          padding: '12px 24px 8px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        {/* Navigation Pills */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={() => setActiveTab('overview')}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 20,
+              fontSize: 13,
+              fontWeight: 500,
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'overview' ? '#F1F5F9' : 'transparent',
+              color: activeTab === 'overview' ? '#0F172A' : '#64748B',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('documents')}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 20,
+              fontSize: 13,
+              fontWeight: 500,
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'documents' ? '#F1F5F9' : 'transparent',
+              color: activeTab === 'documents' ? '#0F172A' : '#64748B',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            Documents
+          </button>
+          <button
+            onClick={() => setActiveTab('members')}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 20,
+              fontSize: 13,
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'members' ? '#F1F5F9' : 'transparent',
+              color: activeTab === 'members' ? '#0F172A' : '#64748B',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            Members
+          </button>
+        </div>
+
+        {/* Action Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isCurrentUserLeader && (
+            <button
+              onClick={handleOpenAddModal}
+              style={{
+                backgroundColor: '#FFFFFF',
+                color: '#0F172A',
+                border: '1px solid #E2E8F0',
+                padding: '6px 12px',
+                borderRadius: 6,
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+              }}
+            >
+              <span>+ Add a member</span>
+            </button>
+          )}
+          <button
+            style={{
+              backgroundColor: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              padding: '6px 8px',
+              borderRadius: 6,
+              color: '#64748B',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            title="Lọc"
+          >
+            <SlidersHorizontal size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* ─── Main Content Area ─── */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {activeTab === 'members' && (
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+            {/* Table Header */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(280px, 2fr) minmax(240px, 2fr) minmax(180px, 1fr) 40px',
+                padding: '10px 24px',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#64748B',
+                borderBottom: '1px solid #F1F5F9',
+                backgroundColor: '#FFFFFF',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                <span>Name</span>
+                <span style={{ fontSize: 11 }}>↓</span>
+              </div>
+              <div>Email</div>
+              <div>Role</div>
+              <div></div>
+            </div>
+
+            {/* Members Rows */}
+            {loading ? (
+              <div style={{ padding: '32px 24px', color: '#64748B', fontSize: 13, textAlign: 'center' }}>
+                Đang tải danh sách thành viên...
+              </div>
+            ) : filteredMembers.length === 0 ? (
+              <div style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
+                Chưa có thành viên nào trong nhóm. Bấm <b>+ Add a member</b> để mời thành viên.
+              </div>
+            ) : (
+              <div>
+                {filteredMembers.map((m, idx) => {
+                  const displayName = m.fullName || m.username || 'Thành viên';
+                  const initials = getInitials(displayName);
+                  const avatarBg = getAvatarBg(m.email || displayName);
+
+                  const isSelf = Boolean(
+                    currentUser && (m.userId === currentUser.id || (currentUser.keycloakId && m.userId === currentUser.keycloakId))
+                  );
+                  const isOwner = Boolean(
+                    team?.ownerId && (m.userId === team.ownerId)
+                  );
+
+                  return (
+                    <div
+                      key={m.userId || `member-${idx}`}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(280px, 2fr) minmax(240px, 2fr) minmax(180px, 1fr) 40px',
+                        padding: '10px 24px',
+                        borderBottom: '1px solid #F8FAFC',
+                        alignItems: 'center',
+                        fontSize: 13,
+                        transition: 'background-color 0.1s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      {/* Name & Avatar */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '50%',
+                            backgroundColor: avatarBg,
+                            color: '#FFFFFF',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {initials}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                          <span style={{ fontWeight: 600, color: '#0F172A', lineHeight: 1.3 }}>
+                            {displayName}
+                          </span>
+                          {m.username && (
+                            <span style={{ fontSize: 11, color: '#94A3B8', lineHeight: 1.2 }}>
+                              {m.username}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Email */}
+                      <div style={{ color: '#64748B', fontSize: 13 }}>
+                        {m.email || '—'}
+                      </div>
+
+                      {/* Role */}
+                      <div>
+                        {isCurrentUserLeader && !isSelf ? (
+                          <select
+                            value={m.role || 'MEMBER'}
+                            onChange={(e) => handleUpdateRole(m.userId, e.target.value)}
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: m.role === 'LEADER' ? '#1D4ED8' : '#334155',
+                              backgroundColor: m.role === 'LEADER' ? '#EFF6FF' : '#F8FAFC',
+                              border: '1px solid #CBD5E1',
+                              padding: '4px 8px',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              outline: 'none',
+                            }}
+                          >
+                            <option value="LEADER">Team Leader</option>
+                            <option value="MEMBER">Workspace member</option>
+                            <option value="VIEWER">Viewer</option>
+                          </select>
+                        ) : (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              fontSize: 12,
+                              fontWeight: 500,
+                              color: m.role === 'LEADER' ? '#1D4ED8' : '#2563EB',
+                              backgroundColor: m.role === 'LEADER' ? '#EFF6FF' : '#F1F5F9',
+                              padding: '3px 10px',
+                              borderRadius: 4,
+                            }}
+                          >
+                            {getRoleLabel(m.role)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Action */}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        {isCurrentUserLeader && !isSelf && !isOwner && (
+                          <button
+                            onClick={() => handleRemoveMember(m.userId, displayName)}
+                            title="Xóa khỏi nhóm"
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#CBD5E1',
+                              cursor: 'pointer',
+                              padding: 4,
+                              borderRadius: 4,
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = '#EF4444')}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = '#CBD5E1')}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'overview' && (
+          <div style={{ padding: 24, maxWidth: 800, display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 20, border: '1px solid #E2E8F0' }}>
+              <h4 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 12 }}>
+                Thông tin Nhóm
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Tên nhóm</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{team?.name || '—'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Số lượng thành viên</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{members.length} thành viên</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Vai trò của bạn</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: isCurrentUserOwner ? '#DC2626' : isCurrentUserLeader ? '#2563EB' : '#0F172A' }}>
+                    {isCurrentUserOwner ? 'Chủ sở hữu (Owner)' : isCurrentUserLeader ? 'Trưởng nhóm (Team Leader)' : isCurrentUserMember ? 'Thành viên (Member)' : 'Khách (Viewer)'}
+                  </div>
+                </div>
+              </div>
+
+              {team?.description && (
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #E2E8F0' }}>
+                  <div style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Mô tả</div>
+                  <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.5 }}>{team.description}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Danger Zone */}
+            <div style={{ backgroundColor: '#FEF2F2', borderRadius: 10, padding: 20, border: '1px solid #FEE2E2' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <ShieldAlert size={18} color="#DC2626" />
+                <h4 style={{ fontSize: 15, fontWeight: 700, color: '#991B1B', margin: 0 }}>
+                  Khu vực Quản trị & Nguy hiểm
+                </h4>
+              </div>
+
+              {isCurrentUserOwner ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#7F1D1D' }}>Xóa nhóm làm việc này</div>
+                    <div style={{ fontSize: 12, color: '#991B1B' }}>
+                      Toàn bộ thành viên sẽ bị xóa khỏi nhóm và các dự án sẽ được tách rời. Hành động không thể hoàn tác.
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleDeleteTeam}
+                    disabled={submitting}
+                    style={{
+                      backgroundColor: '#DC2626',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      padding: '8px 16px',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: submitting ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Trash2 size={14} />
+                    <span>{submitting ? 'Đang xóa...' : 'Xóa nhóm vĩnh viễn'}</span>
+                  </button>
+                </div>
+              ) : isCurrentUserMember ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#7F1D1D' }}>Rời khỏi nhóm làm việc</div>
+                    <div style={{ fontSize: 12, color: '#991B1B' }}>
+                      Bạn sẽ không còn là thành viên và sẽ mất quyền truy cập vào các dự án nội bộ của nhóm.
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleLeaveTeam}
+                    disabled={submitting}
+                    style={{
+                      backgroundColor: '#E11D48',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      padding: '8px 16px',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: submitting ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <LogOut size={14} />
+                    <span>{submitting ? 'Đang rời...' : 'Rời khỏi nhóm'}</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'documents' && (
+          <div style={{ padding: 24, color: '#64748B', fontSize: 13 }}>
+            <h4 style={{ fontSize: 15, fontWeight: 600, color: '#0F172A', marginBottom: 8 }}>
+              Tài liệu & Ghi chú
+            </h4>
+            <p>Chưa có tài liệu đính kèm nào trong nhóm.</p>
           </div>
         )}
       </div>
 
-      {/* ════════ Content Container ════════ */}
-      <div style={{ padding: '28px 36px', maxWidth: 1000, width: '100%', margin: '0 auto' }}>
-        {/* ─── Team Overview Card ─── */}
+      {/* ─── Add Member Modal (with Interactive Autocomplete Search) ─── */}
+      {isAddModalOpen && (
         <div
           style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 12,
-            border: '1px solid #E2E8F0',
-            padding: 24,
-            marginBottom: 24,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.5)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 70,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
           }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                  {team.name}
-                </h1>
-                {team.key && (
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: '#2563EB',
-                      backgroundColor: '#EFF6FF',
-                      padding: '2px 8px',
-                      borderRadius: 4,
-                      border: '1px solid #DBEAFE',
-                    }}
-                  >
-                    {team.key}
-                  </span>
-                )}
-              </div>
-              <p style={{ fontSize: 13, color: '#64748B', marginTop: 6, marginBottom: 0 }}>
-                {team.description || 'Chưa có mô tả cho nhóm này.'}
-              </p>
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 13,
-                color: '#2563EB',
-                backgroundColor: '#EFF6FF',
-                padding: '6px 12px',
-                borderRadius: 20,
-                fontWeight: 600,
-                border: '1px solid #DBEAFE',
-              }}
-            >
-              <Users size={16} />
-              <span>{members.length} thành viên</span>
-            </div>
-          </div>
-        </div>
-
-        {/* ─── Add Member Section ─── */}
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 12,
-            border: '1px solid #E2E8F0',
-            padding: 24,
-            marginBottom: 24,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                backgroundColor: '#EFF6FF',
-                color: '#2563EB',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <UserPlus size={16} />
-            </div>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-              Thêm thành viên mới vào nhóm
-            </h3>
-          </div>
-          <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 16px 0' }}>
-            Nhập <b>Email</b> hoặc <b>Username</b> của người dùng và chọn vai trò phân quyền tương ứng.
-          </p>
-
-          {errorMsg && (
-            <div
-              style={{
-                padding: '10px 14px',
-                borderRadius: 8,
-                backgroundColor: '#FEF2F2',
-                color: '#DC2626',
-                fontSize: 13,
-                marginBottom: 16,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                border: '1px solid #FEE2E2',
-              }}
-            >
-              <AlertCircle size={16} />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          {successMsg && (
-            <div
-              style={{
-                padding: '10px 14px',
-                borderRadius: 8,
-                backgroundColor: '#ECFDF5',
-                color: '#059669',
-                fontSize: 13,
-                marginBottom: 16,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                border: '1px solid #D1FAE5',
-              }}
-            >
-              <CheckCircle2 size={16} />
-              <span>{successMsg}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleAddMember} style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 260, position: 'relative' }}>
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 12,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#94A3B8',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                <AtSign size={16} />
-              </div>
-              <input
-                type="text"
-                placeholder="Nhập Email hoặc Username..."
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                required
-                style={{
-                  width: '100%',
-                  padding: '9px 12px 9px 36px',
-                  borderRadius: 8,
-                  border: '1px solid #CBD5E1',
-                  fontSize: 13,
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  transition: 'border-color 0.15s ease',
-                }}
-                onFocus={(e) => (e.target.style.borderColor = '#2563EB')}
-                onBlur={(e) => (e.target.style.borderColor = '#CBD5E1')}
-              />
-            </div>
-
-            <div style={{ minWidth: 200 }}>
-              <select
-                value={newRole}
-                onChange={(e) => setNewRole(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: 8,
-                  border: '1px solid #CBD5E1',
-                  fontSize: 13,
-                  backgroundColor: '#FFFFFF',
-                  color: '#0F172A',
-                  outline: 'none',
-                  cursor: 'pointer',
-                  fontWeight: 500,
-                }}
-              >
-                {TEAM_ROLES.map((r) => (
-                  <option key={r.code} value={r.code}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting || !identifier.trim()}
-              style={{
-                backgroundColor: '#2563EB',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: 8,
-                padding: '9px 20px',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: submitting || !identifier.trim() ? 'not-allowed' : 'pointer',
-                opacity: submitting || !identifier.trim() ? 0.7 : 1,
-                whiteSpace: 'nowrap',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                transition: 'background-color 0.15s ease',
-              }}
-            >
-              <UserCheck size={16} />
-              <span>{submitting ? 'Đang thêm...' : 'Thêm thành viên'}</span>
-            </button>
-          </form>
-        </div>
-
-        {/* ─── Members List Table ─── */}
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 12,
-            border: '1px solid #E2E8F0',
-            overflow: 'visible',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-          }}
+          onClick={() => setIsAddModalOpen(false)}
         >
           <div
             style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid #F1F5F9',
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
+              width: '100%',
+              maxWidth: 480,
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              overflow: 'hidden',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              flexDirection: 'column',
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Users size={16} color="#2563EB" />
-              <span>Danh sách thành viên ({members.length})</span>
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: '#FFFFFF',
+              }}
+            >
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>
+                Thêm thành viên vào {team?.name || 'nhóm'}
+              </span>
+              <button
+                onClick={() => setIsAddModalOpen(false)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  color: '#64748B',
+                  padding: 4,
+                }}
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            <div style={{ fontSize: 12, color: '#64748B', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Info size={13} color="#94A3B8" />
-              <span>Chỉ <b>Trưởng nhóm (TEAM_LEAD)</b> có quyền chỉnh sửa quyền của thành viên.</span>
-            </div>
-          </div>
+            {/* Modal Form */}
+            <form onSubmit={handleAddMember} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {addError && (
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    backgroundColor: '#FEF2F2',
+                    border: '1px solid #FEE2E2',
+                    color: '#DC2626',
+                    fontSize: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <AlertCircle size={14} />
+                  <span>{addError}</span>
+                </div>
+              )}
 
-          {members.length === 0 ? (
-            <div style={{ padding: '36px 20px', textAlign: 'center', color: '#64748B', fontSize: 13 }}>
-              Chưa có thành viên nào trong nhóm này.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {members.map((member, index) => {
-                const displayName = member.fullName || member.username || 'Thành viên ' + (index + 1);
-                const roleConfig = getRoleConfig(member.roleInTeam);
-                const isLeaderRole = roleConfig.code === 'TEAM_LEAD';
-                const isUpdating = updatingRoleUserId === member.userId;
-                const isPopoverOpen = activeRolePopoverUserId === member.userId;
+              {/* User Search / Selected User Preview */}
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                  Tìm kiếm người dùng (Username hoặc Email) <span style={{ color: '#EF4444' }}>*</span>
+                </label>
 
-                return (
+                {selectedUser ? (
                   <div
-                    key={member.userId}
                     style={{
-                      padding: '14px 20px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      borderBottom: index < members.length - 1 ? '1px solid #F1F5F9' : 'none',
-                      backgroundColor: '#FFFFFF',
-                      transition: 'background-color 0.15s ease',
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      backgroundColor: '#EFF6FF',
+                      border: '1.5px solid #3B82F6',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#FFFFFF')}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div
                         style={{
-                          width: 38,
-                          height: 38,
+                          width: 32,
+                          height: 32,
                           borderRadius: '50%',
-                          backgroundColor: roleConfig.bg,
-                          color: roleConfig.color,
-                          border: `1px solid ${roleConfig.border}`,
+                          backgroundColor: '#2563EB',
+                          color: '#FFFFFF',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
+                          fontSize: 12,
                           fontWeight: 700,
-                          fontSize: 14,
                         }}
                       >
-                        {member.username ? member.username.charAt(0).toUpperCase() : 'U'}
+                        {getInitials(selectedUser.firstName || selectedUser.username)}
                       </div>
-
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
-                            {displayName}
-                          </span>
-                          {member.username && (
-                            <span style={{ fontSize: 12, color: '#64748B' }}>
-                              @{member.username}
-                            </span>
-                          )}
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
+                          {selectedUser.firstName ? `${selectedUser.firstName} ${selectedUser.lastName || ''}`.trim() : selectedUser.username}
                         </div>
-                        <div style={{ fontSize: 12, color: '#64748B', display: 'flex', alignItems: 'center', gap: 12, marginTop: 3 }}>
-                          {member.email && (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <Mail size={12} color="#94A3B8" />
-                              <span>{member.email}</span>
-                            </span>
-                          )}
-                          {member.joinedAt && (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#94A3B8' }}>
-                              <Calendar size={12} />
-                              <span>Tham gia: {new Date(member.joinedAt).toLocaleDateString('vi-VN')}</span>
-                            </span>
-                          )}
+                        <div style={{ fontSize: 11, color: '#64748B' }}>
+                          {selectedUser.email || selectedUser.username}
                         </div>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      {/* ─── Role Badge / Selector Popover ─── */}
-                      <div style={{ position: 'relative' }}>
-                        {userIsLead ? (
-                          <button
-                            type="button"
-                            onClick={() => setActiveRolePopoverUserId(isPopoverOpen ? null : member.userId)}
-                            disabled={isUpdating}
-                            title="Bấm để thay đổi quyền của thành viên này"
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 6,
-                              fontSize: 12,
-                              fontWeight: 700,
-                              padding: '5px 12px',
-                              borderRadius: 20,
-                              backgroundColor: roleConfig.bg,
-                              color: roleConfig.color,
-                              border: `1px solid ${roleConfig.border}`,
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease',
-                              outline: 'none',
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(0.96)')}
-                            onMouseLeave={(e) => (e.currentTarget.style.filter = 'none')}
-                          >
-                            {roleConfig.icon(13)}
-                            <span>{roleConfig.badgeText}</span>
-                            <ChevronDown size={13} style={{ opacity: 0.7 }} />
-                          </button>
-                        ) : (
-                          <span
-                            title="Chỉ Trưởng nhóm (TEAM_LEAD) mới có quyền đổi vai trò"
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                              fontSize: 12,
-                              fontWeight: 700,
-                              padding: '5px 12px',
-                              borderRadius: 20,
-                              backgroundColor: roleConfig.bg,
-                              color: roleConfig.color,
-                              border: `1px solid ${roleConfig.border}`,
-                            }}
-                          >
-                            {roleConfig.icon(13)}
-                            <span>{roleConfig.badgeText}</span>
-                          </span>
-                        )}
+                    <button
+                      type="button"
+                      onClick={handleClearSelectedUser}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#64748B',
+                        cursor: 'pointer',
+                        padding: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                      title="Chọn người khác"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }}>
+                      <Search
+                        size={14}
+                        color="#94A3B8"
+                        style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }}
+                      />
+                      <input
+                        type="text"
+                        value={memberIdentifier}
+                        onChange={(e) => {
+                          setMemberIdentifier(e.target.value);
+                          if (addError) setAddError('');
+                        }}
+                        placeholder="Nhập tên, username hoặc email để tìm kiếm..."
+                        autoFocus
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px 8px 32px',
+                          borderRadius: 6,
+                          border: '1px solid #CBD5E1',
+                          fontSize: 13,
+                          color: '#0F172A',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
 
-                        {/* Dropdown Popover Chuyển Đổi Quyền */}
-                        {isPopoverOpen && (
-                          <>
-                            {/* Backdrop click-outside */}
+                    {/* Autocomplete Dropdown List */}
+                    {userSuggestions.length > 0 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          marginTop: 4,
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: 8,
+                          border: '1px solid #E2E8F0',
+                          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                          zIndex: 80,
+                          maxHeight: 200,
+                          overflowY: 'auto',
+                        }}
+                      >
+                        {userSuggestions.map((u) => {
+                          const fullName = (u.firstName ? `${u.firstName} ${u.lastName || ''}` : u.username || 'User').trim();
+                          const isAlreadyInTeam = members.some(
+                            (m) =>
+                              m.userId === u.id ||
+                              (u.keycloakId && m.userId === u.keycloakId) ||
+                              (u.email && m.email && m.email.toLowerCase() === u.email.toLowerCase())
+                          );
+
+                          return (
                             <div
-                              onClick={() => setActiveRolePopoverUserId(null)}
+                              key={u.id}
+                              onClick={() => !isAlreadyInTeam && handleSelectUser(u)}
                               style={{
-                                position: 'fixed',
-                                inset: 0,
-                                zIndex: 90,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '8px 12px',
+                                cursor: isAlreadyInTeam ? 'default' : 'pointer',
+                                opacity: isAlreadyInTeam ? 0.6 : 1,
+                                borderBottom: '1px solid #F8FAFC',
+                                transition: 'background-color 0.1s ease',
                               }}
-                            />
-
-                            <div
-                              onClick={(e) => e.stopPropagation()}
-                              style={{
-                                position: 'absolute',
-                                ...(index >= members.length - 2 && members.length > 2
-                                  ? { bottom: '100%', marginBottom: 6 }
-                                  : { top: '100%', marginTop: 6 }),
-                                right: 0,
-                                zIndex: 100,
-                                backgroundColor: '#FFFFFF',
-                                borderRadius: 10,
-                                boxShadow: '0 10px 25px -5px rgba(0,0,0,0.18), 0 8px 10px -6px rgba(0,0,0,0.1)',
-                                border: '1px solid #E2E8F0',
-                                padding: 6,
-                                minWidth: 300,
+                              onMouseEnter={(e) => {
+                                if (!isAlreadyInTeam) e.currentTarget.style.backgroundColor = '#F1F5F9';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isAlreadyInTeam) e.currentTarget.style.backgroundColor = '#FFFFFF';
                               }}
                             >
-                              <div
-                                style={{
-                                  padding: '6px 10px',
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  color: '#64748B',
-                                  borderBottom: '1px solid #F1F5F9',
-                                  textTransform: 'uppercase',
-                                  letterSpacing: '0.04em',
-                                  marginBottom: 4,
-                                }}
-                              >
-                                Phân quyền vai trò trong Team
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div
+                                  style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: '50%',
+                                    backgroundColor: getAvatarBg(u.email || fullName),
+                                    color: '#FFFFFF',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {getInitials(fullName)}
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>
+                                    {fullName}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: '#64748B' }}>
+                                    {u.email || `@${u.username}`}
+                                  </div>
+                                </div>
                               </div>
 
-                              {TEAM_ROLES.map((r) => {
-                                const isSelected = roleConfig.code === r.code;
-                                return (
-                                  <div
-                                    key={r.code}
-                                    onClick={() => handleUpdateRole(member, r.code)}
-                                    style={{
-                                      padding: '8px 10px',
-                                      borderRadius: 6,
-                                      cursor: 'pointer',
-                                      backgroundColor: isSelected ? '#F8FAFC' : 'transparent',
-                                      transition: 'background-color 0.15s ease',
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      gap: 2,
-                                    }}
-                                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = isSelected ? '#F1F5F9' : '#F8FAFC')}
-                                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = isSelected ? '#F8FAFC' : 'transparent')}
-                                  >
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        {r.icon(14)}
-                                        <span style={{ fontSize: 13, fontWeight: 600, color: r.color }}>
-                                          {r.label}
-                                        </span>
-                                      </div>
-                                      {isSelected && <Check size={14} color="#2563EB" />}
-                                    </div>
-                                    <div style={{ fontSize: 11, color: '#64748B', lineHeight: 1.4, paddingLeft: 20 }}>
-                                      {r.description}
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                              {isAlreadyInTeam ? (
+                                <span style={{ fontSize: 11, color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Check size={12} />
+                                  <span>Đã trong nhóm</span>
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 11, color: '#2563EB', fontWeight: 500 }}>
+                                  Chọn ➔
+                                </span>
+                              )}
                             </div>
-                          </>
-                        )}
+                          );
+                        })}
                       </div>
-
-                      {/* Nút Xóa Thành Viên */}
-                      {userIsLead && (
-                        <button
-                          onClick={() => handleRemoveMember(member)}
-                          title="Xóa khỏi nhóm"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#94A3B8',
-                            cursor: 'pointer',
-                            padding: 6,
-                            borderRadius: 6,
-                            display: 'flex',
-                            alignItems: 'center',
-                            transition: 'color 0.15s ease, background-color 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = '#DC2626';
-                            e.currentTarget.style.backgroundColor = '#FEF2F2';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.color = '#94A3B8';
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </div>
+
+              {/* Role Selection */}
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                  Vai trò trong nhóm (Role)
+                </label>
+                <select
+                  value={memberRole}
+                  onChange={(e) => setMemberRole(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    border: '1px solid #CBD5E1',
+                    fontSize: 13,
+                    color: '#0F172A',
+                    outline: 'none',
+                    backgroundColor: '#FFFFFF',
+                  }}
+                >
+                  <option value="MEMBER">Workspace member (Thành viên - Có quyền làm việc trong dự án)</option>
+                  <option value="LEADER">Team Leader (Trưởng nhóm - Toàn quyền quản trị nhóm)</option>
+                  <option value="VIEWER">Viewer (Chỉ xem - Không được chỉnh sửa)</option>
+                </select>
+              </div>
+
+              {/* Modal Actions */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: 8,
+                  marginTop: 6,
+                  paddingTop: 14,
+                  borderTop: '1px solid #F1F5F9',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    color: '#475569',
+                    border: '1px solid #E2E8F0',
+                    padding: '7px 14px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || (!selectedUser && !memberIdentifier.trim())}
+                  style={{
+                    backgroundColor: submitting || (!selectedUser && !memberIdentifier.trim()) ? '#94A3B8' : '#2563EB',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    padding: '7px 18px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: submitting || (!selectedUser && !memberIdentifier.trim()) ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <UserCheck size={15} />
+                  <span>{submitting ? 'Đang thêm...' : 'Thêm vào nhóm'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -692,7 +692,7 @@
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "**********",
+      "secret": "pBchukVams8pHwBHnPvzTY86e3ou2Ym7",
       "redirectUris": [
         "http://localhost:8081/*",
         "http://localhost:5173/auth/callback",
@@ -1432,7 +1432,7 @@
         "disableUserInfo": "false",
         "filteredByClaim": "false",
         "syncMode": "IMPORT",
-        "clientSecret": "**********"
+        "clientSecret": "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"
       }
     }
   ],

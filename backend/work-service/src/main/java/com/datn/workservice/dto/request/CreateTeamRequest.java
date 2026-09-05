@@ -1,6 +1,7 @@
 package com.datn.workservice.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,14 +16,12 @@ import java.util.UUID;
 @AllArgsConstructor
 public class CreateTeamRequest {
 
-    @NotBlank(message = "Tên nhóm không được để trống")
-    @Size(max = 255, message = "Tên nhóm tối đa 255 ký tự")
+    @NotNull(message = "Workspace ID is required")
+    private UUID workspaceId;
+
+    @NotBlank(message = "Team name is required")
+    @Size(max = 255, message = "Team name cannot exceed 255 characters")
     private String name;
 
-    @Size(max = 20, message = "Mã tiền tố nhóm tối đa 20 ký tự")
-    private String key;
-
     private String description;
-
-    private UUID ownerId;
 }

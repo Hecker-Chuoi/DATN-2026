@@ -28,7 +28,6 @@ import {
   ListFilter
 } from 'lucide-react';
 import { projectApi, teamApi } from '../../api.js';
-import CreateProjectModal from '../modals/CreateProjectModal.jsx';
 
 export default function AdminProjectManagement() {
   const navigate = useNavigate();

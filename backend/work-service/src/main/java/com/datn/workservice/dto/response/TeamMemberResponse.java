@@ -1,5 +1,6 @@
 package com.datn.workservice.dto.response;
 
+import com.datn.workservice.enums.TeamRole;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,11 +15,14 @@ import java.util.UUID;
 @AllArgsConstructor
 public class TeamMemberResponse {
 
+    private UUID id;
     private UUID teamId;
     private UUID userId;
-    private String username;
-    private String fullName;
-    private String email;
-    private String roleInTeam;
+    private TeamRole role;
     private LocalDateTime joinedAt;
+
+    private String username;
+    private String email;
+    private String fullName;
+    private String avatarUrl;
 }

@@ -2,13 +2,14 @@ package com.datn.workservice.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
+import java.time.LocalDate;
 
 @Data
 @Builder
@@ -16,22 +17,24 @@ import java.util.UUID;
 @AllArgsConstructor
 public class CloneProjectRequest {
 
-    private UUID sourceProjectId;
+    @NotBlank(message = "New project name is required")
+    @Size(max = 255, message = "Project name cannot exceed 255 characters")
+    private String name;
 
-    private UUID teamId;
+    @NotBlank(message = "New project key is required")
+    @Size(min = 2, max = 10, message = "Project key must be between 2 and 10 characters")
+    @Pattern(
+        regexp = "^[A-Z][A-Z0-9_]*$",
+        message = "Project key must start with an uppercase letter and contain only uppercase alphanumeric characters and underscores"
+    )
+    private String key;
 
-    @NotBlank(message = "Mã dự án mới (Key) không được để trống")
-    @Size(min = 2, max = 100, message = "Mã dự án phải từ 2-100 ký tự (VD: du_an_moi_a1b2c3d4)")
-    private String newKey;
-
-    @NotBlank(message = "Tên dự án mới không được để trống")
-    @Size(max = 255, message = "Tên dự án tối đa 255 ký tự")
-    private String newName;
-
-    private String newDescription;
-
-    private java.time.LocalDate startDate;
+    @NotNull(message = "New project start date is required for dynamic timeline shifting")
+    private LocalDate startDate;
 
     @Builder.Default
-    private Boolean isPublic = false;
+    private Boolean includeItems = true;
+
+    @Builder.Default
+    private Boolean includeSprints = true;
 }

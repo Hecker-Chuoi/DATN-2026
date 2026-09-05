@@ -1,0 +1,21 @@
+package com.datn.workservice.dto.request;
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class CreateWorkItemCommentRequest {
+
+    @NotBlank(message = "Nội dung bình luận không được để trống")
+    private String body;
+
+    private UUID parentCommentId; // Optional: For threaded comment replies
+}

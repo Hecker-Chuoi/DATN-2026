@@ -1,32 +1,45 @@
 import React, { useState } from 'react';
-import { X, Users } from 'lucide-react';
+import { X, Users, Sparkles, Check, AlertCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { teamApi } from '../../api.js';
 
-export default function CreateTeamModal({ currentUser, onClose, onSuccess }) {
+export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
   const [name, setName] = useState('');
-  const [key, setKey] = useState('');
   const [description, setDescription] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!isOpen) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      setError('Vui lòng nhập tên nhóm làm việc');
+      return;
+    }
 
     try {
-      setLoading(true);
-      setErrorMsg('');
-      await teamApi.create({
+      setSubmitting(true);
+      setError('');
+      const res = await teamApi.create({
         name: name.trim(),
-        key: key.trim().toUpperCase() || null,
-        description: description.trim() || null,
-        ownerId: currentUser?.id || null,
+        description: description.trim(),
       });
-      onSuccess();
+
+      toast.success('Tạo nhóm làm việc mới thành công!');
+      setName('');
+      setDescription('');
+      onClose();
+      if (onTeamCreated) {
+        onTeamCreated(res.data);
+      }
     } catch (err) {
-      setErrorMsg(err.message || 'Tạo nhóm thất bại. Vui lòng thử lại.');
+      console.error('Failed to create team:', err);
+      const msg = err.response?.data?.message || 'Không thể tạo nhóm làm việc. Vui lòng thử lại.';
+      setError(msg);
+      toast.error(msg);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -35,43 +48,46 @@ export default function CreateTeamModal({ currentUser, onClose, onSuccess }) {
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.45)',
-        backdropFilter: 'blur(3px)',
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 60,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 9999,
-        padding: 20,
+        padding: 16,
       }}
       onClick={onClose}
     >
       <div
         style={{
-          width: '100%',
-          maxWidth: 460,
           backgroundColor: '#FFFFFF',
-          borderRadius: 14,
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-          border: '1px solid #E2E8F0',
+          borderRadius: 12,
+          width: '100%',
+          maxWidth: 480,
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <div
           style={{
             padding: '16px 20px',
-            borderBottom: '1px solid #F1F5F9',
+            borderBottom: '1px solid #E2E8F0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            backgroundColor: '#FAFAFA',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
+                width: 36,
+                height: 36,
+                borderRadius: 8,
                 backgroundColor: '#EFF6FF',
                 color: '#2563EB',
                 display: 'flex',
@@ -79,119 +95,123 @@ export default function CreateTeamModal({ currentUser, onClose, onSuccess }) {
                 justifyContent: 'center',
               }}
             >
-              <Users size={15} />
+              <Users size={20} />
             </div>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-              Tạo Nhóm Làm Việc Mới
-            </h2>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                Tạo Nhóm làm việc mới
+              </h3>
+              <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>
+                Tổ chức các dự án và thành viên theo nhóm
+              </p>
+            </div>
           </div>
 
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              padding: 6,
+              borderRadius: 6,
+              cursor: 'pointer',
+              color: '#64748B',
+            }}
           >
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ padding: '20px' }}>
-          {errorMsg && (
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {error && (
             <div
               style={{
-                padding: '8px 12px',
+                padding: '10px 14px',
                 borderRadius: 6,
                 backgroundColor: '#FEF2F2',
+                border: '1px solid #FEE2E2',
                 color: '#DC2626',
-                fontSize: 12,
-                marginBottom: 14,
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
               }}
             >
-              {errorMsg}
+              <AlertCircle size={16} />
+              <span>{error}</span>
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 12, marginBottom: 14 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                Tên nhóm *
-              </label>
-              <input
-                type="text"
-                placeholder="VD: Core Backend Team"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (!key && e.target.value.length >= 2) {
-                    setKey(e.target.value.substring(0, 3).toUpperCase());
-                  }
-                }}
-                required
-                style={{
-                  width: '100%',
-                  padding: '8px 10px',
-                  borderRadius: 6,
-                  border: '1px solid #CBD5E1',
-                  fontSize: 13,
-                  outline: 'none',
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                Mã tiền tố
-              </label>
-              <input
-                type="text"
-                placeholder="CBT"
-                value={key}
-                onChange={(e) => setKey(e.target.value.toUpperCase())}
-                maxLength={6}
-                style={{
-                  width: '100%',
-                  padding: '8px 10px',
-                  borderRadius: 6,
-                  border: '1px solid #CBD5E1',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  outline: 'none',
-                  textTransform: 'uppercase',
-                }}
-              />
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-              Mô tả mục tiêu nhóm
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+              Tên nhóm (Team Name) <span style={{ color: '#EF4444' }}>*</span>
             </label>
-            <textarea
-              rows={3}
-              placeholder="Mô tả phạm vi trách nhiệm hoặc mục tiêu của nhóm..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (error) setError('');
+              }}
+              placeholder="Ví dụ: Backend Core Team, Frontend Squad, UI/UX..."
+              autoFocus
               style={{
                 width: '100%',
-                padding: '8px 10px',
+                padding: '8px 12px',
                 borderRadius: 6,
                 border: '1px solid #CBD5E1',
-                fontSize: 13,
+                fontSize: 14,
+                color: '#0F172A',
                 outline: 'none',
-                resize: 'vertical',
               }}
             />
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+              Mô tả nhóm (Tùy chọn)
+            </label>
+            <textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Mô tả phạm vi trách nhiệm hoặc mục tiêu của nhóm làm việc..."
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid #CBD5E1',
+                fontSize: 13,
+                color: '#0F172A',
+                outline: 'none',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
+
+          {/* Footer Actions */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 10,
+              marginTop: 8,
+              paddingTop: 16,
+              borderTop: '1px solid #F1F5F9',
+            }}
+          >
             <button
               type="button"
               onClick={onClose}
               style={{
+                backgroundColor: '#F1F5F9',
+                color: '#475569',
+                border: 'none',
                 padding: '8px 16px',
                 borderRadius: 6,
-                border: '1px solid #CBD5E1',
-                backgroundColor: '#FFFFFF',
-                color: '#475569',
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -201,19 +221,23 @@ export default function CreateTeamModal({ currentUser, onClose, onSuccess }) {
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={submitting || !name.trim()}
               style={{
+                backgroundColor: submitting || !name.trim() ? '#94A3B8' : '#2563EB',
+                color: '#FFFFFF',
+                border: 'none',
                 padding: '8px 18px',
                 borderRadius: 6,
-                border: 'none',
-                backgroundColor: '#2563EB',
-                color: '#FFFFFF',
                 fontSize: 13,
                 fontWeight: 600,
-                cursor: loading ? 'not-allowed' : 'pointer',
+                cursor: submitting || !name.trim() ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
               }}
             >
-              {loading ? 'Đang tạo...' : 'Tạo nhóm'}
+              <Sparkles size={14} />
+              <span>{submitting ? 'Đang tạo...' : 'Tạo nhóm'}</span>
             </button>
           </div>
         </form>

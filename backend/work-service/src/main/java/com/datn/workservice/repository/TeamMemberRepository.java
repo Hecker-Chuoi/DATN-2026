@@ -9,8 +9,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface TeamMemberRepository extends JpaRepository<TeamMember, TeamMember.TeamMemberId> {
+public interface TeamMemberRepository extends JpaRepository<TeamMember, UUID> {
     List<TeamMember> findByIdTeamId(UUID teamId);
     List<TeamMember> findByIdUserId(UUID userId);
     Optional<TeamMember> findByIdTeamIdAndIdUserId(UUID teamId, UUID userId);
+    Optional<TeamMember> findByTeamIdAndUserId(UUID teamId, UUID userId);
+    boolean existsByTeamIdAndUserId(UUID teamId, UUID userId);
+    void deleteByTeamIdAndUserId(UUID teamId, UUID userId);
+    void deleteByTeamId(UUID teamId);
 }

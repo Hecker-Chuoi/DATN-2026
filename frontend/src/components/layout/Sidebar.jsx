@@ -257,38 +257,83 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
       {/* ─── 4. User Profile Footer ─── */}
       <div
         style={{
-          padding: '12px 14px',
+          padding: '10px 12px',
           borderTop: '1px solid #F1F5F9',
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
+          gap: 6,
         }}
       >
         <div
+          onClick={() => navigate('/profile')}
+          title="Xem thông tin tài khoản"
           style={{
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            backgroundColor: '#E2E8F0',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 600,
-            fontSize: 13,
-            color: '#334155',
-            flexShrink: 0,
+            gap: 10,
+            flex: 1,
+            minWidth: 0,
+            padding: '6px 8px',
+            borderRadius: 8,
+            cursor: 'pointer',
+            backgroundColor: location.pathname === '/profile' ? '#EFF6FF' : 'transparent',
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            if (location.pathname !== '/profile') {
+              e.currentTarget.style.backgroundColor = '#F8FAFC';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (location.pathname !== '/profile') {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }
           }}
         >
-          {currentUser?.username ? currentUser.username.charAt(0).toUpperCase() : 'U'}
-        </div>
-        <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {currentUser?.fullName || currentUser?.username || 'User'}
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              backgroundColor: '#E2E8F0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 600,
+              fontSize: 13,
+              color: '#334155',
+              flexShrink: 0,
+            }}
+          >
+            {currentUser?.username ? currentUser.username.charAt(0).toUpperCase() : 'U'}
           </div>
-          <div style={{ fontSize: 11, color: '#94A3B8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {currentUser?.email || 'user@work.datn'}
+          <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: location.pathname === '/profile' ? '#2563EB' : '#0F172A',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {currentUser?.fullName || currentUser?.username || 'User'}
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                color: '#94A3B8',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {currentUser?.email || 'user@work.datn'}
+            </div>
           </div>
         </div>
+
         {onLogout && (
           <button
             onClick={onLogout}

@@ -1,6 +1,7 @@
 package com.datn.workservice.dto.request;
 
-import com.datn.workservice.enums.ProjectStatus;
+import com.datn.workservice.enums.DefaultAssigneeType;
+import com.datn.workservice.enums.ProjectType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -17,21 +18,26 @@ import java.util.UUID;
 @AllArgsConstructor
 public class UpdateProjectRequest {
 
-    private UUID teamId;
-
-    @NotBlank(message = "Tên dự án không được để trống")
-    @Size(max = 255, message = "Tên dự án tối đa 255 ký tự")
+    @NotBlank(message = "Project name is required")
+    @Size(max = 255, message = "Project name cannot exceed 255 characters")
     private String name;
+
+    private UUID teamId;
 
     private String description;
 
-    private ProjectStatus status;
+    @Size(max = 500, message = "Icon URL cannot exceed 500 characters")
+    private String iconUrl;
+
+    private UUID leadUserId;
+
+    private DefaultAssigneeType defaultAssigneeType;
+
+    private ProjectType projectType;
+
+    private Boolean isTemplate;
 
     private LocalDate startDate;
 
     private LocalDate endDate;
-
-    private Boolean isPublic;
-
-    private Boolean isTemplate;
 }
