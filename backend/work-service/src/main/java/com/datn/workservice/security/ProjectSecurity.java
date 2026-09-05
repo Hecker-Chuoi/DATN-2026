@@ -146,7 +146,7 @@ public class ProjectSecurity {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) return false;
 
-        // Check GrantedAuthorities (nếu đã có converter)
+        // Check GrantedAuthorities
         boolean inAuthorities = authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equalsIgnoreCase(roleName) || a.getAuthority().equalsIgnoreCase("ROLE_" + roleName));
         if (inAuthorities) return true;

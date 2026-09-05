@@ -17,6 +17,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.parameters.P;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -68,7 +69,7 @@ public class ProjectController {
 
     @GetMapping("/{projectId}")
     @PreAuthorize("@projectSecurity.hasProjectPermission(#projectId, 'PROJECT_VIEW')")
-    public ResponseEntity<ApiResponse<ProjectResponse>> getProjectById(@PathVariable("projectId") UUID projectId) {
+    public ResponseEntity<ApiResponse<ProjectResponse>> getProjectById(@PathVariable("projectId") @P("projectId") UUID projectId) {
         ProjectResponse project = projectService.getProjectById(projectId);
         return ResponseEntity.ok(ApiResponse.success(project));
     }
@@ -76,7 +77,7 @@ public class ProjectController {
     @PutMapping("/{projectId}")
     @PreAuthorize("@projectSecurity.hasProjectPermission(#projectId, 'PROJECT_EDIT')")
     public ResponseEntity<ApiResponse<ProjectResponse>> updateProject(
-            @PathVariable("projectId") UUID projectId,
+            @PathVariable("projectId") @P("projectId") UUID projectId,
             @Valid @RequestBody UpdateProjectRequest request) {
         ProjectResponse project = projectService.updateProject(projectId, request);
         return ResponseEntity.ok(ApiResponse.success(project, "Cập nhật dự án thành công"));
@@ -84,7 +85,7 @@ public class ProjectController {
 
     @DeleteMapping("/{projectId}")
     @PreAuthorize("@projectSecurity.hasProjectPermission(#projectId, 'PROJECT_DELETE')")
-    public ResponseEntity<ApiResponse<Void>> deleteProject(@PathVariable("projectId") UUID projectId) {
+    public ResponseEntity<ApiResponse<Void>> deleteProject(@PathVariable("projectId") @P("projectId") UUID projectId) {
         projectService.deleteProject(projectId);
         return ResponseEntity.ok(ApiResponse.success(null, "Xóa dự án thành công"));
     }

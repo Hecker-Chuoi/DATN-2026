@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.parameters.P;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,7 +31,7 @@ public class TaskController {
     @PostMapping
     @PreAuthorize("@projectSecurity.hasProjectPermission(#request.projectId, 'TASK_CREATE')")
     public ResponseEntity<ApiResponse<TaskResponse>> createTask(
-            @Valid @RequestBody CreateTaskRequest request,
+            @Valid @RequestBody @P("request") CreateTaskRequest request,
             Principal principal) {
         UUID currentUserId = extractUserId(principal);
         TaskResponse task = taskService.createTask(request, currentUserId);
@@ -41,7 +42,7 @@ public class TaskController {
     @GetMapping
     @PreAuthorize("@projectSecurity.hasProjectPermission(#projectId, 'TASK_VIEW')")
     public ResponseEntity<ApiResponse<List<TaskResponse>>> getTasks(
-            @RequestParam("projectId") UUID projectId,
+            @RequestParam("projectId") @P("projectId") UUID projectId,
             @RequestParam(value = "milestoneId", required = false) UUID milestoneId,
             @RequestParam(value = "status", required = false) TaskStatus status,
             @RequestParam(value = "assigneeId", required = false) UUID assigneeId,
@@ -52,14 +53,14 @@ public class TaskController {
 
     @GetMapping("/{taskId}")
     @PreAuthorize("@projectSecurity.hasTaskPermission(#taskId, 'TASK_VIEW')")
-    public ResponseEntity<ApiResponse<TaskResponse>> getTaskById(@PathVariable("taskId") UUID taskId) {
+    public ResponseEntity<ApiResponse<TaskResponse>> getTaskById(@PathVariable("taskId") @P("taskId") UUID taskId) {
         TaskResponse task = taskService.getTaskById(taskId);
         return ResponseEntity.ok(ApiResponse.success(task));
     }
 
     @GetMapping("/{taskId}/subtasks")
     @PreAuthorize("@projectSecurity.hasTaskPermission(#taskId, 'TASK_VIEW')")
-    public ResponseEntity<ApiResponse<List<TaskResponse>>> getSubtasks(@PathVariable("taskId") UUID taskId) {
+    public ResponseEntity<ApiResponse<List<TaskResponse>>> getSubtasks(@PathVariable("taskId") @P("taskId") UUID taskId) {
         List<TaskResponse> subtasks = taskService.getSubtasks(taskId);
         return ResponseEntity.ok(ApiResponse.success(subtasks, "Lấy danh sách tác vụ con thành công"));
     }
@@ -67,7 +68,7 @@ public class TaskController {
     @PutMapping("/{taskId}")
     @PreAuthorize("@projectSecurity.hasTaskPermission(#taskId, 'TASK_EDIT')")
     public ResponseEntity<ApiResponse<TaskResponse>> updateTask(
-            @PathVariable("taskId") UUID taskId,
+            @PathVariable("taskId") @P("taskId") UUID taskId,
             @Valid @RequestBody UpdateTaskRequest request) {
         TaskResponse task = taskService.updateTask(taskId, request);
         return ResponseEntity.ok(ApiResponse.success(task, "Cập nhật tác vụ thành công"));
@@ -76,7 +77,7 @@ public class TaskController {
     @PutMapping("/{taskId}/assignee")
     @PreAuthorize("@projectSecurity.hasTaskPermission(#taskId, 'TASK_EDIT')")
     public ResponseEntity<ApiResponse<TaskResponse>> assignTask(
-            @PathVariable("taskId") UUID taskId,
+            @PathVariable("taskId") @P("taskId") UUID taskId,
             @RequestBody com.datn.workservice.dto.request.AssignTaskRequest request,
             Principal principal) {
         UUID currentUserId = extractUserId(principal);
@@ -86,7 +87,7 @@ public class TaskController {
 
     @DeleteMapping("/{taskId}")
     @PreAuthorize("@projectSecurity.hasTaskPermission(#taskId, 'TASK_DELETE')")
-    public ResponseEntity<ApiResponse<Void>> deleteTask(@PathVariable("taskId") UUID taskId) {
+    public ResponseEntity<ApiResponse<Void>> deleteTask(@PathVariable("taskId") @P("taskId") UUID taskId) {
         taskService.deleteTask(taskId);
         return ResponseEntity.ok(ApiResponse.success(null, "Xóa tác vụ thành công"));
     }
