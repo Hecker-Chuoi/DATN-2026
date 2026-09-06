@@ -80,9 +80,17 @@ public class WorkItemResponse {
     private LocalDate dueDate;
     private LocalDateTime resolvedAt;
 
-    // Subtask counts
+    // Subtask counts & Roll-up
     private Integer subtaskCount;
     private Integer subtaskDoneCount;
+    private Long totalTimeSpentSeconds;
+    private Long totalRemainingEstimateSeconds;
+
+    // Timeline & Link Conflict Flags
+    private Boolean hasTimelineConflict;
+    private String timelineConflictMessage;
+    private Boolean isBlocked;
+    private Boolean hasDependencyConflict;
 
     // Labels
     private List<String> labels;

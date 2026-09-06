@@ -18,6 +18,7 @@ import {
 import toast from 'react-hot-toast';
 import { workItemApi, projectApi } from '../../api.js';
 import MemberSelect from '../common/MemberSelect.jsx';
+import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import { PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 
 const TYPE_CONFIGS = {
@@ -127,6 +128,8 @@ export default function CreateWorkItemModal({
     const errs = {};
     if (!summary.trim()) {
       errs.summary = 'Tiêu đề công việc không được để trống';
+    } else if (summary.trim().length > 500) {
+      errs.summary = 'Tiêu đề công việc tối đa 500 ký tự';
     }
     if (!selectedType?.id) {
       errs.typeId = 'Vui lòng chọn loại công việc';
@@ -136,6 +139,14 @@ export default function CreateWorkItemModal({
     }
     if (isEpic && parentId) {
       errs.parentId = 'Epic không thể có công việc cha';
+    }
+    if (storyPoints && !isSubtask && !isEpic) {
+      const spNum = parseFloat(storyPoints);
+      if (isNaN(spNum) || spNum < 0) {
+        errs.storyPoints = 'Điểm Story Points không thể âm';
+      } else if (spNum > 999.99) {
+        errs.storyPoints = 'Điểm Story Points tối đa 999.99';
+      }
     }
 
     if (Object.keys(errs).length > 0) {
@@ -153,7 +164,7 @@ export default function CreateWorkItemModal({
         priority,
         parentId: isEpic ? null : (parentId || null),
         assigneeId: assigneeId || null,
-        storyPoints: storyPoints ? parseFloat(storyPoints) : null,
+        storyPoints: isSubtask || isEpic ? null : (storyPoints ? parseFloat(storyPoints) : null),
         dueDate: dueDate || null,
       };
 
@@ -479,28 +490,67 @@ export default function CreateWorkItemModal({
 
             {/* Story Points */}
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                Story Points
-              </label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                max="100"
-                placeholder="VD: 5.0"
-                value={storyPoints}
-                onChange={(e) => setStoryPoints(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '7px 10px',
-                  borderRadius: 8,
-                  border: '1px solid #CBD5E1',
-                  fontSize: 13,
-                  color: '#0F172A',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', margin: 0 }}>
+                  Story Points
+                </label>
+                <StoryPointsHelpTooltip align="center" />
+              </div>
+              {isSubtask || isEpic ? (
+                <div>
+                  <input
+                    type="text"
+                    disabled
+                    value="N/A"
+                    style={{
+                      width: '100%',
+                      padding: '7px 10px',
+                      borderRadius: 8,
+                      border: '1px solid #E2E8F0',
+                      backgroundColor: '#F1F5F9',
+                      fontSize: 13,
+                      color: '#94A3B8',
+                      cursor: 'not-allowed',
+                      boxSizing: 'border-box',
+                    }}
+                    title={isEpic ? "Epic tính Story Points cuộn từ các Story con (Roll-up)" : "Sub-task không tính Story Points trực tiếp (ước lượng bằng Thời gian)"}
+                  />
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+                    {isEpic ? 'Epic tự động tính điểm từ các Story con' : 'Sub-task không tính Story Points trực tiếp'}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="100"
+                    placeholder="VD: 5.0"
+                    value={storyPoints}
+                    onChange={(e) => {
+                      setStoryPoints(e.target.value);
+                      if (errors.storyPoints) setErrors((prev) => ({ ...prev, storyPoints: undefined }));
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '7px 10px',
+                      borderRadius: 8,
+                      border: `1px solid ${errors.storyPoints ? '#EF4444' : '#CBD5E1'}`,
+                      fontSize: 13,
+                      color: '#0F172A',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  {errors.storyPoints && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#EF4444', fontSize: 11, marginTop: 4 }}>
+                      <AlertCircle size={12} />
+                      <span>{errors.storyPoints}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Assignee */}

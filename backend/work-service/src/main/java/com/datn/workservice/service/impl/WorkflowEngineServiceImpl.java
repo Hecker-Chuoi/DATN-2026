@@ -8,6 +8,7 @@ import com.datn.workservice.dto.model.WorkflowValidatorConfig;
 import com.datn.workservice.dto.request.ExecuteTransitionRequest;
 import com.datn.workservice.dto.response.AvailableTransitionResponse;
 import com.datn.workservice.entity.*;
+import com.datn.workservice.enums.LinkType;
 import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.enums.StatusCategory;
 import com.datn.workservice.enums.WorkItemResolution;
@@ -31,6 +32,7 @@ import java.util.*;
 public class WorkflowEngineServiceImpl implements WorkflowEngineService {
 
     private final WorkItemRepository workItemRepository;
+    private final WorkItemLinkRepository workItemLinkRepository;
     private final WorkflowRepository workflowRepository;
     private final WorkflowTransitionRepository workflowTransitionRepository;
     private final WorkflowSchemeRepository workflowSchemeRepository;
@@ -147,6 +149,68 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
         // 4. Run Validators
         Status toStatus = statusRepository.findById(transition.getToStatusId())
                 .orElseThrow(() -> new ResourceNotFoundException("Target Status not found: " + transition.getToStatusId()));
+
+        // 4a. Blocked Transition Guard (BLOCKS link restriction)
+        if (toStatus.getCategory() == StatusCategory.IN_PROGRESS || toStatus.getCategory() == StatusCategory.DONE) {
+            List<WorkItemLink> incomingBlocks = workItemLinkRepository.findByTargetItemIdAndLinkType(workItem.getId(), LinkType.BLOCKS);
+            if (!incomingBlocks.isEmpty()) {
+                List<String> activeBlockers = new ArrayList<>();
+                for (WorkItemLink link : incomingBlocks) {
+                    workItemRepository.findById(link.getSourceItemId()).ifPresent(blocker -> {
+                        if (blocker.getDeletedAt() == null) {
+                            Status blockerStatus = statusRepository.findById(blocker.getStatusId()).orElse(null);
+                            if (blockerStatus == null || blockerStatus.getCategory() != StatusCategory.DONE) {
+                                activeBlockers.add(blocker.getCode() + " - " + blocker.getSummary());
+                            }
+                        }
+                    });
+                }
+                if (!activeBlockers.isEmpty()) {
+                    throw new BadRequestException("Không thể chuyển sang trạng thái '" + toStatus.getName() + "' do công việc đang bị chặn bởi: " + String.join("; ", activeBlockers));
+                }
+            }
+        }
+
+        // 4b. Subtask & Descendant Blocking Guard & Cascading Resolve (when moving to DONE)
+        if (toStatus.getCategory() == StatusCategory.DONE) {
+            List<WorkItem> descendants = findAllDescendants(workItem.getId());
+            if (!descendants.isEmpty()) {
+                List<WorkItem> incompleteDescendants = descendants.stream()
+                        .filter(desc -> {
+                            Status descStatus = statusRepository.findById(desc.getStatusId()).orElse(null);
+                            return descStatus == null || descStatus.getCategory() != StatusCategory.DONE;
+                        })
+                        .toList();
+                if (!incompleteDescendants.isEmpty()) {
+                    if (request != null && Boolean.TRUE.equals(request.getResolveAllSubtasks())) {
+                        List<Status> doneStatuses = statusRepository.findByCategory(StatusCategory.DONE);
+                        Status defaultDone = !doneStatuses.isEmpty() ? doneStatuses.get(0) : toStatus;
+                        for (WorkItem desc : incompleteDescendants) {
+                            Status oldDescStatus = statusRepository.findById(desc.getStatusId()).orElse(null);
+                            desc.setStatusId(defaultDone.getId());
+                            desc.setResolution(WorkItemResolution.DONE);
+                            desc.setResolvedAt(LocalDateTime.now());
+                            workItemRepository.save(desc);
+                            if (currentUserId != null) {
+                                WorkItemChangelog descChangelog = WorkItemChangelog.builder()
+                                        .workItemId(desc.getId())
+                                        .fieldName("STATUS")
+                                        .oldValue(oldDescStatus != null ? oldDescStatus.getName() : null)
+                                        .newValue(defaultDone.getName())
+                                        .changedBy(currentUserId)
+                                        .changedAt(LocalDateTime.now())
+                                        .build();
+                                workItemChangelogRepository.save(descChangelog);
+                            }
+                        }
+                        log.info("Auto-resolved {} descendant work items for parent WorkItem '{}'", incompleteDescendants.size(), workItem.getCode());
+                    } else {
+                        throw new BadRequestException("Không thể hoàn thành công việc này vì còn " + incompleteDescendants.size() + " nhiệm vụ con (Sub-task) chưa hoàn thành");
+                    }
+                }
+            }
+        }
+
         executeValidators(transition.getValidatorsConfig(), workItem, request, toStatus);
 
         // 5. Update Status & Resolution
@@ -180,6 +244,10 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                 toStatus.getName(),
                 transition.getName(),
                 currentUserId);
+
+        // 8. Cascade Ancestor Status Transitions (Auto-reopen on active child & Auto-start on IN_PROGRESS)
+        cascadeAncestorStatusTransitions(workItem, toStatus, currentUserId);
+
         return saved;
     }
 
@@ -249,11 +317,13 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
 
             switch (type) {
                 case "ALL_SUBTASKS_DONE" -> {
-                    List<WorkItem> subtasks = workItemRepository.findByParentId(workItem.getId());
-                    if (subtasks != null && !subtasks.isEmpty()) {
-                        long incomplete = subtasks.stream()
-                                .filter(st -> st.getDeletedAt() == null)
-                                .map(st -> statusRepository.findById(st.getStatusId()).orElse(null))
+                    if (request != null && Boolean.TRUE.equals(request.getResolveAllSubtasks())) {
+                        break;
+                    }
+                    List<WorkItem> descendants = findAllDescendants(workItem.getId());
+                    if (!descendants.isEmpty()) {
+                        long incomplete = descendants.stream()
+                                .map(desc -> statusRepository.findById(desc.getStatusId()).orElse(null))
                                 .filter(stStatus -> stStatus == null || stStatus.getCategory() != StatusCategory.DONE)
                                 .count();
                         if (incomplete > 0) {
@@ -377,6 +447,147 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
         } catch (Exception e) {
             log.warn("Failed to parse JSONB workflow config: {}", e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Cascades status changes recursively up the hierarchy (Subtask -> Story/Task -> Epic):
+     * 1. Cascade Reopen (Reverse Roll-up): If a child work item is not DONE (e.g. IN_PROGRESS or TODO)
+     *    and an ancestor (parent Story/Task or grandparent Epic) is currently in DONE,
+     *    that ancestor CANNOT remain DONE (an issue cannot be completed if its children are incomplete).
+     *    The ancestor is automatically reopened (moved to IN_PROGRESS), its resolution and resolvedAt are cleared,
+     *    and audit changelog is recorded.
+     * 2. Auto-start Ancestors: If child moves to IN_PROGRESS and an ancestor is in TODO,
+     *    the ancestor is automatically transitioned to IN_PROGRESS.
+     */
+    private void cascadeAncestorStatusTransitions(WorkItem workItem, Status toStatus, UUID currentUserId) {
+        if (workItem.getParentId() == null) {
+            return;
+        }
+
+        UUID currentParentId = workItem.getParentId();
+        WorkItem triggerItem = workItem;
+        Set<UUID> visited = new HashSet<>();
+
+        while (currentParentId != null && visited.add(currentParentId)) {
+            WorkItem parent = workItemRepository.findById(currentParentId).orElse(null);
+            if (parent == null || parent.getDeletedAt() != null) {
+                break;
+            }
+
+            Status parentStatus = statusRepository.findById(parent.getStatusId()).orElse(null);
+            if (parentStatus != null) {
+                // Rule 1: Descendant is not DONE (e.g. reopened to IN_PROGRESS or TODO), but ancestor is DONE
+                if (toStatus.getCategory() != StatusCategory.DONE && parentStatus.getCategory() == StatusCategory.DONE) {
+                    Status targetReopenStatus = resolveInProgressOrActiveStatus(parent);
+                    if (targetReopenStatus != null) {
+                        String oldStatusName = parentStatus.getName();
+                        WorkItemResolution oldResolution = parent.getResolution();
+
+                        parent.setStatusId(targetReopenStatus.getId());
+                        parent.setResolution(null);
+                        parent.setResolvedAt(null);
+                        workItemRepository.save(parent);
+
+                        if (currentUserId != null) {
+                            WorkItemChangelog statusChangelog = WorkItemChangelog.builder()
+                                    .workItemId(parent.getId())
+                                    .fieldName("STATUS")
+                                    .oldValue(oldStatusName)
+                                    .newValue(targetReopenStatus.getName())
+                                    .changedBy(currentUserId)
+                                    .changedAt(LocalDateTime.now())
+                                    .build();
+                            workItemChangelogRepository.save(statusChangelog);
+
+                            if (oldResolution != null) {
+                                WorkItemChangelog resChangelog = WorkItemChangelog.builder()
+                                        .workItemId(parent.getId())
+                                        .fieldName("RESOLUTION")
+                                        .oldValue(oldResolution.name())
+                                        .newValue(null)
+                                        .changedBy(currentUserId)
+                                        .changedAt(LocalDateTime.now())
+                                        .build();
+                                workItemChangelogRepository.save(resChangelog);
+                            }
+                        }
+                        log.info("Cascading reopen: Ancestor WorkItem '{}' automatically reopened from '{}' to '{}' because descendant '{}' is in non-DONE status '{}'",
+                                parent.getCode(), oldStatusName, targetReopenStatus.getName(), triggerItem.getCode(), toStatus.getName());
+                    }
+                }
+                // Rule 2: Descendant moved to IN_PROGRESS, but ancestor is still in TODO
+                else if (toStatus.getCategory() == StatusCategory.IN_PROGRESS && parentStatus.getCategory() == StatusCategory.TODO) {
+                    Status targetStartStatus = resolveInProgressOrActiveStatus(parent);
+                    if (targetStartStatus != null) {
+                        String oldStatusName = parentStatus.getName();
+                        parent.setStatusId(targetStartStatus.getId());
+                        workItemRepository.save(parent);
+
+                        if (currentUserId != null) {
+                            WorkItemChangelog statusChangelog = WorkItemChangelog.builder()
+                                    .workItemId(parent.getId())
+                                    .fieldName("STATUS")
+                                    .oldValue(oldStatusName)
+                                    .newValue(targetStartStatus.getName())
+                                    .changedBy(currentUserId)
+                                    .changedAt(LocalDateTime.now())
+                                    .build();
+                            workItemChangelogRepository.save(statusChangelog);
+                        }
+                        log.info("Auto-transitioned ancestor WorkItem '{}' from '{}' to '{}' because descendant '{}' moved to IN_PROGRESS",
+                                parent.getCode(), oldStatusName, targetStartStatus.getName(), triggerItem.getCode());
+                    }
+                }
+            }
+
+            // Ascend to next level in hierarchy (e.g. Subtask -> Story -> Epic)
+            triggerItem = parent;
+            currentParentId = parent.getParentId();
+        }
+    }
+
+    private Status resolveInProgressOrActiveStatus(WorkItem item) {
+        // 1. Try to find an IN_PROGRESS status from item's workflow
+        try {
+            Workflow workflow = resolveWorkflow(item.getProjectId(), item.getTypeId());
+            List<WorkflowTransition> transitions = workflowTransitionRepository.findByWorkflowId(workflow.getId());
+            for (WorkflowTransition t : transitions) {
+                Status s = statusRepository.findById(t.getToStatusId()).orElse(null);
+                if (s != null && s.getCategory() == StatusCategory.IN_PROGRESS) {
+                    return s;
+                }
+            }
+        } catch (Exception ignored) {
+            // Fallback below
+        }
+
+        // 2. Global fallback to any IN_PROGRESS status
+        List<Status> inProgressList = statusRepository.findByCategory(StatusCategory.IN_PROGRESS);
+        if (!inProgressList.isEmpty()) {
+            return inProgressList.get(0);
+        }
+
+        // 3. Fallback to TODO if no IN_PROGRESS exists
+        List<Status> todoList = statusRepository.findByCategory(StatusCategory.TODO);
+        return !todoList.isEmpty() ? todoList.get(0) : null;
+    }
+
+    private List<WorkItem> findAllDescendants(UUID rootId) {
+        List<WorkItem> descendants = new ArrayList<>();
+        collectDescendants(rootId, descendants);
+        return descendants;
+    }
+
+    private void collectDescendants(UUID parentId, List<WorkItem> acc) {
+        List<WorkItem> children = workItemRepository.findByParentId(parentId);
+        if (children != null && !children.isEmpty()) {
+            for (WorkItem child : children) {
+                if (child.getDeletedAt() == null) {
+                    acc.add(child);
+                    collectDescendants(child.getId(), acc);
+                }
+            }
         }
     }
 }

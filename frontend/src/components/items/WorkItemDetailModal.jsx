@@ -34,11 +34,15 @@ import {
   FileArchive,
   Code as CodeIcon,
   Search,
-  Check
+  Check,
+  AlertTriangle,
+  Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workItemApi } from '../../api.js';
 import MemberSelect from '../common/MemberSelect.jsx';
+import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
+import ResolveSubtasksModal from '../modals/ResolveSubtasksModal.jsx';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 
 const TYPE_ICONS = {
@@ -64,6 +68,9 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
+  const [showResolveSubtasksModal, setShowResolveSubtasksModal] = useState(false);
+  const [pendingTransitionId, setPendingTransitionId] = useState(null);
+  const [isResolvingSubtasks, setIsResolvingSubtasks] = useState(false);
 
   // Collaboration state
   const [comments, setComments] = useState([]);
@@ -209,13 +216,18 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
     }
   };
 
-  const handleExecuteTransition = async (transitionId) => {
+  const handleExecuteTransition = async (transitionId, resolveAllSubtasks = false) => {
     if (!transitionId) return;
     try {
+      if (resolveAllSubtasks) {
+        setIsResolvingSubtasks(true);
+      }
       setShowStatusDropdown(false);
-      const res = await workItemApi.executeTransition(currentId, transitionId, { comment: '' });
+      const res = await workItemApi.executeTransition(currentId, transitionId, { comment: '', resolveAllSubtasks });
       if (res && res.data) {
-        toast.success('Đã chuyển trạng thái thành công');
+        toast.success(resolveAllSubtasks ? 'Đã hoàn thành tất cả nhiệm vụ con và công việc cha!' : 'Đã chuyển trạng thái thành công');
+        setShowResolveSubtasksModal(false);
+        setPendingTransitionId(null);
         fetchDetail(currentId);
         fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
@@ -223,6 +235,8 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
     } catch (err) {
       console.error('Failed to transition item:', err);
       toast.error(err.response?.data?.message || err.message || 'Không thể chuyển trạng thái');
+    } finally {
+      setIsResolvingSubtasks(false);
     }
   };
 
@@ -419,8 +433,15 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
         size: 10,
       });
       const list = res?.data?.content || res?.data || [];
-      // Exclude current item
-      setLinkSearchResults(list.filter((it) => it.id !== currentId));
+      // Exclude: current item, parent item, and direct subtasks/children (Anti-Self-Parent rule)
+      const filtered = list.filter((it) => {
+        if (it.id === currentId) return false;
+        if (item?.parentId && it.id === item.parentId) return false;
+        if (item?.subtasks?.some((st) => st.id === it.id)) return false;
+        if (item?.childStories?.some((cs) => cs.id === it.id)) return false;
+        return true;
+      });
+      setLinkSearchResults(filtered);
     } catch (err) {
       console.debug('Failed to search link candidates:', err);
     } finally {
@@ -433,6 +454,18 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
       toast.error('Vui lòng chọn một công việc để liên kết');
       return;
     }
+
+    // Scale Mismatch check for BLOCKS between Epic and Subtask
+    const isCurrentEpic = item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC';
+    const isCurrentSubtask = item?.hierarchyLevel === -1 || item?.isSubtask || item?.typeCode === 'SUBTASK';
+    const isTargetEpic = selectedTargetItem?.hierarchyLevel === 1 || selectedTargetItem?.typeCode === 'EPIC';
+    const isTargetSubtask = selectedTargetItem?.hierarchyLevel === -1 || selectedTargetItem?.isSubtask || selectedTargetItem?.typeCode === 'SUBTASK';
+
+    if (linkRelationType === 'BLOCKS' && ((isCurrentEpic && isTargetSubtask) || (isCurrentSubtask && isTargetEpic))) {
+      toast.error('Không thể tạo liên kết BLOCKS trực tiếp giữa Epic và Sub-task (Scale Mismatch). Vui lòng liên kết ở cấp độ Story/Task.');
+      return;
+    }
+
     setIsCreatingLink(true);
     try {
       await workItemApi.createLink(currentId, {
@@ -679,9 +712,134 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 borderRight: '1px solid #E2E8F0',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 24,
+                gap: 20,
               }}
             >
+              {/* ─── Warning Banners ─── */}
+              {item?.isBlocked && (
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#FEF2F2',
+                    border: '1px solid #FCA5A5',
+                    borderRadius: 8,
+                    color: '#991B1B',
+                    fontSize: 13,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
+                    <Lock size={16} color="#DC2626" />
+                    <span>CÔNG VIỆC BỊ CẢN TRỞ (BLOCKED)</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#B91C1C', lineHeight: 1.5 }}>
+                    Công việc này không thể chuyển sang <strong>In Progress</strong> hoặc <strong>Done</strong> vì đang bị chặn bởi các công việc chưa hoàn thành:
+                  </div>
+                  {item?.blockingWorkItems && item.blockingWorkItems.length > 0 && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                      {item.blockingWorkItems.map((b) => (
+                        <span
+                          key={b.id}
+                          onClick={() => setCurrentId(b.id)}
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            backgroundColor: '#FFFFFF',
+                            border: '1px solid #FECACA',
+                            color: '#B91C1C',
+                            fontWeight: 600,
+                            fontSize: 12,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                          title={`Mở công việc cản trở: ${b.summary}`}
+                        >
+                          <Lock size={11} />
+                          <span>[{b.code}] {b.summary}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {item?.hasTimelineConflict && (
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#FFFBEB',
+                    border: '1px solid #FCD34D',
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    color: '#92400E',
+                    fontSize: 13,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <AlertTriangle size={18} color="#D97706" style={{ flexShrink: 0 }} />
+                    <div>
+                      <strong>Cảnh báo lệch hạn: </strong>
+                      <span>{item.timelineConflictMessage || 'Hạn chót của công việc con vượt quá hạn chót của công việc cha'}</span>
+                    </div>
+                  </div>
+                  {item?.parentId && item?.parent?.dueDate && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await workItemApi.update(currentId, { dueDate: item.parent.dueDate });
+                          toast.success(`Đã đồng bộ hạn chót về Task cha (${item.parent.dueDate})`);
+                          fetchDetail(currentId);
+                          fetchChangelogs(currentId);
+                        } catch (err) {
+                          toast.error('Lỗi khi đồng bộ hạn chót');
+                        }
+                      }}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: 6,
+                        border: '1px solid #F59E0B',
+                        backgroundColor: '#FFFFFF',
+                        color: '#B45309',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                      }}
+                    >
+                      Đồng bộ hạn về Task cha ({item.parent.dueDate})
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {item?.hasDependencyConflict && (
+                <div
+                  style={{
+                    padding: '10px 16px',
+                    backgroundColor: '#EFF6FF',
+                    border: '1px solid #BFDBFE',
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    color: '#1E40AF',
+                    fontSize: 13,
+                  }}
+                >
+                  <AlertCircle size={17} color="#2563EB" style={{ flexShrink: 0 }} />
+                  <span>{item.dependencyConflictMessage || 'Xung đột thời gian: Blocker kết thúc sau ngày bắt đầu dự kiến của công việc này'}</span>
+                </div>
+              )}
+
               {/* Summary */}
               <div>
                 {isEditingSummary ? (
@@ -934,165 +1092,257 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 </div>
               )}
 
-              {/* Sub-tasks Section */}
-              <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Sub-tasks</span>
-                    {subtaskTotal > 0 && (
-                      <span style={{ fontSize: 12, color: '#64748B' }}>
-                        {subtaskDone} of {subtaskTotal} completed ({Math.round(progressPercent)}%)
-                      </span>
-                    )}
-                  </div>
-                  {!isAddingSubtask && (
-                    <button
-                      onClick={() => setIsAddingSubtask(true)}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: '#2563EB',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      <Plus size={14} />
-                      <span>Thêm Subtask</span>
-                    </button>
-                  )}
-                </div>
-
-                {subtaskTotal > 0 && (
-                  <div
-                    style={{
-                      height: 6,
-                      backgroundColor: '#E2E8F0',
-                      borderRadius: 3,
-                      overflow: 'hidden',
-                      marginBottom: 12,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${progressPercent}%`,
-                        height: '100%',
-                        backgroundColor: '#10B981',
-                        transition: 'width 0.3s ease',
-                      }}
-                    />
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {item?.subtasks?.map((sub) => {
-                    const isDone = sub.statusCategory === 'DONE';
-                    return (
-                      <div
-                        key={sub.id}
+              {/* Sub-tasks Section (Only for Level 0 Standard items, not Epics) */}
+              {(item?.hierarchyLevel !== 1 && item?.typeCode !== 'EPIC') && (
+                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Sub-tasks</span>
+                      {subtaskTotal > 0 && (
+                        <span style={{ fontSize: 12, color: '#64748B' }}>
+                          {subtaskDone} of {subtaskTotal} completed ({Math.round(progressPercent)}%)
+                        </span>
+                      )}
+                    </div>
+                    {!isAddingSubtask && (
+                      <button
+                        onClick={() => setIsAddingSubtask(true)}
                         style={{
+                          border: 'none',
+                          background: 'transparent',
+                          color: '#2563EB',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '8px 12px',
-                          backgroundColor: '#F8FAFC',
-                          borderRadius: 6,
-                          border: '1px solid #E2E8F0',
-                          fontSize: 13,
+                          gap: 4,
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <CheckCircle2
-                            size={16}
-                            color={isDone ? '#10B981' : '#94A3B8'}
-                            style={{ cursor: 'pointer' }}
-                          />
-                          <span
-                            onClick={() => setCurrentId(sub.id)}
-                            style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', cursor: 'pointer' }}
-                          >
-                            {sub.code}
-                          </span>
-                          <span
-                            style={{
-                              color: isDone ? '#94A3B8' : '#0F172A',
-                              textDecoration: isDone ? 'line-through' : 'none',
-                            }}
-                          >
-                            {sub.summary}
-                          </span>
-                        </div>
-                        <span
+                        <Plus size={14} />
+                        <span>Thêm Subtask</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {subtaskTotal > 0 && (
+                    <div
+                      style={{
+                        height: 6,
+                        backgroundColor: '#E2E8F0',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        marginBottom: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${progressPercent}%`,
+                          height: '100%',
+                          backgroundColor: '#10B981',
+                          transition: 'width 0.3s ease',
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {item?.subtasks?.map((sub) => {
+                      const isDone = sub.statusCategory === 'DONE';
+                      return (
+                        <div
+                          key={sub.id}
                           style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            padding: '2px 8px',
-                            borderRadius: 4,
-                            backgroundColor: sub.statusColorHex ? `${sub.statusColorHex}15` : '#EFF6FF',
-                            color: sub.statusColorHex || '#2563EB',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '8px 12px',
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: 6,
+                            border: '1px solid #E2E8F0',
+                            fontSize: 13,
                           }}
                         >
-                          {sub.statusName || 'TO DO'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <CheckCircle2
+                              size={16}
+                              color={isDone ? '#10B981' : '#94A3B8'}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            <span
+                              onClick={() => setCurrentId(sub.id)}
+                              style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', cursor: 'pointer' }}
+                            >
+                              {sub.code}
+                            </span>
+                            <span
+                              style={{
+                                color: isDone ? '#94A3B8' : '#0F172A',
+                                textDecoration: isDone ? 'line-through' : 'none',
+                              }}
+                            >
+                              {sub.summary}
+                            </span>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              backgroundColor: sub.statusColorHex ? `${sub.statusColorHex}20` : '#E2E8F0',
+                              color: sub.statusColorHex || '#475569',
+                            }}
+                          >
+                            {sub.statusName}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                {isAddingSubtask && (
-                  <form onSubmit={handleAddSubtask} style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                    <input
-                      type="text"
-                      value={newSubtaskTitle}
-                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                      placeholder="Nhập tiêu đề Sub-task..."
-                      autoFocus
-                      style={{
-                        flex: 1,
-                        fontSize: 13,
-                        padding: '6px 10px',
-                        borderRadius: 6,
-                        border: '1px solid #2563EB',
-                        outline: 'none',
-                      }}
-                    />
-                    <button
-                      type="submit"
-                      style={{
-                        backgroundColor: '#2563EB',
-                        color: '#FFFFFF',
-                        border: 'none',
-                        padding: '6px 14px',
-                        borderRadius: 6,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Tạo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingSubtask(false)}
-                      style={{
-                        backgroundColor: '#F1F5F9',
-                        color: '#475569',
-                        border: 'none',
-                        padding: '6px 14px',
-                        borderRadius: 6,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Hủy
-                    </button>
-                  </form>
-                )}
-              </div>
+                  {isAddingSubtask && (
+                    <form onSubmit={handleAddSubtask} style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                      <input
+                        type="text"
+                        value={newSubtaskTitle}
+                        onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                        placeholder="Nhập tiêu đề Sub-task..."
+                        autoFocus
+                        style={{
+                          flex: 1,
+                          fontSize: 13,
+                          padding: '6px 10px',
+                          borderRadius: 6,
+                          border: '1px solid #2563EB',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        style={{
+                          backgroundColor: '#2563EB',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          padding: '6px 14px',
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Tạo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingSubtask(false)}
+                        style={{
+                          backgroundColor: '#F1F5F9',
+                          color: '#475569',
+                          border: 'none',
+                          padding: '6px 14px',
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Hủy
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* ─── Epic Child Stories & Progress (Step 5.5) ─── */}
+              {(item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC') && (
+                <div style={{ border: '1px solid #E9D5FF', backgroundColor: '#FAF5FF', borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Bookmark size={16} color="#6554C0" />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#581C87' }}>
+                        Child Stories trong Epic ({item?.childStories?.length || 0})
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#6554C0' }}>
+                      {item?.doneStoryPoints || 0} / {item?.totalStoryPoints || 0} Story Points hoàn thành
+                    </div>
+                  </div>
+
+                  {/* Epic Progress Bar */}
+                  {item?.totalStoryPoints > 0 && (
+                    <div style={{ width: '100%', height: 6, backgroundColor: '#E9D5FF', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
+                      <div
+                        style={{
+                          width: `${Math.min(100, Math.round(((item.doneStoryPoints || 0) / item.totalStoryPoints) * 100))}%`,
+                          height: '100%',
+                          backgroundColor: '#6554C0',
+                          transition: 'width 0.3s ease',
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Child Stories List */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {item?.childStories && item.childStories.length > 0 ? (
+                      item.childStories.map((cs) => {
+                        const isDone = cs.statusCategory === 'DONE';
+                        return (
+                          <div
+                            key={cs.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '8px 12px',
+                              backgroundColor: '#FFFFFF',
+                              borderRadius: 6,
+                              border: '1px solid #E9D5FF',
+                              fontSize: 13,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span
+                                onClick={() => setCurrentId(cs.id)}
+                                style={{ fontSize: 12, fontWeight: 700, color: '#6554C0', cursor: 'pointer' }}
+                              >
+                                {cs.code}
+                              </span>
+                              <span style={{ color: isDone ? '#94A3B8' : '#0F172A', textDecoration: isDone ? 'line-through' : 'none' }}>
+                                {cs.summary}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {cs.storyPoints != null && (
+                                <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4, backgroundColor: '#F3F0FF', color: '#6554C0' }}>
+                                  {cs.storyPoints} SP
+                                </span>
+                              )}
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  padding: '2px 8px',
+                                  borderRadius: 4,
+                                  backgroundColor: cs.statusColorHex ? `${cs.statusColorHex}15` : '#EFF6FF',
+                                  color: cs.statusColorHex || '#2563EB',
+                                }}
+                              >
+                                {cs.statusName || 'TO DO'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div style={{ fontSize: 12, color: '#7E22CE', fontStyle: 'italic' }}>
+                        Chưa có Story/Task con nào được gắn vào Epic này.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* ─── Activity Tabs (Comments, Attachments, History) ─── */}
               <div style={{ marginTop: 8 }}>
@@ -1691,10 +1941,24 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       {item?.availableTransitions?.length > 0 ? (
                         item.availableTransitions.map((t) => {
                           const tId = t.transitionId || t.id;
+                          const isDoneTransition = t.toStatusCategory === 'DONE' || t.toStatusName?.toUpperCase() === 'DONE';
+                          const incompleteDescendants = (item?.descendants && item.descendants.length > 0 ? item.descendants : (item?.subtasks || [])).filter(
+                            (st) => st.statusCategory !== 'DONE'
+                          );
+                          const hasIncompleteSubtasks = incompleteDescendants.length > 0;
+
                           return (
                             <div
                               key={tId}
-                              onClick={() => handleExecuteTransition(tId)}
+                              onClick={() => {
+                                if (isDoneTransition && hasIncompleteSubtasks) {
+                                  setShowStatusDropdown(false);
+                                  setPendingTransitionId(tId);
+                                  setShowResolveSubtasksModal(true);
+                                } else {
+                                  handleExecuteTransition(tId, false);
+                                }
+                              }}
                               style={{
                                 padding: '8px 12px',
                                 fontSize: 13,
@@ -1867,26 +2131,109 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
               {/* Story Points */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Story Points</span>
-                <input
-                  type="number"
-                  step="0.5"
-                  defaultValue={item?.storyPoints || ''}
-                  onBlur={(e) => handleUpdateStoryPoints(e.target.value)}
-                  placeholder="0"
-                  style={{
-                    width: '100%',
-                    marginTop: 6,
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: '#0F172A',
-                    outline: 'none',
-                    backgroundColor: '#FFFFFF',
-                  }}
-                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Story Points</span>
+                  <StoryPointsHelpTooltip size={12} align="sidebar" />
+                </div>
+                {item?.hierarchyLevel === -1 || item?.isSubtask || item?.typeCode === 'SUBTASK' ? (
+                  <div>
+                    <input
+                      type="text"
+                      disabled
+                      value="N/A"
+                      title="Sub-task không tính Story Points trực tiếp"
+                      style={{
+                        width: '100%',
+                        marginTop: 6,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '1px solid #E2E8F0',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#94A3B8',
+                        backgroundColor: '#F1F5F9',
+                        cursor: 'not-allowed',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+                      Sub-task không tính Story Points
+                    </div>
+                  </div>
+                ) : item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC' ? (
+                  <div>
+                    <input
+                      type="text"
+                      disabled
+                      value={`${item?.doneStoryPoints || 0} / ${item?.totalStoryPoints || 0} pts`}
+                      title="Epic tự động cuộn tổng Story Points từ các Story con"
+                      style={{
+                        width: '100%',
+                        marginTop: 6,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '1px solid #E2E8F0',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#6554C0',
+                        backgroundColor: '#F3F0FF',
+                        cursor: 'not-allowed',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <div style={{ fontSize: 11, color: '#6554C0', marginTop: 4 }}>
+                      Roll-up tự động từ các Story con
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type="number"
+                    step="0.5"
+                    defaultValue={item?.storyPoints || ''}
+                    onBlur={(e) => handleUpdateStoryPoints(e.target.value)}
+                    placeholder="0"
+                    style={{
+                      width: '100%',
+                      marginTop: 6,
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '1px solid #CBD5E1',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      outline: 'none',
+                      backgroundColor: '#FFFFFF',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Time Tracking Section (Step 5.5 Roll-up) */}
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Time Tracking</span>
+                <div style={{ marginTop: 6, padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: 6, border: '1px solid #E2E8F0', fontSize: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ color: '#64748B' }}>Đã làm (Logged):</span>
+                    <strong style={{ color: '#0F172A' }}>
+                      {Math.round(((item?.timeSpentSeconds || 0) / 3600) * 10) / 10}h
+                    </strong>
+                  </div>
+                  {item?.subtasks && item.subtasks.length > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: '#0284C7' }}>
+                      <span>Tổng cuộn (Gồm Sub-tasks):</span>
+                      <strong>
+                        {Math.round(((item?.totalTimeSpentSeconds || 0) / 3600) * 10) / 10}h
+                      </strong>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B' }}>Còn lại (Remaining):</span>
+                    <strong style={{ color: '#0F172A' }}>
+                      {Math.round(((item?.remainingEstimateSeconds || 0) / 3600) * 10) / 10}h
+                    </strong>
+                  </div>
+                </div>
               </div>
 
               {/* Sprint info */}
@@ -2102,6 +2449,21 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
             </div>
           </div>
         )}
+
+        {/* ─── Resolve Subtasks Modal (Step 5.5) ─── */}
+        <ResolveSubtasksModal
+          isOpen={showResolveSubtasksModal}
+          parentCode={item?.code}
+          parentSummary={item?.summary}
+          parentHierarchyLevel={item?.hierarchyLevel}
+          subtasks={item?.descendants && item.descendants.length > 0 ? item.descendants : (item?.subtasks || [])}
+          loading={isResolvingSubtasks}
+          onConfirm={() => handleExecuteTransition(pendingTransitionId, true)}
+          onCancel={() => {
+            setShowResolveSubtasksModal(false);
+            setPendingTransitionId(null);
+          }}
+        />
       </div>
     </div>
   );

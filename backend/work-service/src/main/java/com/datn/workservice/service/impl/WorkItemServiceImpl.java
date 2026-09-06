@@ -10,6 +10,7 @@ import com.datn.workservice.dto.response.AvailableTransitionResponse;
 import com.datn.workservice.dto.response.WorkItemDetailResponse;
 import com.datn.workservice.dto.response.WorkItemResponse;
 import com.datn.workservice.entity.*;
+import com.datn.workservice.enums.LinkType;
 import com.datn.workservice.enums.StatusCategory;
 import com.datn.workservice.enums.WorkItemPriority;
 import com.datn.workservice.repository.*;
@@ -25,6 +26,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -35,6 +37,7 @@ import java.util.stream.Collectors;
 public class WorkItemServiceImpl implements WorkItemService {
 
     private final WorkItemRepository workItemRepository;
+    private final WorkItemLinkRepository workItemLinkRepository;
     private final ProjectRepository projectRepository;
     private final WorkItemTypeRepository workItemTypeRepository;
     private final StatusRepository statusRepository;
@@ -315,6 +318,19 @@ public class WorkItemServiceImpl implements WorkItemService {
 
         WorkItem saved = workItemRepository.save(item);
 
+        // Cascading Sprint: When parent sprint changes, cascade sprintId to all subtasks
+        if (!Objects.equals(saved.getSprintId(), oldState.getSprintId())) {
+            List<WorkItem> subtasks = workItemRepository.findByParentId(saved.getId());
+            for (WorkItem subtask : subtasks) {
+                if (subtask.getDeletedAt() == null && !Objects.equals(subtask.getSprintId(), saved.getSprintId())) {
+                    subtask.setSprintId(saved.getSprintId());
+                    workItemRepository.save(subtask);
+                    log.info("Cascaded sprint '{}' to subtask '{}' from parent '{}'",
+                            saved.getSprintId(), subtask.getCode(), saved.getCode());
+                }
+            }
+        }
+
         // Record diff in audit trail
         workItemAuditService.recordDiff(oldState, saved, userId);
 
@@ -417,14 +433,71 @@ public class WorkItemServiceImpl implements WorkItemService {
             }
         }
 
+        // Subtask counts & Roll-up
         List<WorkItem> subtasks = workItemRepository.findByParentId(item.getId());
-        int subtaskCount = subtasks.size();
+        int subtaskCount = 0;
         int subtaskDoneCount = 0;
+        long totalTimeSpent = item.getTimeSpentSeconds() != null ? item.getTimeSpentSeconds() : 0L;
+        long totalRemaining = item.getRemainingEstimateSeconds() != null ? item.getRemainingEstimateSeconds() : 0L;
+        boolean hasTimelineConflict = false;
+        String timelineConflictMessage = null;
+
         for (WorkItem sub : subtasks) {
+            if (sub.getDeletedAt() != null) continue;
+            subtaskCount++;
             Status subStatus = statusRepository.findById(sub.getStatusId()).orElse(null);
             if (subStatus != null && subStatus.getCategory() == StatusCategory.DONE) {
                 subtaskDoneCount++;
             }
+            if (sub.getTimeSpentSeconds() != null) {
+                totalTimeSpent += sub.getTimeSpentSeconds();
+            }
+            if (sub.getRemainingEstimateSeconds() != null) {
+                totalRemaining += sub.getRemainingEstimateSeconds();
+            }
+            if (sub.getDueDate() != null && item.getDueDate() != null && sub.getDueDate().isAfter(item.getDueDate())) {
+                hasTimelineConflict = true;
+                timelineConflictMessage = "Có nhiệm vụ con có hạn chót (" + sub.getDueDate() + ") trễ hơn hạn chót của công việc này (" + item.getDueDate() + ")";
+            }
+        }
+
+        if (item.getParentId() != null && item.getDueDate() != null) {
+            WorkItem parent = workItemRepository.findById(item.getParentId()).orElse(null);
+            if (parent != null && parent.getDueDate() != null && item.getDueDate().isAfter(parent.getDueDate())) {
+                hasTimelineConflict = true;
+                timelineConflictMessage = "Hạn chót (" + item.getDueDate() + ") vượt quá hạn chót của công việc Cha (" + parent.getDueDate() + ")";
+            }
+        }
+
+        // Links: Blocked & Dependency Conflict
+        boolean isBlocked = false;
+        boolean hasDependencyConflict = false;
+        List<WorkItemLink> incomingBlocks = workItemLinkRepository.findByTargetItemIdAndLinkType(item.getId(), LinkType.BLOCKS);
+        if (incomingBlocks != null && !incomingBlocks.isEmpty()) {
+            for (WorkItemLink link : incomingBlocks) {
+                WorkItem blocker = workItemRepository.findById(link.getSourceItemId()).orElse(null);
+                if (blocker != null && blocker.getDeletedAt() == null) {
+                    Status blockerStatus = statusRepository.findById(blocker.getStatusId()).orElse(null);
+                    if (blockerStatus == null || blockerStatus.getCategory() != StatusCategory.DONE) {
+                        isBlocked = true;
+                    }
+                    if (blocker.getDueDate() != null) {
+                        if (item.getStartDate() != null && blocker.getDueDate().isAfter(item.getStartDate())) {
+                            hasDependencyConflict = true;
+                        } else if (item.getDueDate() != null && blocker.getDueDate().isAfter(item.getDueDate())) {
+                            hasDependencyConflict = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Labels
+        List<String> labelNames = Collections.emptyList();
+        List<WorkItemLabelMap> labelMaps = workItemLabelMapRepository.findByWorkItemId(item.getId());
+        if (!labelMaps.isEmpty()) {
+            List<UUID> labelIds = labelMaps.stream().map(WorkItemLabelMap::getLabelId).toList();
+            labelNames = labelRepository.findAllById(labelIds).stream().map(Label::getName).toList();
         }
 
         return WorkItemResponse.builder()
@@ -467,6 +540,13 @@ public class WorkItemServiceImpl implements WorkItemService {
                 .resolvedAt(item.getResolvedAt())
                 .subtaskCount(subtaskCount)
                 .subtaskDoneCount(subtaskDoneCount)
+                .totalTimeSpentSeconds(totalTimeSpent)
+                .totalRemainingEstimateSeconds(totalRemaining)
+                .hasTimelineConflict(hasTimelineConflict)
+                .timelineConflictMessage(timelineConflictMessage)
+                .isBlocked(isBlocked)
+                .hasDependencyConflict(hasDependencyConflict)
+                .labels(labelNames)
                 .version(item.getVersion())
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())
@@ -484,7 +564,67 @@ public class WorkItemServiceImpl implements WorkItemService {
             }
         }
 
-        List<WorkItemResponse> subtasks = listSubtasks(item.getId());
+        List<WorkItemResponse> subtasks = Collections.emptyList();
+        List<WorkItemResponse> childStories = Collections.emptyList();
+        List<WorkItemResponse> descendants = new ArrayList<>();
+
+        // Blocking work items list & dependency conflict message
+        List<WorkItemResponse> blockingWorkItems = new ArrayList<>();
+        String dependencyConflictMessage = null;
+        List<WorkItemLink> incomingBlocks = workItemLinkRepository.findByTargetItemIdAndLinkType(item.getId(), LinkType.BLOCKS);
+        if (incomingBlocks != null && !incomingBlocks.isEmpty()) {
+            for (WorkItemLink link : incomingBlocks) {
+                WorkItem blocker = workItemRepository.findById(link.getSourceItemId()).orElse(null);
+                if (blocker != null && blocker.getDeletedAt() == null) {
+                    Status blockerStatus = statusRepository.findById(blocker.getStatusId()).orElse(null);
+                    if (blockerStatus == null || blockerStatus.getCategory() != StatusCategory.DONE) {
+                        blockingWorkItems.add(mapToSummaryResponse(blocker));
+                    }
+                    if (blocker.getDueDate() != null) {
+                        if (item.getStartDate() != null && blocker.getDueDate().isAfter(item.getStartDate())) {
+                            dependencyConflictMessage = "Xung đột phụ thuộc: Blocker " + blocker.getCode() + " kết thúc (" + blocker.getDueDate() + ") sau ngày bắt đầu dự kiến (" + item.getStartDate() + ")";
+                        } else if (item.getDueDate() != null && blocker.getDueDate().isAfter(item.getDueDate())) {
+                            dependencyConflictMessage = "Xung đột phụ thuộc: Blocker " + blocker.getCode() + " kết thúc (" + blocker.getDueDate() + ") sau hạn chót (" + item.getDueDate() + ")";
+                        }
+                    }
+                }
+            }
+        }
+
+        // Epic child stories & Story Points roll-up
+        BigDecimal totalStoryPoints = null;
+        BigDecimal doneStoryPoints = null;
+        if (summary.getHierarchyLevel() != null && summary.getHierarchyLevel() == 1) {
+            List<WorkItem> children = workItemRepository.findByParentId(item.getId());
+            childStories = new ArrayList<>();
+            BigDecimal totalSp = item.getStoryPoints() != null ? item.getStoryPoints() : BigDecimal.ZERO;
+            BigDecimal doneSp = BigDecimal.ZERO;
+            for (WorkItem child : children) {
+                if (child.getDeletedAt() != null) continue;
+                WorkItemResponse childResp = mapToSummaryResponse(child);
+                childStories.add(childResp);
+                descendants.add(childResp);
+                if (child.getStoryPoints() != null) {
+                    totalSp = totalSp.add(child.getStoryPoints());
+                    if (childResp.getStatusCategory() == StatusCategory.DONE) {
+                        doneSp = doneSp.add(child.getStoryPoints());
+                    }
+                }
+                // Recursively collect grandchild subtasks under this child Story
+                List<WorkItem> grandChildren = workItemRepository.findByParentId(child.getId());
+                if (grandChildren != null) {
+                    for (WorkItem gc : grandChildren) {
+                        if (gc.getDeletedAt() != null) continue;
+                        descendants.add(mapToSummaryResponse(gc));
+                    }
+                }
+            }
+            totalStoryPoints = totalSp;
+            doneStoryPoints = doneSp;
+        } else if (summary.getHierarchyLevel() != null && summary.getHierarchyLevel() == 0) {
+            subtasks = listSubtasks(item.getId());
+            descendants.addAll(subtasks);
+        }
 
         // Available transitions strictly for this item's project workflow
         Optional<Workflow> projectWorkflow = workflowRepository.findByProjectIdAndIsDefaultTrue(item.getProjectId());
@@ -538,6 +678,8 @@ public class WorkItemServiceImpl implements WorkItemService {
                 .parentId(summary.getParentId())
                 .parent(parentDto)
                 .subtasks(subtasks)
+                .childStories(childStories)
+                .descendants(descendants)
                 .sprintId(summary.getSprintId())
                 .sprintName(summary.getSprintName())
                 .reporterId(summary.getReporterId())
@@ -546,6 +688,10 @@ public class WorkItemServiceImpl implements WorkItemService {
                 .originalEstimateSeconds(summary.getOriginalEstimateSeconds())
                 .remainingEstimateSeconds(summary.getRemainingEstimateSeconds())
                 .timeSpentSeconds(summary.getTimeSpentSeconds())
+                .totalTimeSpentSeconds(summary.getTotalTimeSpentSeconds())
+                .totalRemainingEstimateSeconds(summary.getTotalRemainingEstimateSeconds())
+                .totalStoryPoints(totalStoryPoints)
+                .doneStoryPoints(doneStoryPoints)
                 .rank(summary.getRank())
                 .componentId(summary.getComponentId())
                 .componentName(summary.getComponentName())
@@ -556,6 +702,13 @@ public class WorkItemServiceImpl implements WorkItemService {
                 .startDate(summary.getStartDate())
                 .dueDate(summary.getDueDate())
                 .resolvedAt(summary.getResolvedAt())
+                .hasTimelineConflict(summary.getHasTimelineConflict())
+                .timelineConflictMessage(summary.getTimelineConflictMessage())
+                .isBlocked(summary.getIsBlocked())
+                .blockingWorkItems(blockingWorkItems)
+                .hasDependencyConflict(summary.getHasDependencyConflict())
+                .dependencyConflictMessage(dependencyConflictMessage)
+                .labels(summary.getLabels())
                 .version(summary.getVersion())
                 .createdAt(summary.getCreatedAt())
                 .updatedAt(summary.getUpdatedAt())

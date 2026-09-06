@@ -195,12 +195,14 @@ Trong Jira và DATN-2026 Work Service, hai khái niệm này phục vụ hai m�
 
 Mặc dù Issue Links đại diện cho mạng lưới đồ thị ngang hàng (Horizontal Graph), Jira Cloud kiểm soát sự tương tác của chúng với Dải thời gian (Timeline), Vòng đời trạng thái (Workflow) và Cấp độ phân cấp công việc (Task Types / Hierarchy Levels) theo các chuẩn mực logic chặt chẽ:
 
-```
+```text
 [Task A (Prerequisite)] ──(BLOCKS)──► [Task B (Dependent)]
   • Thời gian: A.dueDate <= B.startDate (Lệch hạn ➔ Đổi mũi tên sang Đỏ 🔴)
   • Sprint:    A.sprint <= B.sprint (Không cho B chạy trước A)
   • Trạng thái: A chưa DONE ➔ B bị khóa 🔒 không cho chuyển sang IN_PROGRESS / DONE
   • Task Type: Cấm Subtask link với Task cha ruột; Cấm Epic BLOCKS Subtask (Scale Mismatch)
+```
+
 ```mermaid
 graph TD
     classDef prerequisite fill:#1e3a8a,stroke:#60a5fa,stroke-width:2px,color:#fff;
@@ -210,22 +212,21 @@ graph TD
     classDef warningBox fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fff;
 
     subgraph BlocksRelation ["🔒 QUAN HỆ BLOCKS: THỜI GIAN & TRẠNG THÁI (FINISH-TO-START DEPENDENCY)"]
-        direction TB
         subgraph TimeConstraints ["⏰ Ràng Buộc Thời Gian & Phân Bổ Sprint"]
             TASK_A_TIME["🔵 TASK A (Prerequisite)<br/>dueDate: 10/10 | Sprint 1"]:::prerequisite
             TASK_B_TIME_VALID["🟢 TASK B (Lên lịch hợp lệ)<br/>startDate: 11/10 ➔ dueDate: 20/10 | Sprint 1 hoặc 2"]:::unblockedTask
-            TASK_B_TIME_ERR["⚠️ TASK B (Xung đột Timeline 🔴)<br/>startDate: 05/10 (Bắt đầu trước khi A xong)<br/><i>Biểu đồ Gantt đổi đường nối sang ĐỎ RỰC</i>"]:::warningBox
+            TASK_B_TIME_ERR["⚠️ TASK B (Xung đột Timeline 🔴)<br/>startDate: 05/10 (Bắt đầu trước khi A xong)<br/>Gantt: Đổi đường nối sang ĐỎ RỰC"]:::warningBox
             
-            TASK_A_TIME -->|A.dueDate <= B.startDate| TASK_B_TIME_VALID
-            TASK_A_TIME -.->|Xung đột: B.startDate < A.dueDate| TASK_B_TIME_ERR
+            TASK_A_TIME -->|A.dueDate ≤ B.startDate| TASK_B_TIME_VALID
+            TASK_A_TIME -.->|Xung đột: B.startDate trước A.dueDate| TASK_B_TIME_ERR
         end
 
         subgraph StatusFlow ["🔄 Vòng Đời Trạng Thái (Blocked ➔ Unblocked)"]
-            A_ACTIVE["🔵 Task A: TODO / IN_PROGRESS<br/><i>(Đang thực hiện - Chưa giải quyết)</i>"]:::prerequisite
-            B_LOCKED["🔴 Task B: BỊ KHÓA (BLOCKED 🔒)<br/><i>Workflow Validator cấm chuyển sang IN_PROGRESS / DONE</i>"]:::blockedTask
+            A_ACTIVE["🔵 Task A: TODO / IN_PROGRESS<br/>(Đang thực hiện - Chưa giải quyết)"]:::prerequisite
+            B_LOCKED["🔴 Task B: BỊ KHÓA (BLOCKED 🔒)<br/>Workflow Validator cấm chuyển sang IN_PROGRESS / DONE"]:::blockedTask
             
-            A_DONE["🟢 Task A: CHUYỂN SANG DONE<br/><i>Tiêu đề gạch ngang ~~Task A~~</i>"]:::unblockedTask
-            B_FREE["🟢 Task B: ĐƯỢC GIẢI PHÓNG (UNBLOCKED 🔓)<br/><i>Cho phép bắt đầu thực hiện bình thường</i>"]:::unblockedTask
+            A_DONE["🟢 Task A: CHUYỂN SANG DONE<br/>Tiêu đề gạch ngang Task A"]:::unblockedTask
+            B_FREE["🟢 Task B: ĐƯỢC GIẢI PHÓNG (UNBLOCKED 🔓)<br/>Cho phép bắt đầu thực hiện bình thường"]:::unblockedTask
 
             A_ACTIVE -->|Khóa chặn bước chuyển| B_LOCKED
             A_ACTIVE -.->|Sự kiện Transition DONE| A_DONE
@@ -234,10 +235,9 @@ graph TD
     end
 
     subgraph OtherLinks ["🔗 CÁC LOẠI LIÊN KẾT KHÁC & TƯƠNG THÍCH TASK TYPE"]
-        direction TB
-        TASK_CAUSE["🔵 TASK A (Done: 10/10)<br/><i>Nguồn gốc phát sinh lỗi</i>"]:::prerequisite
-        BUG_CAUSE["🔴 BUG B (CreatedAt: 15/10)<br/><i>Lỗi hồi quy ngoài kế hoạch</i>"]:::blockedTask
-        TASK_CAUSE -->|causes (Quan hệ nhân quả)| BUG_CAUSE
+        TASK_CAUSE["🔵 TASK A (Done: 10/10)<br/>Nguồn gốc phát sinh lỗi"]:::prerequisite
+        BUG_CAUSE["🔴 BUG B (CreatedAt: 15/10)<br/>Lỗi hồi quy ngoài kế hoạch"]:::blockedTask
+        TASK_CAUSE -->|causes - Quan hệ nhân quả| BUG_CAUSE
 
         DUP_SRC["⚪ Task B (Báo cáo sau)"]:::neutralLink
         DUP_TGT["🔵 Task A (Bản ghi gốc)"]:::prerequisite
@@ -345,7 +345,7 @@ Khi người dùng tạo một liên kết có hướng như `BLOCKS` hoặc `CA
 graph TD
     A["Task A"] -->|BLOCKS| B["Task B"]
     B -->|BLOCKS| C["Task C"]
-    C -.->|CỐ TÌNH TẠO BLOCKS (BỊ CHẶN LẬP TỨC)| A
+    C -.->|Cố tình tạo BLOCKS - Bị chặn lập tức| A
     style A fill:#FEF2F2,stroke:#DC2626,stroke-width:2px;
     style B fill:#FEF2F2,stroke:#DC2626,stroke-width:2px;
     style C fill:#FEF2F2,stroke:#DC2626,stroke-width:2px;

@@ -15,18 +15,96 @@ import {
   CheckCircle2,
   Clock,
   User,
-  MoreHorizontal
+  MoreHorizontal,
+  Lock,
+  AlertTriangle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workItemApi, workflowApi } from '../../api.js';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 
-const TYPE_ICONS = {
-  EPIC: { icon: Bookmark, color: '#6554C0', label: 'Epic' },
-  STORY: { icon: Bookmark, color: '#36B37E', label: 'Story' },
-  TASK: { icon: CheckSquare, color: '#0052CC', label: 'Task' },
-  BUG: { icon: CircleDot, color: '#E5493A', label: 'Bug' },
-  SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Sub-task' },
+const TYPE_CONFIG = {
+  EPIC: { label: 'Epic', color: '#6554C0', bgColor: '#F3F0FF', borderColor: '#DDD6FE' },
+  STORY: { label: 'Story', color: '#059669', bgColor: '#ECFDF5', borderColor: '#A7F3D0' },
+  TASK: { label: 'Task', color: '#0052CC', bgColor: '#EFF6FF', borderColor: '#BFDBFE' },
+  BUG: { label: 'Bug', color: '#E5493A', bgColor: '#FEF2F2', borderColor: '#FECACA' },
+  SUBTASK: { label: 'Sub-task', color: '#0284C7', bgColor: '#F0F9FF', borderColor: '#BAE6FD' },
+  SUB_TASK: { label: 'Sub-task', color: '#0284C7', bgColor: '#F0F9FF', borderColor: '#BAE6FD' },
+};
+const TYPE_ICONS = TYPE_CONFIG;
+
+/**
+ * Helper tính toán tiến độ công việc con (Sub-tasks của Story/Task, Child Stories của Epic)
+ * và phân loại màu sắc trực quan theo mốc tiến độ:
+ * - 100%: Xanh lá cây rõ ràng, nổi bật (#10B981 / #059669)
+ * - 70% - 99%: Xanh dương (#2563EB)
+ * - 40% - 69%: Vàng hổ phách (#F59E0B)
+ * - 1% - 39%: Cam (#EA580C)
+ * - 0%: Xám trung tính (#94A3B8)
+ */
+const getSubtaskProgressConfig = (subtaskCount, subtaskDoneCount) => {
+  const total = Number(subtaskCount) || 0;
+  if (total <= 0) return null;
+  const done = Math.max(0, Number(subtaskDoneCount) || 0);
+  const percent = Math.min(100, Math.max(0, Math.round((done / total) * 100)));
+
+  if (percent === 100) {
+    return {
+      total,
+      done,
+      percent,
+      barColor: '#10B981', // Xanh lá cây tươi sáng, rõ ràng
+      textColor: '#059669', // Xanh đậm dễ đọc
+      trackBg: '#DCFCE7',
+      label: 'Hoàn thành 100%',
+    };
+  }
+
+  if (percent >= 70) {
+    return {
+      total,
+      done,
+      percent,
+      barColor: '#2563EB', // Xanh dương
+      textColor: '#1D4ED8',
+      trackBg: '#DBEAFE',
+      label: 'Sắp hoàn thành',
+    };
+  }
+
+  if (percent >= 40) {
+    return {
+      total,
+      done,
+      percent,
+      barColor: '#F59E0B', // Vàng cam hổ phách
+      textColor: '#B45309',
+      trackBg: '#FEF3C7',
+      label: 'Đang tiến hành',
+    };
+  }
+
+  if (percent > 0) {
+    return {
+      total,
+      done,
+      percent,
+      barColor: '#EA580C', // Cam
+      textColor: '#C2410C',
+      trackBg: '#FFEDD5',
+      label: 'Mới bắt đầu',
+    };
+  }
+
+  return {
+    total,
+    done,
+    percent: 0,
+    barColor: '#94A3B8', // Xám
+    textColor: '#64748B',
+    trackBg: '#E2E8F0',
+    label: 'Chưa bắt đầu',
+  };
 };
 
 export default function ProjectBoardView({
@@ -164,7 +242,7 @@ export default function ProjectBoardView({
                   transition: 'all 0.15s ease',
                 }}
               >
-                {t === 'ALL' ? 'Tất cả' : t}
+                {t === 'ALL' ? 'Tất cả' : (TYPE_CONFIG[t]?.label || t)}
               </button>
             ))}
           </div>
@@ -318,15 +396,20 @@ export default function ProjectBoardView({
                   </div>
                 ) : (
                   columnItems.map((item) => {
-                    const typeCode = (item.typeCode || item.typeName || 'TASK').toUpperCase();
-                    const typeConfig = TYPE_ICONS[typeCode] || TYPE_ICONS.TASK;
-                    const TypeIcon = typeConfig.icon;
+                    const rawTypeCode = (item.typeCode || item.typeName || 'TASK').toUpperCase().replace('-', '_');
+                    const typeConfig = TYPE_CONFIG[rawTypeCode] || TYPE_CONFIG[rawTypeCode.replace('_', '')] || TYPE_CONFIG.TASK;
+                    const displayTypeName = item.typeName || typeConfig.label || rawTypeCode;
 
                     const priorityConfig = getPriorityConfig(item.priority);
                     const PriorityIcon = priorityConfig.icon;
 
                     const todayStr = new Date().toISOString().substring(0, 10);
                     const isOverdue = item.dueDate && item.dueDate < todayStr && item.statusCategory !== 'DONE';
+
+                    const subtaskProgress = getSubtaskProgressConfig(
+                      item.subtaskCount,
+                      item.subtaskDoneCount ?? item.completedSubtaskCount ?? 0
+                    );
 
                     return (
                       <div
@@ -354,26 +437,68 @@ export default function ProjectBoardView({
                           e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
                         }}
                       >
-                        {/* Parent tag if belongs to Epic/Parent */}
-                        {item.parentCode && (
-                          <div
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                              fontSize: 10,
-                              fontWeight: 700,
-                              color: '#6554C0',
-                              backgroundColor: '#F3F0FF',
-                              padding: '2px 6px',
-                              borderRadius: 4,
-                              alignSelf: 'flex-start',
-                            }}
-                          >
-                            <Bookmark size={10} />
-                            <span>{item.parentCode}</span>
-                          </div>
-                        )}
+                        {/* Parent tag & Conflict/Blocked badges */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {item.parentCode && (
+                            <div
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: '#6554C0',
+                                backgroundColor: '#F3F0FF',
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                alignSelf: 'flex-start',
+                              }}
+                            >
+                              <Bookmark size={10} />
+                              <span>{item.parentCode}</span>
+                            </div>
+                          )}
+
+                          {item.isBlocked && (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: '#DC2626',
+                                backgroundColor: '#FEF2F2',
+                                border: '1px solid #FECACA',
+                                padding: '1px 5px',
+                                borderRadius: 4,
+                              }}
+                              title="Công việc bị cản trở bởi blocker chưa xong"
+                            >
+                              <Lock size={10} /> BLOCKED
+                            </span>
+                          )}
+
+                          {item.hasTimelineConflict && (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: '#D97706',
+                                backgroundColor: '#FFFBEB',
+                                border: '1px solid #FCD34D',
+                                padding: '1px 5px',
+                                borderRadius: 4,
+                              }}
+                              title={item.timelineConflictMessage || 'Cảnh báo lệch hạn thời gian liên tầng'}
+                            >
+                              <AlertTriangle size={10} /> Lệch hạn
+                            </span>
+                          )}
+                        </div>
 
                         {/* Title / Summary */}
                         <div
@@ -401,11 +526,25 @@ export default function ProjectBoardView({
                             gap: 4,
                           }}
                         >
-                          {/* Left: Type Icon & Issue Code */}
+                          {/* Left: Type Badge (text only, no icon) & Issue Code */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div title={typeConfig.label}>
-                              <TypeIcon size={14} color={typeConfig.color} />
-                            </div>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: item.typeColor || typeConfig.color,
+                                backgroundColor: typeConfig.bgColor || '#EFF6FF',
+                                border: `1px solid ${typeConfig.borderColor || '#BFDBFE'}`,
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                lineHeight: '16px',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {displayTypeName}
+                            </span>
                             <span style={{ fontWeight: 700, color: '#2563EB' }}>
                               {item.code}
                             </span>
@@ -435,20 +574,21 @@ export default function ProjectBoardView({
                               </span>
                             )}
 
-                            {/* Subtask count */}
-                            {item.subtaskCount > 0 && (
+                            {/* Subtask count with dynamic milestone color */}
+                            {subtaskProgress && (
                               <span
                                 style={{
                                   display: 'flex',
                                   alignItems: 'center',
                                   gap: 2,
-                                  color: '#64748B',
+                                  color: subtaskProgress.textColor,
                                   fontSize: 11,
+                                  fontWeight: subtaskProgress.percent === 100 ? 700 : 500,
                                 }}
-                                title={`${item.subtaskDoneCount || item.completedSubtaskCount || 0}/${item.subtaskCount} Subtasks hoàn thành`}
+                                title={`${subtaskProgress.done}/${subtaskProgress.total} công việc con hoàn thành (${subtaskProgress.percent}%)`}
                               >
-                                <CheckCircle2 size={12} color="#10B981" />
-                                <span>{item.subtaskDoneCount || item.completedSubtaskCount || 0}/{item.subtaskCount}</span>
+                                <CheckCircle2 size={12} color={subtaskProgress.barColor} />
+                                <span>{subtaskProgress.done}/{subtaskProgress.total}</span>
                               </span>
                             )}
 
@@ -490,6 +630,55 @@ export default function ProjectBoardView({
                             </div>
                           </div>
                         </div>
+
+                        {/* Subtask Progress Bar at the bottom of the card */}
+                        {subtaskProgress && (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              paddingTop: 2,
+                            }}
+                            title={`Tiến độ công việc con: ${subtaskProgress.done}/${subtaskProgress.total} hoàn thành (${subtaskProgress.percent}%)`}
+                          >
+                            {/* Track & Filled Bar */}
+                            <div
+                              style={{
+                                flex: 1,
+                                height: 5,
+                                backgroundColor: subtaskProgress.trackBg,
+                                borderRadius: 99,
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${subtaskProgress.percent}%`,
+                                  height: '100%',
+                                  backgroundColor: subtaskProgress.barColor,
+                                  borderRadius: 99,
+                                  transition: 'width 0.3s ease',
+                                }}
+                              />
+                            </div>
+
+                            {/* Percentage Text */}
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: subtaskProgress.textColor,
+                                fontVariantNumeric: 'tabular-nums',
+                                minWidth: 28,
+                                textAlign: 'right',
+                                lineHeight: 1,
+                              }}
+                            >
+                              {subtaskProgress.percent}%
+                            </span>
+                          </div>
+                        )}
                       </div>
                     );
                   })

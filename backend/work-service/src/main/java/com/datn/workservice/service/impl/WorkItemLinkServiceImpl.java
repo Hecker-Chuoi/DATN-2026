@@ -9,6 +9,8 @@ import com.datn.workservice.dto.request.CreateWorkItemLinkRequest;
 import com.datn.workservice.dto.response.WorkItemLinkResponse;
 import com.datn.workservice.entity.*;
 import com.datn.workservice.enums.LinkType;
+import com.datn.workservice.enums.StatusCategory;
+import com.datn.workservice.enums.WorkItemResolution;
 import com.datn.workservice.repository.*;
 import com.datn.workservice.service.DependencyCycleDetector;
 import com.datn.workservice.service.WorkItemAuditService;
@@ -17,6 +19,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -128,6 +132,23 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
 
         LinkType linkType = request.getLinkType();
 
+        // Rule 1: Anti-Self-Parent link check (cannot link parent to child as related links)
+        if ((sourceItem.getParentId() != null && sourceItem.getParentId().equals(targetItem.getId())) ||
+                (targetItem.getParentId() != null && targetItem.getParentId().equals(sourceItem.getId()))) {
+            throw new BadRequestException("Không thể tạo liên kết thủ công giữa công việc Cha và Con ruột (đã được liên kết qua phân cấp Subtask)");
+        }
+
+        // Rule 2: Scale Mismatch check (cannot link BLOCKS directly between Epic and Subtask)
+        WorkItemType sourceItemType = workItemTypeRepository.findById(sourceItem.getTypeId()).orElse(null);
+        WorkItemType targetItemType = workItemTypeRepository.findById(targetItem.getTypeId()).orElse(null);
+        if (linkType == LinkType.BLOCKS && sourceItemType != null && targetItemType != null) {
+            int srcLvl = sourceItemType.getHierarchyLevel() != null ? sourceItemType.getHierarchyLevel() : 0;
+            int tgtLvl = targetItemType.getHierarchyLevel() != null ? targetItemType.getHierarchyLevel() : 0;
+            if ((srcLvl == 1 && tgtLvl == -1) || (srcLvl == -1 && tgtLvl == 1)) {
+                throw new BadRequestException("Không thể tạo liên kết BLOCKS trực tiếp giữa Epic và Subtask do chênh lệch cấp độ (Scale Mismatch). Vui lòng liên kết ở cấp độ Story/Task.");
+            }
+        }
+
         // Check if link already exists
         if (workItemLinkRepository.existsBySourceItemIdAndTargetItemIdAndLinkType(sourceItemId, targetItem.getId(), linkType)) {
             throw new BadRequestException("Liên kết giữa hai công việc này đã tồn tại");
@@ -136,6 +157,28 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
         // Validate Directed Cycle when BLOCKS or CAUSES
         if (linkType == LinkType.BLOCKS || linkType == LinkType.CAUSES) {
             dependencyCycleDetector.validateNoCycle(sourceItemId, targetItem.getId(), linkType);
+        }
+
+        // Rule 3: Auto-resolve source item on DUPLICATES (B duplicates A -> mark B as DONE with DUPLICATE resolution)
+        if (linkType == LinkType.DUPLICATES) {
+            Status sourceStatus = statusRepository.findById(sourceItem.getStatusId()).orElse(null);
+            if (sourceStatus == null || sourceStatus.getCategory() != StatusCategory.DONE) {
+                List<Status> doneStatuses = statusRepository.findByCategory(StatusCategory.DONE);
+                if (!doneStatuses.isEmpty()) {
+                    Status doneStatus = doneStatuses.get(0);
+                    sourceItem.setStatusId(doneStatus.getId());
+                    sourceItem.setResolution(WorkItemResolution.DUPLICATE);
+                    sourceItem.setResolvedAt(LocalDateTime.now());
+                    workItemRepository.save(sourceItem);
+                    auditService.recordCustomEvent(
+                            sourceItemId,
+                            "STATUS",
+                            sourceStatus != null ? sourceStatus.getName() : null,
+                            "Tự động hoàn thành với kết quả DUPLICATE do phát hiện trùng lặp với " + targetItem.getCode(),
+                            userId
+                    );
+                }
+            }
         }
 
         WorkItemLink link = WorkItemLink.builder()

@@ -145,7 +145,7 @@ flowchart TD
     Broker -.->|2. Consume Event & Push Notification| Notif
     AI -.->|REST: Fetch Project & Task Context for RAG| Work
     
-    Notif -.->|Push Realtime Alerts (SSE / WS)| Client
+    Notif -.->|Push Realtime Alerts - SSE hoặc WS| Client
 ```
 
 1. **Đồng bộ (Synchronous - REST via Spring Cloud OpenFeign)**:
