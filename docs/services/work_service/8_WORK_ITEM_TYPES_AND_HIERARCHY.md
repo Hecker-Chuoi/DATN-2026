@@ -27,15 +27,22 @@
    - [3.1. Cấu Trúc Phân Cấp Trực Quan](#31-cấu-trúc-phân-cấp-trực-quan)
    - [3.2. Ma Trận Hợp Lệ Quan Hệ Cha - Con (Parent-Child Validation Matrix)](#32-ma-trận-hợp-lệ-quan-hệ-cha---con-parent-child-validation-matrix)
 4. [Các Ràng Buộc Biên & Tính Toàn Vẹn Dữ Liệu (Integrity Constraints)](#4-các-ràng-buộc-biên--tính-toàn-vẹn-dữ-liệu-integrity-constraints)
-5. [Cơ Chế Roll-up Tiến Độ & Đo Lường (Roll-up Metrics & Progress Tracking)](#5-cơ-chế-roll-up-tiến-độ--đo-lường-roll-up-metrics--progress-tracking)
-   - [5.1. Roll-up Subtask lên Standard Issue](#51-roll-up-subtask-lên-standard-issue)
-   - [5.2. Roll-up Standard Issue lên Epic](#52-roll-up-standard-issue-lên-epic)
+5. [Quản Lý Mối Quan Hệ Thời Gian, Tiến Độ & Trạng Thái Giữa Các Task Type (Jira-Grade Time & Status Relationships)](#5-quản-lý-mối-quan-hệ-thời-gian-tiến-độ--trạng-thái-giữa-các-task-type-jira-grade-time--status-relationships)
+   - [5.1. Mối Quan Hệ Về Thời Gian (Timeline, Start/Due Date & Milestone Span)](#51-mối-quan-hệ-về-thời-gian-timeline-startdue-date--milestone-span)
+   - [5.2. Ước Lượng & Đo Lường (Story Points & Time Tracking Roll-up)](#52-ước-lượng--đo-lường-story-points--time-tracking-roll-up)
+   - [5.3. Mối Quan Hệ Về Chu Kỳ Sprint (Sprint Inheritance & Cascading)](#53-mối-quan-hệ-về-chu-kỳ-sprint-sprint-inheritance--cascading)
+   - [5.4. Mối Quan Hệ Về Trạng Thái & Vòng Đời (Status Category & Workflow Transitions)](#54-mối-quan-hệ-về-trạng-thái--vòng-đời-status-category--workflow-transitions)
+   - [5.5. Bảng Ma Trận Đối Chiếu Chuẩn Jira (Comprehensive Cheat Sheet Matrix)](#55-bảng-ma-trận-đối-chiếu-chuẩn-jira-comprehensive-cheat-sheet-matrix)
 6. [Đối Chiếu: Cấu Trúc Cây (Hierarchy) vs Mạng Lưới Liên Kết (Issue Links)](#6-đối-chiếu-cấu-trúc-cây-hierarchy-vs-mạng-lưới-liên-kết-issue-links)
 7. [Hiện Thực Kỹ Thuật (Technical Implementation)](#7-hiện-thực-kỹ-thuật-technical-implementation)
    - [7.1. Cấu Trúc Cơ Sở Dữ Liệu](#71-cấu-trúc-cơ-sở-dữ-liệu)
    - [7.2. Bộ Thẩm Định Phân Cấp Backend (`StrictHierarchyValidator`)](#72-bộ-thẩm-định-phân-cấp-backend-stricthierarchyvalidator)
    - [7.3. Thuật Toán Bảo Toàn Cây Khi Nhân Bản Template (Two-Pass Clone Remapping)](#73-thuật-toán-bảo-toàn-cây-khi-nhân-bản-template-two-pass-clone-remapping)
 8. [Quy Chuẩn Trải Nghiệm Giao Diện Người Dùng (UI/UX Guidelines)](#8-quy-chuẩn-trải-nghiệm-giao-diện-người-dùng-uiux-guidelines)
+   - [8.1. Modal Tạo Mới Thông Minh (`CreateWorkItemModal.jsx`)](#81-modal-tạo-mới-thông-minh-createworkitemmodaljsx)
+   - [8.2. Bảo Vệ Kéo Thả Trực Quan (`dragGuards.js`)](#82-bảo-vệ-kéo-thả-trực-quan-dragguardsjs)
+   - [8.3. Thể Hiện Phân Cấp Trên Chi Tiết Thẻ (Breadcrumbs & Badges)](#83-thể-hiện-phân-cấp-trên-chi-tiết-thẻ-breadcrumbs--badges)
+   - [8.4. Xử Lý Giao Diện Cho Mối Quan Hệ Thời Gian, Sprint & Trạng Thái (Frontend Implementation)](#84-xử-lý-giao-diện-cho-mối-quan-hệ-thời-gian-sprint--trạng-thái-frontend-implementation)
 
 ---
 
@@ -272,44 +279,195 @@ Bên cạnh cấp bậc phân cấp, hệ thống thiết lập 5 tầng phòng 
 
 ---
 
-## 5. CƠ CHẾ ROLL-UP TIẾN ĐỘ & ĐO LƯỜNG (ROLL-UP METRICS & PROGRESS TRACKING)
+## 5. QUẢN LÝ MỐI QUAN HỆ THỜI GIAN, TIẾN ĐỘ & TRẠNG THÁI GIỮA CÁC TASK TYPE (JIRA-GRADE TIME & STATUS RELATIONSHIPS)
 
-Cấu trúc phân cấp 3 tầng cho phép hệ thống tự động tổng hợp (Roll-up) các số liệu từ dưới lên trên:
+Trong kiến trúc quản trị dự án Jira Cloud, mỗi loại thẻ công việc có vòng đời riêng biệt nhưng chịu sự ràng buộc chặt chẽ theo chiều dọc thông qua hai cơ chế nền tảng: **Roll-up (Cuộn dữ liệu tổng hợp từ dưới lên)** và **Cascading (Kế thừa & lan truyền từ trên xuống)**.
 
 ```
-[Level -1: Subtasks] ────(Roll-up tiến độ & giờ làm)───► [Level 0: Story/Task] ────(Roll-up Story Points)───► [Level 1: Epic]
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    LEVEL 1: EPIC                                       │
+│  • Thời gian: Bao quát toàn bộ lộ trình Sprint & Ngày kết thúc của các Story           │
+│  • Ước lượng: Tự động cuộn tổng Story Points (Không nhập thời gian chi tiết)           │
+│  • Sprint: Đứng ngoài chu kỳ Sprint (Cross-sprint Container)                           │
+│  • Trạng thái: Đóng mở độc lập bởi PM/PO; cảnh báo khi đóng dở dang                    │
+└───────────────────────────────────────────▲────────────────────────────────────────────┘
+                                            │ Roll-up Points / Dates
+                                            │ (Loose Coupling)
+┌───────────────────────────────────────────┴────────────────────────────────────────────┐
+│                        LEVEL 0: STANDARD (STORY / TASK / BUG)                          │
+│  • Thời gian: Dải ngày cốt lõi của tính năng (Start Date ➔ Due Date)                   │
+│  • Ước lượng: Nơi DUY NHẤT chấm Story Points; đo lường Time Tracking tổng hợp          │
+│  • Sprint: Gán trực tiếp vào Sprint hoặc Backlog; làm chuẩn cho con kế thừa            │
+│  • Trạng thái: Bị CHẶN hoàn thành nếu còn Sub-task chưa hoàn tất (Blocking Guard)      │
+└───────────────────────────────────────────▲────────────────────────────────────────────┘
+                                            │ Roll-up Time / Status
+                                            │ Cascading Sprint (Strict Coupling)
+┌───────────────────────────────────────────┴────────────────────────────────────────────┐
+│                                  LEVEL -1: SUB-TASK                                    │
+│  • Thời gian: Nằm trong dải ngày của Task cha (Cảnh báo mềm nếu trễ hơn cha)           │
+│  • Ước lượng: KHÔNG chấm Story Points; chỉ ghi nhận Giờ làm (Log Work / Estimates)    │
+│  • Sprint: Bắt buộc đồng bộ 100% theo Sprint của Task cha                             │
+│  • Trạng thái: Khi bắt đầu ➔ Tự động kích hoạt Task cha chuyển sang IN PROGRESS       │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    classDef epicStyle fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff;
+    classDef standardStyle fill:#065f46,stroke:#34d399,stroke-width:2px,color:#fff;
+    classDef subtaskStyle fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#fff;
+    classDef alertStyle fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fff;
+    classDef guardStyle fill:#b45309,stroke:#f59e0b,stroke-width:2px,color:#fff;
+
+    subgraph TimelineHierarchy ["⏰ CHIỀU THỜI GIAN & CHU KỲ SPRINT (TIMELINE & SPRINT AXIS)"]
+        direction TB
+        EPIC_TIME["🟣 EPIC-1: DẢI NGÀY LỘ TRÌNH (ROADMAP)<br/>startDate = min(Stories, Sprints) ➔ dueDate = max(Stories, Sprints)<br/><i>(Đứng ngoài Sprint - Container cấp chiến lược)</i>"]:::epicStyle
+        
+        STORY_TIME["🟢 STORY-10: DẢI NGÀY TÍNH NĂNG (SPRINT 1)<br/>startDate: 01/10 ➔ dueDate: 14/10 | Sprint 1<br/><i>(Làm chuẩn dải ngày và Sprint cho Subtasks con)</i>"]:::standardStyle
+        
+        SUB_TIME1["⚪ SUB-1: 01/10 ➔ 05/10 (Hợp lệ trong dải ngày)"]:::subtaskStyle
+        SUB_TIME2["⚪ SUB-2: 06/10 ➔ 12/10 (Hợp lệ trong dải ngày)"]:::subtaskStyle
+        SUB_TIME_ERR["⚠️ SUB-3: 10/10 ➔ 16/10<br/><b>[LỆCH HẠN: subtask.dueDate > parent.dueDate]</b><br/><i>(Cảnh báo mềm Soft Warning - Không chặn lưu)</i>"]:::alertStyle
+
+        EPIC_TIME -->|Bao quát toàn bộ dải ngày| STORY_TIME
+        STORY_TIME -->|Kế thừa Sprint 1 & Ràng buộc dải ngày| SUB_TIME1
+        STORY_TIME -->|Kế thừa Sprint 1 & Ràng buộc dải ngày| SUB_TIME2
+        STORY_TIME -.->|Xung đột thời gian ⚠️| SUB_TIME_ERR
+    end
+
+    subgraph StatusTransitions ["🔄 CHIỀU TRẠNG THÁI & VÒNG ĐỜI (STATUS & WORKFLOW AXIS)"]
+        direction TB
+        SUB_ACT["⚪ Subtask bắt đầu:<br/>TODO ➔ IN_PROGRESS"]:::subtaskStyle
+        PARENT_START["🟢 Parent TỰ ĐỘNG KÍCH HOẠT:<br/>TODO ➔ IN_PROGRESS"]:::standardStyle
+        
+        PARENT_BLOCK["🚫 KÉO PARENT SANG CỘT DONE<br/>khi còn Subtask TODO / IN_PROGRESS"]:::alertStyle
+        BLOCK_GUARD["🔒 SUBTASK BLOCKING GUARD:<br/>Chặn hoàn thành hoặc bật Popup hỏi<br/>'Đồng thời hoàn thành tất cả Sub-tasks con?'"]:::guardStyle
+        
+        SUB_ALL_DONE["⚪ TẤT CẢ Subtasks đã hoàn thành DONE (100%)"]:::subtaskStyle
+        PARENT_DONE["🟢 Parent ĐƯỢC PHÉP CHUYỂN SANG DONE"]:::standardStyle
+
+        EPIC_PROGRESS["🟣 EPIC PROGRESS TRACKING:<br/>Tính % theo Story Points Done / Total Points<br/><i>(PO đóng thủ công - Cảnh báo nếu đóng dở dang)</i>"]:::epicStyle
+
+        SUB_ACT ==>|Auto-trigger| PARENT_START
+        PARENT_BLOCK ==>|Bị chặn đứng| BLOCK_GUARD
+        SUB_ALL_DONE ==>|Giải phóng chướng ngại| PARENT_DONE
+        PARENT_DONE ==>|Roll-up tiến độ| EPIC_PROGRESS
+    end
 ```
-
-### 5.1. Roll-up Subtask lên Standard Issue
-
-Khi mở chi tiết một Story, Task hoặc Bug có Sub-tasks, hệ thống tính toán:
-
-1. **Thanh Tiến Độ Sub-task (Subtask Progress Bar):**
-   $$\text{Subtask Completion Rate} = \frac{\text{Số lượng Subtask có trạng thái thuộc nhóm DONE}}{\text{Tổng số lượng Subtask con}} \times 100\%$$
-   *Ví dụ:* Story `DATN-10` có 4 Subtasks, trong đó 3 Subtasks đã `DONE`, 1 Subtask `IN PROGRESS` $\rightarrow$ Hiển thị: `75% Hoàn thành (3/4 Sub-tasks)`.
-
-2. **Cảnh Báo Đóng Việc Cha (Parent Resolution Guard):**
-   - Khi người dùng cố gắng kéo Task cha sang cột `DONE` trong khi vẫn còn Sub-task ở trạng thái `TO DO` hoặc `IN PROGRESS`:
-   - Hệ thống hiển thị hộp thoại xác nhận (Modal Alert):
-     > ⚠️ *"Công việc này vẫn còn 2 Sub-tasks chưa hoàn thành. Bạn có muốn đánh dấu hoàn thành tất cả Sub-tasks con hay không?"*
-
-3. **Roll-up Thời Gian Làm Việc (Time Tracking Roll-up):**
-   - $\text{Total Logged Time} = \text{Time Spent của Cha} + \sum \text{Time Spent của các Subtasks}$.
 
 ---
 
-### 5.2. Roll-up Standard Issue lên Epic
+### 5.1. Mối Quan Hệ Về Thời Gian (Timeline, Start/Due Date & Milestone Span)
 
-Epic không đo lường bằng từng giờ làm việc chi tiết mà đo lường bằng **Năng lực Bàn giao Nghiệp vụ (Story Points)**:
+#### 1. Quy tắc bao hàm thời gian (Time Boundary Hierarchy)
+Theo logic vận hành, khoảng thời gian thực thi của một công việc con phải nằm trọn trong phạm vi thời gian của công việc cấp trên:
+$$\text{parent.startDate} \le \text{subtask.startDate} \le \text{subtask.dueDate} \le \text{parent.dueDate}$$
 
-1. **Tiến Độ Hoàn Thành Epic (Epic Story Points Progress):**
-   $$\text{Epic Progress \%} = \frac{\sum \text{Story Points của các Story [DONE] trong Epic}}{\sum \text{Tổng Story Points của toàn bộ Story trong Epic}} \times 100\%$$
+#### 2. Cơ chế Cảnh Báo Mềm (Soft Warning / Non-blocking Alert)
+* **Triết lý Jira:** Trong thực tế phát triển phần mềm, việc Subtask bị trễ hạn chót (`subtask.dueDate > parent.dueDate`) là sự kiện xảy ra thường xuyên. Nếu hệ thống chặn cứng (`Hard Block / 400 Bad Request`), lập trình viên sẽ không thể cập nhật đúng hạn chót thực tế của công việc, dẫn đến sai lệch dữ liệu theo dõi tiến độ.
+* **Quy chuẩn xử lý:**
+  - Hệ thống **vẫn cho phép lưu trữ** khi `subtask.dueDate > parent.dueDate`.
+  - Backend trả về cờ `hasTimelineConflict = true` cùng thông điệp `timelineConflictMessage`.
+  - Frontend tự động gắn huy hiệu cảnh báo màu vàng cam `⚠️ Hạn chót trễ hơn Task cha` trên thẻ Kanban Board và Drawer chi tiết.
+  - Cung cấp nút tiện ích 1-click: `[Đồng bộ hạn về Task cha]` hoặc `[+ Nới hạn Task cha theo Subtask]` (chỉ dành cho Project Admin / Lead).
 
-2. **Thống Kê Thẻ Công Việc (Issue Count Breakdown):**
-   - Hiển thị thanh trạng thái màu sắc 3 phân đoạn:
-     - 🟦 **To Do:** 4 issues (25%)
-     - 🟨 **In Progress:** 6 issues (37.5%)
-     - 🟩 **Done:** 6 issues (37.5%)
+#### 3. Cơ chế Cuộn Thời Gian Tự Động (Dynamic Timeline Roll-up)
+* Khi Task cha (Story/Task) không được người dùng gán ngày bắt đầu hoặc ngày kết thúc cụ thể, hệ thống sẽ tự động xác định dải ngày dựa trên các Subtasks con:
+  $$\text{parent.startDate} = \min_{i=1}^{n} (\text{subtask}_i.\text{startDate})$$
+  $$\text{parent.dueDate} = \max_{i=1}^{n} (\text{subtask}_i.\text{dueDate})$$
+* **Đối với Epic (Level 1):** Epic bao quát toàn bộ các Story và Sprint trực thuộc:
+  $$\text{epic.startDate} = \min \Big( \min_{j}(\text{story}_j.\text{startDate}), \min_{k}(\text{sprint}_k.\text{startDate}) \Big)$$
+  $$\text{epic.dueDate} = \max \Big( \max_{j}(\text{story}_j.\text{dueDate}), \max_{k}(\text{sprint}_k.\text{endDate}) \Big)$$
+
+---
+
+### 5.2. Ước Lượng & Đo Lường (Story Points & Time Tracking Roll-up)
+
+#### 1. Quy tắc Phân Lập Story Points (Story Points Exclusivity Rule)
+* **Chỉ áp dụng ở Level 0 (Story / Task):** Story Points đại diện cho độ phức tạp và giá trị bàn giao người dùng, do đó chỉ được định giá tại Level 0.
+* **Vô hiệu hóa ở Level -1 (Subtask):** Giao diện Subtask khóa hoàn toàn ô nhập Story Points để tránh tính toán trùng lặp (Double Counting) trên Burndown Chart và Velocity Report.
+* **Roll-up lên Level 1 (Epic):** Điểm Story Points của Epic được tính lũy kế tự động từ các Story trực thuộc:
+  $$\text{Epic Total Points} = \sum_{\text{story} \in \text{Epic}} \text{story.storyPoints}$$
+  $$\text{Epic Completed Points} = \sum_{\substack{\text{story} \in \text{Epic} \\ \text{status.category} = \text{DONE}}} \text{story.storyPoints}$$
+
+#### 2. Cuộn Dữ Liệu Thời Gian Làm Việc (Time Tracking Roll-up)
+Lập trình viên ghi nhận giờ làm thực tế (`Log Work`) trực tiếp tại từng Subtask. Dữ liệu này tự động cuộn lên Task cha theo công thức:
+* **Thời gian đã làm (Time Spent):**
+  $$\text{Total Time Spent} = \text{parent.timeSpentSeconds} + \sum_{i=1}^{n} \text{subtask}_i.\text{timeSpentSeconds}$$
+* **Thời gian ước lượng còn lại (Remaining Estimate):**
+  $$\text{Total Remaining} = \text{parent.remainingEstimateSeconds} + \sum_{i=1}^{n} \text{subtask}_i.\text{remainingEstimateSeconds}$$
+* **Hiển thị trên UI:** Drawer chi tiết hiển thị thanh tiến độ kép: *“Thời gian riêng của thẻ này”* và *“Tổng thời gian bao gồm công việc con”*.
+
+---
+
+### 5.3. Mối Quan Hệ Về Chu Kỳ Sprint (Sprint Inheritance & Cascading)
+
+#### 1. Tính Toàn Vẹn Chu Kỳ Sprint (Sprint Integrity Rule)
+* **Sub-task không có chu kỳ Sprint độc lập:** Công việc con bắt buộc phải thực hiện trong cùng một Sprint với công việc cha (`subtask.sprintId == parent.sprintId`).
+* Sub-task không bao giờ được phép xuất hiện đơn lẻ trong Sprint Backlog khi Task cha đang nằm ở Product Backlog.
+
+#### 2. Kế Thừa & Lan Truyền Tự Động (Cascading Sprint Synchronizer)
+* **Khi tạo mới Sub-task:** Hệ thống tự động gán `subtask.sprintId = parent.sprintId`.
+* **Khi dời Task cha (Level 0) sang Sprint khác:**
+  - Nếu Task cha chuyển từ `Backlog` vào `Sprint 1`, toàn bộ Subtasks con tự động cập nhật `sprintId = Sprint 1`.
+  - Nếu Task cha chuyển từ `Sprint 1` sang `Sprint 2` (Spillover / Roll-over), toàn bộ Subtasks con lập tức cập nhật sang `Sprint 2`.
+  - Nếu Task cha bị trả về `Backlog` (`sprintId = null`), toàn bộ Subtasks con cũng tự động xóa liên kết Sprint (`sprintId = null`).
+
+#### 3. Epic Đứng Ngoài Chu Kỳ Sprint (Cross-Sprint Container)
+* Epic tồn tại độc lập ở cấp độ Dự án / Lộ trình (Roadmap).
+* Thẻ Epic **không bao giờ được gán trực tiếp vào Sprint**. Các Story con của một Epic có thể phân bổ rải rác ở Sprint 1, Sprint 2, Sprint 3 hoặc Backlog dài hạn.
+
+---
+
+### 5.4. Mối Quan Hệ Về Trạng Thái & Vòng Đời (Status Category & Workflow Transitions)
+
+Tất cả trạng thái tùy biến trong hệ thống đều phải được ánh xạ vào 1 trong 3 nhóm chuẩn chuẩn quốc tế (`StatusCategory`):
+1. **`TODO`** (Chưa bắt đầu / Chờ thực hiện)
+2. **`IN_PROGRESS`** (Đang tiến hành / Đang kiểm thử / Review)
+3. **`DONE`** (Hoàn thành / Đã đóng / Đã giải quyết)
+
+#### 1. Ràng Buộc Chặn Hoàn Thành Việc Cha (Sub-task Blocking Condition)
+* **Quy tắc:** Không cho phép chuyển Task cha sang trạng thái thuộc nhóm `DONE` nếu vẫn còn **bất kỳ Sub-task con nào chưa hoàn thành** (`status.category != DONE`).
+* **Hành vi xử lý khi người dùng kéo Task cha sang cột DONE:**
+  - **Cách 1 (Chặn nghiêm ngặt - Strict Guard):** Báo lỗi và từ chối cập nhật kèm thông điệp:
+    > 🚫 *"Không thể hoàn thành công việc này vì còn 2 nhiệm vụ con (Sub-tasks) chưa hoàn thành!"*
+  - **Cách 2 (Hộp thoại hỗ trợ - Guided Modal):** Hiển thị Popup với 2 tùy chọn tiện ích:
+    1. *`[Hủy bỏ]`* — Giữ nguyên trạng thái để hoàn tất nốt các việc con.
+    2. *`[Đồng thời đánh dấu hoàn thành tất cả Sub-tasks]`* — Hệ thống tự động chuyển toàn bộ các Subtasks còn lại sang trạng thái `DONE` và ghi nhận changelog đồng loạt.
+
+#### 2. Tự Động Bắt Đầu Việc Cha (Auto-transition Parent to IN_PROGRESS)
+* Khi Task cha đang ở trạng thái `TODO`:
+* Ngay khi một thành viên chuyển bất kỳ một Sub-task con sang `IN_PROGRESS` (bắt đầu viết mã hoặc nghiên cứu):
+* **Hệ thống tự động kích hoạt:** Chuyển trạng thái Task cha sang `IN_PROGRESS` (ghi nhận Audit log: *"Hệ thống tự động chuyển trạng thái do Sub-task [DATN-12] bắt đầu thực hiện"*).
+
+#### 3. Tự Động Hoàn Thành Hoặc Gợi Ý Hoàn Thành Việc Cha (Auto-complete Parent)
+* Khi Sub-task cuối cùng của Task cha được chuyển sang `DONE`:
+* **Hành vi:**
+  - Tự động gợi ý thông báo Toast trên màn hình: *"Tất cả Sub-tasks đã hoàn thành. Bạn có muốn chuyển Task cha [DATN-10] sang ĐÃ HOÀN THÀNH không?"*.
+  - Hoặc cấu hình Rule tự động chuyển Task cha sang `IN_REVIEW` để chờ Tech Lead nghiệm thu.
+
+#### 4. Quy Tắc Mở Lại Công Việc (Parent Reopen Rule)
+* Khi một Task cha bị mở lại từ `DONE` quay về `IN_PROGRESS` hoặc `TODO`:
+* **Nguyên tắc:** **Bảo lưu trạng thái của các Sub-tasks con**. Các Subtasks đã `DONE` không bị ép quay về `TODO` (vì các đầu việc kỹ thuật đó thực tế đã hoàn thành), lập trình viên sẽ tạo thêm Subtask mới cho phần việc phát sinh cần sửa đổi.
+
+#### 5. Cảnh Báo Khi Đóng Epic Dở Dang (Epic Resolution Guard)
+* Epic không tự động hoàn thành khi tất cả Story con `DONE` (bởi vì việc đóng Epic cần sự phê duyệt tổng thể của Product Owner).
+* Khi PO bấm chuyển Epic sang `DONE` trong khi vẫn còn Story con chưa hoàn thành:
+  - Hệ thống hiển thị hộp thoại cảnh báo (Non-blocking Confirm):
+    > ⚠️ *"Epic này vẫn còn 3 User Stories chưa hoàn tất. Bạn có chắc chắn muốn đóng Epic này không? Các Story con chưa xong sẽ giữ nguyên trạng thái hiện tại."*
+
+---
+
+### 5.5. BẢNG MA TRẬN ĐỐI CHIẾU CHUẨN JIRA (COMPREHENSIVE CHEAT SHEET MATRIX)
+
+| Tiêu Chí Đánh Giá | Sub-task (Level -1) | Standard: Story / Task / Bug (Level 0) | Epic (Level 1) |
+| :--- | :--- | :--- | :--- |
+| **Tính Độc Lập** | ❌ Bắt buộc phải có Cha (Level 0) | 🟢 Độc lập hoặc thuộc 1 Epic | 🟢 Độc lập (Cấp cao nhất dự án) |
+| **Gán Sprint** | 🔗 Bắt buộc kế thừa từ Task cha | 🟢 Gán trực tiếp vào Sprint hoặc Backlog | ❌ Không thuộc Sprint (Cross-sprint) |
+| **Story Points** | ❌ Vô hiệu hóa (Không cho nhập) | 🟢 Chấm điểm trực tiếp tại đây | 🔄 Tự động tính tổng ($\sum$) từ Stories |
+| **Time Tracking** | 🟢 Log work chi tiết từng giờ | 🔄 Nhập riêng hoặc cuộn từ Subtasks | 🔄 Cuộn tổng quát toàn bộ tính năng |
+| **Dải Ngày (Timeline)**| Nằm trong dải ngày của Task cha | Hạn chót chính của tính năng bàn giao | Dải ngày bao trùm toàn bộ Stories |
+| **Xử Lý Lệch Hạn** | ⚠️ Cảnh báo mềm nếu trễ hơn cha | ⚠️ Cảnh báo nếu trễ hơn Epic | Dải ngày mở rộng theo các Sprint |
+| **Chuyển sang DONE** | Độc lập chuyển bất kỳ lúc nào | 🚫 **Chặn** nếu còn Sub-task chưa DONE | ⚠️ **Cảnh báo** nếu còn Story chưa DONE |
+| **Kích Hoạt Tự Động** | Bắt đầu $\rightarrow$ Kéo cha sang In Progress | Xong hết $\rightarrow$ Gợi ý đóng cha | Không tự động đóng theo Story con |
 
 ---
 
@@ -531,6 +689,48 @@ Tại tiêu đề của modal chi tiết [`WorkItemDetailModal.jsx`](file:///d:/
 - Thẻ Subtask hiển thị danh sách checklist kèm checkbox hoàn thành nhanh trực tiếp mà không cần mở modal con.
 
 ---
+
+### 8.4. Xử Lý Giao Diện Cho Mối Quan Hệ Thời Gian, Sprint & Trạng Thái (Frontend Implementation)
+
+> [!IMPORTANT]
+> **Toàn bộ các quy tắc liên tầng KHÔNG CHỈ nằm ở Backend** mà bắt buộc phải có các thành phần giao diện Frontend (React 19) tương ứng nhằm mang lại trải nghiệm mượt mà, phản hồi tức thời (Optimistic UI) và hướng dẫn người dùng trực quan chuẩn Jira.
+
+#### 1. Huy Hiệu & Hành Động Cảnh Báo Lệch Hạn Chót (`TimelineConflictAlert`)
+* **Vị trí hiển thị:** Trên thẻ công việc ở bảng Kanban/Scrum, danh sách Backlog và Drawer chi tiết [`WorkItemDetailModal.jsx`](file:///d:/DATN-2026/frontend/src/components/items/WorkItemDetailModal.jsx).
+* **Trạng thái kích hoạt:** Khi `hasTimelineConflict === true` hoặc `subtask.dueDate > parent.dueDate`.
+* **Giao diện trực quan:**
+  - Hiển thị Badge màu vàng cam: `⚠️ Hạn chót trễ hơn Task cha`.
+  - Trên Modal chi tiết: Xuất hiện Banner cảnh báo nhẹ nhàng kèm nút bấm:
+    - `[Đồng bộ về hạn Task cha]` $\rightarrow$ Click phát sinh cập nhật ngay `dueDate = parent.dueDate`.
+    - `[Nới hạn Task cha theo Subtask]` $\rightarrow$ Click mở xác nhận cập nhật `parent.dueDate = subtask.dueDate` (chỉ dành cho Project Lead).
+
+#### 2. Modal Chặn Hoàn Thành Khi Còn Sub-task (`ResolveSubtasksModal.jsx`)
+* **Cơ chế kích hoạt:** Khi người dùng kéo thẻ Task cha (Level 0) sang cột `DONE` hoặc bấm nút chuyển trạng thái sang `DONE` trên giao diện, nếu `item.subtasks.some(st => st.statusCategory !== 'DONE')`:
+* **Hộp thoại tương tác xuất hiện:**
+  - **Tiêu đề cảnh báo:** `⚠️ Không thể hoàn thành công việc [DATN-10]`
+  - **Mô tả chi tiết:** *"Công việc này vẫn còn X nhiệm vụ con (Sub-tasks) chưa hoàn thành:"*
+  - **Danh sách Checklist:** Liệt kê các Subtasks chưa xong kèm Avatar người phụ trách và trạng thái hiện tại.
+  - **Hành động cung cấp:**
+    - Nút 1: `[Quay lại]` $\rightarrow$ Hủy bước chuyển, đưa thẻ về vị trí cột cũ.
+    - Nút 2: `[Đồng thời hoàn thành tất cả Sub-tasks]` $\rightarrow$ Gửi request chuyển Task cha kèm `resolveAllSubtasks: true`, giao diện đồng loạt chuyển màu xanh lá cây `DONE` cho toàn bộ các Subtasks con.
+
+#### 3. Đồng Bộ Kéo Thả Sprint Trên Giao Diện Backlog (`ProjectBacklogPage.jsx`)
+* **Trải nghiệm Accordion:** Khi người dùng mở rộng Story cha trên Backlog, toàn bộ các Subtasks con hiển thị dạng hàng con thụt lề (Indented Sub-rows).
+* **Đồng bộ kéo thả:** Khi kéo Story cha từ Backlog vào `Sprint 1`, toàn bộ các Subtasks con lập tức di chuyển theo vào `Sprint 1` trên màn hình (Optimistic Re-render) mà không đòi hỏi người dùng phải kéo từng Subtask lẻ.
+* **Bảo vệ:** Chặn kéo thả Subtask riêng lẻ ra khỏi phạm vi Sprint của Task cha.
+
+#### 4. Vô Hiệu Hóa Ô Nhập Story Points Tại Sub-task
+* Khi form tạo mới hoặc form chỉnh sửa mở loại thẻ có `hierarchyLevel === -1` (Sub-task):
+* Ô nhập `Story Points` tự động chuyển sang trạng thái **Disabled (Khóa xám)**, placeholder ghi rõ:
+  > *"Story Points chỉ dành cho Story / Task (Level 0)"*.
+
+#### 5. Thanh Đo Lường Tiến Độ Kép & Phân Bố Trạng Thái Epic
+* **Tại Task / Story cha:**
+  - Thanh tiến độ Subtask Checklist: `3/4 Sub-tasks hoàn thành (75%)` với visual progress bar màu xanh lá.
+  - Khối Time Tracking: Hiển thị 2 chỉ số phân biệt: `Thời gian riêng` (vd: 4h) và `Tổng thời gian đã gộp Sub-tasks` (vd: 16h).
+* **Tại Epic:**
+  - Thanh tiến độ Story Points: `Đã xong 21 / 34 Points (61.8%)`.
+  - Thanh phân bổ trạng thái 3 màu (Tri-color Bar): Xanh lam (`To Do`), Vàng (`In Progress`), Xanh lá (`Done`).
 
 > **Tài liệu được lưu trữ tại:** [`docs/services/work_service/8_WORK_ITEM_TYPES_AND_HIERARCHY.md`](file:///d:/DATN-2026/docs/services/work_service/8_WORK_ITEM_TYPES_AND_HIERARCHY.md)  
 > **Tác giả:** Đội ngũ Kiến trúc Hệ thống DATN-2026  
