@@ -69,4 +69,24 @@ public final class SecurityUtils {
         return getCurrentUserIdOptional()
                 .orElseThrow(() -> new UnauthorizedException("User is not authenticated or user ID is missing"));
     }
+
+    /**
+     * Checks if current authenticated user has global ADMIN role in Keycloak JWT or Authorities.
+     */
+    public static boolean isGlobalAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) return false;
+
+        boolean inAuthorities = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ADMIN") || a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
+        if (inAuthorities) return true;
+
+        if (authentication.getPrincipal() instanceof Jwt jwt) {
+            java.util.Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+            if (realmAccess != null && realmAccess.get("roles") instanceof java.util.List<?> roles) {
+                return roles.stream().anyMatch(r -> "ADMIN".equalsIgnoreCase(String.valueOf(r)));
+            }
+        }
+        return false;
+    }
 }

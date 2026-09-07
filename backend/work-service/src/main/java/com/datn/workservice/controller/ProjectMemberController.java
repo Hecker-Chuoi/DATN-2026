@@ -39,6 +39,7 @@ public class ProjectMemberController {
      * Retrieves all members and roles in this project.
      */
     @GetMapping("/members")
+    @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<List<RoleAssignmentResponse>>> getProjectMembers(
             @PathVariable("projectId") UUID projectId
     ) {
@@ -95,6 +96,7 @@ public class ProjectMemberController {
      * Retrieves all project roles.
      */
     @GetMapping("/roles")
+    @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<List<ProjectRoleResponse>>> getProjectRoles(
             @PathVariable("projectId") UUID projectId
     ) {

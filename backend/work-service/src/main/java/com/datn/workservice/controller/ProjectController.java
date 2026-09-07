@@ -70,7 +70,7 @@ public class ProjectController {
     }
 
     @GetMapping("/{projectId}")
-    @PreAuthorize("@projectSecurity.hasProjectPermission(#projectId, 'PROJECT_VIEW')")
+    @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectById(
             @PathVariable("projectId") UUID projectId
     ) {
@@ -87,7 +87,7 @@ public class ProjectController {
     }
 
     @PutMapping("/{projectId}")
-    @PreAuthorize("@projectSecurity.hasProjectPermission(#projectId, 'PROJECT_EDIT')")
+    @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
     public ResponseEntity<ApiResponse<ProjectResponse>> updateProject(
             @PathVariable("projectId") UUID projectId,
             @Valid @RequestBody UpdateProjectRequest request
@@ -98,7 +98,7 @@ public class ProjectController {
     }
 
     @DeleteMapping("/{projectId}")
-    @PreAuthorize("@projectSecurity.hasProjectPermission(#projectId, 'PROJECT_DELETE')")
+    @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
     public ResponseEntity<ApiResponse<Void>> deleteProject(
             @PathVariable("projectId") UUID projectId
     ) {

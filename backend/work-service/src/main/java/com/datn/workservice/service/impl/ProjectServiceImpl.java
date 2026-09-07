@@ -53,6 +53,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final PermissionSchemeEntryRepository permissionSchemeEntryRepository;
     private final WorkItemRepository workItemRepository;
+    private final TeamMemberRepository teamMemberRepository;
 
     private final AtomicKeySequenceGenerator atomicKeySequenceGenerator;
     private final IdentityClient identityClient;
@@ -417,6 +418,29 @@ public class ProjectServiceImpl implements ProjectService {
                     .userId(userId)
                     .roleId(adminRole.getId())
                     .build());
+        }
+
+        // Auto-assign Team Members if project belongs to a Team
+        if (project.getTeamId() != null) {
+            List<TeamMember> teamMembers = teamMemberRepository.findByTeamId(project.getTeamId());
+            for (TeamMember tm : teamMembers) {
+                if (tm.getUserId() != null && !adminUserIds.contains(tm.getUserId())) {
+                    UUID targetRoleId = memberRole.getId();
+                    if (tm.getRole() == com.datn.workservice.enums.TeamRole.LEADER) {
+                        targetRoleId = adminRole.getId();
+                    } else if (tm.getRole() == com.datn.workservice.enums.TeamRole.VIEWER) {
+                        targetRoleId = viewerRole.getId();
+                    }
+
+                    if (!roleAssignmentRepository.existsByProjectIdAndUserIdAndRoleId(project.getId(), tm.getUserId(), targetRoleId)) {
+                        roleAssignmentRepository.save(RoleAssignment.builder()
+                                .projectId(project.getId())
+                                .userId(tm.getUserId())
+                                .roleId(targetRoleId)
+                                .build());
+                    }
+                }
+            }
         }
 
         log.info("Project ecosystem seeded successfully for project: ID={}", project.getId());

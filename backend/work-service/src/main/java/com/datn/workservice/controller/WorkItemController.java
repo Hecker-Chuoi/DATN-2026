@@ -20,6 +20,11 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireProjectPermission;
+import com.datn.workservice.security.RequireTaskPermission;
+import org.springframework.security.access.prepost.PreAuthorize;
+
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,8 +38,9 @@ public class WorkItemController {
     private final WorkItemService workItemService;
 
     @PostMapping("/projects/{projectId}/items")
+    @RequireProjectPermission(PermissionKey.ISSUE_CREATE)
     public ResponseEntity<ApiResponse<WorkItemDetailResponse>> createWorkItem(
-            @PathVariable UUID projectId,
+            @PathVariable("projectId") UUID projectId,
             @Valid @RequestBody CreateWorkItemRequest request,
             @AuthenticationPrincipal Jwt jwt
     ) {
@@ -45,8 +51,9 @@ public class WorkItemController {
     }
 
     @GetMapping("/projects/{projectId}/items")
+    @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<PageResponse<WorkItemResponse>>> listWorkItems(
-            @PathVariable UUID projectId,
+            @PathVariable("projectId") UUID projectId,
             @ModelAttribute WorkItemFilterRequest filter,
             @PageableDefault(size = 50, sort = "rank", direction = Sort.Direction.ASC) Pageable pageable
     ) {
@@ -59,26 +66,30 @@ public class WorkItemController {
     }
 
     @GetMapping("/items/{id}")
-    public ResponseEntity<ApiResponse<WorkItemDetailResponse>> getWorkItemDetail(@PathVariable UUID id) {
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
+    public ResponseEntity<ApiResponse<WorkItemDetailResponse>> getWorkItemDetail(@PathVariable("id") UUID id) {
         WorkItemDetailResponse response = workItemService.getWorkItemDetail(id);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/items/code/{code}")
-    public ResponseEntity<ApiResponse<WorkItemDetailResponse>> getWorkItemByCode(@PathVariable String code) {
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<WorkItemDetailResponse>> getWorkItemByCode(@PathVariable("code") String code) {
         WorkItemDetailResponse response = workItemService.getWorkItemByCode(code);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/items/{id}/subtasks")
-    public ResponseEntity<ApiResponse<List<WorkItemResponse>>> listSubtasks(@PathVariable UUID id) {
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
+    public ResponseEntity<ApiResponse<List<WorkItemResponse>>> listSubtasks(@PathVariable("id") UUID id) {
         List<WorkItemResponse> subtasks = workItemService.listSubtasks(id);
         return ResponseEntity.ok(ApiResponse.success(subtasks));
     }
 
     @PostMapping("/items/{id}/subtasks")
+    @RequireTaskPermission(PermissionKey.ISSUE_CREATE)
     public ResponseEntity<ApiResponse<WorkItemDetailResponse>> createSubtask(
-            @PathVariable UUID id,
+            @PathVariable("id") UUID id,
             @Valid @RequestBody com.datn.workservice.dto.request.CreateSubtaskRequest request,
             @AuthenticationPrincipal Jwt jwt
     ) {
@@ -89,8 +100,9 @@ public class WorkItemController {
     }
 
     @PutMapping("/items/{id}")
+    @RequireTaskPermission(PermissionKey.ISSUE_EDIT)
     public ResponseEntity<ApiResponse<WorkItemDetailResponse>> updateWorkItem(
-            @PathVariable UUID id,
+            @PathVariable("id") UUID id,
             @Valid @RequestBody UpdateWorkItemRequest request,
             @AuthenticationPrincipal Jwt jwt
     ) {
@@ -100,8 +112,9 @@ public class WorkItemController {
     }
 
     @PatchMapping("/items/{id}/rank")
+    @RequireTaskPermission(PermissionKey.ISSUE_EDIT)
     public ResponseEntity<ApiResponse<Void>> updateRank(
-            @PathVariable UUID id,
+            @PathVariable("id") UUID id,
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal Jwt jwt
     ) {
@@ -112,8 +125,9 @@ public class WorkItemController {
     }
 
     @DeleteMapping("/items/{id}")
+    @RequireTaskPermission(PermissionKey.ISSUE_DELETE)
     public ResponseEntity<ApiResponse<Void>> deleteWorkItem(
-            @PathVariable UUID id,
+            @PathVariable("id") UUID id,
             @AuthenticationPrincipal Jwt jwt
     ) {
         UUID userId = extractUserId(jwt);

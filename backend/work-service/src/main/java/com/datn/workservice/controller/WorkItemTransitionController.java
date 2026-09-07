@@ -8,6 +8,8 @@ import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.service.WorkflowEngineService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireTaskPermission;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,6 +28,7 @@ public class WorkItemTransitionController {
      * evaluated for the authenticated user.
      */
     @GetMapping
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<List<AvailableTransitionResponse>>> getAvailableTransitions(
             @PathVariable("id") UUID workItemId
     ) {
@@ -38,6 +41,7 @@ public class WorkItemTransitionController {
      * Executes a specific workflow transition by transition ID in the path.
      */
     @PostMapping("/{transitionId}")
+    @RequireTaskPermission(PermissionKey.ISSUE_TRANSITION)
     public ResponseEntity<ApiResponse<WorkItem>> executeTransitionById(
             @PathVariable("id") UUID workItemId,
             @PathVariable("transitionId") UUID transitionId,
@@ -57,6 +61,7 @@ public class WorkItemTransitionController {
      * Executes a workflow transition with transition ID specified in the request body.
      */
     @PostMapping
+    @RequireTaskPermission(PermissionKey.ISSUE_TRANSITION)
     public ResponseEntity<ApiResponse<WorkItem>> executeTransition(
             @PathVariable("id") UUID workItemId,
             @Valid @RequestBody ExecuteTransitionRequest request

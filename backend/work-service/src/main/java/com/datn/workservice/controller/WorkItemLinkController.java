@@ -8,6 +8,8 @@ import com.datn.workservice.service.WorkItemLinkService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireTaskPermission;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,6 +28,7 @@ public class WorkItemLinkController {
     private final WorkItemLinkService linkService;
 
     @GetMapping({"/items/{itemId}/links", "/work-items/{itemId}/links"})
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<List<WorkItemLinkResponse>>> getLinks(
             @PathVariable("itemId") UUID workItemId
     ) {
@@ -34,6 +37,7 @@ public class WorkItemLinkController {
     }
 
     @PostMapping({"/items/{itemId}/links", "/work-items/{itemId}/links"})
+    @RequireTaskPermission(PermissionKey.ISSUE_EDIT)
     public ResponseEntity<ApiResponse<WorkItemLinkResponse>> createLink(
             @PathVariable("itemId") UUID workItemId,
             @Valid @RequestBody CreateWorkItemLinkRequest request,
@@ -46,6 +50,7 @@ public class WorkItemLinkController {
     }
 
     @DeleteMapping({"/items/{itemId}/links/{linkId}", "/work-items/{itemId}/links/{linkId}"})
+    @RequireTaskPermission(PermissionKey.ISSUE_EDIT)
     public ResponseEntity<ApiResponse<Void>> deleteLink(
             @PathVariable("itemId") UUID workItemId,
             @PathVariable("linkId") UUID linkId,

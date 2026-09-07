@@ -10,11 +10,13 @@ import com.datn.workservice.dto.response.RoleAssignmentResponse;
 import com.datn.workservice.entity.Project;
 import com.datn.workservice.entity.ProjectRole;
 import com.datn.workservice.entity.RoleAssignment;
+import com.datn.workservice.entity.TeamMember;
 import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.repository.PermissionSchemeEntryRepository;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.ProjectRoleRepository;
 import com.datn.workservice.repository.RoleAssignmentRepository;
+import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +35,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     private final ProjectRoleRepository projectRoleRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final PermissionSchemeEntryRepository permissionSchemeEntryRepository;
+    private final TeamMemberRepository teamMemberRepository;
     private final IdentityClient identityClient;
 
     @Override
@@ -115,8 +118,13 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public List<RoleAssignmentResponse> getProjectMembers(UUID projectId) {
+        Project project = projectRepository.findById(projectId).orElse(null);
+        if (project != null && project.getTeamId() != null) {
+            syncTeamMembersToProject(project);
+        }
+
         List<RoleAssignment> assignments = roleAssignmentRepository.findByProjectId(projectId);
         if (assignments.isEmpty()) {
             return Collections.emptyList();
@@ -163,6 +171,38 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                     .fullName(user != null ? user.getFullName() : null)
                     .build();
         }).collect(Collectors.toList());
+    }
+
+    private void syncTeamMembersToProject(Project project) {
+        List<TeamMember> teamMembers = teamMemberRepository.findByTeamId(project.getTeamId());
+        if (teamMembers.isEmpty()) return;
+
+        List<ProjectRole> projectRoles = projectRoleRepository.findByProjectId(project.getId());
+        ProjectRole adminRole = projectRoles.stream().filter(r -> "ADMINISTRATOR".equalsIgnoreCase(r.getName())).findFirst().orElse(null);
+        ProjectRole memberRole = projectRoles.stream().filter(r -> "MEMBER".equalsIgnoreCase(r.getName())).findFirst().orElse(null);
+        ProjectRole viewerRole = projectRoles.stream().filter(r -> "VIEWER".equalsIgnoreCase(r.getName())).findFirst().orElse(null);
+
+        if (adminRole == null || memberRole == null || viewerRole == null) return;
+
+        for (TeamMember tm : teamMembers) {
+            if (tm.getUserId() == null) continue;
+
+            List<RoleAssignment> existing = roleAssignmentRepository.findByProjectIdAndUserId(project.getId(), tm.getUserId());
+            if (existing.isEmpty()) {
+                ProjectRole targetRole = memberRole;
+                if (tm.getRole() == com.datn.workservice.enums.TeamRole.LEADER) {
+                    targetRole = adminRole;
+                } else if (tm.getRole() == com.datn.workservice.enums.TeamRole.VIEWER) {
+                    targetRole = viewerRole;
+                }
+
+                roleAssignmentRepository.save(RoleAssignment.builder()
+                        .projectId(project.getId())
+                        .userId(tm.getUserId())
+                        .roleId(targetRole.getId())
+                        .build());
+            }
+        }
     }
 
     @Override

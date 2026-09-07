@@ -6,11 +6,14 @@ import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.service.WorkItemAttachmentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireTaskPermission;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -30,6 +33,7 @@ public class WorkItemAttachmentController {
     private final WorkItemAttachmentService attachmentService;
 
     @GetMapping({"/items/{itemId}/attachments", "/work-items/{itemId}/attachments"})
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<List<WorkItemAttachmentResponse>>> getAttachments(
             @PathVariable("itemId") UUID workItemId
     ) {
@@ -38,6 +42,7 @@ public class WorkItemAttachmentController {
     }
 
     @PostMapping(value = {"/items/{itemId}/attachments", "/work-items/{itemId}/attachments"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequireTaskPermission(PermissionKey.ISSUE_EDIT)
     public ResponseEntity<ApiResponse<WorkItemAttachmentResponse>> uploadAttachment(
             @PathVariable("itemId") UUID workItemId,
             @RequestParam("file") MultipartFile file,
@@ -50,6 +55,7 @@ public class WorkItemAttachmentController {
     }
 
     @DeleteMapping({"/items/{itemId}/attachments/{attachmentId}", "/work-items/{itemId}/attachments/{attachmentId}"})
+    @RequireTaskPermission(PermissionKey.ISSUE_EDIT)
     public ResponseEntity<ApiResponse<Void>> deleteAttachment(
             @PathVariable("itemId") UUID workItemId,
             @PathVariable("attachmentId") UUID attachmentId,
@@ -61,6 +67,7 @@ public class WorkItemAttachmentController {
     }
 
     @GetMapping({"/attachments/{attachmentId}/download", "/items/{itemId}/attachments/{attachmentId}/download"})
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Resource> downloadAttachment(
             @PathVariable("attachmentId") UUID attachmentId
     ) {

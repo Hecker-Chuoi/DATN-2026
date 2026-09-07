@@ -9,6 +9,8 @@ import com.datn.workservice.service.WorkItemCommentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireTaskPermission;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,6 +29,7 @@ public class WorkItemCommentController {
     private final WorkItemCommentService commentService;
 
     @GetMapping({"/items/{itemId}/comments", "/work-items/{itemId}/comments"})
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<List<WorkItemCommentResponse>>> getComments(
             @PathVariable("itemId") UUID workItemId
     ) {
@@ -35,6 +38,7 @@ public class WorkItemCommentController {
     }
 
     @PostMapping({"/items/{itemId}/comments", "/work-items/{itemId}/comments"})
+    @RequireTaskPermission(PermissionKey.COMMENT_CREATE)
     public ResponseEntity<ApiResponse<WorkItemCommentResponse>> addComment(
             @PathVariable("itemId") UUID workItemId,
             @Valid @RequestBody CreateWorkItemCommentRequest request,
@@ -47,6 +51,7 @@ public class WorkItemCommentController {
     }
 
     @PutMapping({"/items/{itemId}/comments/{commentId}", "/work-items/{itemId}/comments/{commentId}"})
+    @RequireTaskPermission(PermissionKey.COMMENT_CREATE)
     public ResponseEntity<ApiResponse<WorkItemCommentResponse>> updateComment(
             @PathVariable("itemId") UUID workItemId,
             @PathVariable("commentId") UUID commentId,
@@ -59,6 +64,7 @@ public class WorkItemCommentController {
     }
 
     @DeleteMapping({"/items/{itemId}/comments/{commentId}", "/work-items/{itemId}/comments/{commentId}"})
+    @RequireTaskPermission(PermissionKey.COMMENT_CREATE)
     public ResponseEntity<ApiResponse<Void>> deleteComment(
             @PathVariable("itemId") UUID workItemId,
             @PathVariable("commentId") UUID commentId,

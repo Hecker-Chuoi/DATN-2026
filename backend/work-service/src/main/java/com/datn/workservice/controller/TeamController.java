@@ -8,10 +8,14 @@ import com.datn.workservice.client.IdentityClient;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.response.TeamMemberResponse;
 import com.datn.workservice.entity.Project;
+import com.datn.workservice.entity.ProjectRole;
+import com.datn.workservice.entity.RoleAssignment;
 import com.datn.workservice.entity.Team;
 import com.datn.workservice.entity.TeamMember;
 import com.datn.workservice.enums.TeamRole;
 import com.datn.workservice.repository.ProjectRepository;
+import com.datn.workservice.repository.ProjectRoleRepository;
+import com.datn.workservice.repository.RoleAssignmentRepository;
 import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.repository.TeamRepository;
 import com.datn.workservice.security.SecurityUtils;
@@ -36,6 +40,8 @@ public class TeamController {
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final ProjectRepository projectRepository;
+    private final ProjectRoleRepository projectRoleRepository;
+    private final RoleAssignmentRepository roleAssignmentRepository;
     private final IdentityClient identityClient;
 
     /**
@@ -58,7 +64,7 @@ public class TeamController {
         Set<UUID> teamIds = new HashSet<>();
 
         for (UUID uid : userIds) {
-            teamMemberRepository.findByIdUserId(uid).forEach(m -> teamIds.add(m.getTeamId()));
+            teamMemberRepository.findByUserId(uid).forEach(m -> teamIds.add(m.getTeamId()));
             teamRepository.findByOwnerId(uid).forEach(t -> teamIds.add(t.getId()));
         }
 
@@ -202,7 +208,7 @@ public class TeamController {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
 
-        List<TeamMember> members = teamMemberRepository.findByIdTeamId(teamId);
+        List<TeamMember> members = teamMemberRepository.findByTeamId(teamId);
 
         // If no members registered yet, ensure owner is added as LEADER
         if (members.isEmpty() && team.getOwnerId() != null) {
@@ -377,6 +383,9 @@ public class TeamController {
             savedMember = teamMemberRepository.save(newMember);
         }
 
+        // Sync with existing projects of this team
+        syncMemberToTeamProjects(teamId, savedMember.getUserId(), savedMember.getRole());
+
         return ResponseEntity.ok(ApiResponse.success(
                 TeamMemberResponse.builder()
                         .id(savedMember.getId())
@@ -440,6 +449,9 @@ public class TeamController {
         member.setRole(newRole);
         member = teamMemberRepository.save(member);
 
+        // Sync updated role to team projects
+        syncMemberToTeamProjects(teamId, member.getUserId(), member.getRole());
+
         return ResponseEntity.ok(ApiResponse.success(
                 TeamMemberResponse.builder()
                         .id(member.getId())
@@ -497,10 +509,68 @@ public class TeamController {
         }
 
         teamMemberRepository.delete(targetMember);
+        removeMemberFromTeamProjects(teamId, targetMember.getUserId());
+
         return ResponseEntity.ok(ApiResponse.success(null, "Đã xóa thành viên khỏi nhóm"));
     }
 
     // ─── Helper Methods ──────────────────────────────────────────────────────────
+
+    private void syncMemberToTeamProjects(UUID teamId, UUID userId, TeamRole teamRole) {
+        if (teamId == null || userId == null || teamRole == null) return;
+        List<Project> projects = projectRepository.findByTeamId(teamId);
+        if (projects.isEmpty()) return;
+
+        for (Project project : projects) {
+            List<ProjectRole> roles = projectRoleRepository.findByProjectId(project.getId());
+            if (roles.isEmpty()) continue;
+
+            ProjectRole adminRole = roles.stream().filter(r -> "ADMINISTRATOR".equalsIgnoreCase(r.getName())).findFirst().orElse(null);
+            ProjectRole memberRole = roles.stream().filter(r -> "MEMBER".equalsIgnoreCase(r.getName())).findFirst().orElse(null);
+            ProjectRole viewerRole = roles.stream().filter(r -> "VIEWER".equalsIgnoreCase(r.getName())).findFirst().orElse(null);
+
+            ProjectRole targetRole = memberRole;
+            if (teamRole == TeamRole.LEADER) {
+                targetRole = adminRole;
+            } else if (teamRole == TeamRole.VIEWER) {
+                targetRole = viewerRole;
+            }
+
+            if (targetRole == null) continue;
+
+            Set<UUID> aliasIds = getUserAliasIds(userId);
+            List<RoleAssignment> existing = new ArrayList<>();
+            for (UUID uid : aliasIds) {
+                existing.addAll(roleAssignmentRepository.findByProjectIdAndUserId(project.getId(), uid));
+            }
+
+            if (existing.isEmpty()) {
+                roleAssignmentRepository.save(RoleAssignment.builder()
+                        .projectId(project.getId())
+                        .userId(userId)
+                        .roleId(targetRole.getId())
+                        .build());
+            } else {
+                for (RoleAssignment ra : existing) {
+                    ra.setRoleId(targetRole.getId());
+                    roleAssignmentRepository.save(ra);
+                }
+            }
+        }
+    }
+
+    private void removeMemberFromTeamProjects(UUID teamId, UUID userId) {
+        if (teamId == null || userId == null) return;
+        List<Project> projects = projectRepository.findByTeamId(teamId);
+        if (projects.isEmpty()) return;
+
+        Set<UUID> aliasIds = getUserAliasIds(userId);
+        for (Project project : projects) {
+            for (UUID uid : aliasIds) {
+                roleAssignmentRepository.deleteByProjectIdAndUserId(project.getId(), uid);
+            }
+        }
+    }
 
     private Set<UUID> getUserAliasIds(UUID userId) {
         Set<UUID> ids = new HashSet<>();
