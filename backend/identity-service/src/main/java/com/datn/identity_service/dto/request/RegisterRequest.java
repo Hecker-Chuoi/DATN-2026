@@ -20,9 +20,14 @@ public class RegisterRequest {
     @Email(message = "Email format is invalid")
     private String email;
 
+    // Required by the datn-realm User Profile (firstName/lastName are required for role
+    // 'user'). Leaving them blank creates an account that VERIFY_PROFILE rejects at login
+    // with 'invalid_grant: Account is not fully set up'.
+    @NotBlank(message = "First name is required")
     @Size(max = 100)
     private String firstName;
 
+    @NotBlank(message = "Last name is required")
     @Size(max = 100)
     private String lastName;
 }

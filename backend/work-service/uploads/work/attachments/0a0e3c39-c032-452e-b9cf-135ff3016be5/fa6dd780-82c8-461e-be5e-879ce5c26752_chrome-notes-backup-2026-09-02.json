@@ -1,1 +1,74 @@
-{"fontSize":14,"lastBackupDismiss":1788319363761,"notes":[{"id":"mrusk3qze5pljsolbra","title":"NOTE for DoAn","body":"- Đổi tên Chat Bot + Nâng cao vai trò trong hệ thống \n- Hệ thống sẽ MỚM luôn cho ng dùng những thứ mà ta đã xây dựng. Không chỉ là Chat + Response Text, mà là tương tác hẳn với hệ thống (Workflows\\)\n\n\n- Định kì # CHu kì (VD: Đình kì : Họp hàng tuần) \n\n\n- NGHIÊN CỨU QUẢN LÝ TASK NHƯ JIRA (CHO NÓ ĐỠ LOẠN)\n","created":1784646685691,"lastEdit":1788014732672},{"id":"mtehsi8x22bnjzjhe7o","title":"","body":"","created":1788014707809,"lastEdit":1788014707809},{"id":"mswm7y3aoq3hxc9akki","title":"VDT GD2","body":"- mục tiêu 1: bảo vệ đề tài -> cố đạt kết quả cao \n- bảo vệ đề tài: cấp tập đoàn -> cấp tổng công ty\n- nếu ko đc -> mục tiêu 2: có cơ hội làm việc ở vts (đảm bảo chất lg làm việc tốt, đc các anh đánh giá cao) \n\n- mentor: anh Hà LD9 (Văn phòng số)\n\n\n\n\n[=================NOTE DA LAM=================]\nGROUP_CONCAT: Thêm hàm này để setup riêng từng DB - dùng để nối chuỗi với nhiều tham số - \n+++với Oracle thì là         \n-----------return \"listagg(to_char(\" + column + \"), '\" + sep + \"') within group (order by \" + order + \")\";-------\n+++với Maria thì là: \n-----------\"GROUP_CONCAT(\" + column + \" SEPARATOR '\" + sep + \"')\";-----\n\nSYSDATE: để ý Oracle - cột nó có thể khai báo cả hh:mm:ss => nếu cột đó có thì ko chuyển thành CurrentDate đc - nếu ko thì cứ để yên (đa số trong dự án thì ko có)\n","created":1786933755478,"lastEdit":1787900184924},{"id":"mtcarv10cduby6ma17s","title":"NOTE ĐÀO TẠO","body":"","created":1787881988052,"lastEdit":1787881994873},{"id":"mt9qq8relfsg3r2xv7m","title":"","body":"2 service \n\n==================FE: ZK để build UI\nCũ: 1 số chỗ kết nối DB \nMới: Có 1 con mới ko kết nối DB, chỉ gọi UI qua BE \nZUL - UI => Model => Business (KHai báo Param đầu vào + Gọi API)\n\n=================BE: Spring Boot \n- B1: DB: Oracle -> MariaDB -> Chạy đc với cả 2  (Application setup đc với cả 2)\n       + Nó sẽ chuyển đổi ở đâu?: \n- Cách Refactor??: \n\n\n==================Cần làm \n- Sử dụng AI để từ bộ \n- Xly từng Class, làm đến đâu thì nhờ AI Auto Unittest đến đó \n- Oracle - Sequence : GỌi sequence -> trả vè 1 giá trị, nó ko bao h đc lặp lại nữa \n- Maria DB - Table \n- FUnction: Nếu đánh dấu đỏ (ko valid=> ko cần care)\n0 Còn lại: Phải cuyển, giữ nguyên đầu vào => trả lại đầu ra. Hoặc là đưa lên Java Service . (hỏi AI xem câu lệnh có dùng Function ko, có thể chuyển đổi ko, hay là nên chuyển đổi func lên trên Java)\n\n- Procedure: Chỉ quan tâm những tk Valid (có đc sử dụng trong code)\n- Nếu dữ liệu ở 2 bên có khác nhau thì nhớ bảo anh Hòa dump sang lại => Để có cả 1 bộ MariaDB này cx phải chuẩn \n\n\n\nCode Native đều chạy qua BaseREpositoryimpl.java\n- Có thể viết 1 tk Base khác, Impl base cũ\n\n\nThay vì Ifelse tạo interface cho từng Oracle, MariaDB Helper implment từ SQL Helper => Sau đó thì override riêng cho từng câu lệnh \n\n\nSửa đến đâu thì cập nhật Skill đến đó ","created":1787727387866,"lastEdit":1787734947018},{"id":"mqao11tklqzb96y185","title":"Pending","body":"====================PENDING======================\n- Shedlock\n\n\n\n","created":1781252972408,"lastEdit":1787560295521},{"id":"mq4lqyl4sp56ty127","title":"VDT MiniProject","body":"===================NOTE======================\n- Triển khai Meeting - Dịch Transcript Realtime trên Transcript hub đi \n- ","created":1780886345368,"lastEdit":1786951113430},{"id":"mswvc7lqwb9qqp5y1vs","title":"Need to Buy","body":"- 1 cái quạt (Ko ồn)\n- 1 cái đệm\n- 1 gối (ko cần mua)\n- 1 cái dây mạng (xịn) - hoặc là có khi phải thêm cả Hub nối (nhiều mạng) ","created":1786949070974,"lastEdit":1786949139531},{"id":"mq0xij1oga2112zl2v4","title":"GYM","body":"\n=====================BỤNG=========================\n- Tần suất: 2 -> 3 buổi 1 tuần, 5 -> 17 rep, mỗi rep 12 -> 15 cái, mỗi rep nghỉ 90s (20p)\n- Thời gian: Trước khi ăn sáng/ Sau buổi tập chính \n- Bài tập:\n+ Bụng trên: Crunch (Gập bụng, lưng gần như sát đất): (4 -> 5 hiệp, 10 -> 15) https://www.facebook.com/share/v/1BX278pZi6/\n+ Bụng dưới: Leg Raise (Lưng ko đc cong):  (4 -> 5 hiệp, 10 -> 15) https://www.facebook.com/share/v/1BX278pZi6/\n+ Side Plank: (10 -> 12 x 5 hiệp) https://www.facebook.com/share/v/1CpqiKf5Qy/\n\n====================SET LỊCH TẬP====================\n- LINKKKKK: https://www.facebook.com/share/v/1FCcYMUJ5S/\nhttps://www.facebook.com/share/v/1F3kZg1rP3/\n\n====================CARDIO=======================\n- Burpee: https://www.youtube.com/watch?v=auBLPXO8Fww (5 set x 10 - 20 reps)","created":1780664242668,"lastEdit":1786003218287}],"nextID":15,"currentNote":"mrusk3qze5pljsolbra","lastBackup":1785675411779,"noteHeight":492,"noteWidth":492}
+{
+  "fontSize": 14,
+  "lastBackupDismiss": 1788319363761,
+  "notes": [
+    {
+      "id": "mrusk3qze5pljsolbra",
+      "title": "NOTE for DoAn",
+      "body": "- Đổi tên Chat Bot + Nâng cao vai trò trong hệ thống \n- Hệ thống sẽ MỚM luôn cho ng dùng những thứ mà ta đã xây dựng. Không chỉ là Chat + Response Text, mà là tương tác hẳn với hệ thống (Workflows\\)\n\n\n- Định kì # CHu kì (VD: Đình kì : Họp hàng tuần) \n\n\n- NGHIÊN CỨU QUẢN LÝ TASK NHƯ JIRA (CHO NÓ ĐỠ LOẠN)\n",
+      "created": 1784646685691,
+      "lastEdit": 1788014732672
+    },
+    {
+      "id": "mtehsi8x22bnjzjhe7o",
+      "title": "",
+      "body": "",
+      "created": 1788014707809,
+      "lastEdit": 1788014707809
+    },
+    {
+      "id": "mswm7y3aoq3hxc9akki",
+      "title": "VDT GD2",
+      "body": "- mục tiêu 1: bảo vệ đề tài -> cố đạt kết quả cao \n- bảo vệ đề tài: cấp tập đoàn -> cấp tổng công ty\n- nếu ko đc -> mục tiêu 2: có cơ hội làm việc ở vts (đảm bảo chất lg làm việc tốt, đc các anh đánh giá cao) \n\n- mentor: anh Hà LD9 (Văn phòng số)\n\n\n\n\n[=================NOTE DA LAM=================]\nGROUP_CONCAT: Thêm hàm này để setup riêng từng DB - dùng để nối chuỗi với nhiều tham số - \n+++với Oracle thì là         \n-----------return \"listagg(to_char(\" + column + \"), '\" + sep + \"') within group (order by \" + order + \")\";-------\n+++với Maria thì là: \n-----------\"GROUP_CONCAT(\" + column + \" SEPARATOR '\" + sep + \"')\";-----\n\nSYSDATE: để ý Oracle - cột nó có thể khai báo cả hh:mm:ss => nếu cột đó có thì ko chuyển thành CurrentDate đc - nếu ko thì cứ để yên (đa số trong dự án thì ko có)\n",
+      "created": 1786933755478,
+      "lastEdit": 1787900184924
+    },
+    {
+      "id": "mtcarv10cduby6ma17s",
+      "title": "NOTE ĐÀO TẠO",
+      "body": "",
+      "created": 1787881988052,
+      "lastEdit": 1787881994873
+    },
+    {
+      "id": "mt9qq8relfsg3r2xv7m",
+      "title": "",
+      "body": "2 service \n\n==================FE: ZK để build UI\nCũ: 1 số chỗ kết nối DB \nMới: Có 1 con mới ko kết nối DB, chỉ gọi UI qua BE \nZUL - UI => Model => Business (KHai báo Param đầu vào + Gọi API)\n\n=================BE: Spring Boot \n- B1: DB: Oracle -> MariaDB -> Chạy đc với cả 2  (Application setup đc với cả 2)\n       + Nó sẽ chuyển đổi ở đâu?: \n- Cách Refactor??: \n\n\n==================Cần làm \n- Sử dụng AI để từ bộ \n- Xly từng Class, làm đến đâu thì nhờ AI Auto Unittest đến đó \n- Oracle - Sequence : GỌi sequence -> trả vè 1 giá trị, nó ko bao h đc lặp lại nữa \n- Maria DB - Table \n- FUnction: Nếu đánh dấu đỏ (ko valid=> ko cần care)\n0 Còn lại: Phải cuyển, giữ nguyên đầu vào => trả lại đầu ra. Hoặc là đưa lên Java Service . (hỏi AI xem câu lệnh có dùng Function ko, có thể chuyển đổi ko, hay là nên chuyển đổi func lên trên Java)\n\n- Procedure: Chỉ quan tâm những tk Valid (có đc sử dụng trong code)\n- Nếu dữ liệu ở 2 bên có khác nhau thì nhớ bảo anh Hòa dump sang lại => Để có cả 1 bộ MariaDB này cx phải chuẩn \n\n\n\nCode Native đều chạy qua BaseREpositoryimpl.java\n- Có thể viết 1 tk Base khác, Impl base cũ\n\n\nThay vì Ifelse tạo interface cho từng Oracle, MariaDB Helper implment từ SQL Helper => Sau đó thì override riêng cho từng câu lệnh \n\n\nSửa đến đâu thì cập nhật Skill đến đó ",
+      "created": 1787727387866,
+      "lastEdit": 1787734947018
+    },
+    {
+      "id": "mqao11tklqzb96y185",
+      "title": "Pending",
+      "body": "====================PENDING======================\n- Shedlock\n\n\n\n",
+      "created": 1781252972408,
+      "lastEdit": 1787560295521
+    },
+    {
+      "id": "mq4lqyl4sp56ty127",
+      "title": "VDT MiniProject",
+      "body": "===================NOTE======================\n- Triển khai Meeting - Dịch Transcript Realtime trên Transcript hub đi \n- ",
+      "created": 1780886345368,
+      "lastEdit": 1786951113430
+    },
+    {
+      "id": "mswvc7lqwb9qqp5y1vs",
+      "title": "Need to Buy",
+      "body": "- 1 cái quạt (Ko ồn)\n- 1 cái đệm\n- 1 gối (ko cần mua)\n- 1 cái dây mạng (xịn) - hoặc là có khi phải thêm cả Hub nối (nhiều mạng) ",
+      "created": 1786949070974,
+      "lastEdit": 1786949139531
+    },
+    {
+      "id": "mq0xij1oga2112zl2v4",
+      "title": "GYM",
+      "body": "\n=====================BỤNG=========================\n- Tần suất: 2 -> 3 buổi 1 tuần, 5 -> 17 rep, mỗi rep 12 -> 15 cái, mỗi rep nghỉ 90s (20p)\n- Thời gian: Trước khi ăn sáng/ Sau buổi tập chính \n- Bài tập:\n+ Bụng trên: Crunch (Gập bụng, lưng gần như sát đất): (4 -> 5 hiệp, 10 -> 15) https://www.facebook.com/share/v/1BX278pZi6/\n+ Bụng dưới: Leg Raise (Lưng ko đc cong):  (4 -> 5 hiệp, 10 -> 15) https://www.facebook.com/share/v/1BX278pZi6/\n+ Side Plank: (10 -> 12 x 5 hiệp) https://www.facebook.com/share/v/1CpqiKf5Qy/\n\n====================SET LỊCH TẬP====================\n- LINKKKKK: https://www.facebook.com/share/v/1FCcYMUJ5S/\nhttps://www.facebook.com/share/v/1F3kZg1rP3/\n\n====================CARDIO=======================\n- Burpee: https://www.youtube.com/watch?v=auBLPXO8Fww (5 set x 10 - 20 reps)",
+      "created": 1780664242668,
+      "lastEdit": 1786003218287
+    }
+  ],
+  "nextID": 15,
+  "currentNote": "mrusk3qze5pljsolbra",
+  "lastBackup": 1785675411779,
+  "noteHeight": 492,
+  "noteWidth": 492
+}
