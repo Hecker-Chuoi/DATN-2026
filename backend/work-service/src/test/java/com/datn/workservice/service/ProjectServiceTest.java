@@ -69,6 +69,12 @@ class ProjectServiceTest {
     private AtomicKeySequenceGenerator atomicKeySequenceGenerator;
     @Mock
     private IdentityClient identityClient;
+    @Mock
+    private TeamMemberRepository teamMemberRepository;
+    @Mock
+    private ProjectAccessService projectAccessService;
+    @Mock
+    private ProjectMemberService projectMemberService;
 
     @InjectMocks
     private ProjectServiceImpl projectService;
@@ -248,6 +254,56 @@ class ProjectServiceTest {
 
         assertThat(updated.getName()).isEqualTo("New Name");
         assertThat(updated.getDescription()).isEqualTo("New Description");
+    }
+
+    @Test
+    @DisplayName("createProject: Rejects attaching project to a team the creator does not belong to")
+    void testCreateProjectRejectsForeignTeam() {
+        UUID teamId = UUID.randomUUID();
+        CreateProjectRequest request = CreateProjectRequest.builder()
+                .workspaceId(workspaceId)
+                .teamId(teamId)
+                .name("Sneaky Project")
+                .key("SNK")
+                .build();
+
+        when(projectRepository.existsByKeyIgnoreCase("SNK")).thenReturn(false);
+        when(teamRepository.findById(teamId)).thenReturn(Optional.of(
+                Team.builder().id(teamId).name("Other Team").ownerId(UUID.randomUUID()).workspaceId(workspaceId).build()));
+        when(projectAccessService.isGlobalAdmin()).thenReturn(false);
+        when(teamMemberRepository.existsByTeamIdAndUserId(teamId, currentUserId)).thenReturn(false);
+
+        assertThatThrownBy(() -> projectService.createProject(request, currentUserId))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(projectRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("getAllProjects: Non-admin only sees accessible projects and gets myRole")
+    void testGetAllProjectsFiltersByMembership() {
+        Project mine = Project.builder()
+                .id(projectId)
+                .workspaceId(workspaceId)
+                .name("Mine")
+                .key("MINE")
+                .leadUserId(UUID.randomUUID())
+                .createdBy(UUID.randomUUID())
+                .build();
+        UUID memberRoleId = UUID.randomUUID();
+
+        when(roleAssignmentRepository.findByUserId(currentUserId)).thenReturn(List.of(
+                RoleAssignment.builder().projectId(projectId).userId(currentUserId).roleId(memberRoleId).build()));
+        when(projectRoleRepository.findAllById(any())).thenReturn(List.of(
+                ProjectRole.builder().id(memberRoleId).projectId(projectId).name("MEMBER").build()));
+        when(projectRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(mine)));
+
+        var page = projectService.getAllProjects(null, null, null, null,
+                org.springframework.data.domain.PageRequest.of(0, 20), currentUserId, false);
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getContent().get(0).getMyRole()).isEqualTo("MEMBER");
     }
 
     @Test

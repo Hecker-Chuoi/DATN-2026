@@ -1,6 +1,8 @@
 package com.datn.workservice.security;
 
+import com.datn.workservice.entity.WorkItem;
 import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.repository.WorkItemRepository;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,87 +18,85 @@ import org.springframework.web.bind.annotation.PathVariable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
+/**
+ * AOP guard cho @RequireProjectPermission / @RequireTaskPermission.
+ *
+ * Nguyên tắc FAIL-CLOSED: nếu không xác định được projectId/taskId từ tham số
+ * thì từ chối (403) thay vì bỏ qua kiểm tra.
+ */
 @Slf4j
 @Aspect
 @Component
 @RequiredArgsConstructor
 public class ProjectPermissionGuard {
 
+    private static final Set<String> TASK_ID_PARAM_NAMES = Set.of("id", "itemid", "workitemid", "taskid");
+
     private final ProjectMemberService projectMemberService;
-    private final ProjectSecurity projectSecurity;
+    private final WorkItemRepository workItemRepository;
 
     @Before("@annotation(com.datn.workservice.security.RequireProjectPermission) || @within(com.datn.workservice.security.RequireProjectPermission) || @annotation(com.datn.workservice.security.RequireTaskPermission) || @within(com.datn.workservice.security.RequireTaskPermission)")
     public void checkPermission(JoinPoint joinPoint) {
-        try {
-            MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-            Method method = signature.getMethod();
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Method method = signature.getMethod();
 
-            RequireProjectPermission requireProjectPerm = AnnotationUtils.findAnnotation(method, RequireProjectPermission.class);
-            if (requireProjectPerm == null && joinPoint.getTarget() != null) {
-                requireProjectPerm = AnnotationUtils.findAnnotation(joinPoint.getTarget().getClass(), RequireProjectPermission.class);
+        RequireProjectPermission requireProjectPerm = AnnotationUtils.findAnnotation(method, RequireProjectPermission.class);
+        if (requireProjectPerm == null && joinPoint.getTarget() != null) {
+            requireProjectPerm = AnnotationUtils.findAnnotation(joinPoint.getTarget().getClass(), RequireProjectPermission.class);
+        }
+
+        RequireTaskPermission requireTaskPerm = AnnotationUtils.findAnnotation(method, RequireTaskPermission.class);
+        if (requireTaskPerm == null && joinPoint.getTarget() != null) {
+            requireTaskPerm = AnnotationUtils.findAnnotation(joinPoint.getTarget().getClass(), RequireTaskPermission.class);
+        }
+
+        if (requireProjectPerm == null && requireTaskPerm == null) {
+            return;
+        }
+
+        Optional<UUID> currentUserIdOpt = SecurityUtils.getCurrentUserIdOptional();
+        if (currentUserIdOpt.isEmpty()) {
+            log.warn("Access denied: Unauthenticated user accessing method {}", signature.toShortString());
+            throw new AccessDeniedException("Yêu cầu xác thực để thực hiện thao tác này");
+        }
+
+        UUID currentUserId = currentUserIdOpt.get();
+        if (SecurityUtils.isGlobalAdmin()) {
+            log.debug("Access granted for Global ADMIN user {} on method {}", currentUserId, signature.toShortString());
+            return;
+        }
+
+        if (requireProjectPerm != null) {
+            UUID projectId = resolveProjectId(joinPoint, method);
+            if (projectId == null) {
+                log.warn("Access denied: cannot resolve projectId for method {}", signature.toShortString());
+                throw new AccessDeniedException("Không xác định được dự án để kiểm tra quyền");
             }
+            check(projectId, currentUserId, requireProjectPerm.value(), "trong dự án");
+        }
 
-            RequireTaskPermission requireTaskPerm = AnnotationUtils.findAnnotation(method, RequireTaskPermission.class);
-            if (requireTaskPerm == null && joinPoint.getTarget() != null) {
-                requireTaskPerm = AnnotationUtils.findAnnotation(joinPoint.getTarget().getClass(), RequireTaskPermission.class);
+        if (requireTaskPerm != null) {
+            UUID taskId = resolveTaskId(joinPoint, method);
+            if (taskId == null) {
+                log.warn("Access denied: cannot resolve work item id for method {}", signature.toShortString());
+                throw new AccessDeniedException("Không xác định được công việc để kiểm tra quyền");
             }
+            UUID projectId = workItemRepository.findById(taskId)
+                    .map(WorkItem::getProjectId)
+                    .orElseThrow(() -> new AccessDeniedException("Không tìm thấy công việc hoặc bạn không có quyền truy cập"));
+            check(projectId, currentUserId, requireTaskPerm.value(), "trên công việc");
+        }
+    }
 
-            if (requireProjectPerm == null && requireTaskPerm == null) {
-                return;
-            }
-
-            Optional<UUID> currentUserIdOpt = SecurityUtils.getCurrentUserIdOptional();
-            if (currentUserIdOpt.isEmpty()) {
-                log.warn("Access denied: Unauthenticated user accessing method {}", signature.toShortString());
-                throw new AccessDeniedException("Yêu cầu xác thực để thực hiện thao tác này");
-            }
-
-            UUID currentUserId = currentUserIdOpt.get();
-            if (SecurityUtils.isGlobalAdmin()) {
-                log.info("Access granted for Global ADMIN user {} on method {}", currentUserId, signature.toShortString());
-                return;
-            }
-
-            if (requireProjectPerm != null) {
-                UUID projectId = resolveProjectId(joinPoint, method);
-                if (projectId != null) {
-                    PermissionKey requiredPermission = requireProjectPerm.value();
-                    log.debug("Checking project permission {} for user {} on project {}", requiredPermission, currentUserId, projectId);
-                    boolean hasPermission = projectMemberService.hasPermission(projectId, currentUserId, requiredPermission);
-
-                    if (!hasPermission) {
-                        log.warn("Access denied for user {} requesting permission {} on project {}",
-                                currentUserId, requiredPermission, projectId);
-                        throw new AccessDeniedException(
-                                "Bạn không có quyền thực hiện thao tác này (" + requiredPermission.name() + ") trong dự án"
-                        );
-                    }
-                }
-            }
-
-            if (requireTaskPerm != null) {
-                UUID taskId = resolveTaskId(joinPoint, method);
-                if (taskId != null) {
-                    PermissionKey requiredPermission = requireTaskPerm.value();
-                    log.debug("Checking task permission {} for user {} on task {}", requiredPermission, currentUserId, taskId);
-                    boolean hasPermission = projectSecurity.hasTaskPermission(taskId, requiredPermission.name());
-
-                    if (!hasPermission) {
-                        log.warn("Access denied for user {} requesting permission {} on task {}",
-                                currentUserId, requiredPermission, taskId);
-                        throw new AccessDeniedException(
-                                "Bạn không có quyền thực hiện thao tác này (" + requiredPermission.name() + ") trên công việc"
-                        );
-                    }
-                }
-            }
-        } catch (AccessDeniedException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Unexpected error in ProjectPermissionGuard: {}", e.getMessage(), e);
-            throw new RuntimeException("Lỗi hệ thống khi kiểm tra quyền", e);
+    private void check(UUID projectId, UUID userId, PermissionKey required, String scopeLabel) {
+        boolean hasPermission = projectMemberService.hasPermission(projectId, userId, required);
+        if (!hasPermission) {
+            log.warn("Access denied for user {} requesting permission {} on project {}", userId, required, projectId);
+            throw new AccessDeniedException(
+                    "Bạn không có quyền thực hiện thao tác này (" + required.name() + ") " + scopeLabel);
         }
     }
 
@@ -110,13 +110,13 @@ public class ProjectPermissionGuard {
             return null;
         }
 
-        // 1. Inspect @PathVariable annotations
+        // 1. @PathVariable("projectId")
         for (int i = 0; i < args.length; i++) {
             if (i < paramAnnotations.length && args[i] instanceof UUID uuid) {
                 for (Annotation ann : paramAnnotations[i]) {
                     if (ann instanceof PathVariable pv) {
                         String pvName = pv.value().isEmpty() ? pv.name() : pv.value();
-                        if ("projectId".equalsIgnoreCase(pvName) || pvName.isEmpty()) {
+                        if ("projectId".equalsIgnoreCase(pvName)) {
                             return uuid;
                         }
                     }
@@ -124,28 +124,18 @@ public class ProjectPermissionGuard {
             }
         }
 
-        // 2. Check parameter name
+        // 2. Tên tham số chứa "project"
         if (parameterNames != null) {
-            for (int i = 0; i < parameterNames.length; i++) {
-                String paramName = parameterNames[i];
-                if (i < args.length && args[i] instanceof UUID uuid) {
-                    if ("projectId".equalsIgnoreCase(paramName) || paramName.toLowerCase().contains("project")) {
-                        return uuid;
-                    }
+            for (int i = 0; i < parameterNames.length && i < args.length; i++) {
+                if (args[i] instanceof UUID uuid && parameterNames[i].toLowerCase().contains("project")) {
+                    return uuid;
                 }
             }
         }
 
-        // 3. Fallback: First UUID argument in method
+        // 3. DTO có getProjectId()
         for (Object arg : args) {
-            if (arg instanceof UUID uuid) {
-                return uuid;
-            }
-        }
-
-        // 4. Inspect DTO argument with getProjectId()
-        for (Object arg : args) {
-            if (arg != null) {
+            if (arg != null && !(arg instanceof UUID)) {
                 try {
                     Method getProjectIdMethod = arg.getClass().getMethod("getProjectId");
                     Object result = getProjectIdMethod.invoke(arg);
@@ -170,14 +160,13 @@ public class ProjectPermissionGuard {
             return null;
         }
 
-        // 1. Inspect @PathVariable annotations for task/item ID
+        // 1. @PathVariable id/itemId/workItemId/taskId
         for (int i = 0; i < args.length; i++) {
             if (i < paramAnnotations.length && args[i] instanceof UUID uuid) {
                 for (Annotation ann : paramAnnotations[i]) {
                     if (ann instanceof PathVariable pv) {
                         String pvName = pv.value().isEmpty() ? pv.name() : pv.value();
-                        if ("id".equalsIgnoreCase(pvName) || "itemId".equalsIgnoreCase(pvName)
-                                || "workItemId".equalsIgnoreCase(pvName) || "taskId".equalsIgnoreCase(pvName)) {
+                        if (TASK_ID_PARAM_NAMES.contains(pvName.toLowerCase())) {
                             return uuid;
                         }
                     }
@@ -185,23 +174,12 @@ public class ProjectPermissionGuard {
             }
         }
 
-        // 2. Check parameter name
+        // 2. Tên tham số
         if (parameterNames != null) {
-            for (int i = 0; i < parameterNames.length; i++) {
-                String paramName = parameterNames[i];
-                if (i < args.length && args[i] instanceof UUID uuid) {
-                    if ("id".equalsIgnoreCase(paramName) || "itemId".equalsIgnoreCase(paramName)
-                            || "workItemId".equalsIgnoreCase(paramName) || "taskId".equalsIgnoreCase(paramName)) {
-                        return uuid;
-                    }
+            for (int i = 0; i < parameterNames.length && i < args.length; i++) {
+                if (args[i] instanceof UUID uuid && TASK_ID_PARAM_NAMES.contains(parameterNames[i].toLowerCase())) {
+                    return uuid;
                 }
-            }
-        }
-
-        // 3. Fallback: First UUID argument in method
-        for (Object arg : args) {
-            if (arg instanceof UUID uuid) {
-                return uuid;
             }
         }
 

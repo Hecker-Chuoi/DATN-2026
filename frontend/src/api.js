@@ -53,6 +53,41 @@ export const adminTokenStore = {
 
 export const tokenStore = userTokenStore;
 
+// ─── JWT helpers (đọc realm roles của Keycloak từ access token, không cần thư viện) ───
+export function decodeJwtPayload(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+/** Realm roles (VD: ["ADMIN", "USER"]) của token người dùng hiện tại. */
+export function getUserRealmRoles() {
+  const payload = decodeJwtPayload(userTokenStore.get());
+  const roles = payload?.realm_access?.roles;
+  return Array.isArray(roles) ? roles : [];
+}
+
+/** Keycloak user id (claim `sub`) – work-service dùng id này làm user_id ở mọi bảng. */
+export function getUserKeycloakId() {
+  const payload = decodeJwtPayload(userTokenStore.get());
+  return payload?.sub || null;
+}
+
+/** Admin portal (/admin/**) dùng admin token cho mọi request, kể cả work-service. */
+function isAdminPortalPage() {
+  return typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
+}
+
 // ─── Recursive Normalizer for Spring Boot / Jackson DefaultTyping ────────────
 function normalizeResponseData(data) {
   if (data === null || data === undefined) return data;
@@ -99,6 +134,7 @@ apiClient.interceptors.request.use(
     }
 
     const isAdminRoute =
+      isAdminPortalPage() ||
       url.includes('/identity/api/v1/admin/') ||
       url.includes('/api/v1/admin/');
 
@@ -153,6 +189,7 @@ apiClient.interceptors.response.use(
       }
 
       const isAdminRoute =
+        isAdminPortalPage() ||
         url.includes('/identity/api/v1/admin/') ||
         url.includes('/api/v1/admin/');
       const store = isAdminRoute ? adminTokenStore : userTokenStore;
@@ -210,13 +247,16 @@ apiClient.interceptors.response.use(
     const body = error.response?.data;
     const msg = body?.message || error.message || 'Lỗi kết nối máy chủ';
 
-    if (error.response?.status !== 401 || !originalRequest?._retry) {
+    // Trang có thể tự xử lý 403/404 (VD: hiển thị màn "Không có quyền") bằng cách gửi { skipErrorToast: true }
+    const skipToast = Boolean(originalRequest?.skipErrorToast);
+    if (!skipToast && (error.response?.status !== 401 || !originalRequest?._retry)) {
       toast.error(msg, { id: msg });
     }
 
     const customErr = new Error(msg);
     customErr.status = error.response?.status;
     customErr.body = body;
+    customErr.response = error.response;
     return Promise.reject(customErr);
   }
 );
@@ -276,14 +316,16 @@ export const teamApi = {
 export const projectApi = {
   listAll: (params) => apiClient.get(`${WORK_BASE}/projects`, { params }),
   listTemplates: () => apiClient.get(`${WORK_BASE}/projects/templates`),
-  getById: (id) => apiClient.get(`${WORK_BASE}/projects/${id}`),
+  getById: (id, config = {}) => apiClient.get(`${WORK_BASE}/projects/${id}`, config),
   create: (data) => apiClient.post(`${WORK_BASE}/projects`, data),
   update: (id, data) => apiClient.put(`${WORK_BASE}/projects/${id}`, data),
   delete: (id) => apiClient.delete(`${WORK_BASE}/projects/${id}`),
   clone: (sourceProjectId, data) =>
     apiClient.post(`${WORK_BASE}/projects/${sourceProjectId}/clone`, data),
-  getMembers: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/members`),
-  getMyPermissions: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/permissions/my`),
+  getMembers: (projectId, config = {}) => apiClient.get(`${WORK_BASE}/projects/${projectId}/members`, config),
+  /** Trả về { roleName, isLead, isGlobalAdmin, permissions[] }; 403 nếu không phải thành viên (không toast). */
+  getMyPermissions: (projectId) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/permissions/my`, { skipErrorToast: true }),
   addMember: (projectId, data) => apiClient.post(`${WORK_BASE}/projects/${projectId}/members`, data),
   updateMemberRole: (projectId, userId, roleId) =>
     apiClient.put(`${WORK_BASE}/projects/${projectId}/members/${userId}/role`, { roleId }),

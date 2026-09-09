@@ -1,6 +1,7 @@
 package com.datn.workservice.service;
 
 import com.datn.workservice.dto.request.AssignProjectRoleRequest;
+import com.datn.workservice.dto.response.MyProjectPermissionsResponse;
 import com.datn.workservice.dto.response.ProjectRoleResponse;
 import com.datn.workservice.dto.response.RoleAssignmentResponse;
 import com.datn.workservice.enums.PermissionKey;
@@ -12,16 +13,19 @@ public interface ProjectMemberService {
 
     /**
      * Checks if a user has a specific granular permission within a project.
+     * Deny-by-default: users without any role assignment in the project have NO permission
+     * (except Project Lead / creator who are implicit administrators).
      */
     boolean hasPermission(UUID projectId, UUID userId, PermissionKey permissionKey);
 
     /**
-     * Retrieves the list of permission keys granted to the current user in a project.
+     * Retrieves role and permission keys granted to the current user in a project.
+     * Throws AccessDeniedException when the user is not a member (and not Global ADMIN).
      */
-    List<String> getMyPermissions(UUID projectId, UUID currentUserId);
+    MyProjectPermissionsResponse getMyPermissions(UUID projectId, UUID currentUserId, boolean isGlobalAdmin);
 
     /**
-     * Retrieves all members and their assigned roles in a project.
+     * Retrieves all members and their assigned roles in a project (read-only).
      */
     List<RoleAssignmentResponse> getProjectMembers(UUID projectId);
 
@@ -44,4 +48,10 @@ public interface ProjectMemberService {
      * Retrieves all available roles in a project.
      */
     List<ProjectRoleResponse> getProjectRoles(UUID projectId);
+
+    /**
+     * Synchronizes members of the project's team into role_assignments
+     * (LEADER -> ADMINISTRATOR, MEMBER -> MEMBER, VIEWER -> VIEWER). Existing assignments are kept.
+     */
+    void syncTeamMembersToProject(UUID projectId);
 }

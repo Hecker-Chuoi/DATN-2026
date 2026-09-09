@@ -35,6 +35,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final KeycloakService keycloakService;
+    private final WorkDataCleanupService workDataCleanupService;
 
 
     /**
@@ -63,8 +64,8 @@ public class UserService {
                 request.getLastName()
         );
 
-        // 3. Assign default realm role 'USER' in Keycloak
-        keycloakService.assignRealmRoles(keycloakId, Set.of("ADMIN")); //DEFAULT_ROLES
+        // 3. Assign default realm role 'USER' in Keycloak (ADMIN chỉ được cấp thủ công qua API admin)
+        keycloakService.assignRealmRoles(keycloakId, DEFAULT_ROLES);
 
         // 4. Persist to local DB
         User user = User.builder()
@@ -393,12 +394,19 @@ public class UserService {
         // 2. Set status to SUSPENDED in DB
         user.setStatus(User.UserStatus.SUSPENDED);
         userRepository.save(user);
- 
-        // 3. Cleanup DB references (team memberships, watchers, assignee)
-        userRepository.deleteTeamMembershipsByUserId(userId);
-        userRepository.deleteTaskWatchersByUserId(userId);
-        userRepository.unassignTasksByUserId(userId);
- 
+
+        // 3. Cleanup work-service references (team memberships, project roles, assignee).
+        //    work-service lưu user_id = Keycloak sub, nên dọn theo cả 2 định danh (Keycloak id + DB id cũ).
+        Set<UUID> referenceIds = new java.util.HashSet<>();
+        referenceIds.add(userId);
+        try {
+            if (user.getKeycloakId() != null) {
+                referenceIds.add(UUID.fromString(user.getKeycloakId()));
+            }
+        } catch (IllegalArgumentException ignored) {
+        }
+        workDataCleanupService.cleanupUserReferences(referenceIds);
+
         log.info("Soft-deleted and cleaned up user '{}'", user.getUsername());
     }
 

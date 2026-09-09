@@ -32,7 +32,7 @@ const TYPE_ICONS = {
 export default function ProjectBoardView({
   projectId,
   projectKey,
-  canCreate = true,
+  canCreate = false,
   onOpenCreateModal,
   onSelectWorkItem,
   refreshKey = 0
@@ -273,22 +273,24 @@ export default function ProjectBoardView({
                   </span>
                 </div>
 
-                <button
-                  onClick={() => onOpenCreateModal && onOpenCreateModal()}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#64748B',
-                    cursor: 'pointer',
-                    padding: 4,
-                    borderRadius: 4,
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                  title="Thêm công việc vào cột này"
-                >
-                  <Plus size={15} />
-                </button>
+                {canCreate && (
+                  <button
+                    onClick={() => onOpenCreateModal && onOpenCreateModal()}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#64748B',
+                      cursor: 'pointer',
+                      padding: 4,
+                      borderRadius: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    title="Thêm công việc vào cột này"
+                  >
+                    <Plus size={15} />
+                  </button>
+                )}
               </div>
 
               {/* Card List in Column */}

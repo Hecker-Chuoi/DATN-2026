@@ -2,8 +2,11 @@ import React from 'react';
 import { usePermission } from '../../context/PermissionContext';
 
 /**
- * Guard Component for conditional rendering of JSX elements based on user permissions.
- * Usage: <Can projectId={projectId} perform="PROJECT_EDIT"><Button>Edit</Button></Can>
+ * Guard component ẩn/hiện JSX theo quyền trong dự án.
+ * Usage: <Can projectId={projectId} perform="ISSUE_CREATE"><Button>Tạo</Button></Can>
+ *
+ * Lưu ý: quyền của dự án phải được tải trước (useProjectPermission(projectId) ở trang cha),
+ * nếu chưa tải thì mặc định từ chối.
  */
 export const Can = ({ projectId, perform, fallback = null, children }) => {
   const { hasPermission } = usePermission();

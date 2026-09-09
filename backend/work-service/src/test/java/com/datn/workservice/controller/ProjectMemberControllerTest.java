@@ -1,9 +1,9 @@
 package com.datn.workservice.controller;
 
 import com.datn.workservice.dto.request.AssignProjectRoleRequest;
+import com.datn.workservice.dto.response.MyProjectPermissionsResponse;
 import com.datn.workservice.dto.response.ProjectRoleResponse;
 import com.datn.workservice.dto.response.RoleAssignmentResponse;
-import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.service.ProjectMemberService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -80,19 +80,27 @@ class ProjectMemberControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/work/projects/{projectId}/permissions/my - Returns permissions")
+    @DisplayName("GET /api/v1/work/projects/{projectId}/permissions/my - Returns role & permissions")
     void testGetMyPermissions_Success() throws Exception {
-        when(projectMemberService.getMyPermissions(projectId, currentUserId))
-                .thenReturn(List.of("PROJECT_VIEW", "ISSUE_CREATE", "SPRINT_MANAGE"));
+        MyProjectPermissionsResponse response = MyProjectPermissionsResponse.builder()
+                .projectId(projectId)
+                .roleName("MEMBER")
+                .isLead(false)
+                .isGlobalAdmin(false)
+                .permissions(List.of("PROJECT_VIEW", "ISSUE_CREATE", "SPRINT_MANAGE"))
+                .build();
+        when(projectMemberService.getMyPermissions(projectId, currentUserId, false)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/work/projects/{projectId}/permissions/my", projectId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0]").value("PROJECT_VIEW"))
-                .andExpect(jsonPath("$.data[1]").value("ISSUE_CREATE"))
-                .andExpect(jsonPath("$.data[2]").value("SPRINT_MANAGE"));
+                .andExpect(jsonPath("$.data.roleName").value("MEMBER"))
+                .andExpect(jsonPath("$.data.isLead").value(false))
+                .andExpect(jsonPath("$.data.permissions[0]").value("PROJECT_VIEW"))
+                .andExpect(jsonPath("$.data.permissions[1]").value("ISSUE_CREATE"))
+                .andExpect(jsonPath("$.data.permissions[2]").value("SPRINT_MANAGE"));
 
-        verify(projectMemberService).getMyPermissions(projectId, currentUserId);
+        verify(projectMemberService).getMyPermissions(projectId, currentUserId, false);
     }
 
     @Test

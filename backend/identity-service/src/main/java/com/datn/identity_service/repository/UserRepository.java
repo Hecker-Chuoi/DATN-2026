@@ -40,12 +40,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Modifying
     @Query(value = "DELETE FROM team_members WHERE user_id = :userId", nativeQuery = true)
     void deleteTeamMembershipsByUserId(@Param("userId") UUID userId);
- 
+
     @Modifying
-    @Query(value = "DELETE FROM task_watchers WHERE user_id = :userId", nativeQuery = true)
-    void deleteTaskWatchersByUserId(@Param("userId") UUID userId);
- 
+    @Query(value = "DELETE FROM role_assignments WHERE user_id = :userId", nativeQuery = true)
+    void deleteProjectRoleAssignmentsByUserId(@Param("userId") UUID userId);
+
     @Modifying
-    @Query(value = "UPDATE tasks SET assignee_id = NULL WHERE assignee_id = :userId", nativeQuery = true)
-    void unassignTasksByUserId(@Param("userId") UUID userId);
+    @Query(value = "UPDATE work_items SET assignee_id = NULL WHERE assignee_id = :userId", nativeQuery = true)
+    void unassignWorkItemsByUserId(@Param("userId") UUID userId);
 }

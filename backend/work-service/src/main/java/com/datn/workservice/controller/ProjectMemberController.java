@@ -2,6 +2,7 @@ package com.datn.workservice.controller;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.workservice.dto.request.AssignProjectRoleRequest;
+import com.datn.workservice.dto.response.MyProjectPermissionsResponse;
 import com.datn.workservice.dto.response.ProjectRoleResponse;
 import com.datn.workservice.dto.response.RoleAssignmentResponse;
 import com.datn.workservice.enums.PermissionKey;
@@ -26,12 +27,14 @@ public class ProjectMemberController {
     private final ProjectMemberService projectMemberService;
 
     /**
-     * Retrieves permissions of current user in this project.
+     * Retrieves role & permissions of current user in this project.
+     * Returns 403 when the user is not a member of the project (frontend uses this as access check).
      */
     @GetMapping("/permissions/my")
-    public ResponseEntity<ApiResponse<List<String>>> getMyPermissions(@PathVariable("projectId") UUID projectId) {
+    public ResponseEntity<ApiResponse<MyProjectPermissionsResponse>> getMyPermissions(@PathVariable("projectId") UUID projectId) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
-        List<String> permissions = projectMemberService.getMyPermissions(projectId, currentUserId);
+        MyProjectPermissionsResponse permissions = projectMemberService.getMyPermissions(
+                projectId, currentUserId, SecurityUtils.isGlobalAdmin());
         return ResponseEntity.ok(ApiResponse.success(permissions));
     }
 

@@ -2,7 +2,6 @@ package com.datn.workservice.controller;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.common.dto.PageResponse;
-import com.datn.workservice.dto.request.CloneProjectRequest;
 import com.datn.workservice.dto.request.CreateProjectRequest;
 import com.datn.workservice.dto.request.UpdateProjectRequest;
 import com.datn.workservice.dto.response.ProjectDetailResponse;
@@ -19,13 +18,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.parameters.P;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
-import java.security.Principal;
-import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -46,6 +40,9 @@ public class ProjectController {
                 .body(ApiResponse.success(response, "Dự án đã được tạo và khởi tạo hệ sinh thái thành công"));
     }
 
+    /**
+     * Danh sách dự án mà người dùng hiện tại được truy cập (Global ADMIN thấy tất cả).
+     */
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ProjectResponse>>> getAllProjects(
             @RequestParam(required = false) UUID workspaceId,
@@ -54,8 +51,10 @@ public class ProjectController {
             @RequestParam(required = false) Boolean isTemplate,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        boolean includeAll = SecurityUtils.isGlobalAdmin();
         PageResponse<ProjectResponse> response = projectService.getAllProjects(
-                workspaceId, teamId, search, isTemplate, pageable
+                workspaceId, teamId, search, isTemplate, pageable, currentUserId, includeAll
         );
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -65,7 +64,9 @@ public class ProjectController {
             @RequestParam(required = false) UUID workspaceId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        PageResponse<ProjectResponse> response = projectService.getTemplates(workspaceId, pageable);
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        boolean includeAll = SecurityUtils.isGlobalAdmin();
+        PageResponse<ProjectResponse> response = projectService.getTemplates(workspaceId, pageable, currentUserId, includeAll);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -78,6 +79,9 @@ public class ProjectController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    /**
+     * Tra cứu theo Key: quyền PROJECT_VIEW được kiểm tra trong service sau khi resolve project.
+     */
     @GetMapping("/key/{key}")
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectByKey(
             @PathVariable("key") String key

@@ -151,6 +151,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin }) {
         category: newStatusCategory,
         colorHex: newStatusColor,
         description: newStatusDesc.trim(),
+        projectId, // backend yêu cầu PROJECT_ADMIN của dự án này để tạo trạng thái dùng chung
       });
       toast.success('Tạo trạng thái mới thành công!');
       setIsAddStatusOpen(false);

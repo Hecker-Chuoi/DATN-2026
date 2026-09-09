@@ -6,18 +6,27 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Tiện ích đọc thông tin người dùng hiện tại từ JWT của Keycloak.
+ *
+ * Quy ước định danh: work-service dùng DUY NHẤT claim {@code sub} (Keycloak user id)
+ * làm user_id ở mọi bảng (role_assignments, team_members, created_by, assignee_id...).
+ */
 @Slf4j
 public final class SecurityUtils {
+
+    private static final String ADMIN_ROLE = "ADMIN";
 
     private SecurityUtils() {
     }
 
     /**
-     * Extracts the current authenticated User ID from Spring Security context.
-     * Checks JWT 'sub' claim or authentication name.
+     * Trả về user id (Keycloak {@code sub}) của người dùng hiện tại, nếu đã xác thực.
      */
     public static Optional<UUID> getCurrentUserIdOptional() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -27,19 +36,6 @@ public final class SecurityUtils {
 
         Object principal = authentication.getPrincipal();
         if (principal instanceof Jwt jwt) {
-            // 1. Prioritize custom claim 'user_id' or 'userId' (PostgreSQL database User ID)
-            String userIdClaim = jwt.getClaimAsString("user_id");
-            if (userIdClaim == null) {
-                userIdClaim = jwt.getClaimAsString("userId");
-            }
-            if (userIdClaim != null && !userIdClaim.isBlank()) {
-                try {
-                    return Optional.of(UUID.fromString(userIdClaim));
-                } catch (IllegalArgumentException ignored) {
-                }
-            }
-
-            // 2. Fallback to 'sub' claim (Keycloak User ID)
             String subject = jwt.getSubject();
             if (subject != null && !subject.isBlank()) {
                 try {
@@ -50,7 +46,7 @@ public final class SecurityUtils {
             }
         }
 
-        // Fallback to name if it is a valid UUID
+        // Fallback: authentication name (dùng trong test hoặc token không phải JWT)
         String name = authentication.getName();
         if (name != null && !name.isBlank() && !"anonymousUser".equalsIgnoreCase(name)) {
             try {
@@ -63,7 +59,7 @@ public final class SecurityUtils {
     }
 
     /**
-     * Gets current user ID or throws UnauthorizedException.
+     * Trả về user id hiện tại hoặc ném UnauthorizedException.
      */
     public static UUID getCurrentUserId() {
         return getCurrentUserIdOptional()
@@ -71,20 +67,30 @@ public final class SecurityUtils {
     }
 
     /**
-     * Checks if current authenticated user has global ADMIN role in Keycloak JWT or Authorities.
+     * Người dùng hiện tại có realm role ADMIN (Global Admin) hay không.
      */
     public static boolean isGlobalAdmin() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) return false;
+        return hasRealmRole(ADMIN_ROLE);
+    }
 
-        boolean inAuthorities = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ADMIN") || a.getAuthority().equalsIgnoreCase("ROLE_ADMIN"));
-        if (inAuthorities) return true;
+    /**
+     * Kiểm tra realm role từ GrantedAuthorities (ROLE_x) hoặc trực tiếp từ claim realm_access.roles.
+     */
+    public static boolean hasRealmRole(String roleName) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || roleName == null) return false;
+
+        if (authentication.getAuthorities() != null) {
+            boolean inAuthorities = authentication.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equalsIgnoreCase(roleName)
+                            || a.getAuthority().equalsIgnoreCase("ROLE_" + roleName));
+            if (inAuthorities) return true;
+        }
 
         if (authentication.getPrincipal() instanceof Jwt jwt) {
-            java.util.Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
-            if (realmAccess != null && realmAccess.get("roles") instanceof java.util.List<?> roles) {
-                return roles.stream().anyMatch(r -> "ADMIN".equalsIgnoreCase(String.valueOf(r)));
+            Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+            if (realmAccess != null && realmAccess.get("roles") instanceof List<?> roles) {
+                return roles.stream().anyMatch(r -> roleName.equalsIgnoreCase(String.valueOf(r)));
             }
         }
         return false;

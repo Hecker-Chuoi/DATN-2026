@@ -2,6 +2,8 @@ package com.datn.workservice.controller;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.workservice.dto.response.WorkItemChangelogResponse;
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireTaskPermission;
 import com.datn.workservice.service.WorkItemAuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +22,7 @@ public class WorkItemChangelogController {
     private final WorkItemAuditService auditService;
 
     @GetMapping({"/items/{itemId}/changelogs", "/work-items/{itemId}/changelogs"})
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<List<WorkItemChangelogResponse>>> getChangelogs(
             @PathVariable("itemId") UUID workItemId
     ) {

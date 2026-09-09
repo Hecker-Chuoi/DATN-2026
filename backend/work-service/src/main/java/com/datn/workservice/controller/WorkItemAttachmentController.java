@@ -2,20 +2,17 @@ package com.datn.workservice.controller;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.workservice.dto.response.WorkItemAttachmentResponse;
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireTaskPermission;
 import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.service.WorkItemAttachmentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import com.datn.workservice.enums.PermissionKey;
-import com.datn.workservice.security.RequireTaskPermission;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -45,29 +42,32 @@ public class WorkItemAttachmentController {
     @RequireTaskPermission(PermissionKey.ISSUE_EDIT)
     public ResponseEntity<ApiResponse<WorkItemAttachmentResponse>> uploadAttachment(
             @PathVariable("itemId") UUID workItemId,
-            @RequestParam("file") MultipartFile file,
-            @AuthenticationPrincipal Jwt jwt
+            @RequestParam("file") MultipartFile file
     ) {
-        UUID userId = resolveUserId(jwt);
+        UUID userId = SecurityUtils.getCurrentUserId();
         WorkItemAttachmentResponse response = attachmentService.uploadAttachment(workItemId, file, userId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Đã tải lên tệp đính kèm thành công"));
     }
 
+    /**
+     * Xóa tệp: thành viên dự án; service kiểm tra ATTACHMENT_DELETE_OWN (tệp của mình) / ATTACHMENT_DELETE_ALL.
+     */
     @DeleteMapping({"/items/{itemId}/attachments/{attachmentId}", "/work-items/{itemId}/attachments/{attachmentId}"})
-    @RequireTaskPermission(PermissionKey.ISSUE_EDIT)
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<Void>> deleteAttachment(
             @PathVariable("itemId") UUID workItemId,
-            @PathVariable("attachmentId") UUID attachmentId,
-            @AuthenticationPrincipal Jwt jwt
+            @PathVariable("attachmentId") UUID attachmentId
     ) {
-        UUID userId = resolveUserId(jwt);
+        UUID userId = SecurityUtils.getCurrentUserId();
         attachmentService.deleteAttachment(workItemId, attachmentId, userId);
         return ResponseEntity.ok(ApiResponse.success(null, "Đã xóa tệp đính kèm"));
     }
 
+    /**
+     * Tải tệp: quyền PROJECT_VIEW trên dự án chứa tệp được kiểm tra trong service.
+     */
     @GetMapping({"/attachments/{attachmentId}/download", "/items/{itemId}/attachments/{attachmentId}/download"})
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Resource> downloadAttachment(
             @PathVariable("attachmentId") UUID attachmentId
     ) {
@@ -81,18 +81,5 @@ public class WorkItemAttachmentController {
                 .contentType(MediaType.parseMediaType(contentType))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + encodedFileName + "\"; filename*=UTF-8''" + encodedFileName)
                 .body(resource);
-    }
-
-    private UUID resolveUserId(Jwt jwt) {
-        return SecurityUtils.getCurrentUserIdOptional().orElseGet(() -> {
-            if (jwt != null) {
-                String sub = jwt.getSubject();
-                try {
-                    return UUID.fromString(sub);
-                } catch (Exception ignored) {
-                }
-            }
-            return UUID.fromString("00000000-0000-0000-0000-000000000001");
-        });
     }
 }

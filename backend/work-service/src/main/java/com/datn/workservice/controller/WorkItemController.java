@@ -2,11 +2,16 @@ package com.datn.workservice.controller;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.common.dto.PageResponse;
+import com.datn.workservice.dto.request.CreateSubtaskRequest;
 import com.datn.workservice.dto.request.CreateWorkItemRequest;
 import com.datn.workservice.dto.request.UpdateWorkItemRequest;
 import com.datn.workservice.dto.request.WorkItemFilterRequest;
 import com.datn.workservice.dto.response.WorkItemDetailResponse;
 import com.datn.workservice.dto.response.WorkItemResponse;
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireProjectPermission;
+import com.datn.workservice.security.RequireTaskPermission;
+import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.service.WorkItemService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,14 +21,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-
-import com.datn.workservice.enums.PermissionKey;
-import com.datn.workservice.security.RequireProjectPermission;
-import com.datn.workservice.security.RequireTaskPermission;
-import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 import java.util.Map;
@@ -41,10 +39,9 @@ public class WorkItemController {
     @RequireProjectPermission(PermissionKey.ISSUE_CREATE)
     public ResponseEntity<ApiResponse<WorkItemDetailResponse>> createWorkItem(
             @PathVariable("projectId") UUID projectId,
-            @Valid @RequestBody CreateWorkItemRequest request,
-            @AuthenticationPrincipal Jwt jwt
+            @Valid @RequestBody CreateWorkItemRequest request
     ) {
-        UUID userId = extractUserId(jwt);
+        UUID userId = SecurityUtils.getCurrentUserId();
         request.setProjectId(projectId);
         WorkItemDetailResponse response = workItemService.createWorkItem(projectId, request, userId);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
@@ -72,8 +69,10 @@ public class WorkItemController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    /**
+     * Tra cứu theo mã (VD: DATN-12). Quyền PROJECT_VIEW được kiểm tra trong service sau khi resolve project.
+     */
     @GetMapping("/items/code/{code}")
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<WorkItemDetailResponse>> getWorkItemByCode(@PathVariable("code") String code) {
         WorkItemDetailResponse response = workItemService.getWorkItemByCode(code);
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -90,10 +89,9 @@ public class WorkItemController {
     @RequireTaskPermission(PermissionKey.ISSUE_CREATE)
     public ResponseEntity<ApiResponse<WorkItemDetailResponse>> createSubtask(
             @PathVariable("id") UUID id,
-            @Valid @RequestBody com.datn.workservice.dto.request.CreateSubtaskRequest request,
-            @AuthenticationPrincipal Jwt jwt
+            @Valid @RequestBody CreateSubtaskRequest request
     ) {
-        UUID userId = extractUserId(jwt);
+        UUID userId = SecurityUtils.getCurrentUserId();
         WorkItemDetailResponse response = workItemService.createSubtask(id, request, userId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Sub-task đã được tạo thành công"));
@@ -103,10 +101,9 @@ public class WorkItemController {
     @RequireTaskPermission(PermissionKey.ISSUE_EDIT)
     public ResponseEntity<ApiResponse<WorkItemDetailResponse>> updateWorkItem(
             @PathVariable("id") UUID id,
-            @Valid @RequestBody UpdateWorkItemRequest request,
-            @AuthenticationPrincipal Jwt jwt
+            @Valid @RequestBody UpdateWorkItemRequest request
     ) {
-        UUID userId = extractUserId(jwt);
+        UUID userId = SecurityUtils.getCurrentUserId();
         WorkItemDetailResponse response = workItemService.updateWorkItem(id, request, userId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -115,10 +112,9 @@ public class WorkItemController {
     @RequireTaskPermission(PermissionKey.ISSUE_EDIT)
     public ResponseEntity<ApiResponse<Void>> updateRank(
             @PathVariable("id") UUID id,
-            @RequestBody Map<String, String> body,
-            @AuthenticationPrincipal Jwt jwt
+            @RequestBody Map<String, String> body
     ) {
-        UUID userId = extractUserId(jwt);
+        UUID userId = SecurityUtils.getCurrentUserId();
         String newRank = body.get("rank");
         workItemService.updateRank(id, newRank, userId);
         return ResponseEntity.ok(ApiResponse.success(null));
@@ -126,24 +122,9 @@ public class WorkItemController {
 
     @DeleteMapping("/items/{id}")
     @RequireTaskPermission(PermissionKey.ISSUE_DELETE)
-    public ResponseEntity<ApiResponse<Void>> deleteWorkItem(
-            @PathVariable("id") UUID id,
-            @AuthenticationPrincipal Jwt jwt
-    ) {
-        UUID userId = extractUserId(jwt);
+    public ResponseEntity<ApiResponse<Void>> deleteWorkItem(@PathVariable("id") UUID id) {
+        UUID userId = SecurityUtils.getCurrentUserId();
         workItemService.deleteWorkItem(id, userId);
         return ResponseEntity.ok(ApiResponse.success(null));
-    }
-
-    private UUID extractUserId(Jwt jwt) {
-        if (jwt == null) {
-            return UUID.fromString("00000000-0000-0000-0000-000000000001");
-        }
-        String sub = jwt.getSubject();
-        try {
-            return UUID.fromString(sub);
-        } catch (IllegalArgumentException e) {
-            return UUID.nameUUIDFromBytes(sub.getBytes());
-        }
     }
 }

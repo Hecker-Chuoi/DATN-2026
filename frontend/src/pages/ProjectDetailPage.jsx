@@ -1,35 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useOutletContext } from 'react-router-dom';
 import {
   FolderKanban,
   Kanban,
   ListTodo,
-  Layers,
-  Sparkles,
   Users,
-  ShieldCheck,
-  Settings,
   GitBranch,
   Star,
   MoreHorizontal,
   Link2,
-  SlidersHorizontal,
-  Plus
+  Plus,
+  ShieldCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi } from '../api.js';
 import { useProjectPermission } from '../hooks/useProjectPermission.js';
+import AccessDenied from '../components/common/AccessDenied.jsx';
 import ProjectMembersTab from '../components/project/ProjectMembersTab.jsx';
 import ProjectWorkflowTab from '../components/project/ProjectWorkflowTab.jsx';
 import ProjectBoardView from '../components/boards/ProjectBoardView.jsx';
 import CreateWorkItemModal from '../components/items/CreateWorkItemModal.jsx';
 import WorkItemDetailModal from '../components/items/WorkItemDetailModal.jsx';
 
+const ROLE_LABELS = {
+  ADMINISTRATOR: { label: 'Administrator', bg: '#FAF5FF', color: '#7E22CE', border: '#E9D5FF' },
+  MEMBER: { label: 'Member', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  VIEWER: { label: 'Viewer', bg: '#F8FAFC', color: '#475569', border: '#E2E8F0' },
+  ADMIN: { label: 'System Admin', bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+};
+
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
-  const navigate = useNavigate();
+  const { currentUser } = useOutletContext() || {};
+
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [activeTab, setActiveTab] = useState('board'); // 'board' | 'backlog' | 'members' | 'workflow'
   const [isStarred, setIsStarred] = useState(false);
   const [members, setMembers] = useState([]);
@@ -40,46 +46,80 @@ export default function ProjectDetailPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
 
-  const { isAdmin, canCreateIssue, canManageSprint, permissions } = useProjectPermission(projectId);
+  // ─── Quyền của người dùng hiện tại trong dự án (backend là nguồn sự thật) ───
+  const perm = useProjectPermission(projectId);
+  const { can, isAdmin, isLead, isGlobalAdmin, role } = perm;
+
+  // Keycloak id là định danh work-service dùng cho authorId / uploadedBy / assigneeId
+  const currentUserId = currentUser?.keycloakId || currentUser?.id || null;
 
   const fetchProject = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const [projRes, membersRes] = await Promise.all([
-        projectApi.getById(projectId),
-        projectApi.getMembers(projectId).catch(() => null),
+        projectApi.getById(projectId, { skipErrorToast: true }),
+        projectApi.getMembers(projectId, { skipErrorToast: true }).catch(() => null),
       ]);
       if (projRes && projRes.data) {
         setProject(projRes.data);
       }
       if (membersRes && membersRes.data) {
-        setMembers(membersRes.data);
+        setMembers(Array.isArray(membersRes.data) ? membersRes.data : []);
       }
     } catch (err) {
       console.warn('Could not load project detail:', err);
+      setLoadError(err);
     } finally {
       setLoading(false);
     }
   };
 
+  // Chỉ tải dữ liệu dự án sau khi backend xác nhận user có quyền xem
   useEffect(() => {
-    if (projectId) {
+    if (projectId && perm.status === 'ready') {
       fetchProject();
     }
-  }, [projectId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, perm.status]);
 
   const handleOpenDetailModal = (itemId) => {
     setSelectedItemId(itemId);
     setIsDetailModalOpen(true);
   };
 
-  const handleItemCreated = (newItem) => {
+  const handleItemCreated = () => {
     setBoardRefreshKey((prev) => prev + 1);
   };
 
-  const handleItemUpdated = (updatedItem) => {
+  const handleItemUpdated = () => {
     setBoardRefreshKey((prev) => prev + 1);
   };
+
+  // ─── Trạng thái truy cập ───
+  if (perm.forbidden || loadError?.status === 403) {
+    return <AccessDenied status={403} />;
+  }
+  if (perm.notFound || loadError?.status === 404) {
+    return <AccessDenied status={404} />;
+  }
+  if (perm.status === 'error') {
+    return (
+      <AccessDenied
+        status={403}
+        title="Không kiểm tra được quyền truy cập"
+        message={perm.error?.message || 'Không thể kết nối tới máy chủ. Vui lòng thử lại sau.'}
+      />
+    );
+  }
+
+  const roleBadge = ROLE_LABELS[role] || null;
+  const availableTabs = [
+    { id: 'board', label: 'Active Board', icon: Kanban },
+    { id: 'backlog', label: 'Backlog', icon: ListTodo },
+    { id: 'members', label: 'Members & Roles', icon: Users },
+    { id: 'workflow', label: 'Workflow & Statuses', icon: GitBranch },
+  ];
 
   return (
     <div
@@ -138,6 +178,29 @@ export default function ProjectDetailPage() {
               </span>
             )}
           </div>
+
+          {/* Vai trò của tôi trong dự án */}
+          {roleBadge && (
+            <span
+              title={isLead ? 'Bạn là Trưởng dự án (Project Lead)' : isGlobalAdmin ? 'Quản trị viên hệ thống' : 'Vai trò của bạn trong dự án'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 11,
+                fontWeight: 600,
+                color: roleBadge.color,
+                backgroundColor: roleBadge.bg,
+                border: `1px solid ${roleBadge.border}`,
+                padding: '2px 8px',
+                borderRadius: 10,
+              }}
+            >
+              <ShieldCheck size={11} />
+              <span>{isLead ? 'Project Lead' : roleBadge.label}</span>
+            </span>
+          )}
+
           <button
             onClick={() => setIsStarred(!isStarred)}
             style={{
@@ -169,30 +232,32 @@ export default function ProjectDetailPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Nút Tạo Issue nổi bật trên Header */}
-          <button
-            onClick={() => setIsCreateItemModalOpen(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              backgroundColor: '#2563EB',
-              color: '#FFFFFF',
-              border: 'none',
-              borderRadius: 6,
-              padding: '5px 12px',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              boxShadow: '0 1px 2px rgba(37,99,235,0.2)',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1D4ED8')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2563EB')}
-          >
-            <Plus size={14} />
-            <span>Tạo công việc</span>
-          </button>
+          {/* Nút Tạo Issue: chỉ hiện khi có quyền ISSUE_CREATE */}
+          {can('ISSUE_CREATE') && (
+            <button
+              onClick={() => setIsCreateItemModalOpen(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: '#2563EB',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: 6,
+                padding: '5px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(37,99,235,0.2)',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1D4ED8')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2563EB')}
+            >
+              <Plus size={14} />
+              <span>Tạo công việc</span>
+            </button>
+          )}
 
           <button
             onClick={() => {
@@ -227,14 +292,8 @@ export default function ProjectDetailPage() {
           gap: 12,
         }}
       >
-        {/* Navigation Pills */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {[
-            { id: 'board', label: 'Active Board', icon: Kanban },
-            { id: 'backlog', label: 'Backlog', icon: ListTodo },
-            { id: 'members', label: 'Members & Roles', icon: Users },
-            { id: 'workflow', label: 'Workflow & Statuses', icon: GitBranch },
-          ].map((tab) => {
+          {availableTabs.map((tab) => {
             const active = activeTab === tab.id;
             const TabIcon = tab.icon;
             return (
@@ -266,9 +325,9 @@ export default function ProjectDetailPage() {
 
       {/* ─── Body Content ─── */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {loading ? (
+        {perm.loading || loading ? (
           <div style={{ padding: 48, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
-            Đang tải thông tin dự án...
+            {perm.loading ? 'Đang kiểm tra quyền truy cập...' : 'Đang tải thông tin dự án...'}
           </div>
         ) : (
           <>
@@ -276,7 +335,7 @@ export default function ProjectDetailPage() {
               <ProjectBoardView
                 projectId={projectId}
                 projectKey={project?.key}
-                canCreate={canCreateIssue || isAdmin}
+                canCreate={can('ISSUE_CREATE')}
                 onOpenCreateModal={() => setIsCreateItemModalOpen(true)}
                 onSelectWorkItem={handleOpenDetailModal}
                 refreshKey={boardRefreshKey}
@@ -311,13 +370,19 @@ export default function ProjectDetailPage() {
 
             {activeTab === 'members' && (
               <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-                <ProjectMembersTab projectId={projectId} isAdmin={isAdmin} />
+                <ProjectMembersTab
+                  projectId={projectId}
+                  project={project}
+                  isAdmin={isAdmin}
+                  currentUserId={currentUserId}
+                  onMembersUpdated={fetchProject}
+                />
               </div>
             )}
 
             {activeTab === 'workflow' && (
               <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-                <ProjectWorkflowTab projectId={projectId} isAdmin={isAdmin} />
+                <ProjectWorkflowTab projectId={projectId} project={project} isAdmin={isAdmin} />
               </div>
             )}
           </>
@@ -345,8 +410,10 @@ export default function ProjectDetailPage() {
         }}
         onItemUpdated={handleItemUpdated}
         members={members}
+        projectId={projectId}
+        currentUserId={currentUserId}
+        can={can}
       />
     </div>
   );
 }
-

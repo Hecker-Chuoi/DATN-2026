@@ -1,17 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Users,
   UserPlus,
   Shield,
   Trash2,
   Check,
   Search,
   X,
-  AlertCircle,
   Sparkles,
-  Info,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  AlertCircle,
+  Info
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi, userApi } from '../../api.js';
@@ -22,20 +21,23 @@ const ROLE_COLORS = {
   VIEWER: { bg: '#F8FAFC', text: '#475569', border: '#E2E8F0' },
 };
 
-const PERMISSION_DEFINITIONS = [
+/**
+ * Ma trận quyền mặc định (khớp với PermissionKey + seed ở backend ProjectServiceImpl.seedProjectEcosystem).
+ */
+export const PERMISSION_DEFINITIONS = [
   {
     category: '1. Quản trị Dự án & Vòng đời Agile',
     permissions: [
       {
         key: 'PROJECT_ADMIN',
         name: 'Toàn quyền Quản trị Dự án (Project Admin)',
-        desc: 'Cấu hình thông tin dự án, quản lý thành viên, gán vai trò và xóa dự án.',
+        desc: 'Cấu hình thông tin dự án, quản lý thành viên, gán vai trò, cấu hình workflow và xóa dự án.',
         roles: ['ADMINISTRATOR'],
       },
       {
         key: 'PROJECT_VIEW',
-        name: 'Xem Dự án & Bảng biểu (Project View)',
-        desc: 'Xem tổng quan dự án, danh sách công việc, bảng Kanban/Scrum và báo cáo.',
+        name: 'Xem Dự án & Bảng biểu (Browse Project)',
+        desc: 'Xem tổng quan dự án, danh sách công việc, bảng Kanban/Scrum, lịch sử và tệp đính kèm.',
         roles: ['ADMINISTRATOR', 'MEMBER', 'VIEWER'],
       },
       {
@@ -64,7 +66,7 @@ const PERMISSION_DEFINITIONS = [
       {
         key: 'ISSUE_EDIT',
         name: 'Chỉnh sửa Công việc (Issue Edit)',
-        desc: 'Cập nhật tiêu đề, mô tả, Story Points, thời gian ước lượng và Custom Fields.',
+        desc: 'Cập nhật tiêu đề, mô tả, Story Points, hạn chót, liên kết và tải lên tệp đính kèm.',
         roles: ['ADMINISTRATOR', 'MEMBER'],
       },
       {
@@ -88,31 +90,73 @@ const PERMISSION_DEFINITIONS = [
     ],
   },
   {
-    category: '3. Cộng tác & Thảo luận',
+    category: '3. Bình luận & Trao đổi',
     permissions: [
       {
         key: 'COMMENT_CREATE',
-        name: 'Bình luận & Đính kèm (Comment & Attach)',
-        desc: 'Gửi bình luận trao đổi dạng cây phân cấp và tải lên tài liệu đính kèm.',
+        name: 'Thêm Bình luận (Add Comments)',
+        desc: 'Gửi bình luận trao đổi dạng cây phân cấp trên công việc.',
+        roles: ['ADMINISTRATOR', 'MEMBER', 'VIEWER'],
+      },
+      {
+        key: 'COMMENT_EDIT_OWN',
+        name: 'Sửa Bình luận của mình (Edit Own Comments)',
+        desc: 'Chỉnh sửa nội dung bình luận do chính mình viết.',
+        roles: ['ADMINISTRATOR', 'MEMBER', 'VIEWER'],
+      },
+      {
+        key: 'COMMENT_DELETE_OWN',
+        name: 'Xóa Bình luận của mình (Delete Own Comments)',
+        desc: 'Xóa bình luận do chính mình viết.',
+        roles: ['ADMINISTRATOR', 'MEMBER', 'VIEWER'],
+      },
+      {
+        key: 'COMMENT_DELETE_ALL',
+        name: 'Xóa mọi Bình luận (Delete All Comments)',
+        desc: 'Xóa bình luận của bất kỳ thành viên nào trong dự án.',
+        roles: ['ADMINISTRATOR'],
+      },
+    ],
+  },
+  {
+    category: '4. Tệp đính kèm',
+    permissions: [
+      {
+        key: 'ATTACHMENT_DELETE_OWN',
+        name: 'Xóa Tệp của mình (Delete Own Attachments)',
+        desc: 'Xóa tệp đính kèm do chính mình tải lên.',
         roles: ['ADMINISTRATOR', 'MEMBER'],
+      },
+      {
+        key: 'ATTACHMENT_DELETE_ALL',
+        name: 'Xóa mọi Tệp (Delete All Attachments)',
+        desc: 'Xóa tệp đính kèm của bất kỳ thành viên nào trong dự án.',
+        roles: ['ADMINISTRATOR'],
       },
     ],
   },
 ];
 
-export default function ProjectMembersTab({ projectId, project, isAdmin, onMembersUpdated }) {
+const ALL_PERMISSIONS = PERMISSION_DEFINITIONS.flatMap((g) => g.permissions);
+const countFor = (role) => ALL_PERMISSIONS.filter((p) => p.roles.includes(role)).length;
+
+export default function ProjectMembersTab({ projectId, project, isAdmin, currentUserId, onMembersUpdated }) {
   const [members, setMembers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showDetailedMatrix, setShowDetailedMatrix] = useState(false);
 
-  // Add Member Modal State
+  // Add Member Modal State (autocomplete search – không cần quyền ADMIN hệ thống)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [systemUsers, setSystemUsers] = useState([]);
-  const [selectedUserId, setSelectedUserId] = useState('');
+  const [userQuery, setUserQuery] = useState('');
+  const [userSuggestions, setUserSuggestions] = useState([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [addingMember, setAddingMember] = useState(false);
+  const [addError, setAddError] = useState('');
+  const searchTimeoutRef = useRef(null);
 
   const fetchMembersAndRoles = async () => {
     try {
@@ -139,38 +183,76 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
     if (projectId) {
       fetchMembersAndRoles();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
-  const openAddMemberModal = async () => {
-    setIsAddModalOpen(true);
-    setSelectedUserId('');
-    setSelectedRoleId(roles[1]?.id || roles[0]?.id || '');
-
-    try {
-      const res = await userApi.listAll();
-      if (res && res.data) {
-        setSystemUsers(Array.isArray(res.data) ? res.data : (res.data.content || []));
-      }
-    } catch (err) {
-      console.warn('Could not fetch system users for picker:', err);
+  // Live user search (debounce 400ms)
+  useEffect(() => {
+    if (!isAddModalOpen) {
+      setUserSuggestions([]);
+      return undefined;
     }
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (selectedUser) return undefined;
+
+    const query = userQuery.trim();
+    if (!query) {
+      setUserSuggestions([]);
+      return undefined;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setIsSearchingUsers(true);
+        const res = await userApi.search(query);
+        const list = Array.isArray(res?.data) ? res.data : (res?.data?.content || []);
+        setUserSuggestions(list);
+      } catch {
+        setUserSuggestions([]);
+      } finally {
+        setIsSearchingUsers(false);
+      }
+    }, 400);
+
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [userQuery, isAddModalOpen, selectedUser]);
+
+  const openAddMemberModal = () => {
+    const memberRole = roles.find((r) => r.name === 'MEMBER');
+    setSelectedRoleId(memberRole?.id || roles[0]?.id || '');
+    setSelectedUser(null);
+    setUserQuery('');
+    setUserSuggestions([]);
+    setAddError('');
+    setIsAddModalOpen(true);
   };
+
+  const isSameUser = (a, b) => Boolean(a && b && String(a) === String(b));
+
+  const memberMatchesUser = (m, u) =>
+    isSameUser(m.userId, u.id) ||
+    isSameUser(m.userId, u.keycloakId) ||
+    (u.email && m.email && m.email.toLowerCase() === u.email.toLowerCase());
 
   const handleAddMemberSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedUserId) {
-      toast.error('Vui lòng chọn người dùng muốn thêm vào dự án');
+    if (!selectedUser) {
+      setAddError('Vui lòng chọn người dùng từ danh sách gợi ý');
       return;
     }
     if (!selectedRoleId) {
-      toast.error('Vui lòng chọn vai trò cho thành viên');
+      setAddError('Vui lòng chọn vai trò cho thành viên');
       return;
     }
 
     try {
       setAddingMember(true);
+      setAddError('');
       await projectApi.addMember(projectId, {
-        userId: selectedUserId,
+        // work-service lưu Keycloak id; backend vẫn tự chuẩn hóa nếu chỉ có DB id
+        userId: selectedUser.keycloakId || selectedUser.id,
         roleId: selectedRoleId,
       });
 
@@ -179,7 +261,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
       fetchMembersAndRoles();
       if (onMembersUpdated) onMembersUpdated();
     } catch (err) {
-      console.error('Failed to add member:', err);
+      setAddError(err?.message || 'Không thể thêm thành viên');
     } finally {
       setAddingMember(false);
     }
@@ -190,13 +272,14 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
       await projectApi.updateMemberRole(projectId, userId, newRoleId);
       toast.success('Đã cập nhật vai trò thành viên thành công!');
       fetchMembersAndRoles();
+      if (onMembersUpdated) onMembersUpdated();
     } catch (err) {
       console.error('Failed to update member role:', err);
     }
   };
 
   const handleRemoveMember = async (userId, memberName) => {
-    if (userId === project?.leadUserId) {
+    if (isSameUser(userId, project?.leadUserId)) {
       toast.error('Không thể xóa Trưởng dự án (Project Lead) khỏi dự án');
       return;
     }
@@ -218,12 +301,27 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
   const filteredMembers = members.filter((m) => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
-    const matchName = m.fullName?.toLowerCase().includes(term);
-    const matchUsername = m.username?.toLowerCase().includes(term);
-    const matchEmail = m.email?.toLowerCase().includes(term);
-    const matchRole = m.roleName?.toLowerCase().includes(term);
-    return matchName || matchUsername || matchEmail || matchRole;
+    return (
+      m.fullName?.toLowerCase().includes(term) ||
+      m.username?.toLowerCase().includes(term) ||
+      m.email?.toLowerCase().includes(term) ||
+      m.roleName?.toLowerCase().includes(term)
+    );
   });
+
+  // Số Administrator hiện có (Lead luôn được tính là Administrator) – dùng để khóa thao tác hạ cấp/xóa admin cuối cùng
+  const adminUserIds = new Set(
+    members.filter((m) => m.roleName === 'ADMINISTRATOR').map((m) => String(m.userId))
+  );
+  if (project?.leadUserId) adminUserIds.add(String(project.leadUserId));
+  const isLastAdministrator = (m) => m.roleName === 'ADMINISTRATOR' && adminUserIds.size <= 1;
+
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
   return (
     <div style={{ padding: '24px', maxWidth: 1000, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
@@ -261,6 +359,26 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
           </button>
         )}
       </div>
+
+      {!isAdmin && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 12px',
+            marginBottom: 16,
+            borderRadius: 8,
+            backgroundColor: '#F8FAFC',
+            border: '1px solid #E2E8F0',
+            fontSize: 12,
+            color: '#64748B',
+          }}
+        >
+          <Info size={14} />
+          <span>Chỉ Administrator hoặc Trưởng dự án mới có thể thêm thành viên và thay đổi vai trò.</span>
+        </div>
+      )}
 
       {/* ─── Search Toolbar ─── */}
       <div style={{ marginBottom: 16, position: 'relative', maxWidth: 360 }}>
@@ -325,8 +443,11 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {filteredMembers.map((m) => {
-              const isLead = m.userId === project?.leadUserId;
+              const isLead = isSameUser(m.userId, project?.leadUserId);
+              const isSelf = isSameUser(m.userId, currentUserId);
               const roleStyle = ROLE_COLORS[m.roleName] || ROLE_COLORS.MEMBER;
+              const lockedAdmin = isLastAdministrator(m);
+              const canEditRow = isAdmin && !isLead && !lockedAdmin;
 
               return (
                 <div
@@ -363,6 +484,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                     <div>
                       <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span>{m.fullName || m.username || 'Thành viên'}</span>
+                        {isSelf && <span style={{ fontSize: 10, color: '#64748B', fontWeight: 500 }}>(bạn)</span>}
                         {isLead && (
                           <span
                             style={{
@@ -389,7 +511,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
 
                   {/* Role Selector / Badge */}
                   <div>
-                    {isAdmin && !isLead ? (
+                    {canEditRow ? (
                       <select
                         value={m.roleId}
                         onChange={(e) => handleRoleChange(m.userId, e.target.value)}
@@ -413,6 +535,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                       </select>
                     ) : (
                       <span
+                        title={lockedAdmin ? 'Administrator cuối cùng của dự án – không thể hạ cấp' : undefined}
                         style={{
                           display: 'inline-block',
                           padding: '3px 9px',
@@ -431,7 +554,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
 
                   {/* Actions */}
                   <div style={{ textAlign: 'right' }}>
-                    {isAdmin && !isLead && (
+                    {canEditRow && (
                       <button
                         onClick={() => handleRemoveMember(m.userId, m.fullName || m.username)}
                         title="Xóa thành viên"
@@ -502,7 +625,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
               transition: 'all 0.15s ease',
             }}
           >
-            <span>{showDetailedMatrix ? 'Thu gọn tóm tắt' : 'Xem chi tiết 10 quyền hạn'}</span>
+            <span>{showDetailedMatrix ? 'Thu gọn tóm tắt' : `Xem chi tiết ${ALL_PERMISSIONS.length} quyền hạn`}</span>
             {showDetailedMatrix ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         </div>
@@ -512,28 +635,34 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
           <div style={{ padding: 12, backgroundColor: '#FAF5FF', borderRadius: 8, border: '1px solid #E9D5FF' }}>
             <div style={{ fontWeight: 700, color: '#7E22CE', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>Administrator</span>
-              <span style={{ fontSize: 11, backgroundColor: '#F3E8FF', padding: '1px 6px', borderRadius: 10 }}>10 / 10 quyền</span>
+              <span style={{ fontSize: 11, backgroundColor: '#F3E8FF', padding: '1px 6px', borderRadius: 10 }}>
+                {countFor('ADMINISTRATOR')} / {ALL_PERMISSIONS.length} quyền
+              </span>
             </div>
             <div style={{ color: '#6B21A8', lineHeight: 1.4 }}>
-              Toàn quyền cấu hình dự án, thành viên, workflow, board, sprint và xóa công việc.
+              Toàn quyền cấu hình dự án, thành viên, workflow, sprint; xóa công việc, bình luận và tệp của mọi người.
             </div>
           </div>
           <div style={{ padding: 12, backgroundColor: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
             <div style={{ fontWeight: 700, color: '#1D4ED8', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>Member</span>
-              <span style={{ fontSize: 11, backgroundColor: '#DBEAFE', padding: '1px 6px', borderRadius: 10 }}>6 / 10 quyền</span>
+              <span style={{ fontSize: 11, backgroundColor: '#DBEAFE', padding: '1px 6px', borderRadius: 10 }}>
+                {countFor('MEMBER')} / {ALL_PERMISSIONS.length} quyền
+              </span>
             </div>
             <div style={{ color: '#1E40AF', lineHeight: 1.4 }}>
-              Xem dự án, tạo task, chỉnh sửa, phân công, kéo thả trạng thái và thêm bình luận.
+              Tạo, sửa, phân công, chuyển trạng thái công việc; bình luận và quản lý bình luận / tệp của chính mình.
             </div>
           </div>
           <div style={{ padding: 12, backgroundColor: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
             <div style={{ fontWeight: 700, color: '#475569', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span>Viewer</span>
-              <span style={{ fontSize: 11, backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: 10 }}>1 / 10 quyền</span>
+              <span style={{ fontSize: 11, backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: 10 }}>
+                {countFor('VIEWER')} / {ALL_PERMISSIONS.length} quyền
+              </span>
             </div>
             <div style={{ color: '#64748B', lineHeight: 1.4 }}>
-              Chỉ đọc: Xem danh sách công việc, bảng Kanban và báo cáo mà không thể chỉnh sửa.
+              Chỉ theo dõi: xem board, công việc, lịch sử; có thể bình luận trao đổi nhưng không chỉnh sửa dữ liệu.
             </div>
           </div>
         </div>
@@ -571,7 +700,6 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
 
             {PERMISSION_DEFINITIONS.map((group, groupIdx) => (
               <div key={groupIdx}>
-                {/* Category Header */}
                 <div
                   style={{
                     padding: '8px 16px',
@@ -590,77 +718,48 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                   <span>{group.category}</span>
                 </div>
 
-                {/* Rows */}
-                {group.permissions.map((p) => {
-                  const hasAdmin = p.roles.includes('ADMINISTRATOR');
-                  const hasMember = p.roles.includes('MEMBER');
-                  const hasViewer = p.roles.includes('VIEWER');
-
-                  return (
-                    <div
-                      key={p.key}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '2.5fr 1fr 1fr 1fr',
-                        padding: '10px 16px',
-                        borderBottom: '1px solid #F1F5F9',
-                        alignItems: 'center',
-                        fontSize: 12,
-                      }}
-                    >
-                      {/* Permission Name & Desc */}
-                      <div>
-                        <div style={{ fontWeight: 600, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span>{p.name}</span>
-                          <code style={{ fontSize: 10, backgroundColor: '#F1F5F9', padding: '1px 5px', borderRadius: 4, color: '#64748B' }}>
-                            {p.key}
-                          </code>
-                        </div>
-                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{p.desc}</div>
+                {group.permissions.map((p) => (
+                  <div
+                    key={p.key}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '2.5fr 1fr 1fr 1fr',
+                      padding: '10px 16px',
+                      borderBottom: '1px solid #F1F5F9',
+                      alignItems: 'center',
+                      fontSize: 12,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span>{p.name}</span>
+                        <code style={{ fontSize: 10, backgroundColor: '#F1F5F9', padding: '1px 5px', borderRadius: 4, color: '#64748B' }}>
+                          {p.key}
+                        </code>
                       </div>
-
-                      {/* Admin Check */}
-                      <div style={{ textAlign: 'center' }}>
-                        {hasAdmin ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#16A34A', fontWeight: 600, fontSize: 11 }}>
-                            <Check size={14} strokeWidth={2.5} /> Được phép
-                          </span>
-                        ) : (
-                          <span style={{ color: '#CBD5E1' }}>—</span>
-                        )}
-                      </div>
-
-                      {/* Member Check */}
-                      <div style={{ textAlign: 'center' }}>
-                        {hasMember ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#16A34A', fontWeight: 600, fontSize: 11 }}>
-                            <Check size={14} strokeWidth={2.5} /> Được phép
-                          </span>
-                        ) : (
-                          <span style={{ color: '#CBD5E1' }}>—</span>
-                        )}
-                      </div>
-
-                      {/* Viewer Check */}
-                      <div style={{ textAlign: 'center' }}>
-                        {hasViewer ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#16A34A', fontWeight: 600, fontSize: 11 }}>
-                            <Check size={14} strokeWidth={2.5} /> Được phép
-                          </span>
-                        ) : (
-                          <span style={{ color: '#CBD5E1' }}>—</span>
-                        )}
-                      </div>
+                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{p.desc}</div>
                     </div>
-                  );
-                })}
+
+                    {['ADMINISTRATOR', 'MEMBER', 'VIEWER'].map((roleName) => (
+                      <div key={roleName} style={{ textAlign: 'center' }}>
+                        {p.roles.includes(roleName) ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#16A34A', fontWeight: 600, fontSize: 11 }}>
+                            <Check size={14} strokeWidth={2.5} /> Được phép
+                          </span>
+                        ) : (
+                          <span style={{ color: '#CBD5E1' }}>—</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* ─── Add Member Modal ─── */}
+      {/* ─── Add Member Modal (autocomplete search) ─── */}
       {isAddModalOpen && (
         <div
           style={{
@@ -683,7 +782,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
               width: '100%',
               maxWidth: 480,
-              overflow: 'hidden',
+              overflow: 'visible',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -695,6 +794,8 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 backgroundColor: '#FAFAFC',
+                borderTopLeftRadius: 12,
+                borderTopRightRadius: 12,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 15, color: '#0F172A' }}>
@@ -710,33 +811,167 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
             </div>
 
             <form onSubmit={handleAddMemberSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Select User */}
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Chọn người dùng <span style={{ color: '#EF4444' }}>*</span>
-                </label>
-                <select
-                  value={selectedUserId}
-                  onChange={(e) => setSelectedUserId(e.target.value)}
+              {addError && (
+                <div
                   style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: 8,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    color: '#0F172A',
-                    backgroundColor: '#FFFFFF',
-                    outline: 'none',
-                    boxSizing: 'border-box',
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    backgroundColor: '#FEF2F2',
+                    border: '1px solid #FEE2E2',
+                    color: '#DC2626',
+                    fontSize: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
                   }}
                 >
-                  <option value="">-- Chọn thành viên từ hệ thống --</option>
-                  {systemUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.fullName ? `${u.fullName} (@${u.username})` : u.username} ({u.email || 'No email'})
-                    </option>
-                  ))}
-                </select>
+                  <AlertCircle size={14} />
+                  <span>{addError}</span>
+                </div>
+              )}
+
+              {/* User search */}
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                  Tìm người dùng (tên, username hoặc email) <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+
+                {selectedUser ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      backgroundColor: '#EFF6FF',
+                      border: '1.5px solid #3B82F6',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          backgroundColor: '#2563EB',
+                          color: '#FFFFFF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {getInitials(selectedUser.firstName || selectedUser.username)}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
+                          {selectedUser.firstName ? `${selectedUser.firstName} ${selectedUser.lastName || ''}`.trim() : selectedUser.username}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748B' }}>{selectedUser.email || selectedUser.username}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedUser(null);
+                        setUserQuery('');
+                      }}
+                      style={{ background: 'transparent', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}
+                      title="Chọn người khác"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ position: 'relative' }}>
+                    <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="text"
+                      value={userQuery}
+                      onChange={(e) => {
+                        setUserQuery(e.target.value);
+                        if (addError) setAddError('');
+                      }}
+                      placeholder="Nhập tên, username hoặc email để tìm kiếm..."
+                      autoFocus
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px 9px 32px',
+                        borderRadius: 8,
+                        border: '1px solid #CBD5E1',
+                        fontSize: 13,
+                        color: '#0F172A',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    {isSearchingUsers && (
+                      <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Đang tìm kiếm...</div>
+                    )}
+                    {userSuggestions.length > 0 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          marginTop: 4,
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: 8,
+                          border: '1px solid #E2E8F0',
+                          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                          zIndex: 80,
+                          maxHeight: 220,
+                          overflowY: 'auto',
+                        }}
+                      >
+                        {userSuggestions.map((u) => {
+                          const fullName = (u.firstName ? `${u.firstName} ${u.lastName || ''}` : u.username || 'User').trim();
+                          const alreadyMember = members.some((m) => memberMatchesUser(m, u));
+                          return (
+                            <div
+                              key={u.id}
+                              onClick={() => {
+                                if (alreadyMember) return;
+                                setSelectedUser(u);
+                                setUserSuggestions([]);
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '8px 12px',
+                                cursor: alreadyMember ? 'default' : 'pointer',
+                                opacity: alreadyMember ? 0.6 : 1,
+                                borderBottom: '1px solid #F8FAFC',
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!alreadyMember) e.currentTarget.style.backgroundColor = '#F1F5F9';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!alreadyMember) e.currentTarget.style.backgroundColor = '#FFFFFF';
+                              }}
+                            >
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{fullName}</div>
+                                <div style={{ fontSize: 11, color: '#64748B' }}>{u.email || `@${u.username}`}</div>
+                              </div>
+                              {alreadyMember ? (
+                                <span style={{ fontSize: 11, color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Check size={12} /> Đã trong dự án
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 11, color: '#2563EB', fontWeight: 500 }}>Chọn ➔</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Select Role */}
@@ -767,7 +1002,6 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                 </select>
               </div>
 
-              {/* Submit Buttons */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
                 <button
                   type="button"
@@ -787,16 +1021,16 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                 </button>
                 <button
                   type="submit"
-                  disabled={addingMember}
+                  disabled={addingMember || !selectedUser}
                   style={{
                     padding: '7px 18px',
                     borderRadius: 6,
                     border: 'none',
-                    backgroundColor: '#2563EB',
+                    backgroundColor: addingMember || !selectedUser ? '#94A3B8' : '#2563EB',
                     color: '#FFFFFF',
                     fontSize: 13,
                     fontWeight: 600,
-                    cursor: addingMember ? 'not-allowed' : 'pointer',
+                    cursor: addingMember || !selectedUser ? 'not-allowed' : 'pointer',
                   }}
                 >
                   {addingMember ? 'Đang thêm...' : 'Thêm vào dự án'}

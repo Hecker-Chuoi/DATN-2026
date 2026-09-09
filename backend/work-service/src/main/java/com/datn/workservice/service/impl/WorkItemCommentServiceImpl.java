@@ -3,7 +3,6 @@ package com.datn.workservice.service.impl;
 import com.datn.common.dto.ApiResponse;
 import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ResourceNotFoundException;
-import com.datn.common.exception.UnauthorizedException;
 import com.datn.workservice.client.IdentityClient;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.request.CreateWorkItemCommentRequest;
@@ -11,11 +10,14 @@ import com.datn.workservice.dto.request.UpdateWorkItemCommentRequest;
 import com.datn.workservice.dto.response.WorkItemCommentResponse;
 import com.datn.workservice.entity.WorkItem;
 import com.datn.workservice.entity.WorkItemComment;
+import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.repository.WorkItemCommentRepository;
 import com.datn.workservice.repository.WorkItemRepository;
+import com.datn.workservice.service.ProjectAccessService;
 import com.datn.workservice.service.WorkItemCommentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ public class WorkItemCommentServiceImpl implements WorkItemCommentService {
     private final WorkItemCommentRepository commentRepository;
     private final WorkItemRepository workItemRepository;
     private final IdentityClient identityClient;
+    private final ProjectAccessService projectAccessService;
 
     @Override
     @Transactional(readOnly = true)
@@ -155,9 +158,11 @@ public class WorkItemCommentServiceImpl implements WorkItemCommentService {
             throw new BadRequestException("Không thể cập nhật bình luận đã xóa");
         }
 
-        // Check ownership
-        if (!comment.getAuthorId().equals(userId)) {
-            throw new UnauthorizedException("Bạn chỉ có quyền sửa bình luận của chính mình");
+        // Chỉ tác giả có quyền COMMENT_EDIT_OWN mới được sửa
+        UUID projectId = resolveProjectId(workItemId);
+        boolean isOwner = comment.getAuthorId().equals(userId);
+        if (!isOwner || !projectAccessService.hasProjectPermission(projectId, PermissionKey.COMMENT_EDIT_OWN)) {
+            throw new AccessDeniedException("Bạn chỉ có quyền sửa bình luận của chính mình");
         }
 
         comment.setBody(request.getBody().trim());
@@ -195,9 +200,15 @@ public class WorkItemCommentServiceImpl implements WorkItemCommentService {
             throw new BadRequestException("Bình luận không thuộc về công việc này");
         }
 
-        // Check ownership
-        if (!comment.getAuthorId().equals(userId)) {
-            throw new UnauthorizedException("Bạn chỉ có quyền xóa bình luận của chính mình");
+        // Tác giả cần COMMENT_DELETE_OWN; người khác (Administrator) cần COMMENT_DELETE_ALL
+        UUID projectId = resolveProjectId(workItemId);
+        boolean isOwner = comment.getAuthorId().equals(userId);
+        boolean allowed = (isOwner && projectAccessService.hasProjectPermission(projectId, PermissionKey.COMMENT_DELETE_OWN))
+                || projectAccessService.hasProjectPermission(projectId, PermissionKey.COMMENT_DELETE_ALL);
+        if (!allowed) {
+            throw new AccessDeniedException(isOwner
+                    ? "Bạn không có quyền xóa bình luận trong dự án này"
+                    : "Bạn chỉ có quyền xóa bình luận của chính mình");
         }
 
         // Soft delete
@@ -207,6 +218,12 @@ public class WorkItemCommentServiceImpl implements WorkItemCommentService {
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    private UUID resolveProjectId(UUID workItemId) {
+        return workItemRepository.findById(workItemId)
+                .map(WorkItem::getProjectId)
+                .orElseThrow(() -> new ResourceNotFoundException("WorkItem not found with ID: " + workItemId));
+    }
 
     private UserResponse fetchSingleUser(UUID userId) {
         if (userId == null) return null;

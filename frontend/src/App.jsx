@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { userTokenStore, adminTokenStore, authApi, userApi } from './api.js';
+import { PermissionProvider } from './context/PermissionContext.jsx';
 
 import WorkspaceLayout from './components/layout/WorkspaceLayout.jsx';
 import ProjectListPage from './pages/ProjectListPage.jsx';
@@ -91,6 +92,7 @@ function App() {
 
   return (
     <BrowserRouter>
+     <PermissionProvider currentUser={currentUser}>
       {/* ─── Global Toast Notifications Container ─── */}
       <Toaster
         position="bottom-right"
@@ -231,6 +233,7 @@ function App() {
         {/* Catch-all fallback */}
         <Route path="*" element={<Navigate to="/projects" replace />} />
       </Routes>
+     </PermissionProvider>
     </BrowserRouter>
   );
 }

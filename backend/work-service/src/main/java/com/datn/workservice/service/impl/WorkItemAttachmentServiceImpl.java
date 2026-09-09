@@ -8,8 +8,10 @@ import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.response.WorkItemAttachmentResponse;
 import com.datn.workservice.entity.WorkItem;
 import com.datn.workservice.entity.WorkItemAttachment;
+import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.repository.WorkItemAttachmentRepository;
 import com.datn.workservice.repository.WorkItemRepository;
+import com.datn.workservice.service.ProjectAccessService;
 import com.datn.workservice.service.WorkItemAttachmentService;
 import com.datn.workservice.service.WorkItemAuditService;
 import io.minio.*;
@@ -17,8 +19,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -38,6 +40,7 @@ public class WorkItemAttachmentServiceImpl implements WorkItemAttachmentService 
     private final WorkItemAuditService auditService;
     private final IdentityClient identityClient;
     private final MinioClient minioClient;
+    private final ProjectAccessService projectAccessService;
 
     @Value("${minio.bucket-name:work-attachments}")
     private String bucketName = "work-attachments";
@@ -137,6 +140,19 @@ public class WorkItemAttachmentServiceImpl implements WorkItemAttachmentService 
             throw new BadRequestException("Tệp đính kèm không thuộc về công việc này");
         }
 
+        // Người tải lên cần ATTACHMENT_DELETE_OWN; người khác (Administrator) cần ATTACHMENT_DELETE_ALL
+        UUID projectId = workItemRepository.findById(workItemId)
+                .map(WorkItem::getProjectId)
+                .orElseThrow(() -> new ResourceNotFoundException("WorkItem not found with ID: " + workItemId));
+        boolean isOwner = userId != null && userId.equals(attachment.getUploadedBy());
+        boolean allowed = (isOwner && projectAccessService.hasProjectPermission(projectId, PermissionKey.ATTACHMENT_DELETE_OWN))
+                || projectAccessService.hasProjectPermission(projectId, PermissionKey.ATTACHMENT_DELETE_ALL);
+        if (!allowed) {
+            throw new AccessDeniedException(isOwner
+                    ? "Bạn không có quyền xóa tệp đính kèm trong dự án này"
+                    : "Bạn chỉ có quyền xóa tệp đính kèm do chính mình tải lên");
+        }
+
         // Delete from MinIO
         String objectKey = attachment.getFileUrl();
         try {
@@ -169,6 +185,7 @@ public class WorkItemAttachmentServiceImpl implements WorkItemAttachmentService 
     public Resource loadAttachmentResource(UUID attachmentId) {
         WorkItemAttachment attachment = attachmentRepository.findById(attachmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Attachment not found with ID: " + attachmentId));
+        projectAccessService.assertTaskPermission(attachment.getWorkItemId(), PermissionKey.PROJECT_VIEW);
 
         String objectKey = attachment.getFileUrl();
 
@@ -193,6 +210,7 @@ public class WorkItemAttachmentServiceImpl implements WorkItemAttachmentService 
     public WorkItemAttachmentResponse getAttachmentById(UUID attachmentId) {
         WorkItemAttachment attachment = attachmentRepository.findById(attachmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Attachment not found with ID: " + attachmentId));
+        projectAccessService.assertTaskPermission(attachment.getWorkItemId(), PermissionKey.PROJECT_VIEW);
         UserResponse uploader = fetchSingleUser(attachment.getUploadedBy());
         return mapToResponse(attachment, uploader);
     }

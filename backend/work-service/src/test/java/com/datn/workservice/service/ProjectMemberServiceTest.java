@@ -6,6 +6,7 @@ import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.client.IdentityClient;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.request.AssignProjectRoleRequest;
+import com.datn.workservice.dto.response.MyProjectPermissionsResponse;
 import com.datn.workservice.dto.response.ProjectRoleResponse;
 import com.datn.workservice.dto.response.RoleAssignmentResponse;
 import com.datn.workservice.entity.PermissionSchemeEntry;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,6 +37,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -241,15 +244,41 @@ class ProjectMemberServiceTest {
     void testGetMyPermissions_AsLead_ReturnsAll() {
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
 
-        List<String> permissions = projectMemberService.getMyPermissions(projectId, leadUserId);
+        MyProjectPermissionsResponse response = projectMemberService.getMyPermissions(projectId, leadUserId, false);
 
-        assertThat(permissions).hasSize(PermissionKey.values().length);
-        assertThat(permissions).contains(
+        assertThat(response.getIsLead()).isTrue();
+        assertThat(response.getRoleName()).isEqualTo("ADMINISTRATOR");
+        assertThat(response.getPermissions()).hasSize(PermissionKey.values().length);
+        assertThat(response.getPermissions()).contains(
                 PermissionKey.PROJECT_ADMIN.name(),
                 PermissionKey.ISSUE_CREATE.name(),
                 PermissionKey.SPRINT_MANAGE.name(),
                 PermissionKey.RELEASE_MANAGE.name()
         );
+    }
+
+    @Test
+    @DisplayName("getMyPermissions: Outsider (no role assignment) is denied with AccessDeniedException")
+    void testGetMyPermissions_AsOutsider_Denied() {
+        UUID outsiderId = UUID.randomUUID();
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(roleAssignmentRepository.findByProjectIdAndUserId(projectId, outsiderId)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> projectMemberService.getMyPermissions(projectId, outsiderId, false))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("getMyPermissions: Global ADMIN gets all permissions even without membership")
+    void testGetMyPermissions_AsGlobalAdmin_ReturnsAll() {
+        UUID adminId = UUID.randomUUID();
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(roleAssignmentRepository.findByProjectIdAndUserId(projectId, adminId)).thenReturn(List.of());
+
+        MyProjectPermissionsResponse response = projectMemberService.getMyPermissions(projectId, adminId, true);
+
+        assertThat(response.getIsGlobalAdmin()).isTrue();
+        assertThat(response.getPermissions()).hasSize(PermissionKey.values().length);
     }
 
     @Test
@@ -276,14 +305,92 @@ class ProjectMemberServiceTest {
         when(permissionSchemeEntryRepository.findByProjectIdAndRoleId(projectId, roleId))
                 .thenReturn(List.of(entry1, entry2));
 
-        List<String> permissions = projectMemberService.getMyPermissions(projectId, memberUserId);
+        MyProjectPermissionsResponse response = projectMemberService.getMyPermissions(projectId, memberUserId, false);
 
-        assertThat(permissions).contains(
+        assertThat(response.getRoleName()).isEqualTo("MEMBER");
+        assertThat(response.getIsLead()).isFalse();
+        assertThat(response.getPermissions()).contains(
                 PermissionKey.PROJECT_VIEW.name(),
                 PermissionKey.ISSUE_CREATE.name(),
                 PermissionKey.ISSUE_TRANSITION.name()
         );
-        assertThat(permissions).doesNotContain(PermissionKey.PROJECT_ADMIN.name());
+        assertThat(response.getPermissions()).doesNotContain(PermissionKey.PROJECT_ADMIN.name());
+    }
+
+    @Test
+    @DisplayName("addMemberToProject: Rejects role belonging to another project")
+    void testAddMemberToProject_RoleFromOtherProject_ThrowsBadRequest() {
+        ProjectRole foreignRole = ProjectRole.builder()
+                .id(UUID.randomUUID())
+                .projectId(UUID.randomUUID())
+                .name("MEMBER")
+                .build();
+        AssignProjectRoleRequest request = AssignProjectRoleRequest.builder()
+                .userId(memberUserId)
+                .roleId(foreignRole.getId())
+                .build();
+
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRoleRepository.findById(foreignRole.getId())).thenReturn(Optional.of(foreignRole));
+
+        assertThatThrownBy(() -> projectMemberService.addMemberToProject(projectId, request, leadUserId))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("không thuộc dự án");
+
+        verify(roleAssignmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("addMemberToProject: Stores Keycloak id when identity-service resolves the given DB id")
+    void testAddMemberToProject_CanonicalizesToKeycloakId() {
+        UUID dbId = UUID.randomUUID();
+        UUID keycloakId = UUID.randomUUID();
+        AssignProjectRoleRequest request = AssignProjectRoleRequest.builder()
+                .userId(dbId)
+                .roleId(roleId)
+                .build();
+
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRoleRepository.findById(roleId)).thenReturn(Optional.of(memberRole));
+        when(identityClient.getUserById(dbId)).thenReturn(ApiResponse.success(
+                UserResponse.builder().id(dbId).keycloakId(keycloakId.toString()).username("dev").build()));
+        when(identityClient.getUserById(keycloakId)).thenReturn(ApiResponse.success(
+                UserResponse.builder().id(dbId).keycloakId(keycloakId.toString()).username("dev").build()));
+        when(roleAssignmentRepository.existsByProjectIdAndUserIdAndRoleId(projectId, keycloakId, roleId)).thenReturn(false);
+        when(roleAssignmentRepository.findByProjectIdAndUserId(projectId, keycloakId)).thenReturn(List.of());
+        when(roleAssignmentRepository.save(any(RoleAssignment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RoleAssignmentResponse response = projectMemberService.addMemberToProject(projectId, request, leadUserId);
+
+        assertThat(response.getUserId()).isEqualTo(keycloakId);
+        verify(roleAssignmentRepository).save(argThat(ra -> keycloakId.equals(ra.getUserId())));
+    }
+
+    @Test
+    @DisplayName("removeMemberFromProject: Cannot remove the last ADMINISTRATOR when lead is that user")
+    void testRemoveMemberFromProject_LastAdministrator_ThrowsBadRequest() {
+        UUID adminUserId = UUID.randomUUID();
+        Project projectLedByAdmin = Project.builder()
+                .id(projectId)
+                .name("Fintech Core")
+                .key("FIN")
+                .leadUserId(UUID.randomUUID())
+                .createdBy(creatorUserId)
+                .build();
+        RoleAssignment adminAssignment = RoleAssignment.builder()
+                .id(UUID.randomUUID())
+                .projectId(projectId)
+                .userId(adminUserId)
+                .roleId(adminRole.getId())
+                .build();
+
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(projectLedByAdmin));
+        when(roleAssignmentRepository.findByProjectIdAndUserId(projectId, adminUserId)).thenReturn(List.of(adminAssignment));
+        when(projectRoleRepository.findById(adminRole.getId())).thenReturn(Optional.of(adminRole));
+
+        // Lead is a different user -> lead counts as an administrator -> removal allowed
+        projectMemberService.removeMemberFromProject(projectId, adminUserId, leadUserId);
+        verify(roleAssignmentRepository).deleteByProjectIdAndUserId(projectId, adminUserId);
     }
 
     @Test

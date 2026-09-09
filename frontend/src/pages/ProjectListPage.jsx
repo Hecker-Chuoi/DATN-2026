@@ -395,20 +395,39 @@ export default function ProjectListPage() {
                   }}
                 >
                   <div>
-                    {/* Top Row: Key & Type Badge */}
+                    {/* Top Row: Key, My Role & Type Badge */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: '#2563EB',
-                          backgroundColor: '#EFF6FF',
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                        }}
-                      >
-                        {project.key}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#2563EB',
+                            backgroundColor: '#EFF6FF',
+                            padding: '2px 8px',
+                            borderRadius: 4,
+                          }}
+                        >
+                          {project.key}
+                        </span>
+                        {project.myRole && (
+                          <span
+                            title="Vai trò của bạn trong dự án"
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 600,
+                              color: project.myRole === 'ADMINISTRATOR' ? '#7E22CE' : project.myRole === 'VIEWER' ? '#475569' : '#1D4ED8',
+                              backgroundColor: project.myRole === 'ADMINISTRATOR' ? '#FAF5FF' : project.myRole === 'VIEWER' ? '#F8FAFC' : '#EFF6FF',
+                              border: `1px solid ${project.myRole === 'ADMINISTRATOR' ? '#E9D5FF' : project.myRole === 'VIEWER' ? '#E2E8F0' : '#BFDBFE'}`,
+                              padding: '1px 7px',
+                              borderRadius: 10,
+                              textTransform: 'capitalize',
+                            }}
+                          >
+                            {project.myRole.toLowerCase()}
+                          </span>
+                        )}
+                      </div>
                       <span
                         style={{
                           fontSize: 11,

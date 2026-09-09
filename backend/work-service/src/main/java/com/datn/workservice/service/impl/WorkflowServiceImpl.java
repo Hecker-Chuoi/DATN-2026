@@ -5,8 +5,10 @@ import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.dto.request.*;
 import com.datn.workservice.dto.response.*;
 import com.datn.workservice.entity.*;
+import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.enums.StatusCategory;
 import com.datn.workservice.repository.*;
+import com.datn.workservice.service.ProjectAccessService;
 import com.datn.workservice.service.WorkflowEngineService;
 import com.datn.workservice.service.WorkflowService;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     private final StatusRepository statusRepository;
     private final WorkItemTypeRepository workItemTypeRepository;
     private final WorkflowEngineService workflowEngineService;
+    private final ProjectAccessService projectAccessService;
 
     @Override
     @Transactional(readOnly = true)
@@ -57,6 +60,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     public WorkflowDetailResponse getWorkflowById(UUID workflowId) {
         Workflow workflow = workflowRepository.findById(workflowId)
                 .orElseThrow(() -> new ResourceNotFoundException("Workflow not found with id: " + workflowId));
+        assertWorkflowAccess(workflow, PermissionKey.PROJECT_VIEW);
 
         List<WorkflowTransition> transitions = workflowTransitionRepository.findByWorkflowId(workflowId);
 
@@ -105,6 +109,12 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Override
     @Transactional
     public WorkflowResponse createWorkflow(CreateWorkflowRequest request) {
+        if (request.getProjectId() != null) {
+            projectAccessService.assertProjectPermission(request.getProjectId(), PermissionKey.PROJECT_ADMIN);
+        } else {
+            projectAccessService.assertGlobalAdmin();
+        }
+
         Workflow workflow = Workflow.builder()
                 .projectId(request.getProjectId())
                 .name(request.getName().trim())
@@ -122,6 +132,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     public WorkflowResponse updateWorkflow(UUID workflowId, UpdateWorkflowRequest request) {
         Workflow workflow = workflowRepository.findById(workflowId)
                 .orElseThrow(() -> new ResourceNotFoundException("Workflow not found with id: " + workflowId));
+        assertWorkflowAccess(workflow, PermissionKey.PROJECT_ADMIN);
 
         if (request.getName() != null && !request.getName().isBlank()) {
             workflow.setName(request.getName().trim());
@@ -140,9 +151,9 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Override
     @Transactional
     public WorkflowTransitionResponse createTransition(UUID workflowId, CreateWorkflowTransitionRequest request) {
-        if (!workflowRepository.existsById(workflowId)) {
-            throw new ResourceNotFoundException("Workflow not found with id: " + workflowId);
-        }
+        Workflow workflow = workflowRepository.findById(workflowId)
+                .orElseThrow(() -> new ResourceNotFoundException("Workflow not found with id: " + workflowId));
+        assertWorkflowAccess(workflow, PermissionKey.PROJECT_ADMIN);
 
         if (request.getFromStatusId() != null && !statusRepository.existsById(request.getFromStatusId())) {
             throw new ResourceNotFoundException("From Status not found with id: " + request.getFromStatusId());
@@ -189,6 +200,7 @@ public class WorkflowServiceImpl implements WorkflowService {
         if (!transition.getWorkflowId().equals(workflowId)) {
             throw new BadRequestException("Transition does not belong to workflow: " + workflowId);
         }
+        assertWorkflowAdmin(workflowId);
 
         if (request.getName() != null && !request.getName().isBlank()) {
             transition.setName(request.getName().trim());
@@ -237,6 +249,7 @@ public class WorkflowServiceImpl implements WorkflowService {
         if (!transition.getWorkflowId().equals(workflowId)) {
             throw new BadRequestException("Transition does not belong to workflow: " + workflowId);
         }
+        assertWorkflowAdmin(workflowId);
         workflowTransitionRepository.delete(transition);
         log.info("Deleted transition '{}' (ID={}) from workflow {}", transition.getName(), transitionId, workflowId);
     }
@@ -253,6 +266,13 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Override
     @Transactional
     public StatusResponse createStatus(CreateStatusRequest request) {
+        // Trạng thái dùng chung toàn hệ thống: cần là Administrator của dự án đang cấu hình, hoặc Global ADMIN
+        if (request.getProjectId() != null) {
+            projectAccessService.assertProjectPermission(request.getProjectId(), PermissionKey.PROJECT_ADMIN);
+        } else {
+            projectAccessService.assertGlobalAdmin();
+        }
+
         if (statusRepository.existsByName(request.getName().trim())) {
             throw new BadRequestException("Trạng thái với tên '" + request.getName() + "' đã tồn tại");
         }
@@ -352,6 +372,26 @@ public class WorkflowServiceImpl implements WorkflowService {
         }
 
         return getProjectWorkflowScheme(projectId);
+    }
+
+    // ─── Access Helpers ─────────────────────────────────────────────────────────
+
+    /**
+     * Workflow thuộc dự án: cần quyền {@code key} trong dự án.
+     * Workflow toàn cục (projectId null): ai đã đăng nhập cũng xem được, nhưng chỉ Global ADMIN mới được sửa.
+     */
+    private void assertWorkflowAccess(Workflow workflow, PermissionKey key) {
+        if (workflow.getProjectId() != null) {
+            projectAccessService.assertProjectPermission(workflow.getProjectId(), key);
+        } else if (key != PermissionKey.PROJECT_VIEW) {
+            projectAccessService.assertGlobalAdmin();
+        }
+    }
+
+    private void assertWorkflowAdmin(UUID workflowId) {
+        Workflow workflow = workflowRepository.findById(workflowId)
+                .orElseThrow(() -> new ResourceNotFoundException("Workflow not found with id: " + workflowId));
+        assertWorkflowAccess(workflow, PermissionKey.PROJECT_ADMIN);
     }
 
     // ─── Mapping Helpers ────────────────────────────────────────────────────────

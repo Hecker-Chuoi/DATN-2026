@@ -50,6 +50,7 @@ public class WorkItemServiceImpl implements WorkItemService {
     private final LexoRankService lexoRankService;
     private final StrictHierarchyValidator strictHierarchyValidator;
     private final com.datn.workservice.service.WorkItemAuditService workItemAuditService;
+    private final com.datn.workservice.service.ProjectAccessService projectAccessService;
 
     @Override
     @Transactional
@@ -58,6 +59,11 @@ public class WorkItemServiceImpl implements WorkItemService {
 
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found with ID: " + projectId));
+
+        // Gán việc cho người khác ngay khi tạo cần quyền ISSUE_ASSIGN
+        if (request.getAssigneeId() != null && !request.getAssigneeId().equals(userId)) {
+            projectAccessService.assertProjectPermission(projectId, com.datn.workservice.enums.PermissionKey.ISSUE_ASSIGN);
+        }
 
         WorkItemType type = workItemTypeRepository.findById(request.getTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("WorkItemType not found with ID: " + request.getTypeId()));
@@ -140,6 +146,9 @@ public class WorkItemServiceImpl implements WorkItemService {
     public WorkItemDetailResponse getWorkItemByCode(String code) {
         WorkItem item = workItemRepository.findByCode(code)
                 .orElseThrow(() -> new ResourceNotFoundException("WorkItem not found with code: " + code));
+
+        // Tra cứu theo mã không đi qua guard theo path -> kiểm tra quyền xem dự án tại đây
+        projectAccessService.assertProjectPermission(item.getProjectId(), com.datn.workservice.enums.PermissionKey.PROJECT_VIEW);
 
         return mapToDetailResponse(item);
     }
@@ -270,7 +279,9 @@ public class WorkItemServiceImpl implements WorkItemService {
         if (request.getPriority() != null) {
             item.setPriority(request.getPriority());
         }
-        if (request.getAssigneeId() != null) {
+        if (request.getAssigneeId() != null && !request.getAssigneeId().equals(item.getAssigneeId())) {
+            // Đổi người thực hiện cần quyền ISSUE_ASSIGN (tách khỏi ISSUE_EDIT giống Jira "Assign Issues")
+            projectAccessService.assertProjectPermission(item.getProjectId(), com.datn.workservice.enums.PermissionKey.ISSUE_ASSIGN);
             item.setAssigneeId(request.getAssigneeId());
         }
         if (request.getParentId() != null) {

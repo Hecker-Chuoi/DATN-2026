@@ -49,7 +49,16 @@ const TYPE_ICONS = {
   SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Sub-task' },
 };
 
-export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [] }) {
+export default function WorkItemDetailModal({
+  itemId: initialItemId,
+  isOpen,
+  onClose,
+  onItemUpdated,
+  members = [],
+  currentUserId = null,
+  // Hàm kiểm tra quyền trong dự án (từ useProjectPermission). Mặc định từ chối để không lộ nút thao tác.
+  can = () => false,
+}) {
   const [currentId, setCurrentId] = useState(initialItemId);
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -484,6 +493,22 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
     return date.toLocaleDateString('vi-VN');
   };
 
+  // ─── Quyền thao tác (ẩn/hiện UI; backend vẫn kiểm tra lại) ───
+  const canEdit = can('ISSUE_EDIT');
+  const canCreate = can('ISSUE_CREATE');
+  const canTransition = can('ISSUE_TRANSITION');
+  const canAssign = can('ISSUE_ASSIGN');
+  const canComment = can('COMMENT_CREATE');
+  const canEditOwnComment = can('COMMENT_EDIT_OWN');
+  const canDeleteOwnComment = can('COMMENT_DELETE_OWN');
+  const canDeleteAllComments = can('COMMENT_DELETE_ALL');
+  const canDeleteOwnAttachment = can('ATTACHMENT_DELETE_OWN');
+  const canDeleteAllAttachments = can('ATTACHMENT_DELETE_ALL');
+  const isMine = (ownerId) => Boolean(currentUserId && ownerId && String(ownerId) === String(currentUserId));
+  const canEditComment = (c) => isMine(c.authorId) && canEditOwnComment;
+  const canDeleteComment = (c) => (isMine(c.authorId) && canDeleteOwnComment) || canDeleteAllComments;
+  const canDeleteAttachment = (att) => (isMine(att.uploadedBy) && canDeleteOwnAttachment) || canDeleteAllAttachments;
+
   const priorityInfo = getPriorityConfig(item?.priority);
   const PriorityIcon = priorityInfo.icon;
   const todayStr = new Date().toISOString().substring(0, 10);
@@ -606,26 +631,28 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
           {/* Action Buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              onClick={() => setShowLinkModal(true)}
-              style={{
-                border: '1px solid #CBD5E1',
-                backgroundColor: '#FFFFFF',
-                padding: '5px 10px',
-                borderRadius: 6,
-                cursor: 'pointer',
-                color: '#334155',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                fontSize: 12,
-                fontWeight: 600,
-              }}
-              title="Thêm liên kết công việc"
-            >
-              <Link2 size={14} color="#2563EB" />
-              <span>Link issue</span>
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => setShowLinkModal(true)}
+                style={{
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#FFFFFF',
+                  padding: '5px 10px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  color: '#334155',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+                title="Thêm liên kết công việc"
+              >
+                <Link2 size={14} color="#2563EB" />
+                <span>Link issue</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 navigator.clipboard.writeText(window.location.href);
@@ -705,16 +732,16 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   />
                 ) : (
                   <h2
-                    onClick={() => setIsEditingSummary(true)}
+                    onClick={() => canEdit && setIsEditingSummary(true)}
                     style={{
                       fontSize: 20,
                       fontWeight: 700,
                       color: '#0F172A',
-                      cursor: 'pointer',
+                      cursor: canEdit ? 'pointer' : 'default',
                       padding: '4px 0',
                       lineHeight: 1.3,
                     }}
-                    title="Click để chỉnh sửa tiêu đề"
+                    title={canEdit ? 'Click để chỉnh sửa tiêu đề' : undefined}
                   >
                     {item?.summary || 'Untitled Issue'}
                   </h2>
@@ -725,7 +752,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Description (Mô tả chi tiết)</span>
-                  {!isEditingDescription && (
+                  {!isEditingDescription && canEdit && (
                     <button
                       onClick={() => setIsEditingDescription(true)}
                       style={{
@@ -798,21 +825,21 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   </div>
                 ) : (
                   <div
-                    onClick={() => setIsEditingDescription(true)}
+                    onClick={() => canEdit && setIsEditingDescription(true)}
                     style={{
                       padding: 12,
                       backgroundColor: '#F8FAFC',
                       borderRadius: 6,
                       fontSize: 13,
                       color: item?.description ? '#334155' : '#94A3B8',
-                      cursor: 'pointer',
+                      cursor: canEdit ? 'pointer' : 'default',
                       minHeight: 56,
                       lineHeight: 1.6,
                       whiteSpace: 'pre-wrap',
                       border: '1px solid #E2E8F0',
                     }}
                   >
-                    {item?.description || 'Chưa có mô tả chi tiết. Bấm vào đây để thêm...'}
+                    {item?.description || (canEdit ? 'Chưa có mô tả chi tiết. Bấm vào đây để thêm...' : 'Chưa có mô tả chi tiết.')}
                   </div>
                 )}
               </div>
@@ -828,22 +855,24 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         {links.length}
                       </span>
                     </div>
-                    <button
-                      onClick={() => setShowLinkModal(true)}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: '#2563EB',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 3,
-                      }}
-                    >
-                      <Plus size={13} /> Thêm liên kết
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => setShowLinkModal(true)}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          color: '#2563EB',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 3,
+                        }}
+                      >
+                        <Plus size={13} /> Thêm liên kết
+                      </button>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -911,19 +940,21 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                 >
                                   {lnk.linkedItemStatusName || 'TO DO'}
                                 </span>
-                                <button
-                                  onClick={() => handleDeleteLink(lnk.id)}
-                                  style={{
-                                    border: 'none',
-                                    background: 'transparent',
-                                    cursor: 'pointer',
-                                    color: '#94A3B8',
-                                    padding: 2,
-                                  }}
-                                  title="Gỡ bỏ liên kết"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
+                                {canEdit && (
+                                  <button
+                                    onClick={() => handleDeleteLink(lnk.id)}
+                                    style={{
+                                      border: 'none',
+                                      background: 'transparent',
+                                      cursor: 'pointer',
+                                      color: '#94A3B8',
+                                      padding: 2,
+                                    }}
+                                    title="Gỡ bỏ liên kết"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );
@@ -945,7 +976,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       </span>
                     )}
                   </div>
-                  {!isAddingSubtask && (
+                  {!isAddingSubtask && canCreate && (
                     <button
                       onClick={() => setIsAddingSubtask(true)}
                       style={{
@@ -1148,45 +1179,61 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 {/* TAB 1: Threaded Comments (Step 5.4) */}
                 {activeTab === 'comments' && (
                   <div>
-                    <form onSubmit={handleAddComment} style={{ marginBottom: 20 }}>
-                      <textarea
-                        rows={3}
-                        value={commentDraft}
-                        onChange={(e) => setCommentDraft(e.target.value)}
-                        placeholder="Thêm bình luận trao đổi (Hỗ trợ Markdown)..."
+                    {canComment ? (
+                      <form onSubmit={handleAddComment} style={{ marginBottom: 20 }}>
+                        <textarea
+                          rows={3}
+                          value={commentDraft}
+                          onChange={(e) => setCommentDraft(e.target.value)}
+                          placeholder="Thêm bình luận trao đổi (Hỗ trợ Markdown)..."
+                          style={{
+                            width: '100%',
+                            fontSize: 13,
+                            padding: 10,
+                            borderRadius: 6,
+                            border: '1px solid #CBD5E1',
+                            outline: 'none',
+                            fontFamily: 'inherit',
+                            resize: 'vertical',
+                            marginBottom: 8,
+                          }}
+                        />
+                        <button
+                          type="submit"
+                          disabled={!commentDraft.trim()}
+                          style={{
+                            backgroundColor: commentDraft.trim() ? '#2563EB' : '#94A3B8',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            padding: '6px 14px',
+                            borderRadius: 6,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: commentDraft.trim() ? 'pointer' : 'not-allowed',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
+                        >
+                          <Send size={12} />
+                          <span>Gửi bình luận</span>
+                        </button>
+                      </form>
+                    ) : (
+                      <div
                         style={{
-                          width: '100%',
-                          fontSize: 13,
-                          padding: 10,
+                          marginBottom: 20,
+                          padding: '10px 12px',
                           borderRadius: 6,
-                          border: '1px solid #CBD5E1',
-                          outline: 'none',
-                          fontFamily: 'inherit',
-                          resize: 'vertical',
-                          marginBottom: 8,
-                        }}
-                      />
-                      <button
-                        type="submit"
-                        disabled={!commentDraft.trim()}
-                        style={{
-                          backgroundColor: commentDraft.trim() ? '#2563EB' : '#94A3B8',
-                          color: '#FFFFFF',
-                          border: 'none',
-                          padding: '6px 14px',
-                          borderRadius: 6,
+                          backgroundColor: '#F8FAFC',
+                          border: '1px dashed #CBD5E1',
                           fontSize: 12,
-                          fontWeight: 600,
-                          cursor: commentDraft.trim() ? 'pointer' : 'not-allowed',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
+                          color: '#64748B',
                         }}
                       >
-                        <Send size={12} />
-                        <span>Gửi bình luận</span>
-                      </button>
-                    </form>
+                        Bạn không có quyền bình luận trong dự án này.
+                      </div>
+                    )}
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                       {comments.length === 0 ? (
@@ -1283,42 +1330,48 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                               <div style={{ color: '#334155', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{c.body}</div>
                             )}
 
-                            {/* Comment Actions */}
+                            {/* Comment Actions (theo quyền: COMMENT_CREATE / *_OWN / DELETE_ALL) */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontSize: 11, color: '#64748B' }}>
-                              <button
-                                onClick={() => {
-                                  setReplyParentId(replyParentId === c.id ? null : c.id);
-                                  setReplyDraft('');
-                                }}
-                                style={{
-                                  border: 'none',
-                                  background: 'transparent',
-                                  color: '#2563EB',
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 3,
-                                  padding: 0,
-                                }}
-                              >
-                                <CornerDownRight size={12} /> Trả lời
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingCommentId(c.id);
-                                  setEditingCommentDraft(c.body);
-                                }}
-                                style={{ border: 'none', background: 'transparent', color: '#64748B', cursor: 'pointer', padding: 0 }}
-                              >
-                                Chỉnh sửa
-                              </button>
-                              <button
-                                onClick={() => handleDeleteComment(c.id)}
-                                style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
-                              >
-                                Xóa
-                              </button>
+                              {canComment && (
+                                <button
+                                  onClick={() => {
+                                    setReplyParentId(replyParentId === c.id ? null : c.id);
+                                    setReplyDraft('');
+                                  }}
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#2563EB',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    padding: 0,
+                                  }}
+                                >
+                                  <CornerDownRight size={12} /> Trả lời
+                                </button>
+                              )}
+                              {canEditComment(c) && (
+                                <button
+                                  onClick={() => {
+                                    setEditingCommentId(c.id);
+                                    setEditingCommentDraft(c.body);
+                                  }}
+                                  style={{ border: 'none', background: 'transparent', color: '#64748B', cursor: 'pointer', padding: 0 }}
+                                >
+                                  Chỉnh sửa
+                                </button>
+                              )}
+                              {canDeleteComment(c) && (
+                                <button
+                                  onClick={() => handleDeleteComment(c.id)}
+                                  style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
+                                >
+                                  Xóa
+                                </button>
+                              )}
                             </div>
 
                             {/* Inline Reply Form */}
@@ -1411,14 +1464,16 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                       <span style={{ fontSize: 10, color: '#94A3B8' }}>{formatRelativeTime(reply.createdAt)}</span>
                                     </div>
                                     <div style={{ color: '#334155', fontSize: 12, lineHeight: 1.4 }}>{reply.body}</div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: 10, color: '#64748B' }}>
-                                      <button
-                                        onClick={() => handleDeleteComment(reply.id)}
-                                        style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
-                                      >
-                                        Xóa
-                                      </button>
-                                    </div>
+                                    {canDeleteComment(reply) && (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: 10, color: '#64748B' }}>
+                                        <button
+                                          onClick={() => handleDeleteComment(reply.id)}
+                                          style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
+                                        >
+                                          Xóa
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -1433,45 +1488,61 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 {/* TAB 2: Attachments Dropzone (Step 5.4) */}
                 {activeTab === 'attachments' && (
                   <div>
-                    {/* Drag-and-drop Dropzone */}
-                    <div
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setIsDraggingOver(true);
-                      }}
-                      onDragLeave={() => setIsDraggingOver(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setIsDraggingOver(false);
-                        handleFileUpload(e.dataTransfer.files);
-                      }}
-                      onClick={() => fileInputRef.current?.click()}
-                      style={{
-                        border: `2px dashed ${isDraggingOver ? '#2563EB' : '#CBD5E1'}`,
-                        backgroundColor: isDraggingOver ? '#EFF6FF' : '#F8FAFC',
-                        borderRadius: 8,
-                        padding: '24px 16px',
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                        marginBottom: 16,
-                      }}
-                    >
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        multiple
-                        onChange={(e) => handleFileUpload(e.target.files)}
-                        style={{ display: 'none' }}
-                      />
-                      <UploadCloud size={32} color="#2563EB" style={{ margin: '0 auto 8px' }} />
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
-                        {isUploadingFile ? 'Đang tải lên tệp...' : 'Kéo thả tệp vào đây hoặc Bấm để tải lên'}
+                    {/* Drag-and-drop Dropzone: cần ISSUE_EDIT để tải lên */}
+                    {canEdit ? (
+                      <div
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsDraggingOver(true);
+                        }}
+                        onDragLeave={() => setIsDraggingOver(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsDraggingOver(false);
+                          handleFileUpload(e.dataTransfer.files);
+                        }}
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{
+                          border: `2px dashed ${isDraggingOver ? '#2563EB' : '#CBD5E1'}`,
+                          backgroundColor: isDraggingOver ? '#EFF6FF' : '#F8FAFC',
+                          borderRadius: 8,
+                          padding: '24px 16px',
+                          textAlign: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          marginBottom: 16,
+                        }}
+                      >
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          multiple
+                          onChange={(e) => handleFileUpload(e.target.files)}
+                          style={{ display: 'none' }}
+                        />
+                        <UploadCloud size={32} color="#2563EB" style={{ margin: '0 auto 8px' }} />
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
+                          {isUploadingFile ? 'Đang tải lên tệp...' : 'Kéo thả tệp vào đây hoặc Bấm để tải lên'}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                          Hỗ trợ hình ảnh (PNG, JPG, SVG), tài liệu PDF, DOCX, ZIP tối đa 50MB
+                        </div>
                       </div>
-                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-                        Hỗ trợ hình ảnh (PNG, JPG, SVG), tài liệu PDF, DOCX, ZIP tối đa 50MB
+                    ) : (
+                      <div
+                        style={{
+                          marginBottom: 16,
+                          padding: '10px 12px',
+                          borderRadius: 6,
+                          backgroundColor: '#F8FAFC',
+                          border: '1px dashed #CBD5E1',
+                          fontSize: 12,
+                          color: '#64748B',
+                        }}
+                      >
+                        Bạn chỉ có quyền xem và tải về tệp đính kèm.
                       </div>
-                    </div>
+                    )}
 
                     {/* Attachment List / Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
@@ -1562,19 +1633,21 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                 >
                                   <Download size={12} /> Tải về
                                 </a>
-                                <button
-                                  onClick={() => handleDeleteAttachment(att.id)}
-                                  style={{
-                                    border: 'none',
-                                    background: 'transparent',
-                                    color: '#DC2626',
-                                    cursor: 'pointer',
-                                    padding: 2,
-                                  }}
-                                  title="Xóa tệp"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
+                                {canDeleteAttachment(att) && (
+                                  <button
+                                    onClick={() => handleDeleteAttachment(att.id)}
+                                    style={{
+                                      border: 'none',
+                                      background: 'transparent',
+                                      color: '#DC2626',
+                                      cursor: 'pointer',
+                                      padding: 2,
+                                    }}
+                                    title="Xóa tệp"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1652,24 +1725,26 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Status</span>
                 <div style={{ position: 'relative', marginTop: 6 }}>
                   <button
-                    onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                    onClick={() => canTransition && setShowStatusDropdown(!showStatusDropdown)}
+                    disabled={!canTransition}
+                    title={canTransition ? 'Chuyển trạng thái' : 'Bạn không có quyền chuyển trạng thái công việc'}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
                       borderRadius: 6,
                       border: '1px solid #CBD5E1',
-                      backgroundColor: '#FFFFFF',
+                      backgroundColor: canTransition ? '#FFFFFF' : '#F8FAFC',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      cursor: 'pointer',
+                      cursor: canTransition ? 'pointer' : 'not-allowed',
                       fontSize: 13,
                       fontWeight: 700,
                       color: item?.statusColorHex || '#2563EB',
                     }}
                   >
                     <span>{item?.statusName || 'TO DO'}</span>
-                    <ChevronDown size={14} color="#64748B" />
+                    {canTransition && <ChevronDown size={14} color="#64748B" />}
                   </button>
 
                   {showStatusDropdown && (
@@ -1726,7 +1801,9 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Độ ưu tiên (Priority)</span>
                 <div style={{ position: 'relative', marginTop: 6 }}>
                   <button
-                    onClick={() => setShowPriorityDropdown(!showPriorityDropdown)}
+                    onClick={() => canEdit && setShowPriorityDropdown(!showPriorityDropdown)}
+                    disabled={!canEdit}
+                    title={canEdit ? 'Đổi độ ưu tiên' : 'Bạn không có quyền chỉnh sửa công việc'}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
@@ -1736,7 +1813,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      cursor: 'pointer',
+                      cursor: canEdit ? 'pointer' : 'not-allowed',
                       fontSize: 13,
                       fontWeight: 700,
                       color: priorityInfo.color,
@@ -1818,6 +1895,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     value={item?.assigneeId || ''}
                     onChange={handleUpdateAssignee}
                     placeholder="Chưa gán (Unassigned)"
+                    disabled={!canAssign}
                   />
                 </div>
               </div>
@@ -1849,6 +1927,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   type="date"
                   value={item?.dueDate || ''}
                   onChange={(e) => handleUpdateDueDate(e.target.value)}
+                  disabled={!canEdit}
                   style={{
                     width: '100%',
                     marginTop: 6,
@@ -1874,6 +1953,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   defaultValue={item?.storyPoints || ''}
                   onBlur={(e) => handleUpdateStoryPoints(e.target.value)}
                   placeholder="0"
+                  disabled={!canEdit}
                   style={{
                     width: '100%',
                     marginTop: 6,

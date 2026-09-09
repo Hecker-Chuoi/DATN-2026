@@ -28,19 +28,23 @@ public interface ProjectService {
 
     /**
      * Lists and filters projects within a workspace or team with pagination and search.
+     * Only projects the current user can access are returned (member, lead or creator),
+     * unless {@code includeAll} is true (Global ADMIN).
      */
     PageResponse<ProjectResponse> getAllProjects(
             UUID workspaceId,
             UUID teamId,
             String search,
             Boolean isTemplate,
-            Pageable pageable
+            Pageable pageable,
+            UUID currentUserId,
+            boolean includeAll
     );
 
     /**
-     * Lists template projects.
+     * Lists template projects accessible to the current user.
      */
-    PageResponse<ProjectResponse> getTemplates(UUID workspaceId, Pageable pageable);
+    PageResponse<ProjectResponse> getTemplates(UUID workspaceId, Pageable pageable, UUID currentUserId, boolean includeAll);
 
     /**
      * Updates an existing project.
