@@ -20,6 +20,20 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkflowController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET    /api/v1/work/projects/{projectId}/workflow                            : Lấy chi tiết workflow đang hoạt động của dự án
+     * GET    /api/v1/work/projects/{projectId}/workflows                           : Lấy tất cả workflow của dự án
+     * GET    /api/v1/work/projects/{projectId}/workflow/scheme                     : Lấy sơ đồ workflow & mapping loại công việc
+     * PUT    /api/v1/work/projects/{projectId}/workflow/scheme                     : Cập nhật sơ đồ workflow của dự án
+     * GET    /api/v1/work/projects/{projectId}/statuses                            : Lấy tất cả trạng thái trong dự án
+     * POST   /api/v1/work/statuses                                                 : Tạo trạng thái mới
+     * GET    /api/v1/work/workflows/{workflowId}                                   : Lấy chi tiết workflow theo ID
+     * POST   /api/v1/work/workflows/{workflowId}/transitions                       : Thêm bước chuyển (transition) vào workflow
+     * DELETE /api/v1/work/workflows/{workflowId}/transitions/{transitionId}        : Xóa bước chuyển khỏi workflow
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final WorkflowService workflowService;
 
     /**

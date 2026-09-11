@@ -30,6 +30,22 @@ import java.util.*;
 @RequiredArgsConstructor
 public class TeamController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET    /api/v1/work/teams                            : Lấy danh sách tất cả Team (Admin)
+     * GET    /api/v1/work/teams/my | /me                   : Lấy danh sách Team người dùng hiện tại tham gia
+     * GET    /api/v1/work/teams/{teamId}                   : Lấy chi tiết Team theo ID
+     * POST   /api/v1/work/teams                            : Tạo Team mới (người tạo là Leader)
+     * PUT    /api/v1/work/teams/{teamId}                   : Cập nhật thông tin Team (Leader/Owner)
+     * DELETE /api/v1/work/teams/{teamId}                   : Xóa Team (chỉ Owner)
+     * POST   /api/v1/work/teams/{teamId}/leave             : Rời khỏi Team (thành viên tự rời)
+     * GET    /api/v1/work/teams/{teamId}/members           : Lấy danh sách thành viên của Team
+     * POST   /api/v1/work/teams/{teamId}/members           : Thêm thành viên vào Team (Leader/Owner)
+     * PUT    /api/v1/work/teams/{teamId}/members/{userId}/role : Cập nhật vai trò thành viên (Leader)
+     * DELETE /api/v1/work/teams/{teamId}/members/{userId}  : Xóa thành viên khỏi Team (Leader/Owner)
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final ProjectRepository projectRepository;

@@ -19,6 +19,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkItemTransitionController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET  /api/v1/work/work-items/{id}/transitions                : Lấy các bước chuyển khả dụng từ trạng thái hiện tại
+     * POST /api/v1/work/work-items/{id}/transitions/{transitionId} : Thực hiện chuyển trạng thái theo transitionId trên path
+     * POST /api/v1/work/work-items/{id}/transitions                : Thực hiện chuyển trạng thái (transitionId trong body)
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final WorkflowEngineService workflowEngineService;
 
     /**

@@ -23,6 +23,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProjectMemberController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET    /api/v1/work/projects/{projectId}/permissions/my         : Lấy quyền của người dùng hiện tại trong dự án
+     * GET    /api/v1/work/projects/{projectId}/members                : Lấy danh sách thành viên & vai trò trong dự án
+     * POST   /api/v1/work/projects/{projectId}/members                : Thêm thành viên vào dự án (Project Admin)
+     * PUT    /api/v1/work/projects/{projectId}/members/{userId}/role  : Cập nhật vai trò thành viên (Project Admin)
+     * DELETE /api/v1/work/projects/{projectId}/members/{userId}       : Xóa thành viên khỏi dự án (Project Admin)
+     * GET    /api/v1/work/projects/{projectId}/roles                  : Lấy danh sách vai trò của dự án
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final ProjectMemberService projectMemberService;
 
     /**

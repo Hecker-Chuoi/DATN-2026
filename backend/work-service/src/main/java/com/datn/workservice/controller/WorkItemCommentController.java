@@ -24,6 +24,15 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkItemCommentController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET    /api/v1/work/items/{itemId}/comments | /work-items/{itemId}/comments                 : Lấy danh sách bình luận (dạng cây)
+     * POST   /api/v1/work/items/{itemId}/comments | /work-items/{itemId}/comments                 : Thêm bình luận mới
+     * PUT    /api/v1/work/items/{itemId}/comments/{commentId} | /work-items/{itemId}/comments/{commentId} : Cập nhật bình luận
+     * DELETE /api/v1/work/items/{itemId}/comments/{commentId} | /work-items/{itemId}/comments/{commentId} : Xóa bình luận
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final WorkItemCommentService commentService;
 
     @GetMapping({"/items/{itemId}/comments", "/work-items/{itemId}/comments"})
