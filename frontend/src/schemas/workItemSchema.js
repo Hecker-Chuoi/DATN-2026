@@ -15,16 +15,16 @@ export function validateWorkItemForm(formData, parentItem = null) {
 
   // 2. Type validation
   if (!formData.typeId) {
-    errors.typeId = 'Vui lòng chọn loại công việc (Epic, Story, Task, Bug, Sub-task)';
+    errors.typeId = 'Vui lòng chọn loại công việc';
   }
 
   // 3. Story points validation
   if (formData.storyPoints !== undefined && formData.storyPoints !== null && formData.storyPoints !== '') {
     const pts = Number(formData.storyPoints);
     if (isNaN(pts) || pts < 0) {
-      errors.storyPoints = 'Điểm Story Points phải là số dương hoặc 0';
+      errors.storyPoints = 'Điểm ước lượng phải là số dương hoặc 0';
     } else if (pts > 999.99) {
-      errors.storyPoints = 'Điểm Story Points tối đa 999.99';
+      errors.storyPoints = 'Điểm ước lượng tối đa 999.99';
     }
   }
 
@@ -41,17 +41,17 @@ export function validateWorkItemForm(formData, parentItem = null) {
     const start = new Date(formData.startDate);
     const due = new Date(formData.dueDate);
     if (due < start) {
-      errors.dueDate = 'Hạn chót (Due Date) không thể diễn ra trước ngày bắt đầu (Start Date)';
+      errors.dueDate = 'Hạn chót không thể diễn ra trước ngày bắt đầu';
     }
   }
 
   // 6. Hierarchy rules
   if (formData.typeCode === 'SUB_TASK' && !formData.parentId) {
-    errors.parentId = 'Nhiệm vụ con (Sub-task) bắt buộc phải có công việc cha (Story / Task / Bug)';
+    errors.parentId = 'Nhiệm vụ con bắt buộc phải có công việc cha thuộc cấp tiêu chuẩn';
   }
 
   if (formData.typeCode === 'EPIC' && formData.parentId) {
-    errors.parentId = 'Hạng mục lớn (Epic) là cấp bậc cao nhất và không được có công việc cha';
+    errors.parentId = 'Hạng mục lớn là cấp bậc cao nhất và không được có công việc cha';
   }
 
   return {

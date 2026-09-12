@@ -220,10 +220,10 @@ export default function ProjectListPage() {
         {/* Navigation Pills */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {[
-            { id: 'ALL', label: 'All projects' },
-            { id: 'SCRUM', label: 'Scrum' },
-            { id: 'KANBAN', label: 'Kanban' },
-            { id: 'TEMPLATES', label: 'Templates' },
+            { id: 'ALL', label: 'Tất cả dự án' },
+            { id: 'SCRUM', label: 'Dự án Scrum' },
+            { id: 'KANBAN', label: 'Dự án Kanban' },
+            { id: 'TEMPLATES', label: 'Dự án mẫu' },
           ].map((tab) => {
             const active = activeTab === tab.id;
             return (
@@ -259,7 +259,7 @@ export default function ProjectListPage() {
             />
             <input
               type="text"
-              placeholder="Search projects..."
+              placeholder="Tìm kiếm dự án..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -293,7 +293,7 @@ export default function ProjectListPage() {
             }}
           >
             <Plus size={14} />
-            <span>Create project</span>
+            <span>Tạo dự án mới</span>
           </button>
 
           <button
@@ -444,7 +444,7 @@ export default function ProjectListPage() {
                           }}
                         >
                           {isScrum ? <Zap size={11} /> : <Kanban size={11} />}
-                          <span>{isScrum ? 'Scrum' : 'Kanban'}</span>
+                          <span>{isScrum ? 'Quy trình Scrum' : 'Bảng Kanban'}</span>
                         </span>
 
                         {canDeleteProject && (
@@ -574,7 +574,7 @@ export default function ProjectListPage() {
                       color: '#94A3B8',
                     }}
                   >
-                    <span>ID: {project.id?.substring(0, 8)}...</span>
+                    <span>Mã: {project.id?.substring(0, 8)}...</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#2563EB', fontWeight: 600 }}>
                       <span>Mở bảng</span>
                       <ChevronRight size={12} />

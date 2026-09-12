@@ -24,64 +24,64 @@ const ROLE_COLORS = {
 
 const PERMISSION_DEFINITIONS = [
   {
-    category: '1. Quản trị Dự án & Vòng đời Agile',
+    category: '1. Quản trị Dự án & Vòng đời Quy trình',
     permissions: [
       {
         key: 'PROJECT_ADMIN',
-        name: 'Toàn quyền Quản trị Dự án (Project Admin)',
+        name: 'Toàn quyền Quản trị Dự án',
         desc: 'Cấu hình thông tin dự án, quản lý thành viên, gán vai trò và xóa dự án.',
         roles: ['ADMINISTRATOR'],
       },
       {
         key: 'PROJECT_VIEW',
-        name: 'Xem Dự án & Bảng biểu (Project View)',
-        desc: 'Xem tổng quan dự án, danh sách công việc, bảng Kanban/Scrum và báo cáo.',
+        name: 'Xem Dự án & Bảng làm việc',
+        desc: 'Xem tổng quan dự án, danh sách công việc, bảng làm việc và báo cáo tiến độ.',
         roles: ['ADMINISTRATOR', 'MEMBER', 'VIEWER'],
       },
       {
         key: 'SPRINT_MANAGE',
-        name: 'Quản lý Sprint Agile (Sprint Manage)',
-        desc: 'Lập kế hoạch Backlog, tạo Sprint mới, Bắt đầu và Hoàn thành Sprint.',
+        name: 'Quản lý Chu kỳ Làm việc',
+        desc: 'Lập kế hoạch tồn đọng, tạo chu kỳ mới, Bắt đầu và Hoàn tất chu kỳ.',
         roles: ['ADMINISTRATOR'],
       },
       {
         key: 'RELEASE_MANAGE',
-        name: 'Quản lý Phiên bản Phát hành (Release Manage)',
-        desc: 'Tạo đợt Release Version, chốt danh sách issue đã xong và sinh Release Notes.',
+        name: 'Quản lý Phiên bản Phát hành',
+        desc: 'Tạo đợt phát hành, chốt danh sách công việc đã xong và tạo ghi chú phát hành.',
         roles: ['ADMINISTRATOR'],
       },
     ],
   },
   {
-    category: '2. Quản lý & Thao tác Công việc (Work Items)',
+    category: '2. Quản lý & Thao tác Công việc',
     permissions: [
       {
         key: 'ISSUE_CREATE',
-        name: 'Tạo Công việc Mới (Issue Create)',
-        desc: 'Tạo mới Epic, Story, Task, Bug và Sub-task trong dự án.',
+        name: 'Tạo Công việc Mới',
+        desc: 'Tạo mới Hạng mục lớn, Câu chuyện người dùng, Nhiệm vụ, Lỗi phần mềm và Nhiệm vụ con trong dự án.',
         roles: ['ADMINISTRATOR', 'MEMBER'],
       },
       {
         key: 'ISSUE_EDIT',
-        name: 'Chỉnh sửa Công việc (Issue Edit)',
-        desc: 'Cập nhật tiêu đề, mô tả, Story Points, thời gian ước lượng và Custom Fields.',
+        name: 'Chỉnh sửa Công việc',
+        desc: 'Cập nhật tiêu đề, mô tả, điểm ước lượng, thời gian dự kiến và các trường tùy biến.',
         roles: ['ADMINISTRATOR', 'MEMBER'],
       },
       {
         key: 'ISSUE_TRANSITION',
-        name: 'Chuyển Trạng thái / Kéo thả (Issue Transition)',
-        desc: 'Kéo thả thẻ trên Board và thực hiện các bước chuyển quy trình (To Do -> In Progress -> Done).',
+        name: 'Chuyển Trạng thái / Kéo thả',
+        desc: 'Kéo thả thẻ trên Bảng và thực hiện các bước chuyển quy trình (Cần làm -> Đang thực hiện -> Hoàn thành).',
         roles: ['ADMINISTRATOR', 'MEMBER'],
       },
       {
         key: 'ISSUE_ASSIGN',
-        name: 'Phân công Người xử lý (Issue Assign)',
-        desc: 'Gán hoặc đổi người chịu trách nhiệm (Assignee) cho công việc.',
+        name: 'Phân công Người xử lý',
+        desc: 'Gán hoặc đổi người chịu trách nhiệm cho công việc.',
         roles: ['ADMINISTRATOR', 'MEMBER'],
       },
       {
         key: 'ISSUE_DELETE',
-        name: 'Xóa Công việc (Issue Delete)',
+        name: 'Xóa Công việc',
         desc: 'Xóa vĩnh viễn hoặc chuyển công việc vào thùng rác dự án.',
         roles: ['ADMINISTRATOR'],
       },
@@ -92,8 +92,8 @@ const PERMISSION_DEFINITIONS = [
     permissions: [
       {
         key: 'COMMENT_CREATE',
-        name: 'Bình luận & Đính kèm (Comment & Attach)',
-        desc: 'Gửi bình luận trao đổi dạng cây phân cấp và tải lên tài liệu đính kèm.',
+        name: 'Bình luận & Tệp đính kèm',
+        desc: 'Gửi bình luận trao đổi phân cấp và tải lên tài liệu đính kèm.',
         roles: ['ADMINISTRATOR', 'MEMBER'],
       },
     ],
@@ -197,7 +197,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
 
   const handleRemoveMember = async (userId, memberName) => {
     if (userId === project?.leadUserId) {
-      toast.error('Không thể xóa Trưởng dự án (Project Lead) khỏi dự án');
+      toast.error('Không thể xóa Trưởng dự án khỏi dự án');
       return;
     }
 
@@ -374,7 +374,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                               color: '#B45309',
                             }}
                           >
-                            LEAD
+                            TRƯỞNG DỰ ÁN
                           </span>
                         )}
                       </div>
@@ -481,7 +481,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
             <Shield size={18} color="#2563EB" />
-            <span>Phân quyền hạt mịn theo Vai trò (Granular Project RBAC)</span>
+            <span>Phân quyền chi tiết theo Vai trò</span>
           </div>
 
           <button
@@ -511,29 +511,29 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 12, marginBottom: showDetailedMatrix ? 16 : 0 }}>
           <div style={{ padding: 12, backgroundColor: '#FAF5FF', borderRadius: 8, border: '1px solid #E9D5FF' }}>
             <div style={{ fontWeight: 700, color: '#7E22CE', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>Administrator</span>
+              <span>Quản trị viên (Administrator)</span>
               <span style={{ fontSize: 11, backgroundColor: '#F3E8FF', padding: '1px 6px', borderRadius: 10 }}>10 / 10 quyền</span>
             </div>
             <div style={{ color: '#6B21A8', lineHeight: 1.4 }}>
-              Toàn quyền cấu hình dự án, thành viên, workflow, board, sprint và xóa công việc.
+              Toàn quyền cấu hình dự án, thành viên, quy trình, bảng làm việc, chu kỳ và xóa công việc.
             </div>
           </div>
           <div style={{ padding: 12, backgroundColor: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
             <div style={{ fontWeight: 700, color: '#1D4ED8', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>Member</span>
+              <span>Thành viên (Member)</span>
               <span style={{ fontSize: 11, backgroundColor: '#DBEAFE', padding: '1px 6px', borderRadius: 10 }}>6 / 10 quyền</span>
             </div>
             <div style={{ color: '#1E40AF', lineHeight: 1.4 }}>
-              Xem dự án, tạo task, chỉnh sửa, phân công, kéo thả trạng thái và thêm bình luận.
+              Xem dự án, tạo công việc, chỉnh sửa, phân công, kéo thả trạng thái và thêm bình luận.
             </div>
           </div>
           <div style={{ padding: 12, backgroundColor: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
             <div style={{ fontWeight: 700, color: '#475569', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>Viewer</span>
+              <span>Người xem (Viewer)</span>
               <span style={{ fontSize: 11, backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: 10 }}>1 / 10 quyền</span>
             </div>
             <div style={{ color: '#64748B', lineHeight: 1.4 }}>
-              Chỉ đọc: Xem danh sách công việc, bảng Kanban và báo cáo mà không thể chỉnh sửa.
+              Chỉ đọc: Xem danh sách công việc, bảng làm việc và báo cáo mà không thể chỉnh sửa.
             </div>
           </div>
         </div>
@@ -563,10 +563,10 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                 letterSpacing: '0.04em',
               }}
             >
-              <span>Tên Quyền Hạn (Permission Key) & Mô Tả</span>
-              <span style={{ textAlign: 'center', color: '#7E22CE' }}>Administrator</span>
-              <span style={{ textAlign: 'center', color: '#1D4ED8' }}>Member</span>
-              <span style={{ textAlign: 'center', color: '#475569' }}>Viewer</span>
+              <span>Tên quyền hạn & Mô tả</span>
+              <span style={{ textAlign: 'center', color: '#7E22CE' }}>Quản trị viên</span>
+              <span style={{ textAlign: 'center', color: '#1D4ED8' }}>Thành viên</span>
+              <span style={{ textAlign: 'center', color: '#475569' }}>Người xem</span>
             </div>
 
             {PERMISSION_DEFINITIONS.map((group, groupIdx) => (
@@ -733,7 +733,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                   <option value="">-- Chọn thành viên từ hệ thống --</option>
                   {systemUsers.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.fullName ? `${u.fullName} (@${u.username})` : u.username} ({u.email || 'No email'})
+                      {u.fullName ? `${u.fullName} (@${u.username})` : u.username} ({u.email || 'Không có email'})
                     </option>
                   ))}
                 </select>

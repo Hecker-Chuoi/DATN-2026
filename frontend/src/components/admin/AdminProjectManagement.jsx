@@ -345,7 +345,7 @@ export default function AdminProjectManagement() {
         />
 
         <StatCard
-          label="Đang Hoạt Động (Active)"
+          label="Đang Hoạt Động"
           value={stats.active}
           icon={<Clock size={18} color="#16a34a" />}
           bgColor="#f0fdf4"
@@ -468,7 +468,7 @@ export default function AdminProjectManagement() {
                   size={15}
                   color={templateFilter === 'TEMPLATE_ONLY' ? '#ffffff' : '#d97706'}
                 />
-                <span>Chỉ Dự Án Mẫu (Templates)</span>
+                <span>Chỉ Dự Án Mẫu</span>
                 <span
                   style={{
                     backgroundColor: templateFilter === 'TEMPLATE_ONLY' ? 'rgba(255,255,255,0.25)' : '#fef3c7',
@@ -537,7 +537,7 @@ export default function AdminProjectManagement() {
               />
               <input
                 type="text"
-                placeholder="Tìm theo Tên, Mã Key, Mô tả dự án... (Nhấn Enter)"
+                placeholder="Tìm theo tên, mã viết tắt, mô tả dự án... (Nhấn Enter)"
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
                 style={{
@@ -611,10 +611,10 @@ export default function AdminProjectManagement() {
                   }}
                 >
                   <option value="ALL">Tất cả trạng thái</option>
-                  <option value="ACTIVE">ACTIVE (Đang chạy)</option>
-                  <option value="PLANNING">PLANNING (Kế hoạch)</option>
-                  <option value="COMPLETED">COMPLETED (Hoàn thành)</option>
-                  <option value="ON_HOLD">ON_HOLD (Tạm dừng)</option>
+                  <option value="ACTIVE">Đang hoạt động</option>
+                  <option value="PLANNING">Lập kế hoạch</option>
+                  <option value="COMPLETED">Đã hoàn thành</option>
+                  <option value="ON_HOLD">Tạm dừng</option>
                 </select>
               </div>
 
@@ -798,7 +798,7 @@ export default function AdminProjectManagement() {
                                 }}
                                 onMouseEnter={(e) => (e.target.style.color = '#0284c7')}
                                 onMouseLeave={(e) => (e.target.style.color = '#0f172a')}
-                                title="Bấm để xem bảng công việc (Kanban)"
+                                title="Bấm để xem bảng công việc"
                               >
                                 {project.name}
                               </span>
@@ -842,7 +842,7 @@ export default function AdminProjectManagement() {
                             }}
                           >
                             <Sparkles size={12} color="#d97706" />
-                            <span>TEMPLATE</span>
+                            <span>DỰ ÁN MẪU</span>
                           </span>
                         ) : (
                           <span
@@ -856,7 +856,7 @@ export default function AdminProjectManagement() {
                               border: '1px solid #e2e8f0',
                             }}
                           >
-                            STANDARD
+                            TIÊU CHUẨN
                           </span>
                         )}
                       </td>
@@ -874,7 +874,7 @@ export default function AdminProjectManagement() {
                             border: `1px solid ${statusStyle.border}`,
                           }}
                         >
-                          {project.status || 'ACTIVE'}
+                          {getProjectStatusLabel(project.status)}
                         </span>
                       </td>
 
@@ -1241,7 +1241,7 @@ export default function AdminProjectManagement() {
               {/* Project Key (Read-only) */}
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Mã Dự Án (Key - Cố định)
+                  Mã dự án (Cố định)
                 </label>
                 <input
                   type="text"
@@ -1322,16 +1322,16 @@ export default function AdminProjectManagement() {
                       fontSize: 13,
                     }}
                   >
-                    <option value="PLANNING">PLANNING (Lập kế hoạch)</option>
-                    <option value="ACTIVE">ACTIVE (Đang hoạt động)</option>
-                    <option value="COMPLETED">COMPLETED (Hoàn thành)</option>
-                    <option value="ON_HOLD">ON_HOLD (Tạm dừng)</option>
+                    <option value="PLANNING">Lập kế hoạch</option>
+                    <option value="ACTIVE">Đang hoạt động</option>
+                    <option value="COMPLETED">Đã hoàn thành</option>
+                    <option value="ON_HOLD">Tạm dừng</option>
                   </select>
                 </div>
 
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                    Nhóm Sở Hữu (Team)
+                    Nhóm sở hữu
                   </label>
                   <select
                     value={editingProject.teamId || ''}
@@ -1379,7 +1379,7 @@ export default function AdminProjectManagement() {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Sparkles size={14} color="#d97706" />
-                    <span>Đặt làm Dự Án Mẫu (Template)</span>
+                    <span>Đặt làm Dự án mẫu</span>
                   </div>
                   <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
                     Dự án này sẽ xuất hiện trong danh mục Template để các thành viên khác nhân bản nhanh quy trình và cột mốc.
@@ -1410,7 +1410,7 @@ export default function AdminProjectManagement() {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Globe size={14} color="#16a34a" />
-                    <span>Dự Án Công Khai (Public Workspace)</span>
+                    <span>Dự án công khai</span>
                   </div>
                 </div>
               </div>
@@ -1636,6 +1636,21 @@ function getStatusBadgeStyle(status) {
       return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
     default:
       return { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' };
+  }
+}
+
+function getProjectStatusLabel(status) {
+  switch (status) {
+    case 'ACTIVE':
+      return 'Đang hoạt động';
+    case 'PLANNING':
+      return 'Lập kế hoạch';
+    case 'COMPLETED':
+      return 'Đã hoàn thành';
+    case 'ON_HOLD':
+      return 'Tạm dừng';
+    default:
+      return status || 'Đang hoạt động';
   }
 }
 

@@ -255,7 +255,7 @@ export default function TeamDetailPage() {
 
   const handleRemoveMember = async (userId, memberName) => {
     if (!isCurrentUserLeader) {
-      toast.error('Chỉ Trưởng nhóm (Leader) mới có quyền xóa thành viên');
+      toast.error('Chỉ Trưởng nhóm mới có quyền xóa thành viên');
       return;
     }
     if (currentUser?.id && userId === currentUser.id) {
@@ -288,12 +288,12 @@ export default function TeamDetailPage() {
   const getRoleLabel = (role) => {
     switch (role) {
       case 'LEADER':
-        return 'Team Leader';
+        return 'Trưởng nhóm';
       case 'VIEWER':
-        return 'Viewer';
+        return 'Người xem';
       case 'MEMBER':
       default:
-        return 'Workspace member';
+        return 'Thành viên';
     }
   };
 
@@ -500,7 +500,7 @@ export default function TeamDetailPage() {
               transition: 'all 0.15s ease',
             }}
           >
-            Overview
+            Tổng quan
           </button>
           <button
             onClick={() => setActiveTab('documents')}
@@ -516,7 +516,7 @@ export default function TeamDetailPage() {
               transition: 'all 0.15s ease',
             }}
           >
-            Documents
+            Tài liệu
           </button>
           <button
             onClick={() => setActiveTab('members')}
@@ -532,7 +532,7 @@ export default function TeamDetailPage() {
               transition: 'all 0.15s ease',
             }}
           >
-            Members
+            Thành viên
           </button>
         </div>
 
@@ -556,7 +556,7 @@ export default function TeamDetailPage() {
                 boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
               }}
             >
-              <span>+ Add a member</span>
+              <span>+ Thêm thành viên</span>
             </button>
           )}
           <button
@@ -597,11 +597,11 @@ export default function TeamDetailPage() {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                <span>Name</span>
+                <span>Họ và tên</span>
                 <span style={{ fontSize: 11 }}>↓</span>
               </div>
               <div>Email</div>
-              <div>Role</div>
+              <div>Vai trò</div>
               <div></div>
             </div>
 
@@ -612,7 +612,7 @@ export default function TeamDetailPage() {
               </div>
             ) : filteredMembers.length === 0 ? (
               <div style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
-                Chưa có thành viên nào trong nhóm. Bấm <b>+ Add a member</b> để mời thành viên.
+                Chưa có thành viên nào trong nhóm. Bấm <b>+ Thêm thành viên</b> để mời thành viên.
               </div>
             ) : (
               <div>
@@ -697,9 +697,9 @@ export default function TeamDetailPage() {
                               outline: 'none',
                             }}
                           >
-                            <option value="LEADER">Team Leader</option>
-                            <option value="MEMBER">Workspace member</option>
-                            <option value="VIEWER">Viewer</option>
+                            <option value="LEADER">Trưởng nhóm</option>
+                            <option value="MEMBER">Thành viên</option>
+                            <option value="VIEWER">Người xem</option>
                           </select>
                         ) : (
                           <span
@@ -767,7 +767,7 @@ export default function TeamDetailPage() {
                 <div>
                   <div style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Vai trò của bạn</div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: isCurrentUserOwner ? '#DC2626' : isCurrentUserLeader ? '#2563EB' : '#0F172A' }}>
-                    {isCurrentUserOwner ? 'Chủ sở hữu (Owner)' : isCurrentUserLeader ? 'Trưởng nhóm (Team Leader)' : isCurrentUserMember ? 'Thành viên (Member)' : 'Khách (Viewer)'}
+                    {isCurrentUserOwner ? 'Chủ sở hữu' : isCurrentUserLeader ? 'Trưởng nhóm' : isCurrentUserMember ? 'Thành viên' : 'Người xem'}
                   </div>
                 </div>
               </div>
@@ -945,7 +945,7 @@ export default function TeamDetailPage() {
               {/* User Search / Selected User Preview */}
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Tìm kiếm người dùng (Username hoặc Email) <span style={{ color: '#EF4444' }}>*</span>
+                  Tìm kiếm người dùng (Tên đăng nhập hoặc Thư điện tử) <span style={{ color: '#EF4444' }}>*</span>
                 </label>
 
                 {selectedUser ? (
@@ -1130,7 +1130,7 @@ export default function TeamDetailPage() {
               {/* Role Selection */}
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Vai trò trong nhóm (Role)
+                  Vai trò trong nhóm làm việc
                 </label>
                 <select
                   value={memberRole}
@@ -1146,9 +1146,9 @@ export default function TeamDetailPage() {
                     backgroundColor: '#FFFFFF',
                   }}
                 >
-                  <option value="MEMBER">Workspace member (Thành viên - Có quyền làm việc trong dự án)</option>
-                  <option value="LEADER">Team Leader (Trưởng nhóm - Toàn quyền quản trị nhóm)</option>
-                  <option value="VIEWER">Viewer (Chỉ xem - Không được chỉnh sửa)</option>
+                  <option value="MEMBER">Thành viên (Có quyền tham gia làm việc trong các dự án)</option>
+                  <option value="LEADER">Trưởng nhóm (Toàn quyền quản lý và điều phối nhóm)</option>
+                  <option value="VIEWER">Người xem (Chỉ theo dõi tiến độ, không chỉnh sửa)</option>
                 </select>
               </div>
 

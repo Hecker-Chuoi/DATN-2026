@@ -44,13 +44,14 @@ import MemberSelect from '../common/MemberSelect.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import ResolveSubtasksModal from '../modals/ResolveSubtasksModal.jsx';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
+import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
 
 const TYPE_ICONS = {
-  EPIC: { icon: Bookmark, color: '#6554C0', label: 'Epic' },
-  STORY: { icon: Bookmark, color: '#36B37E', label: 'Story' },
-  TASK: { icon: CheckSquare, color: '#0052CC', label: 'Task' },
-  BUG: { icon: CircleDot, color: '#E5493A', label: 'Bug' },
-  SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Sub-task' },
+  EPIC: { icon: Bookmark, color: '#6554C0', label: 'Hạng mục lớn' },
+  STORY: { icon: Bookmark, color: '#36B37E', label: 'Câu chuyện người dùng' },
+  TASK: { icon: CheckSquare, color: '#0052CC', label: 'Nhiệm vụ' },
+  BUG: { icon: CircleDot, color: '#E5493A', label: 'Lỗi phần mềm' },
+  SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Nhiệm vụ con' },
 };
 
 export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [] }) {
@@ -591,7 +592,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
             {(() => {
               const displayColor = item?.typeColor || typeInfo.color || '#2563EB';
               const lvl = item?.hierarchyLevel;
-              const lvlLabel = lvl === 1 ? 'Cấp 1 • Epic' : lvl === 0 ? 'Cấp 0 • Chuẩn' : lvl === -1 ? 'Cấp -1 • Sub' : null;
+              const lvlLabel = lvl === 1 ? 'Cấp 1 • Hạng mục lớn' : lvl === 0 ? 'Cấp 0 • Tiêu chuẩn' : lvl === -1 ? 'Cấp -1 • Nhiệm vụ con' : null;
               return (
                 <div
                   style={{
@@ -608,7 +609,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   }}
                 >
                   <TypeIcon size={14} color={displayColor} />
-                  <span>{item?.typeName || typeInfo.label}</span>
+                  <span>{getTypeDisplayName(item?.typeName || typeInfo.label)}</span>
                   {lvlLabel && (
                     <span
                       style={{
@@ -678,7 +679,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               title="Thêm liên kết công việc"
             >
               <Link2 size={14} color="#2563EB" />
-              <span>Link issue</span>
+              <span>Liên kết công việc</span>
             </button>
             <button
               onClick={() => {
@@ -720,7 +721,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
         {/* ─── Modal Body (2 Columns Layout) ─── */}
         {loading ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>
-            Đang tải dữ liệu chi tiết Issue...
+            Đang tải dữ liệu chi tiết công việc...
           </div>
         ) : (
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -753,10 +754,10 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
                     <Lock size={16} color="#DC2626" />
-                    <span>CÔNG VIỆC BỊ CẢN TRỞ (BLOCKED)</span>
+                    <span>CÔNG VIỆC ĐANG BỊ CẢN TRỞ</span>
                   </div>
                   <div style={{ fontSize: 12, color: '#B91C1C', lineHeight: 1.5 }}>
-                    Công việc này không thể chuyển sang <strong>In Progress</strong> hoặc <strong>Done</strong> vì đang bị chặn bởi các công việc chưa hoàn thành:
+                    Công việc này không thể chuyển sang <strong>Đang thực hiện</strong> hoặc <strong>Hoàn thành</strong> vì đang bị cản trở bởi các công việc chưa xong:
                   </div>
                   {item?.blockingWorkItems && item.blockingWorkItems.length > 0 && (
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
@@ -816,7 +817,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       onClick={async () => {
                         try {
                           await workItemApi.update(currentId, { dueDate: item.parent.dueDate });
-                          toast.success(`Đã đồng bộ hạn chót về Task cha (${item.parent.dueDate})`);
+                          toast.success(`Đã đồng bộ hạn chót theo công việc cha (${item.parent.dueDate})`);
                           fetchDetail(currentId);
                           fetchChangelogs(currentId);
                         } catch (err) {
@@ -836,7 +837,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                       }}
                     >
-                      Đồng bộ hạn về Task cha ({item.parent.dueDate})
+                      Đồng bộ hạn theo công việc cha ({item.parent.dueDate})
                     </button>
                   )}
                 </div>
@@ -857,7 +858,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   }}
                 >
                   <AlertCircle size={17} color="#2563EB" style={{ flexShrink: 0 }} />
-                  <span>{item.dependencyConflictMessage || 'Xung đột thời gian: Blocker kết thúc sau ngày bắt đầu dự kiến của công việc này'}</span>
+                  <span>{item.dependencyConflictMessage || 'Xung đột thời gian: Công việc cản trở kết thúc sau ngày bắt đầu dự kiến của công việc này'}</span>
                 </div>
               )}
 
@@ -895,7 +896,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     }}
                     title="Click để chỉnh sửa tiêu đề"
                   >
-                    {item?.summary || 'Untitled Issue'}
+                    {item?.summary || 'Chưa có tiêu đề'}
                   </h2>
                 )}
               </div>
@@ -903,7 +904,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               {/* Description */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Description (Mô tả chi tiết)</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Mô tả chi tiết</span>
                   {!isEditingDescription && (
                     <button
                       onClick={() => setIsEditingDescription(true)}
@@ -1002,7 +1003,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Link2 size={16} color="#2563EB" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Linked Issues</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Công việc liên kết</span>
                       <span style={{ fontSize: 11, backgroundColor: '#EFF6FF', color: '#2563EB', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
                         {links.length}
                       </span>
@@ -1088,7 +1089,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                     color: lnk.linkedItemStatusColorHex || '#2563EB',
                                   }}
                                 >
-                                  {lnk.linkedItemStatusName || 'TO DO'}
+                                  {getStatusDisplayName(lnk.linkedItemStatusName || 'Cần làm')}
                                 </span>
                                 <button
                                   onClick={() => handleDeleteLink(lnk.id)}
@@ -1118,10 +1119,10 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Sub-tasks</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Nhiệm vụ con</span>
                       {subtaskTotal > 0 && (
                         <span style={{ fontSize: 12, color: '#64748B' }}>
-                          {subtaskDone} of {subtaskTotal} completed ({Math.round(progressPercent)}%)
+                          {subtaskDone}/{subtaskTotal} hoàn thành ({Math.round(progressPercent)}%)
                         </span>
                       )}
                     </div>
@@ -1141,7 +1142,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         }}
                       >
                         <Plus size={14} />
-                        <span>Thêm Subtask</span>
+                        <span>Thêm nhiệm vụ con</span>
                       </button>
                     )}
                   </div>
@@ -1215,7 +1216,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                               color: sub.statusColorHex || '#475569',
                             }}
                           >
-                            {sub.statusName}
+                            {getStatusDisplayName(sub.statusName)}
                           </span>
                         </div>
                       );
@@ -1228,7 +1229,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         type="text"
                         value={newSubtaskTitle}
                         onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                        placeholder="Nhập tiêu đề Sub-task..."
+                        placeholder="Nhập tiêu đề nhiệm vụ con..."
                         autoFocus
                         style={{
                           flex: 1,
@@ -1282,11 +1283,11 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Bookmark size={16} color="#6554C0" />
                       <span style={{ fontSize: 13, fontWeight: 700, color: '#581C87' }}>
-                        Child Stories trong Epic ({item?.childStories?.length || 0})
+                        Công việc trực thuộc Hạng mục lớn ({item?.childStories?.length || 0})
                       </span>
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#6554C0' }}>
-                      {item?.doneStoryPoints || 0} / {item?.totalStoryPoints || 0} Story Points hoàn thành
+                      {item?.doneStoryPoints || 0} / {item?.totalStoryPoints || 0} điểm ước lượng hoàn thành
                     </div>
                   </div>
 
@@ -1337,7 +1338,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               {cs.storyPoints != null && (
                                 <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4, backgroundColor: '#F3F0FF', color: '#6554C0' }}>
-                                  {cs.storyPoints} SP
+                                  {cs.storyPoints} điểm
                                 </span>
                               )}
                               <span
@@ -1350,7 +1351,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                   color: cs.statusColorHex || '#2563EB',
                                 }}
                               >
-                                {cs.statusName || 'TO DO'}
+                                {getStatusDisplayName(cs.statusName || 'Cần làm')}
                               </span>
                             </div>
                           </div>
@@ -1358,7 +1359,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       })
                     ) : (
                       <div style={{ fontSize: 12, color: '#7E22CE', fontStyle: 'italic' }}>
-                        Chưa có Story/Task con nào được gắn vào Epic này.
+                        Chưa có công việc con nào được gắn vào Hạng mục lớn này.
                       </div>
                     )}
                   </div>
@@ -1368,7 +1369,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               {/* ─── Activity Tabs (Comments, Attachments, History) ─── */}
               <div style={{ marginTop: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20, borderBottom: '1px solid #E2E8F0', paddingBottom: 8, marginBottom: 16 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Activity:</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Hoạt động:</span>
                   <button
                     onClick={() => setActiveTab('comments')}
                     style={{
@@ -1382,7 +1383,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       paddingBottom: 4,
                     }}
                   >
-                    Comments ({comments.length})
+                    Bình luận ({comments.length})
                   </button>
                   <button
                     onClick={() => setActiveTab('attachments')}
@@ -1397,7 +1398,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       paddingBottom: 4,
                     }}
                   >
-                    Attachments ({attachments.length})
+                    Tệp đính kèm ({attachments.length})
                   </button>
                   <button
                     onClick={() => setActiveTab('history')}
@@ -1412,7 +1413,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       paddingBottom: 4,
                     }}
                   >
-                    History ({changelogs.length})
+                    Lịch sử ({changelogs.length})
                   </button>
                 </div>
 
@@ -1920,7 +1921,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
             >
               {/* Status Section */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Status</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Trạng thái</span>
                 <div style={{ position: 'relative', marginTop: 6 }}>
                   <button
                     onClick={() => setShowStatusDropdown(!showStatusDropdown)}
@@ -1939,7 +1940,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       color: item?.statusColorHex || '#2563EB',
                     }}
                   >
-                    <span>{item?.statusName || 'TO DO'}</span>
+                    <span>{getStatusDisplayName(item?.statusName || 'Cần làm')}</span>
                     <ChevronDown size={14} color="#64748B" />
                   </button>
 
@@ -1992,7 +1993,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
                               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                             >
-                              {t.name} (➔ {t.toStatusName})
+                              {t.name} (➔ {getStatusDisplayName(t.toStatusName)})
                             </div>
                           );
                         })
@@ -2008,7 +2009,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
               {/* Priority Section */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Độ ưu tiên (Priority)</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Độ ưu tiên</span>
                 <div style={{ position: 'relative', marginTop: 6 }}>
                   <button
                     onClick={() => setShowPriorityDropdown(!showPriorityDropdown)}
@@ -2096,13 +2097,13 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
               {/* Assignee Section */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Người thực hiện (Assignee)</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Người thực hiện</span>
                 <div style={{ marginTop: 6 }}>
                   <MemberSelect
                     members={members}
                     value={item?.assigneeId || ''}
                     onChange={handleUpdateAssignee}
-                    placeholder="Chưa gán (Unassigned)"
+                    placeholder="Chưa phân công"
                   />
                 </div>
               </div>
@@ -2110,7 +2111,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               {/* Due Date Section */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Hạn chót (Due Date)</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Hạn chót</span>
                   {isOverdue && (
                     <span
                       style={{
@@ -2153,7 +2154,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               {/* Story Points */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Story Points</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Điểm ước lượng</span>
                   <StoryPointsHelpTooltip size={12} align="sidebar" />
                 </div>
                 {item?.hierarchyLevel === -1 || item?.isSubtask || item?.typeCode === 'SUBTASK' ? (
@@ -2161,8 +2162,8 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     <input
                       type="text"
                       disabled
-                      value="N/A"
-                      title="Sub-task không tính Story Points trực tiếp"
+                      value="Không áp dụng"
+                      title="Nhiệm vụ con không tính điểm trực tiếp"
                       style={{
                         width: '100%',
                         marginTop: 6,
@@ -2178,7 +2179,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       }}
                     />
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                      Sub-task không tính Story Points
+                      Nhiệm vụ con không tính điểm trực tiếp
                     </div>
                   </div>
                 ) : item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC' ? (
@@ -2186,8 +2187,8 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     <input
                       type="text"
                       disabled
-                      value={`${item?.doneStoryPoints || 0} / ${item?.totalStoryPoints || 0} pts`}
-                      title="Epic tự động cuộn tổng Story Points từ các Story con"
+                      value={`${item?.doneStoryPoints || 0} / ${item?.totalStoryPoints || 0} điểm`}
+                      title="Hạng mục lớn tự động tính điểm từ các công việc con"
                       style={{
                         width: '100%',
                         marginTop: 6,
@@ -2203,7 +2204,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       }}
                     />
                     <div style={{ fontSize: 11, color: '#6554C0', marginTop: 4 }}>
-                      Roll-up tự động từ các Story con
+                      Tự động tính từ các công việc con
                     </div>
                   </div>
                 ) : (
@@ -2232,26 +2233,26 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
               {/* Time Tracking Section (Step 5.5 Roll-up) */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Time Tracking</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Theo dõi thời gian</span>
                 <div style={{ marginTop: 6, padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: 6, border: '1px solid #E2E8F0', fontSize: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ color: '#64748B' }}>Đã làm (Logged):</span>
+                    <span style={{ color: '#64748B' }}>Đã thực hiện:</span>
                     <strong style={{ color: '#0F172A' }}>
-                      {Math.round(((item?.timeSpentSeconds || 0) / 3600) * 10) / 10}h
+                      {Math.round(((item?.timeSpentSeconds || 0) / 3600) * 10) / 10} giờ
                     </strong>
                   </div>
                   {item?.subtasks && item.subtasks.length > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: '#0284C7' }}>
-                      <span>Tổng cuộn (Gồm Sub-tasks):</span>
+                      <span>Tổng cộng dồn (Gồm nhiệm vụ con):</span>
                       <strong>
-                        {Math.round(((item?.totalTimeSpentSeconds || 0) / 3600) * 10) / 10}h
+                        {Math.round(((item?.totalTimeSpentSeconds || 0) / 3600) * 10) / 10} giờ
                       </strong>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748B' }}>Còn lại (Remaining):</span>
+                    <span style={{ color: '#64748B' }}>Ước lượng còn lại:</span>
                     <strong style={{ color: '#0F172A' }}>
-                      {Math.round(((item?.remainingEstimateSeconds || 0) / 3600) * 10) / 10}h
+                      {Math.round(((item?.remainingEstimateSeconds || 0) / 3600) * 10) / 10} giờ
                     </strong>
                   </div>
                 </div>
@@ -2259,7 +2260,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
               {/* Sprint info */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Sprint</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Chu kỳ làm việc</span>
                 <div
                   style={{
                     marginTop: 6,
@@ -2272,14 +2273,14 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     color: '#2563EB',
                   }}
                 >
-                  {item?.sprintName || 'Backlog'}
+                  {item?.sprintName || 'Danh sách tồn đọng'}
                 </div>
               </div>
 
               {/* Component & Version */}
               {item?.componentName && (
                 <div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Component</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Thành phần</span>
                   <div style={{ marginTop: 4, fontSize: 13, fontWeight: 600, color: '#334155' }}>
                     {item.componentName}
                   </div>
@@ -2288,8 +2289,8 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
               {/* Dates */}
               <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11, color: '#64748B' }}>
-                <div>Created: {item?.createdAt?.substring(0, 10)}</div>
-                <div>Updated: {item?.updatedAt?.substring(0, 10)}</div>
+                <div>Ngày tạo: {item?.createdAt?.substring(0, 10)}</div>
+                <div>Cập nhật: {item?.updatedAt?.substring(0, 10)}</div>
               </div>
             </div>
           </div>
@@ -2324,7 +2325,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               onClick={(e) => e.stopPropagation()}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Liên kết công việc (Link issue)</h3>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Liên kết công việc</h3>
                 <button
                   onClick={() => setShowLinkModal(false)}
                   style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748B' }}
@@ -2335,7 +2336,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>
-                  Loại quan hệ (Relationship)
+                  Loại quan hệ
                 </label>
                 <select
                   value={linkRelationType}
@@ -2350,10 +2351,10 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     fontWeight: 600,
                   }}
                 >
-                  <option value="BLOCKS">Chặn (blocks)</option>
-                  <option value="RELATES_TO">Liên quan đến (relates to)</option>
-                  <option value="DUPLICATES">Trùng lặp với (duplicates)</option>
-                  <option value="CAUSES">Gây ra (causes)</option>
+                  <option value="BLOCKS">Cản trở / Chặn tiến độ</option>
+                  <option value="RELATES_TO">Có liên quan đến</option>
+                  <option value="DUPLICATES">Trùng lặp với</option>
+                  <option value="CAUSES">Gây ra / Nguyên nhân của</option>
                 </select>
               </div>
 

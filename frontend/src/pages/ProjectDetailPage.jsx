@@ -157,7 +157,7 @@ export default function ProjectDetailPage() {
             <FolderKanban size={14} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
-            <span>{project?.name || 'Project Details'}</span>
+            <span>{project?.name || 'Chi tiết dự án'}</span>
             {project?.key && (
               <span
                 style={{
@@ -326,10 +326,10 @@ export default function ProjectDetailPage() {
         {/* Navigation Pills */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {[
-            { id: 'board', label: 'Active Board', icon: Kanban },
-            { id: 'backlog', label: 'Backlog', icon: ListTodo },
-            { id: 'members', label: 'Members & Roles', icon: Users },
-            { id: 'workflow', label: 'Cấu hình Dự án (Config)', icon: Settings },
+            { id: 'board', label: 'Bảng làm việc', icon: Kanban },
+            { id: 'backlog', label: 'Danh sách tồn đọng', icon: ListTodo },
+            { id: 'members', label: 'Thành viên & Vai trò', icon: Users },
+            { id: 'workflow', label: 'Cấu hình Dự án', icon: Settings },
           ].map((tab) => {
             const active = activeTab === tab.id;
             const TabIcon = tab.icon;
@@ -403,10 +403,10 @@ export default function ProjectDetailPage() {
                   <ListTodo size={24} />
                 </div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>
-                  Backlog & Lập kế hoạch Sprint
+                  Danh sách tồn đọng & Kế hoạch Chu kỳ
                 </h3>
                 <p style={{ fontSize: 13, color: '#64748B' }}>
-                  Quản lý danh sách công việc tồn đọng (Product Backlog) và phân bổ Sprint.
+                  Quản lý danh sách công việc tồn đọng và phân bổ theo từng chu kỳ làm việc.
                 </p>
               </div>
             )}

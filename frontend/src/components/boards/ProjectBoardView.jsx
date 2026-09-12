@@ -25,14 +25,15 @@ import {
 import toast from 'react-hot-toast';
 import { workItemApi, workflowApi, workItemTypeApi } from '../../api.js';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
+import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
 
 const TYPE_CONFIG = {
-  EPIC: { label: 'Epic', color: '#6554C0', bgColor: '#F3F0FF', borderColor: '#DDD6FE' },
-  STORY: { label: 'Story', color: '#059669', bgColor: '#ECFDF5', borderColor: '#A7F3D0' },
-  TASK: { label: 'Task', color: '#0052CC', bgColor: '#EFF6FF', borderColor: '#BFDBFE' },
-  BUG: { label: 'Bug', color: '#E5493A', bgColor: '#FEF2F2', borderColor: '#FECACA' },
-  SUBTASK: { label: 'Sub-task', color: '#0284C7', bgColor: '#F0F9FF', borderColor: '#BAE6FD' },
-  SUB_TASK: { label: 'Sub-task', color: '#0284C7', bgColor: '#F0F9FF', borderColor: '#BAE6FD' },
+  EPIC: { label: 'Hạng mục lớn', color: '#6554C0', bgColor: '#F3F0FF', borderColor: '#DDD6FE' },
+  STORY: { label: 'Câu chuyện', color: '#059669', bgColor: '#ECFDF5', borderColor: '#A7F3D0' },
+  TASK: { label: 'Nhiệm vụ', color: '#0052CC', bgColor: '#EFF6FF', borderColor: '#BFDBFE' },
+  BUG: { label: 'Lỗi phần mềm', color: '#E5493A', bgColor: '#FEF2F2', borderColor: '#FECACA' },
+  SUBTASK: { label: 'Nhiệm vụ con', color: '#0284C7', bgColor: '#F0F9FF', borderColor: '#BAE6FD' },
+  SUB_TASK: { label: 'Nhiệm vụ con', color: '#0284C7', bgColor: '#F0F9FF', borderColor: '#BAE6FD' },
 };
 const TYPE_ICONS = TYPE_CONFIG;
 
@@ -201,16 +202,16 @@ export default function ProjectBoardView({
             key: t.id || t.code,
             id: t.id,
             code: t.code,
-            label: t.name || t.code,
+            label: getTypeDisplayName(t.name || t.code),
             color: t.colorHex || TYPE_CONFIG[t.code]?.color || '#2563EB',
             level: t.hierarchyLevel,
           })),
         ]
       : [
           { key: 'ALL', label: 'Tất cả' },
-          { key: 'EPIC', label: 'Epic', color: '#6554C0' },
-          { key: 'TASK', label: 'Task', color: '#0052CC' },
-          { key: 'SUBTASK', label: 'Sub-task', color: '#0284C7' },
+          { key: 'EPIC', label: 'Hạng mục lớn', color: '#6554C0' },
+          { key: 'TASK', label: 'Nhiệm vụ', color: '#0052CC' },
+          { key: 'SUBTASK', label: 'Nhiệm vụ con', color: '#0284C7' },
         ];
 
   return (
@@ -335,7 +336,7 @@ export default function ProjectBoardView({
                 ).length;
                 return (
                   <option key={st.id || st.name} value={st.id || st.name}>
-                    {st.name} ({count})
+                    {getStatusDisplayName(st.name)} ({count})
                   </option>
                 );
               })}
@@ -465,7 +466,7 @@ export default function ProjectBoardView({
                     }}
                   />
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>
-                    {st.name}
+                    {getStatusDisplayName(st.name)}
                   </span>
                   <span
                     style={{
@@ -534,7 +535,7 @@ export default function ProjectBoardView({
                         (item.typeName && t.name?.toLowerCase() === item.typeName.toLowerCase())
                     );
                     const typeConfig = TYPE_CONFIG[rawTypeCode] || TYPE_CONFIG[rawTypeCode.replace('_', '')] || TYPE_CONFIG.TASK;
-                    const displayTypeName = item.typeName || matchedType?.name || typeConfig.label || rawTypeCode;
+                    const displayTypeName = getTypeDisplayName(item.typeName || matchedType?.name || typeConfig.label || rawTypeCode);
                     const typeColor = item.typeColor || matchedType?.colorHex || typeConfig.color || '#2563EB';
 
                     const priorityConfig = getPriorityConfig(item.priority);
@@ -612,7 +613,7 @@ export default function ProjectBoardView({
                               }}
                               title="Công việc bị cản trở bởi blocker chưa xong"
                             >
-                              <Lock size={10} /> BLOCKED
+                              <Lock size={10} /> Bị chặn
                             </span>
                           )}
 
@@ -740,7 +741,7 @@ export default function ProjectBoardView({
                                   padding: '1px 5px',
                                   borderRadius: 10,
                                 }}
-                                title="Story Points"
+                                title="Điểm ước lượng"
                               >
                                 {item.storyPoints}
                               </span>

@@ -105,7 +105,7 @@ export default function DeleteProjectModal({ isOpen, onClose, project, onDeleted
                 Xóa dự án
               </h3>
               <span style={{ fontSize: 12, color: '#B91C1C' }}>
-                Hành động chuyển vào thùng rác (Soft Delete)
+                Chuyển vào thùng rác tạm thời
               </span>
             </div>
           </div>
@@ -146,7 +146,7 @@ export default function DeleteProjectModal({ isOpen, onClose, project, onDeleted
             <AlertTriangle size={18} color="#D97706" style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ fontSize: 13, color: '#92400E', lineHeight: 1.5 }}>
               Bạn đang chuẩn bị xóa dự án <strong>{project.name}</strong> (Mã: <code>{project.key}</code>).
-              Tất cả các công việc (issues), bảng Kanban/Scrum, chu kỳ Sprints và lịch sử liên quan sẽ bị ẩn khỏi không gian làm việc.
+              Tất cả các thẻ công việc, bảng làm việc, chu kỳ và lịch sử liên quan sẽ bị ẩn khỏi không gian làm việc.
             </div>
           </div>
 

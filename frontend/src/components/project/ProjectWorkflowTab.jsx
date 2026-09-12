@@ -35,7 +35,11 @@ import {
   WORK_ITEM_TYPE_CONFIG,
   TASK_TYPE_PRESETS,
   resolveDynamicTypeConfig,
-  HIERARCHY_LEVELS
+  HIERARCHY_LEVELS,
+  getTypeDisplayName,
+  getStatusDisplayName,
+  getStatusCategoryDisplayName,
+  getHierarchyDisplayName,
 } from '../../constants/workConstants.js';
 
 // Helper render icon loại công việc
@@ -61,16 +65,16 @@ const COLOR_PRESETS = [
 ];
 
 const ICON_PRESETS = [
-  { name: 'Zap', label: 'Tia chớp (Epic)' },
-  { name: 'CheckSquare', label: 'Check vuông (Task)' },
-  { name: 'Bookmark', label: 'Thẻ lưu (Story)' },
-  { name: 'Bug', label: 'Con bọ (Bug)' },
-  { name: 'GitCommit', label: 'Điểm nhánh (Subtask)' },
-  { name: 'Layers', label: 'Phân tầng (Phase)' },
-  { name: 'FileCheck', label: 'Kiểm định (Inspect)' },
-  { name: 'Sparkles', label: 'Ngôi sao (Campaign)' },
-  { name: 'Sliders', label: 'Kênh/Cài đặt (Channel)' },
-  { name: 'AlertTriangle', label: 'Cảnh báo (Incident)' },
+  { name: 'Zap', label: 'Tia chớp (Hạng mục lớn)' },
+  { name: 'CheckSquare', label: 'Ô kiểm (Nhiệm vụ)' },
+  { name: 'Bookmark', label: 'Thẻ đánh dấu (Câu chuyện)' },
+  { name: 'Bug', label: 'Con bọ (Lỗi phần mềm)' },
+  { name: 'GitCommit', label: 'Điểm nhánh (Nhiệm vụ con)' },
+  { name: 'Layers', label: 'Phân tầng (Giai đoạn)' },
+  { name: 'FileCheck', label: 'Kiểm định (Nghiệm thu)' },
+  { name: 'Sparkles', label: 'Ngôi sao (Chiến dịch)' },
+  { name: 'Sliders', label: 'Kênh / Tùy biến' },
+  { name: 'AlertTriangle', label: 'Cảnh báo sự cố' },
 ];
 
 export default function ProjectWorkflowTab({ projectId, project, isAdmin, onTypesUpdated }) {
@@ -470,18 +474,19 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
     // 1. Kiểm tra ràng buộc tối thiểu 1 loại cho mỗi level (Level 1, Level 0, Level -1)
     const sameLevelTypes = projectTypes.filter((t) => t.hierarchyLevel === type.hierarchyLevel);
     if (sameLevelTypes.length <= 1) {
-      const lvlStr = type.hierarchyLevel === 1 ? 'Level 1 (Epic)' : type.hierarchyLevel === 0 ? 'Level 0 (Standard)' : 'Level -1 (Subtask)';
+      const lvlStr = type.hierarchyLevel === 1 ? 'Cấp 1 (Hạng mục lớn)' : type.hierarchyLevel === 0 ? 'Cấp 0 (Tiêu chuẩn)' : 'Cấp -1 (Nhiệm vụ con)';
       toast.error(`Không thể xóa! Dự án luôn phải duy trì tối thiểu 1 loại công việc cho ${lvlStr}.`);
       return;
     }
 
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa loại công việc "${type.name}" (${type.code})?`)) {
+    const typeDisplayName = getTypeDisplayName(type.name || type.code);
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa loại công việc "${typeDisplayName}" (${type.code})?`)) {
       return;
     }
 
     try {
       await workItemTypeApi.delete(projectId, type.id);
-      toast.success(`Đã xóa loại công việc "${type.name}" thành công`);
+      toast.success(`Đã xóa loại công việc "${typeDisplayName}" thành công`);
       await fetchWorkflowData(false);
       if (onTypesUpdated) onTypesUpdated();
     } catch (err) {
@@ -1159,10 +1164,10 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               }}
             >
               <div style={{ fontWeight: 700, fontSize: 13, color: '#0F172A' }}>
-                Bảng Cấu hình Các Bước Chuyển Trạng thái ({transitions.length} transitions)
+                Bảng Cấu hình Các Bước Chuyển Trạng thái ({transitions.length} bước chuyển)
               </div>
               <span style={{ fontSize: 12, color: '#64748B' }}>
-                Kiểm soát luồng di chuyển của task từ trạng thái gốc tới trạng thái đích
+                Kiểm soát luồng di chuyển của công việc từ trạng thái xuất phát tới trạng thái đích
               </span>
             </div>
 
@@ -1178,11 +1183,11 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 color: '#475569',
               }}
             >
-              <span>Từ Trạng Thái (From)</span>
-              <span>Tên Nút Bấm Chuyển</span>
-              <span>Tới Trạng Thái (To)</span>
-              <span>Điều kiện & Ràng buộc (Rules)</span>
-              {isAdmin && <span style={{ textAlign: 'right' }}>Thao Tác</span>}
+              <span>Từ trạng thái xuất phát</span>
+              <span>Tên nút thao tác</span>
+              <span>Đến trạng thái đích</span>
+              <span>Điều kiện & Ràng buộc</span>
+              {isAdmin && <span style={{ textAlign: 'right' }}>Thao tác</span>}
             </div>
 
             {transitions.length === 0 ? (
@@ -1219,7 +1224,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                           border: '1px solid #CBD5E1',
                         }}
                       >
-                        {t.fromStatusName}
+                        {getStatusDisplayName(t.fromStatusName)}
                       </span>
                     </div>
 
@@ -1242,7 +1247,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                           border: `1px solid ${t.toStatusCategory === 'DONE' ? '#86EFAC' : t.toStatusCategory === 'IN_PROGRESS' ? '#93C5FD' : '#CBD5E1'}`,
                         }}
                       >
-                        {t.toStatusName}
+                        {getStatusDisplayName(t.toStatusName)}
                       </span>
                     </div>
 
@@ -1261,7 +1266,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             gap: 3,
                           }}
                         >
-                          <Shield size={11} /> Condition
+                          <Shield size={11} /> Điều kiện
                         </span>
                       )}
                       {hasValidators && (
@@ -1277,7 +1282,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             gap: 3,
                           }}
                         >
-                          <FileCheck size={11} /> Validator
+                          <FileCheck size={11} /> Kiểm tra hợp lệ
                         </span>
                       )}
                       {!hasConditions && !hasValidators && (
@@ -1386,11 +1391,11 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Layers size={18} color="#2563EB" />
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                  Sơ đồ Phân bổ & Quản lý Loại Công việc (Work Item Types & Scheme)
+                  Sơ đồ Phân bổ & Quản lý Loại Công việc
                 </h3>
               </div>
               <p style={{ fontSize: 13, color: '#64748B', marginTop: 6, marginBottom: 0, maxWidth: 720, lineHeight: 1.5 }}>
-                Tùy biến các loại công việc riêng của dự án này. <strong>Quy tắc hệ thống:</strong> Luôn duy trì tối thiểu 1 loại cho <strong>Level 1</strong> (Epic), 1 loại cho <strong>Level 0</strong> (Tiêu chuẩn) và 1 loại cho <strong>Level -1</strong> (Subtask).
+                Tùy biến các loại công việc riêng của dự án này. <strong>Quy tắc hệ thống:</strong> Luôn duy trì tối thiểu 1 loại cho <strong>Cấp 1</strong> (Hạng mục lớn), 1 loại cho <strong>Cấp 0</strong> (Tiêu chuẩn) và 1 loại cho <strong>Cấp -1</strong> (Nhiệm vụ con).
               </p>
             </div>
 
@@ -1474,7 +1479,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 }}
               >
                 <HelpCircle size={15} color="#2563EB" />
-                <span>Giải Thích</span>
+                <span>Hướng Dẫn Phân Cấp</span>
               </button>
             </div>
           </div>
@@ -1493,10 +1498,10 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 color: '#475569',
               }}
             >
-              <span>Loại Công Việc & Mô Tả (Work Item Type & Describe)</span>
-              <span>Cấp Bậc (Level)</span>
-              <span>Quy Trình Làm Việc Áp Dụng (Workflow)</span>
-              {isAdmin && <span style={{ textAlign: 'right' }}>Thao Tác</span>}
+              <span>Loại công việc & Mô tả</span>
+              <span>Cấp bậc</span>
+              <span>Quy trình làm việc áp dụng</span>
+              {isAdmin && <span style={{ textAlign: 'right' }}>Thao tác</span>}
             </div>
 
             {projectTypes.length === 0 ? (
@@ -1540,7 +1545,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                           }}
                         >
                           {renderTypeIcon(t.iconName, hex, 14)}
-                          <span>{t.name}</span>
+                          <span>{getTypeDisplayName(t.name || t.code)}</span>
                         </span>
                         <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>({t.code})</span>
                       </div>
@@ -1566,7 +1571,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             gap: 4,
                           }}
                         >
-                          <Zap size={12} /> Level 1 (Epic)
+                          <Zap size={12} /> Cấp 1 • Hạng mục lớn
                         </span>
                       )}
                       {level === 0 && (
@@ -1584,7 +1589,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             gap: 4,
                           }}
                         >
-                          <CheckSquare size={12} /> Level 0 (Tiêu chuẩn)
+                          <CheckSquare size={12} /> Cấp 0 • Tiêu chuẩn
                         </span>
                       )}
                       {level === -1 && (
@@ -1602,7 +1607,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             gap: 4,
                           }}
                         >
-                          <GitCommit size={12} /> Level -1 (Sub-task)
+                          <GitCommit size={12} /> Cấp -1 • Nhiệm vụ con
                         </span>
                       )}
                     </div>
@@ -1610,7 +1615,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     {/* Workflow */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#0F172A', fontWeight: 600 }}>
                       <GitBranch size={14} color="#2563EB" />
-                      <span>{workflowDetail?.name || 'Dự án Default Workflow'}</span>
+                      <span>{workflowDetail?.name || 'Quy trình làm việc mặc định'}</span>
                     </div>
 
                     {/* Actions */}
@@ -1735,7 +1740,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
             <form onSubmit={handleSaveTransition}>
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Trạng thái Gốc (From Status)
+                  Trạng thái xuất phát
                 </label>
                 <select
                   value={fromStatusId}
@@ -1749,10 +1754,10 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     outline: 'none',
                   }}
                 >
-                  <option value="">-- Bất kỳ trạng thái nào (Any / Initial) --</option>
+                  <option value="">-- Bất kỳ trạng thái nào (Khởi tạo / Tự do) --</option>
                   {allStatuses.map((st) => (
                     <option key={st.id} value={st.id} disabled={toStatusId && st.id === toStatusId}>
-                      {st.name} ({st.category}){toStatusId && st.id === toStatusId ? ' (Trùng trạng thái đích)' : ''}
+                      {getStatusDisplayName(st.name)} ({getStatusCategoryDisplayName(st.category)}){toStatusId && st.id === toStatusId ? ' (Trùng trạng thái đích)' : ''}
                     </option>
                   ))}
                 </select>
@@ -1760,7 +1765,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Trạng thái Đích (To Status) *
+                  Trạng thái đích *
                 </label>
                 <select
                   value={toStatusId}
@@ -1778,7 +1783,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                   <option value="">-- Chọn trạng thái đích --</option>
                   {allStatuses.map((st) => (
                     <option key={st.id} value={st.id} disabled={fromStatusId && st.id === fromStatusId}>
-                      {st.name} ({st.category}){fromStatusId && st.id === fromStatusId ? ' (Trùng trạng thái bắt đầu)' : ''}
+                      {getStatusDisplayName(st.name)} ({getStatusCategoryDisplayName(st.category)}){fromStatusId && st.id === fromStatusId ? ' (Trùng trạng thái bắt đầu)' : ''}
                     </option>
                   ))}
                 </select>
@@ -1786,11 +1791,11 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Tên Nút Bấm Chuyển (Action Name) *
+                  Tên nút bấm chuyển *
                 </label>
                 <input
                   type="text"
-                  placeholder="VD: Start Progress, Submit for Review, Approve & Done"
+                  placeholder="VD: Bắt đầu làm, Gửi xét duyệt, Phê duyệt & Hoàn tất"
                   value={transitionName}
                   onChange={(e) => setTransitionName(e.target.value)}
                   maxLength={150}
@@ -1809,7 +1814,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
               <div style={{ marginBottom: 16, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, border: '1px solid #E2E8F0' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 8 }}>
-                  Ràng buộc & Điều kiện FSM (Rules)
+                  Ràng buộc & Điều kiện chuyển đổi
                 </div>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#475569', marginBottom: 6, cursor: 'pointer' }}>
                   <input
@@ -1817,7 +1822,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     checked={requireAssigneeOnly}
                     onChange={(e) => setRequireAssigneeOnly(e.target.checked)}
                   />
-                  <span>Chỉ người được giao việc (Assignee) mới được chuyển</span>
+                  <span>Chỉ người được giao việc mới được chuyển</span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#475569', marginBottom: 6, cursor: 'pointer' }}>
                   <input
@@ -1825,7 +1830,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     checked={requireSubtasksDone}
                     onChange={(e) => setRequireSubtasksDone(e.target.checked)}
                   />
-                  <span>Bắt buộc tất cả Subtasks phải hoàn thành trước (All Subtasks Done)</span>
+                  <span>Bắt buộc tất cả nhiệm vụ con phải hoàn thành trước</span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
                   <input
@@ -1833,7 +1838,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     checked={requireResolution}
                     onChange={(e) => setRequireResolution(e.target.checked)}
                   />
-                  <span>Bắt buộc chọn lý do giải quyết (Resolution Required)</span>
+                  <span>Bắt buộc chọn lý do giải quyết</span>
                 </label>
               </div>
 
@@ -1927,7 +1932,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 </label>
                 <input
                   type="text"
-                  placeholder="VD: In Code Review, Testing, Ready for QA"
+                  placeholder="VD: Đang duyệt mã, Đang kiểm thử, Sẵn sàng nghiệm thu"
                   value={newStatusName}
                   onChange={(e) => setNewStatusName(e.target.value)}
                   required
@@ -1945,7 +1950,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Danh Mục Chuẩn (Status Category) *
+                  Nhóm trạng thái chuẩn *
                 </label>
                 <select
                   value={newStatusCategory}
@@ -1959,15 +1964,15 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     outline: 'none',
                   }}
                 >
-                  <option value="TODO">Cần làm (TODO)</option>
-                  <option value="IN_PROGRESS">Đang thực hiện (IN_PROGRESS)</option>
-                  <option value="DONE">Hoàn thành (DONE)</option>
+                  <option value="TODO">Cần làm</option>
+                  <option value="IN_PROGRESS">Đang thực hiện</option>
+                  <option value="DONE">Hoàn thành</option>
                 </select>
               </div>
 
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Mã Màu Hiển Thị (Color Hex)
+                  Mã màu hiển thị
                 </label>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <input
@@ -2146,12 +2151,12 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                    Mã Loại (Code) *
+                    Mã loại (viết hoa) *
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="VD: INSPECT, STORY"
+                    placeholder="VD: KIEM_THU, TAI_LIEU"
                     value={typeFormData.code}
                     onChange={(e) => setTypeFormData({ ...typeFormData, code: e.target.value.toUpperCase() })}
                     style={{
@@ -2172,7 +2177,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               {/* Hierarchy Level Selection */}
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Cấp Bậc Phân Cấp (Hierarchy Level) *
+                  Cấp bậc phân cấp *
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                   {/* Level 1: Epic */}
@@ -2189,10 +2194,10 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     }}
                   >
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#9333EA', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                      <Zap size={14} /> Level 1
+                      <Zap size={14} /> Cấp 1
                     </div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#6B21A8', marginTop: 2 }}>Epic / Hạng mục lớn</div>
-                    <div style={{ fontSize: 10, color: '#7E22CE', marginTop: 4 }}>Không có việc cha</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#6B21A8', marginTop: 2 }}>Hạng mục lớn</div>
+                    <div style={{ fontSize: 10, color: '#7E22CE', marginTop: 4 }}>Công việc cấp cao nhất</div>
                   </div>
 
                   {/* Level 0: Standard */}
@@ -2209,10 +2214,10 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     }}
                   >
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                      <CheckSquare size={14} /> Level 0
+                      <CheckSquare size={14} /> Cấp 0
                     </div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#1D4ED8', marginTop: 2 }}>Tiêu chuẩn (Task)</div>
-                    <div style={{ fontSize: 10, color: '#1E40AF', marginTop: 4 }}>Gắn vào Epic hoặc độc lập</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#1D4ED8', marginTop: 2 }}>Tiêu chuẩn</div>
+                    <div style={{ fontSize: 10, color: '#1E40AF', marginTop: 4 }}>Trực thuộc hạng mục lớn hoặc độc lập</div>
                   </div>
 
                   {/* Level -1: Subtask */}
@@ -2229,10 +2234,10 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     }}
                   >
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#0284C7', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                      <GitCommit size={14} /> Level -1
+                      <GitCommit size={14} /> Cấp -1
                     </div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#0369A1', marginTop: 2 }}>Việc con (Subtask)</div>
-                    <div style={{ fontSize: 10, color: '#075985', marginTop: 4 }}>Bắt buộc có cha Level 0</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#0369A1', marginTop: 2 }}>Nhiệm vụ con</div>
+                    <div style={{ fontSize: 10, color: '#075985', marginTop: 4 }}>Bắt buộc trực thuộc công việc Cấp 0</div>
                   </div>
                 </div>
               </div>
@@ -2240,7 +2245,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               {/* Description (Describe) */}
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Mô Tả Mục Đích Sử Dụng (Describe)
+                  Mô tả mục đích sử dụng
                 </label>
                 <textarea
                   rows={3}
@@ -2316,7 +2321,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               {/* Icon Selector */}
               <div style={{ marginBottom: 18 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Biểu Tượng (Icon)
+                  Biểu tượng hiển thị
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
                   {ICON_PRESETS.map((ic) => {
@@ -2429,7 +2434,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 <Sparkles size={20} color="#2563EB" />
                 <div>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                    Mẫu Cấu Hình Loại Công Việc Gợi Ý (Task Type Presets)
+                    Mẫu Cấu Hình Loại Công Việc Gợi Ý
                   </h3>
                   <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
                     Chọn bộ cấu hình gợi ý chuyên nghiệp theo từng loại hình dự án
@@ -2522,7 +2527,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             }}
                           >
                             {renderTypeIcon(t.iconName, t.colorHex, 13)}
-                            <span>{t.name}</span>
+                            <span>{getTypeDisplayName(t.name || t.code)}</span>
                           </span>
                           <span style={{ color: '#64748B', fontWeight: 600 }}>({t.code})</span>
                           <span style={{ color: '#64748B' }}>- {t.description}</span>
@@ -2537,7 +2542,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             color: t.hierarchyLevel === 1 ? '#9333EA' : t.hierarchyLevel === 0 ? '#2563EB' : '#0284C7',
                           }}
                         >
-                          Level {t.hierarchyLevel}
+                          Cấp {t.hierarchyLevel}
                         </span>
                       </div>
                     ))}
@@ -2742,7 +2747,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 }}
               >
                 <Layers size={16} />
-                <span>1. Phân Cấp Cây Công Việc (Hierarchy Levels)</span>
+                <span>1. Phân Cấp Cây Công Việc</span>
               </button>
 
               <button
@@ -2764,7 +2769,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 }}
               >
                 <GitBranch size={16} />
-                <span>2. MQH Loại Công Việc & Trạng Thái (Task Type - Status)</span>
+                <span>2. Mối Quan Hệ Loại Công Việc & Trạng Thái</span>
               </button>
 
               <button
@@ -2786,7 +2791,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 }}
               >
                 <Clock size={16} />
-                <span>3. MQH Loại Công Việc & Thời Gian (Task Type - Time)</span>
+                <span>3. Mối Quan Hệ Loại Công Việc & Thời Gian</span>
               </button>
             </div>
 
@@ -2821,7 +2826,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                   >
                     <Shield size={18} color="#2563EB" style={{ marginTop: 2, flexShrink: 0 }} />
                     <div>
-                      <strong>Ràng buộc bất biến của hệ thống:</strong> Mỗi dự án luôn bắt buộc phải duy trì tối thiểu <strong>1 loại cho Level 1</strong>, <strong>1 loại cho Level 0</strong>, và <strong>1 loại cho Level -1</strong>. Hệ thống ngăn chặn việc xóa hoặc chuyển đổi làm mất đi loại công việc duy nhất của bất kỳ cấp độ nào.
+                      <strong>Ràng buộc bất biến của hệ thống:</strong> Mỗi dự án luôn bắt buộc phải duy trì tối thiểu <strong>1 loại cho Cấp 1</strong>, <strong>1 loại cho Cấp 0</strong>, và <strong>1 loại cho Cấp -1</strong>. Hệ thống ngăn chặn việc xóa hoặc chuyển đổi làm mất đi loại công việc duy nhất của bất kỳ cấp độ nào.
                     </div>
                   </div>
 
@@ -2841,21 +2846,21 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, backgroundColor: '#F3E8FF', border: '1px solid #E9D5FF' }}>
                       <Zap size={16} color="#9333EA" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#6B21A8' }}>Level 1: Epic (Hạng mục lớn)</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#6B21A8' }}>Cấp 1: Hạng mục lớn</span>
                     </div>
 
                     <ArrowRight size={18} color="#94A3B8" />
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE' }}>
                       <CheckSquare size={16} color="#2563EB" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8' }}>Level 0: Standard (Task / Story / Bug)</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8' }}>Cấp 0: Tiêu chuẩn (Nhiệm vụ / Câu chuyện / Lỗi)</span>
                     </div>
 
                     <ArrowRight size={18} color="#94A3B8" />
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD' }}>
                       <GitCommit size={16} color="#0284C7" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#0369A1' }}>Level -1: Subtask (Nhiệm vụ con)</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#0369A1' }}>Cấp -1: Nhiệm vụ con</span>
                     </div>
                   </div>
 
@@ -2872,18 +2877,18 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                         <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, backgroundColor: '#9333EA', color: '#FFFFFF' }}>
-                          Level 1
+                          Cấp 1
                         </span>
                         <h4 style={{ fontSize: 15, fontWeight: 700, color: '#581C87', margin: 0 }}>
-                          Hạng Mục Lớn (Epic) — Tầng Bao Quát & Chiến Lược
+                          Hạng Mục Lớn — Tầng Bao Quát & Chiến Lược
                         </h4>
                       </div>
                       <p style={{ fontSize: 13, color: '#6B21A8', margin: '0 0 10px 0', lineHeight: 1.5 }}>
-                        Đại diện cho mục tiêu dài hạn, cụm tính năng lớn, gói thầu trọng điểm hoặc sáng kiến chiến lược kéo dài qua nhiều tháng / nhiều Sprint.
+                        Đại diện cho mục tiêu dài hạn, cụm tính năng lớn, gói thầu trọng điểm hoặc sáng kiến chiến lược kéo dài qua nhiều tháng hoặc nhiều chu kỳ làm việc.
                       </p>
                       <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#4A044E', lineHeight: 1.6 }}>
-                        <li><strong>Vị trí cây phân cấp:</strong> Là cấp cao nhất trong dự án. <code>parentId = null</code> (Tuyệt đối <strong>không được phép có công việc cha</strong>).</li>
-                        <li><strong>Quan hệ con:</strong> Chỉ chứa trực tiếp các công việc con thuộc <strong>Level 0</strong>. Không được chứa trực tiếp Subtask Level -1.</li>
+                        <li><strong>Vị trí cây phân cấp:</strong> Là cấp cao nhất trong dự án (Tuyệt đối <strong>không được phép có công việc cha</strong>).</li>
+                        <li><strong>Quan hệ con:</strong> Chỉ chứa trực tiếp các công việc con thuộc <strong>Cấp 0</strong>. Không được chứa trực tiếp Nhiệm vụ con Cấp -1.</li>
                         <li><strong>Ví dụ:</strong> <em>Hệ thống Cổng Thanh Toán Trực Tuyến</em>, <em>Thi công hạng mục Cọc & Móng Tòa nhà</em>, <em>Chiến dịch Marketing Tết 2026</em>.</li>
                       </ul>
                     </div>
@@ -2899,20 +2904,20 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                         <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, backgroundColor: '#2563EB', color: '#FFFFFF' }}>
-                          Level 0
+                          Cấp 0
                         </span>
                         <h4 style={{ fontSize: 15, fontWeight: 700, color: '#1E3A8A', margin: 0 }}>
-                          Công Việc Tiêu Chuẩn (Standard: Task, Story, Bug...) — Tầng Thực Thi Cốt Lõi
+                          Công Việc Tiêu Chuẩn (Nhiệm vụ, Câu chuyện, Lỗi...) — Tầng Thực Thi Cốt Lõi
                         </h4>
                       </div>
                       <p style={{ fontSize: 13, color: '#1E40AF', margin: '0 0 10px 0', lineHeight: 1.5 }}>
-                        Là đơn vị công việc trọng tâm phục vụ lập kế hoạch Sprint, phân công thành viên phụ trách và theo dõi trạng thái hàng tuần.
+                        Là đơn vị công việc trọng tâm phục vụ lập kế hoạch chu kỳ, phân công thành viên phụ trách và theo dõi tiến độ hàng tuần.
                       </p>
                       <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#172554', lineHeight: 1.6 }}>
-                        <li><strong>Vị trí cây phân cấp:</strong> Có thể trực thuộc một Epic (Level 1) hoặc có thể đứng độc lập không cần cha.</li>
-                        <li><strong>Phân công & Ước lượng:</strong> Được gán trực tiếp cho thành viên (Assignee), có điểm ước lượng (Story Point), ngày bắt đầu và hạn chót (Due Date).</li>
-                        <li><strong>Quan hệ con:</strong> Có thể chứa nhiều Nhiệm vụ con (**Level -1**) bên dưới để phân rã kỹ thuật.</li>
-                        <li><strong>Ví dụ:</strong> <em>Tích hợp API VNPAY</em>, <em>Sửa lỗi crash app khi upload ảnh</em>, <em>Đổ bê tông dầm sàn tầng 1</em>.</li>
+                        <li><strong>Vị trí cây phân cấp:</strong> Có thể trực thuộc một Hạng mục lớn (Cấp 1) hoặc có thể đứng độc lập không cần cha.</li>
+                        <li><strong>Phân công & Ước lượng:</strong> Được gán trực tiếp cho người phụ trách, có điểm ước lượng, ngày bắt đầu và hạn chót hoàn thành.</li>
+                        <li><strong>Quan hệ con:</strong> Có thể chứa nhiều Nhiệm vụ con (**Cấp -1**) bên dưới để phân rã kỹ thuật.</li>
+                        <li><strong>Ví dụ:</strong> <em>Tích hợp cổng thanh toán</em>, <em>Sửa lỗi ứng dụng khi tải tệp</em>, <em>Đổ bê tông dầm sàn tầng 1</em>.</li>
                       </ul>
                     </div>
 
@@ -2927,19 +2932,19 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                         <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, backgroundColor: '#0284C7', color: '#FFFFFF' }}>
-                          Level -1
+                          Cấp -1
                         </span>
                         <h4 style={{ fontSize: 15, fontWeight: 700, color: '#0369A1', margin: 0 }}>
-                          Nhiệm Vụ Con (Subtask) — Tầng Tác Vụ Vi Mô Chi Tiết
+                          Nhiệm Vụ Con — Tầng Tác Vụ Vi Mô Chi Tiết
                         </h4>
                       </div>
                       <p style={{ fontSize: 13, color: '#0284C7', margin: '0 0 10px 0', lineHeight: 1.5 }}>
                         Dành cho các tác vụ kỹ thuật nhỏ từ 1-8 giờ để phân chia cụ thể các bước thực hiện cho từng cá nhân.
                       </p>
                       <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#0C4A6E', lineHeight: 1.6 }}>
-                        <li><strong>Vị trí cây phân cấp:</strong> Bắt buộc <strong>phải có công việc cha thuộc Level 0</strong> (<code>parentId != null</code>). Không thể đứng mồ côi một mình.</li>
-                        <li><strong>Giới hạn phân cấp:</strong> Không thể chia thêm cấp con bên dưới (không có cháu).</li>
-                        <li><strong>Ví dụ:</strong> <em>Viết hàm mã hóa SHA256</em>, <em>Cắt giao diện CSS modal thanh toán</em>, <em>Kiểm tra áp lực cốt thép sàn</em>.</li>
+                        <li><strong>Vị trí cây phân cấp:</strong> Bắt buộc <strong>phải có công việc cha thuộc Cấp 0</strong>. Không thể đứng độc lập một mình.</li>
+                        <li><strong>Giới hạn phân cấp:</strong> Không thể chia thêm cấp con bên dưới (không có cấp cháu).</li>
+                        <li><strong>Ví dụ:</strong> <em>Viết hàm mã hóa bảo mật</em>, <em>Cắt giao diện cửa sổ thông báo</em>, <em>Kiểm tra chất lượng vật tư</em>.</li>
                       </ul>
                     </div>
                   </div>
@@ -2963,9 +2968,9 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                       <GitBranch size={18} color="#2563EB" />
-                      <strong style={{ fontSize: 14, color: '#0F172A' }}>Tại sao cần phân tách Sơ đồ Quy trình (Workflow Scheme) theo Loại Công việc?</strong>
+                      <strong style={{ fontSize: 14, color: '#0F172A' }}>Tại sao cần phân tách Sơ đồ Quy trình theo Loại Công việc?</strong>
                     </div>
-                    Trong thực tế, mỗi loại hình công việc có một vòng đời và quy trình kiểm duyệt hoàn toàn khác nhau. Hệ thống cho phép gán mỗi <strong>Task Type</strong> với một sơ đồ trạng thái (Workflow) riêng biệt để phản ánh đúng thực tế vận hành.
+                    Trong thực tế, mỗi loại hình công việc có một vòng đời và quy trình kiểm duyệt hoàn toàn khác nhau. Hệ thống cho phép gán mỗi <strong>Loại công việc</strong> với một sơ đồ trạng thái riêng biệt để phản ánh đúng thực tế vận hành.
                   </div>
 
                   {/* Workflow Comparison Grid */}
@@ -2974,12 +2979,12 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     <div style={{ padding: 14, borderRadius: 8, border: '1px solid #FECACA', backgroundColor: '#FEF2F2' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: '#DC2626', fontWeight: 700, fontSize: 13 }}>
                         <AlertCircle size={16} />
-                        <span>Quy trình Xử lý Bug (Lỗi)</span>
+                        <span>Quy trình Xử lý Lỗi</span>
                       </div>
                       <div style={{ fontSize: 12, color: '#991B1B', lineHeight: 1.5 }}>
                         Cần kiểm thử và xác minh nghiêm ngặt qua nhiều bước:
-                        <div style={{ marginTop: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 6, border: '1px solid #FCA5A5', fontSize: 11, fontFamily: 'monospace' }}>
-                          Open → Confirmed → In Fixing → In Retest → Closed
+                        <div style={{ marginTop: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 6, border: '1px solid #FCA5A5', fontSize: 11 }}>
+                          Mới tạo → Đã xác nhận → Đang sửa lỗi → Kiểm tra lại → Đã hoàn tất
                         </div>
                       </div>
                     </div>
@@ -2988,12 +2993,12 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     <div style={{ padding: 14, borderRadius: 8, border: '1px solid #BFDBFE', backgroundColor: '#EFF6FF' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: '#2563EB', fontWeight: 700, fontSize: 13 }}>
                         <CheckSquare size={16} />
-                        <span>Quy trình Task / Story Agile</span>
+                        <span>Quy trình Nhiệm vụ / Câu chuyện</span>
                       </div>
                       <div style={{ fontSize: 12, color: '#1E40AF', lineHeight: 1.5 }}>
-                        Dòng chảy linh hoạt tinh gọn theo chuẩn Scrum/Kanban:
-                        <div style={{ marginTop: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 6, border: '1px solid #93C5FD', fontSize: 11, fontFamily: 'monospace' }}>
-                          To Do → In Progress → Code Review → Done
+                        Dòng chảy công việc linh hoạt tinh gọn:
+                        <div style={{ marginTop: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 6, border: '1px solid #93C5FD', fontSize: 11 }}>
+                          Cần làm → Đang thực hiện → Chờ duyệt → Hoàn thành
                         </div>
                       </div>
                     </div>
@@ -3002,12 +3007,12 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     <div style={{ padding: 14, borderRadius: 8, border: '1px solid #E9D5FF', backgroundColor: '#FAF5FF' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: '#9333EA', fontWeight: 700, fontSize: 13 }}>
                         <Zap size={16} />
-                        <span>Quy trình Epic Vĩ mô</span>
+                        <span>Quy trình Hạng mục lớn Vĩ mô</span>
                       </div>
                       <div style={{ fontSize: 12, color: '#6B21A8', lineHeight: 1.5 }}>
                         Theo dõi tiến độ phát triển giai đoạn cấp quản lý:
-                        <div style={{ marginTop: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 6, border: '1px solid #D8B4FE', fontSize: 11, fontFamily: 'monospace' }}>
-                          Draft → Planned → In Progress → Completed
+                        <div style={{ marginTop: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 6, border: '1px solid #D8B4FE', fontSize: 11 }}>
+                          Bản thảo → Kế hoạch → Đang thực hiện → Hoàn tất
                         </div>
                       </div>
                     </div>
@@ -3017,25 +3022,25 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                   <div style={{ padding: 16, borderRadius: 10, border: '1px solid #E2E8F0', backgroundColor: '#FFFFFF' }}>
                     <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Shield size={16} color="#059669" />
-                      <span>Các Điều Kiện Chặn Chuyển Trạng Thái (Guards & Validators)</span>
+                      <span>Các Điều Kiện Chặn Chuyển Trạng Thái</span>
                     </h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, color: '#475569' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                         <CheckCircle2 size={16} color="#059669" style={{ marginTop: 2, flexShrink: 0 }} />
                         <div>
-                          <strong>ALL_SUBTASKS_DONE (Hoàn thành việc con trước):</strong> Task cha (Level 0) chỉ được phép kéo sang <code>DONE</code> khi tất cả các Subtask (Level -1) con bên dưới đã hoàn thành. Ngăn chặn việc đóng việc ẩu.
+                          <strong>Toàn bộ việc con phải hoàn thành trước:</strong> Công việc cha (Cấp 0) chỉ được phép kéo sang <code>Hoàn thành</code> khi tất cả các Nhiệm vụ con (Cấp -1) trực thuộc đã hoàn thành. Ngăn chặn việc đóng việc khi chưa hoàn tất.
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                         <CheckCircle2 size={16} color="#059669" style={{ marginTop: 2, flexShrink: 0 }} />
                         <div>
-                          <strong>ASSIGNEE_ONLY (Đúng người được giao việc):</strong> Chỉ người thực hiện chính được phân công (hoặc Quản trị viên) mới có quyền bấm chuyển công việc sang bước tiếp theo.
+                          <strong>Đúng người được giao việc:</strong> Chỉ người thực hiện chính được phân công (hoặc Quản trị viên) mới có quyền bấm chuyển công việc sang bước tiếp theo.
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                         <CheckCircle2 size={16} color="#059669" style={{ marginTop: 2, flexShrink: 0 }} />
                         <div>
-                          <strong>FIELD_REQUIRED (Bắt buộc nhập dữ liệu):</strong> Yêu cầu nhập lý do xử lý (Resolution) hoặc mô tả nghiệm thu trước khi chuyển sang trạng thái kết thúc.
+                          <strong>Bắt buộc nhập dữ liệu:</strong> Yêu cầu nhập lý do xử lý hoặc mô tả nghiệm thu trước khi chuyển sang trạng thái kết thúc.
                         </div>
                       </div>
                     </div>
@@ -3043,7 +3048,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
                   {/* 3 Categories Note */}
                   <div style={{ padding: 14, borderRadius: 8, backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', fontSize: 12, color: '#64748B' }}>
-                    <strong>Chuẩn hóa 3 Nhóm Danh mục (Status Categories):</strong> Mọi trạng thái dù có tên gọi tùy biến thế nào cũng được phân về đúng 1 trong 3 nhóm chuẩn: <code>TODO</code> (Chưa làm), <code>IN_PROGRESS</code> (Đang làm), và <code>DONE</code> (Đã hoàn thành) để hệ thống tự động tính toán báo cáo tiến độ và biểu đồ Burndown.
+                    <strong>Chuẩn hóa 3 Nhóm Danh mục Trạng thái:</strong> Mọi trạng thái dù có tên gọi tùy biến thế nào cũng được phân về đúng 1 trong 3 nhóm chuẩn: <code>Cần làm</code>, <code>Đang thực hiện</code>, và <code>Hoàn thành</code> để hệ thống tự động tính toán báo cáo tiến độ và biểu đồ tiến độ chu kỳ.
                   </div>
                 </div>
               )}
@@ -3063,24 +3068,24 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#166534' }}>
                       <TrendingUp size={18} />
                       <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
-                        Cơ Chế Cộng Dồn Thời Gian Tự Động (Time Tracking Rollup Engine)
+                        Cơ Chế Cộng Dồn Thời Gian Tự Động
                       </h4>
                     </div>
                     <p style={{ fontSize: 13, color: '#15803D', margin: '0 0 12px 0', lineHeight: 1.5 }}>
-                      Hệ thống tự động đồng bộ thời gian từ cấp vi mô lên cấp vĩ mô theo thời gian thực:
+                      Hệ thống tự động đồng bộ thời gian từ cấp nhiệm vụ con lên cấp cha và hạng mục lớn theo thời gian thực:
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, color: '#14532D' }}>
                       <div style={{ padding: 10, backgroundColor: '#FFFFFF', borderRadius: 8, border: '1px solid #86EFAC' }}>
-                        <strong>1. Ghi nhận thời gian tại Subtask (Level -1):</strong> Thành viên trực tiếp log giờ làm việc hàng ngày (<em>Time Spent</em>) và ước lượng chi tiết (<em>Original Estimate</em>) tại từng tác vụ con cụ thể.
+                        <strong>1. Ghi nhận thời gian tại Nhiệm vụ con (Cấp -1):</strong> Thành viên trực tiếp ghi nhận thời gian làm việc thực tế và thời gian ước lượng chi tiết tại từng nhiệm vụ con cụ thể.
                       </div>
                       <div style={{ padding: 10, backgroundColor: '#FFFFFF', borderRadius: 8, border: '1px solid #86EFAC' }}>
-                        <strong>2. Tự động lũy kế lên Task cha (Level 0):</strong> Tổng giờ thực tế và ước lượng của Task cha sẽ tự động cộng dồn từ toàn bộ Subtask con bên dưới:
+                        <strong>2. Tự động lũy kế lên Công việc cha (Cấp 0):</strong> Tổng thời gian thực tế và ước lượng của công việc cha sẽ tự động cộng dồn từ toàn bộ các nhiệm vụ con bên dưới:
                         <div style={{ marginTop: 4, fontFamily: 'monospace', color: '#15803D', fontWeight: 600 }}>
-                          Tổng giờ Task = Giờ log trực tiếp trên Task + ∑(Giờ log của các Subtask con)
+                          Tổng thời gian = Thời gian ghi nhận trực tiếp + ∑(Thời gian của các nhiệm vụ con)
                         </div>
                       </div>
                       <div style={{ padding: 10, backgroundColor: '#FFFFFF', borderRadius: 8, border: '1px solid #86EFAC' }}>
-                        <strong>3. Tiến độ tổng thể Epic (Level 1):</strong> Hệ thống tính toán % hoàn thành của Epic dựa trên tổng số giờ đã log và số Story/Task đã chuyển sang <code>DONE</code>.
+                        <strong>3. Tiến độ tổng thể Hạng mục lớn (Cấp 1):</strong> Hệ thống tính toán tỷ lệ % hoàn thành dựa trên tổng thời gian đã ghi nhận và số lượng công việc trực thuộc đã hoàn thành.
                       </div>
                     </div>
                   </div>
@@ -3097,13 +3102,13 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#1E40AF' }}>
                       <Calendar size={18} />
                       <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
-                        Ràng Buộc Thời Hạn Cây Công Việc (Start Date & Due Date)
+                        Ràng Buộc Thời Gian Cây Công Việc
                       </h4>
                     </div>
                     <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#1E3A8A', lineHeight: 1.6 }}>
-                      <li><strong>Thời hạn Subtask (Level -1):</strong> Ngày bắt đầu và hạn chót của Subtask <strong>phải nằm trọn vẹn</strong> trong khoảng thời gian diễn ra của Task cha. Hệ thống chặn lỗi logic không cho Subtask hết hạn sau Task cha.</li>
-                      <li><strong>Thời hạn Task cha (Level 0):</strong> Phải nằm trong chu kỳ Sprint đang chạy hoặc nằm trong khung thời gian tổng thể của Epic (Level 1).</li>
-                      <li><strong>Biểu đồ Gantt & Timeline:</strong> Thanh thời gian của Epic trên sơ đồ Gantt sẽ tự động co giãn bao trùm từ ngày bắt đầu sớm nhất đến ngày kết thúc muộn nhất của các công việc con bên dưới.</li>
+                      <li><strong>Thời hạn Nhiệm vụ con (Cấp -1):</strong> Ngày bắt đầu và hạn chót của nhiệm vụ con <strong>phải nằm trọn vẹn</strong> trong khoảng thời gian diễn ra của công việc cha. Hệ thống tự động chặn không cho nhiệm vụ con kết thúc sau công việc cha.</li>
+                      <li><strong>Thời hạn Công việc cha (Cấp 0):</strong> Phải nằm trong chu kỳ làm việc đang chạy hoặc nằm trong khung thời gian tổng thể của Hạng mục lớn (Cấp 1).</li>
+                      <li><strong>Biểu đồ tiến độ & Dòng thời gian:</strong> Thanh thời gian của Hạng mục lớn sẽ tự động co giãn bao trùm từ ngày bắt đầu sớm nhất đến ngày kết thúc muộn nhất của các công việc trực thuộc bên dưới.</li>
                     </ul>
                   </div>
 
@@ -3119,14 +3124,14 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#6B21A8' }}>
                       <Clock size={18} />
                       <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
-                        Chốt Mốc Hoàn Tất & Chỉ Số Hiệu Suất (Cycle Time & Lead Time)
+                        Chốt Mốc Hoàn Tất & Chỉ Số Hiệu Suất
                       </h4>
                     </div>
                     <div style={{ fontSize: 13, color: '#581C87', lineHeight: 1.5 }}>
-                      Khi một công việc được kéo sang trạng thái thuộc nhóm <code>DONE</code>, hệ thống tự động ghi nhận thời điểm hoàn tất thực tế (<code>completed_at</code>), từ đó tính toán tự động:
+                      Khi một công việc được kéo sang trạng thái thuộc nhóm <code>Hoàn thành</code>, hệ thống tự động ghi nhận thời điểm hoàn tất thực tế, từ đó tính toán tự động:
                       <ul style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
-                        <li><strong>Lead Time:</strong> Tổng thời gian từ thời điểm công việc được tạo đến khi hoàn thành xong.</li>
-                        <li><strong>Cycle Time:</strong> Thời gian thực tế đội ngũ tập trung làm việc (tính từ lúc chuyển sang <code>IN_PROGRESS</code> đến khi sang <code>DONE</code>).</li>
+                        <li><strong>Thời gian chu trình tổng thể:</strong> Tổng thời gian từ thời điểm công việc được tạo đến khi hoàn thành xong.</li>
+                        <li><strong>Thời gian xử lý thực tế:</strong> Thời gian thực tế đội ngũ tập trung làm việc (tính từ lúc bắt đầu thực hiện đến khi hoàn thành).</li>
                       </ul>
                     </div>
                   </div>

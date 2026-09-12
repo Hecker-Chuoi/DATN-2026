@@ -17,7 +17,7 @@ export default function MemberSelect({
   members = [],
   value = '',
   onChange,
-  placeholder = 'Chưa gán (Unassigned)',
+  placeholder = 'Chưa phân công',
   disabled = false,
   style = {},
 }) {
@@ -211,7 +211,7 @@ export default function MemberSelect({
                 >
                   <User size={12} />
                 </div>
-                <span style={{ fontSize: 13, color: '#64748B' }}>Chưa gán (Unassigned)</span>
+                <span style={{ fontSize: 13, color: '#64748B' }}>Chưa phân công</span>
               </div>
               {!value && <Check size={14} color="#2563EB" strokeWidth={2.5} />}
             </div>

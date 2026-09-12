@@ -25,13 +25,14 @@ import { workItemApi, projectApi } from '../../api.js';
 import MemberSelect from '../common/MemberSelect.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import { PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
+import { getTypeDisplayName } from '../../constants/workConstants.js';
 
 const TYPE_CONFIGS = {
-  EPIC: { label: 'Epic', icon: Zap, color: '#9333EA', bgColor: '#F5F3FF', level: 1 },
-  STORY: { label: 'Story', icon: Bookmark, color: '#10B981', bgColor: '#ECFDF5', level: 0 },
-  TASK: { label: 'Task', icon: CheckSquare, color: '#3B82F6', bgColor: '#EFF6FF', level: 0 },
-  BUG: { label: 'Bug', icon: AlertCircle, color: '#EF4444', bgColor: '#FEF2F2', level: 0 },
-  SUBTASK: { label: 'Sub-task', icon: GitCommit, color: '#06B6D4', bgColor: '#ECFEFF', level: -1 },
+  EPIC: { label: 'Hạng mục lớn', icon: Zap, color: '#9333EA', bgColor: '#F5F3FF', level: 1 },
+  STORY: { label: 'Câu chuyện người dùng', icon: Bookmark, color: '#10B981', bgColor: '#ECFDF5', level: 0 },
+  TASK: { label: 'Nhiệm vụ', icon: CheckSquare, color: '#3B82F6', bgColor: '#EFF6FF', level: 0 },
+  BUG: { label: 'Lỗi phần mềm', icon: AlertCircle, color: '#EF4444', bgColor: '#FEF2F2', level: 0 },
+  SUBTASK: { label: 'Nhiệm vụ con', icon: GitCommit, color: '#06B6D4', bgColor: '#ECFEFF', level: -1 },
 };
 
 const renderTypeIcon = (iconName, color = '#2563EB', size = 14) => {
@@ -51,11 +52,11 @@ const renderTypeIcon = (iconName, color = '#2563EB', size = 14) => {
 };
 
 const PRIORITIES = [
-  { value: 'HIGHEST', label: 'Highest', icon: ArrowUp, color: '#DE350B' },
-  { value: 'HIGH', label: 'High', icon: ArrowUp, color: '#FF5630' },
-  { value: 'MEDIUM', label: 'Medium', icon: Equal, color: '#FFAB00' },
-  { value: 'LOW', label: 'Low', icon: ArrowDown, color: '#36B37E' },
-  { value: 'LOWEST', label: 'Lowest', icon: ArrowDown, color: '#6B778C' },
+  { value: 'HIGHEST', label: 'Khẩn cấp', icon: ArrowUp, color: '#DE350B' },
+  { value: 'HIGH', label: 'Cao', icon: ArrowUp, color: '#FF5630' },
+  { value: 'MEDIUM', label: 'Trung bình', icon: Equal, color: '#FFAB00' },
+  { value: 'LOW', label: 'Thấp', icon: ArrowDown, color: '#36B37E' },
+  { value: 'LOWEST', label: 'Rất thấp', icon: ArrowDown, color: '#6B778C' },
 ];
 
 export default function CreateWorkItemModal({
@@ -181,7 +182,7 @@ export default function CreateWorkItemModal({
         }}
       >
         {renderTypeIcon(iconName, isSelected ? color : '#64748B', 14)}
-        <span>{t.name || conf?.label || t.code}</span>
+        <span>{getTypeDisplayName(t.name || conf?.label || t.code)}</span>
         <span
           style={{
             fontSize: 10,
@@ -226,17 +227,17 @@ export default function CreateWorkItemModal({
       errs.typeId = 'Vui lòng chọn loại công việc';
     }
     if (isSubtask && !parentId) {
-      errs.parentId = 'Sub-task bắt buộc phải có công việc cha (Story/Task/Bug)';
+      errs.parentId = 'Nhiệm vụ con bắt buộc phải có công việc cha';
     }
     if (isEpic && parentId) {
-      errs.parentId = 'Epic không thể có công việc cha';
+      errs.parentId = 'Hạng mục lớn không thể có công việc cha';
     }
     if (storyPoints && !isSubtask && !isEpic) {
       const spNum = parseFloat(storyPoints);
       if (isNaN(spNum) || spNum < 0) {
-        errs.storyPoints = 'Điểm Story Points không thể âm';
+        errs.storyPoints = 'Điểm ước lượng không thể âm';
       } else if (spNum > 999.99) {
-        errs.storyPoints = 'Điểm Story Points tối đa 999.99';
+        errs.storyPoints = 'Điểm ước lượng tối đa 999.99';
       }
     }
 
@@ -374,10 +375,10 @@ export default function CreateWorkItemModal({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <label style={{ fontSize: 13, fontWeight: 600, color: '#334155', margin: 0 }}>
-                Loại công việc (Issue Type) <span style={{ color: '#EF4444' }}>*</span>
+                Loại công việc <span style={{ color: '#EF4444' }}>*</span>
               </label>
               <span style={{ fontSize: 11, color: '#64748B' }}>
-                Phân cấp 3 tầng (Level 1, 0, -1)
+                Phân cấp 3 tầng (Cấp 1, Cấp 0, Cấp -1)
               </span>
             </div>
 
@@ -412,7 +413,7 @@ export default function CreateWorkItemModal({
                         gap: 4,
                       }}
                     >
-                      <Zap size={10} /> Cấp 1 • Hạng mục lớn (Epic)
+                      <Zap size={10} /> Cấp 1 • Hạng mục lớn
                     </span>
                     <span style={{ fontSize: 11, color: '#94A3B8' }}>Cấp cao nhất, không có cha</span>
                   </div>
@@ -442,9 +443,9 @@ export default function CreateWorkItemModal({
                         gap: 4,
                       }}
                     >
-                      <CheckSquare size={10} /> Cấp 0 • Tiêu chuẩn (Standard)
+                      <CheckSquare size={10} /> Cấp 0 • Tiêu chuẩn
                     </span>
-                    <span style={{ fontSize: 11, color: '#94A3B8' }}>Công việc chính, có thể gắn vào Epic</span>
+                    <span style={{ fontSize: 11, color: '#94A3B8' }}>Công việc chính, có thể gắn vào Hạng mục lớn</span>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {standardTypes.map(renderTypeButton)}
@@ -472,7 +473,7 @@ export default function CreateWorkItemModal({
                         gap: 4,
                       }}
                     >
-                      <GitCommit size={10} /> Cấp -1 • Nhiệm vụ con (Subtask)
+                      <GitCommit size={10} /> Cấp -1 • Nhiệm vụ con
                     </span>
                     <span style={{ fontSize: 11, color: '#94A3B8' }}>Phụ thuộc, bắt buộc có cha Cấp 0</span>
                   </div>
@@ -501,7 +502,7 @@ export default function CreateWorkItemModal({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ color: '#64748B' }}>Đang chọn:</span>
                   <strong style={{ color: isEpic ? '#7C3AED' : isSubtask ? '#0D9488' : '#0284C7' }}>
-                    {selectedType.name}
+                    {getTypeDisplayName(selectedType.name || selectedType.code)}
                   </strong>
                   <span
                     style={{
@@ -513,7 +514,7 @@ export default function CreateWorkItemModal({
                       color: '#FFFFFF',
                     }}
                   >
-                    {isEpic ? 'Level 1 (Epic)' : isSubtask ? 'Level -1 (Subtask)' : 'Level 0 (Standard)'}
+                    {isEpic ? 'Cấp 1 (Hạng mục lớn)' : isSubtask ? 'Cấp -1 (Nhiệm vụ con)' : 'Cấp 0 (Tiêu chuẩn)'}
                   </span>
                 </div>
                 <span style={{ color: '#64748B', fontSize: 11, fontStyle: 'italic' }}>
@@ -521,7 +522,7 @@ export default function CreateWorkItemModal({
                     ? 'Không có công việc cha'
                     : isSubtask
                     ? 'Bắt buộc chọn công việc cha (Cấp 0)'
-                    : 'Tùy chọn gắn vào Epic cha'}
+                    : 'Tùy chọn gắn vào Hạng mục lớn cha'}
                 </span>
               </div>
             )}
@@ -570,7 +571,7 @@ export default function CreateWorkItemModal({
           {/* Parent Issue Selector (Controlled by 3-Level Hierarchy) */}
           <div>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-              Công việc cha (Parent Issue) {isSubtask && <span style={{ color: '#EF4444' }}>*</span>}
+              Công việc cha {isSubtask && <span style={{ color: '#EF4444' }}>*</span>}
             </label>
             {isEpic ? (
               <div
@@ -584,7 +585,7 @@ export default function CreateWorkItemModal({
                   border: '1px dashed #CBD5E1',
                 }}
               >
-                ℹ️ Epic là cấp cao nhất (Level 1) và không thể trực thuộc công việc khác.
+                ℹ️ Hạng mục lớn là cấp cao nhất (Cấp 1) và không thể trực thuộc công việc khác.
               </div>
             ) : (
               <select
@@ -606,11 +607,11 @@ export default function CreateWorkItemModal({
                 }}
               >
                 <option value="">
-                  {isSubtask ? '-- Bắt buộc chọn Story/Task/Bug cha --' : '-- Không có (Độc lập / Thuộc Backlog) --'}
+                  {isSubtask ? '-- Bắt buộc chọn công việc cha --' : '-- Không có (Độc lập / Danh sách tồn đọng) --'}
                 </option>
                 {availableParents.map((p) => (
                   <option key={p.id} value={p.id}>
-                    [{p.code}] {p.summary} ({p.typeName || p.typeCode})
+                    [{p.code}] {p.summary} ({getTypeDisplayName(p.typeName || p.typeCode)})
                   </option>
                 ))}
               </select>
@@ -626,7 +627,7 @@ export default function CreateWorkItemModal({
           {/* Priority Selection Pills */}
           <div>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
-              Mức độ ưu tiên (Priority)
+              Mức độ ưu tiên
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {Object.keys(PRIORITY_CONFIG).map((pKey) => {
@@ -668,7 +669,7 @@ export default function CreateWorkItemModal({
             {/* Due Date */}
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                Hạn chót (Due Date)
+                Hạn chót
               </label>
               <input
                 type="date"
@@ -691,7 +692,7 @@ export default function CreateWorkItemModal({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', margin: 0 }}>
-                  Story Points
+                  Điểm ước lượng
                 </label>
                 <StoryPointsHelpTooltip align="center" />
               </div>
@@ -700,7 +701,7 @@ export default function CreateWorkItemModal({
                   <input
                     type="text"
                     disabled
-                    value="N/A"
+                    value="Không áp dụng"
                     style={{
                       width: '100%',
                       padding: '7px 10px',
@@ -712,10 +713,10 @@ export default function CreateWorkItemModal({
                       cursor: 'not-allowed',
                       boxSizing: 'border-box',
                     }}
-                    title={isEpic ? "Epic tính Story Points cuộn từ các Story con (Roll-up)" : "Sub-task không tính Story Points trực tiếp (ước lượng bằng Thời gian)"}
+                    title={isEpic ? "Hạng mục lớn tự động tính điểm từ các công việc con" : "Nhiệm vụ con không tính điểm trực tiếp"}
                   />
                   <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                    {isEpic ? 'Epic tự động tính điểm từ các Story con' : 'Sub-task không tính Story Points trực tiếp'}
+                    {isEpic ? 'Hạng mục lớn tự động tính điểm từ các công việc con' : 'Nhiệm vụ con không tính điểm trực tiếp'}
                   </div>
                 </div>
               ) : (
@@ -761,7 +762,7 @@ export default function CreateWorkItemModal({
                 members={members}
                 value={assigneeId}
                 onChange={(newId) => setAssigneeId(newId)}
-                placeholder="Chưa gán (Unassigned)"
+                placeholder="Chưa phân công"
               />
             </div>
           </div>
@@ -769,11 +770,11 @@ export default function CreateWorkItemModal({
           {/* Description */}
           <div>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-              Mô tả chi tiết (Markdown)
+              Mô tả chi tiết
             </label>
             <textarea
               rows={3}
-              placeholder="Mô tả tiêu chí nghiệm thu (Acceptance Criteria), các bước tái hiện..."
+              placeholder="Mô tả tiêu chí nghiệm thu, các bước thực hiện..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               style={{

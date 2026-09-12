@@ -143,8 +143,8 @@ export default function StoryPointsHelpTooltip({
       <button
         type="button"
         onClick={handleToggleClick}
-        aria-label="Story Points là gì?"
-        title="Bấm hoặc rê chuột để xem giải thích về Story Points"
+        aria-label="Điểm ước lượng là gì?"
+        title="Bấm hoặc rê chuột để xem giải thích về điểm ước lượng"
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -197,7 +197,7 @@ export default function StoryPointsHelpTooltip({
                 <Sparkles size={12} />
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
-                Story Points là gì?
+                Điểm ước lượng là gì?
               </span>
             </div>
             <button
@@ -228,7 +228,7 @@ export default function StoryPointsHelpTooltip({
               margin: '0 0 8px 0',
             }}
           >
-            Đơn vị ước lượng tương đối trong Agile/Scrum dùng để đo lường{' '}
+            Đơn vị ước lượng tương đối dùng để đo lường{' '}
             <strong>độ phức tạp</strong>, <strong>khối lượng công việc</strong> và{' '}
             <strong>mức độ rủi ro</strong> của nhiệm vụ thay vì số giờ cố định.
           </p>
@@ -302,7 +302,7 @@ export default function StoryPointsHelpTooltip({
                   flexShrink: 0,
                 }}
               />
-              <span><strong>Story / Task:</strong> Nhập điểm trực tiếp</span>
+              <span><strong>Câu chuyện / Nhiệm vụ:</strong> Nhập điểm trực tiếp</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span
@@ -314,7 +314,7 @@ export default function StoryPointsHelpTooltip({
                   flexShrink: 0,
                 }}
               />
-              <span><strong>Epic:</strong> Tự động cuộn tổng (Roll-up)</span>
+              <span><strong>Hạng mục lớn:</strong> Tự động cộng dồn từ công việc con</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span
@@ -326,7 +326,7 @@ export default function StoryPointsHelpTooltip({
                   flexShrink: 0,
                 }}
               />
-              <span><strong>Sub-task:</strong> Không tính điểm (dùng giờ làm)</span>
+              <span><strong>Nhiệm vụ con:</strong> Không tính điểm (theo dõi theo giờ làm)</span>
             </div>
           </div>
 
@@ -341,7 +341,7 @@ export default function StoryPointsHelpTooltip({
               lineHeight: 1.35,
             }}
           >
-            💡 <strong>Mẹo:</strong> Giúp đo lường <strong>Vận tốc (Velocity)</strong> của đội ngũ qua từng Sprint.
+            💡 <strong>Mẹo:</strong> Giúp đo lường <strong>tốc độ hoàn thành</strong> của đội ngũ qua từng chu kỳ làm việc.
           </div>
         </div>
       )}
