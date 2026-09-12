@@ -224,13 +224,13 @@ public class ProjectServiceImpl implements ProjectService {
             log.warn("Sequence initialization notice for project '{}': {}", project.getKey(), e.getMessage());
         }
 
-        // 2. Default 5 Work Item Types
+        // 2. Default 3 Work Item Types
         List<WorkItemType> defaultTypes = List.of(
                 WorkItemType.builder()
                         .projectId(project.getId())
                         .name("Epic")
                         .code("EPIC")
-                        .description("High-level initiative or large body of work")
+                        .description("Hạng mục lớn bao quát nhiều công việc (Epic)")
                         .iconName("Zap")
                         .colorHex("#9333EA")
                         .hierarchyLevel(1)
@@ -239,20 +239,9 @@ public class ProjectServiceImpl implements ProjectService {
                         .build(),
                 WorkItemType.builder()
                         .projectId(project.getId())
-                        .name("Story")
-                        .code("STORY")
-                        .description("User story capturing requirements from a user perspective")
-                        .iconName("Bookmark")
-                        .colorHex("#10B981")
-                        .hierarchyLevel(0)
-                        .isSubtask(false)
-                        .isSystemDefault(true)
-                        .build(),
-                WorkItemType.builder()
-                        .projectId(project.getId())
                         .name("Task")
                         .code("TASK")
-                        .description("Standard task or action item")
+                        .description("Công việc tiêu chuẩn (Standard task or action item)")
                         .iconName("CheckSquare")
                         .colorHex("#3B82F6")
                         .hierarchyLevel(0)
@@ -261,20 +250,9 @@ public class ProjectServiceImpl implements ProjectService {
                         .build(),
                 WorkItemType.builder()
                         .projectId(project.getId())
-                        .name("Bug")
-                        .code("BUG")
-                        .description("Problem or defect that impairs product functionality")
-                        .iconName("Bug")
-                        .colorHex("#EF4444")
-                        .hierarchyLevel(0)
-                        .isSubtask(false)
-                        .isSystemDefault(true)
-                        .build(),
-                WorkItemType.builder()
-                        .projectId(project.getId())
                         .name("Subtask")
                         .code("SUBTASK")
-                        .description("Sub-element of a parent task or story")
+                        .description("Công việc con phụ thuộc (Sub-element of a parent task)")
                         .iconName("GitCommit")
                         .colorHex("#06B6D4")
                         .hierarchyLevel(-1)
@@ -284,10 +262,10 @@ public class ProjectServiceImpl implements ProjectService {
         );
         List<WorkItemType> savedTypes = workItemTypeRepository.saveAll(defaultTypes);
 
-        // 3. Default Statuses
-        Status todoStatus = getOrCreateStatus("To Do", StatusCategory.TODO, "#64748B", "Initial backlog state");
-        Status inProgressStatus = getOrCreateStatus("In Progress", StatusCategory.IN_PROGRESS, "#3B82F6", "Work actively ongoing");
-        Status doneStatus = getOrCreateStatus("Done", StatusCategory.DONE, "#10B981", "Task completed");
+        // 3. Default Project Statuses (Unique per project)
+        Status todoStatus = createDefaultProjectStatus(project.getId(), "To Do", StatusCategory.TODO, "#64748B", "Initial backlog state");
+        Status inProgressStatus = createDefaultProjectStatus(project.getId(), "In Progress", StatusCategory.IN_PROGRESS, "#3B82F6", "Work actively ongoing");
+        Status doneStatus = createDefaultProjectStatus(project.getId(), "Done", StatusCategory.DONE, "#10B981", "Task completed");
 
         // 4. Default Workflow & Transitions
         Workflow workflow = Workflow.builder()
@@ -422,9 +400,10 @@ public class ProjectServiceImpl implements ProjectService {
         log.info("Project ecosystem seeded successfully for project: ID={}", project.getId());
     }
 
-    private Status getOrCreateStatus(String name, StatusCategory category, String colorHex, String description) {
-        return statusRepository.findByName(name).orElseGet(() ->
+    private Status createDefaultProjectStatus(UUID projectId, String name, StatusCategory category, String colorHex, String description) {
+        return statusRepository.findByProjectIdAndNameIgnoreCase(projectId, name).orElseGet(() ->
                 statusRepository.save(Status.builder()
+                        .projectId(projectId)
                         .name(name)
                         .category(category)
                         .colorHex(colorHex)

@@ -37,7 +37,7 @@ public class ProjectMemberController {
     private final ProjectMemberService projectMemberService;
 
     /**
-     * Retrieves permissions of current user in this project.
+     * Lấy danh sách quyền của người dùng hiện tại trong dự án.
      */
     @GetMapping("/permissions/my")
     public ResponseEntity<ApiResponse<List<String>>> getMyPermissions(@PathVariable("projectId") UUID projectId) {
@@ -47,7 +47,7 @@ public class ProjectMemberController {
     }
 
     /**
-     * Retrieves all members and roles in this project.
+     * Lấy danh sách tất cả thành viên và vai trò trong dự án.
      */
     @GetMapping("/members")
     public ResponseEntity<ApiResponse<List<RoleAssignmentResponse>>> getProjectMembers(
@@ -58,7 +58,7 @@ public class ProjectMemberController {
     }
 
     /**
-     * Adds a member with role to this project.
+     * Thêm thành viên mới (kèm vai trò) vào dự án.
      */
     @PostMapping("/members")
     @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
@@ -73,7 +73,7 @@ public class ProjectMemberController {
     }
 
     /**
-     * Updates an existing member's role in this project.
+     * Cập nhật vai trò của thành viên đã tồn tại trong dự án.
      */
     @PutMapping("/members/{userId}/role")
     @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
@@ -89,7 +89,7 @@ public class ProjectMemberController {
     }
 
     /**
-     * Removes a member from this project.
+     * Xóa thành viên khỏi dự án.
      */
     @DeleteMapping("/members/{userId}")
     @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
@@ -103,7 +103,7 @@ public class ProjectMemberController {
     }
 
     /**
-     * Retrieves all project roles.
+     * Lấy danh sách tất cả vai trò của dự án.
      */
     @GetMapping("/roles")
     public ResponseEntity<ApiResponse<List<ProjectRoleResponse>>> getProjectRoles(

@@ -18,6 +18,8 @@ import com.datn.workservice.repository.RoleAssignmentRepository;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +47,13 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
         Project project = projectRepository.findById(projectId).orElse(null);
         if (project == null || project.getDeletedAt() != null) {
             return false;
+        }
+
+        // 0. System Admin (ROLE_ADMIN) has all project permissions
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getAuthorities() != null && auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equalsIgnoreCase(a.getAuthority()) || "ADMIN".equalsIgnoreCase(a.getAuthority()))) {
+            return true;
         }
 
         // 1. Project Lead & Creator have super-admin privileges over the project
@@ -83,6 +92,15 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     public List<String> getMyPermissions(UUID projectId, UUID currentUserId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
+
+        // If user has system role ROLE_ADMIN, grant all permissions
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getAuthorities() != null && auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equalsIgnoreCase(a.getAuthority()) || "ADMIN".equalsIgnoreCase(a.getAuthority()))) {
+            return Arrays.stream(PermissionKey.values())
+                    .map(Enum::name)
+                    .collect(Collectors.toList());
+        }
 
         // If user is Lead or Creator, grant all permissions
         if (currentUserId.equals(project.getLeadUserId()) || currentUserId.equals(project.getCreatedBy())) {

@@ -13,4 +13,5 @@ public interface BoardColumnStatusRepository extends JpaRepository<BoardColumnSt
     List<BoardColumnStatus> findByColumnIdIn(List<UUID> columnIds);
     List<BoardColumnStatus> findByStatusId(UUID statusId);
     void deleteByColumnId(UUID columnId);
+    void deleteByStatusId(UUID statusId);
 }

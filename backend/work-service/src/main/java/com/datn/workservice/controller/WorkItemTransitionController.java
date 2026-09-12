@@ -30,8 +30,8 @@ public class WorkItemTransitionController {
     private final WorkflowEngineService workflowEngineService;
 
     /**
-     * Retrieves all available transitions from the current status of the work item
-     * evaluated for the authenticated user.
+     * Lấy danh sách các bước chuyển khả dụng từ trạng thái hiện tại của công việc,
+     * được đánh giá dựa trên người dùng đã xác thực.
      */
     @GetMapping
     public ResponseEntity<ApiResponse<List<AvailableTransitionResponse>>> getAvailableTransitions(
@@ -43,7 +43,7 @@ public class WorkItemTransitionController {
     }
 
     /**
-     * Executes a specific workflow transition by transition ID in the path.
+     * Thực hiện bước chuyển trạng thái theo transitionId truyền trên đường dẫn (path).
      */
     @PostMapping("/{transitionId}")
     public ResponseEntity<ApiResponse<WorkItem>> executeTransitionById(
@@ -62,7 +62,7 @@ public class WorkItemTransitionController {
     }
 
     /**
-     * Executes a workflow transition with transition ID specified in the request body.
+     * Thực hiện bước chuyển trạng thái với transitionId được truyền trong body của request.
      */
     @PostMapping
     public ResponseEntity<ApiResponse<WorkItem>> executeTransition(

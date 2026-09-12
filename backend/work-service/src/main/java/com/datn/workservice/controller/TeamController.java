@@ -97,11 +97,11 @@ public class TeamController {
                 .name(body.getOrDefault("name", "Nhóm mới"))
                 .description(body.get("description"))
                 .ownerId(currentUserId)
-                .workspaceId(currentUserId) // Placeholder workspace
+                .workspaceId(currentUserId) // Workspace tạm thời (placeholder)
                 .build();
         Team saved = teamRepository.save(team);
 
-        // Automatically assign creator as LEADER
+        // Tự động gán người tạo làm LEADER
         try {
             TeamMember leader = TeamMember.builder()
                     .teamId(saved.getId())
@@ -217,7 +217,7 @@ public class TeamController {
 
         List<TeamMember> members = teamMemberRepository.findByTeamId(teamId);
 
-        // If no members registered yet, ensure owner is added as LEADER
+        // Nếu chưa có thành viên nào đăng ký, thêm Owner vào với vai trò LEADER
         if (members.isEmpty() && team.getOwnerId() != null) {
             TeamMember ownerMember = TeamMember.builder()
                     .teamId(teamId)
@@ -250,7 +250,7 @@ public class TeamController {
             log.warn("Could not fetch user details from identityClient: {}", ex.getMessage());
         }
 
-        // Group by user to prevent duplicate rows if legacy data had both KeycloakId and DbId
+        // Gộp theo người dùng để tránh trùng lặp khi dữ liệu cũ tồn tại cả KeycloakId và DbId
         Map<String, TeamMemberResponse> dedupMap = new LinkedHashMap<>();
         for (TeamMember m : members) {
             UserResponse u = userMap.get(m.getUserId());
@@ -270,7 +270,7 @@ public class TeamController {
 
             String dedupKey = (email != null && !email.isBlank()) ? email.toLowerCase() : m.getUserId().toString();
             if (dedupMap.containsKey(dedupKey)) {
-                // Keep LEADER role if either record was LEADER
+                // Giữ vai trò LEADER nếu một trong hai bản ghi là LEADER
                 if (m.getRole() == TeamRole.LEADER) {
                     dedupMap.get(dedupKey).setRole(TeamRole.LEADER);
                 }
@@ -346,7 +346,7 @@ public class TeamController {
             }
         }
 
-        // Canonical ID: prioritize Keycloak ID because Spring Security JWT sub uses Keycloak UUID
+        // ID chuẩn hóa: ưu tiên Keycloak ID vì JWT sub của Spring Security sử dụng Keycloak UUID
         if (keycloakId != null) {
             targetUserId = keycloakId;
         } else if (dbId != null) {
@@ -365,7 +365,7 @@ public class TeamController {
             } catch (Exception ignored) {}
         }
 
-        // Check if member already exists under targetUserId OR dbId OR keycloakId
+        // Kiểm tra thành viên đã tồn tại theo targetUserId HOẶC dbId HOẶC keycloakId
         Optional<TeamMember> existing = teamMemberRepository.findByTeamIdAndUserId(teamId, targetUserId);
         if (existing.isEmpty() && dbId != null) {
             existing = teamMemberRepository.findByTeamIdAndUserId(teamId, dbId);
@@ -433,7 +433,7 @@ public class TeamController {
             throw new BadRequestException("Vai trò không hợp lệ: " + roleStr);
         }
 
-        // Look up member with alias support
+        // Tìm kiếm thành viên với hỗ trợ alias ID
         Set<UUID> aliasIds = getUserAliasIds(userId);
         TeamMember member = null;
         for (UUID uid : aliasIds) {
@@ -511,7 +511,7 @@ public class TeamController {
         return ResponseEntity.ok(ApiResponse.success(null, "Đã xóa thành viên khỏi nhóm"));
     }
 
-    // ─── Helper Methods ──────────────────────────────────────────────────────────
+    // ─── Các phương thức hỗ trợ (Helper Methods) ────────────────────────────────
 
     private Set<UUID> getUserAliasIds(UUID userId) {
         Set<UUID> ids = new HashSet<>();

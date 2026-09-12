@@ -28,7 +28,11 @@ public class WorkflowController {
      * PUT    /api/v1/work/projects/{projectId}/workflow/scheme                     : Cập nhật sơ đồ workflow của dự án
      * GET    /api/v1/work/projects/{projectId}/statuses                            : Lấy tất cả trạng thái trong dự án
      * POST   /api/v1/work/statuses                                                 : Tạo trạng thái mới
+     * PUT    /api/v1/work/statuses/{statusId}                                      : Cập nhật trạng thái
+     * DELETE /api/v1/work/statuses/{statusId}                                      : Xóa trạng thái (nếu không đang được sử dụng)
      * GET    /api/v1/work/workflows/{workflowId}                                   : Lấy chi tiết workflow theo ID
+     * POST   /api/v1/work/workflows                                                : Tạo quy trình mới
+     * PUT    /api/v1/work/workflows/{workflowId}                                   : Cập nhật thông tin quy trình
      * POST   /api/v1/work/workflows/{workflowId}/transitions                       : Thêm bước chuyển (transition) vào workflow
      * DELETE /api/v1/work/workflows/{workflowId}/transitions/{transitionId}        : Xóa bước chuyển khỏi workflow
      * ────────────────────────────────────────────────────────────────────────
@@ -37,7 +41,7 @@ public class WorkflowController {
     private final WorkflowService workflowService;
 
     /**
-     * Retrieves the primary active workflow detail with full transitions and statuses for a project.
+     * Lấy chi tiết workflow đang hoạt động (bao gồm đầy đủ các bước chuyển và trạng thái) của dự án.
      */
     @GetMapping("/projects/{projectId}/workflow")
     @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
@@ -49,7 +53,7 @@ public class WorkflowController {
     }
 
     /**
-     * Retrieves all workflows configured for a project.
+     * Lấy danh sách tất cả workflow đã cấu hình cho dự án.
      */
     @GetMapping("/projects/{projectId}/workflows")
     @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
@@ -61,7 +65,7 @@ public class WorkflowController {
     }
 
     /**
-     * Retrieves the active workflow scheme and issue type mappings for a project.
+     * Lấy sơ đồ workflow đang hoạt động và ánh xạ loại công việc (issue type) của dự án.
      */
     @GetMapping("/projects/{projectId}/workflow/scheme")
     @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
@@ -73,7 +77,7 @@ public class WorkflowController {
     }
 
     /**
-     * Updates workflow scheme mappings for a project.
+     * Cập nhật ánh xạ sơ đồ workflow cho dự án.
      */
     @PutMapping("/projects/{projectId}/workflow/scheme")
     @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
@@ -86,7 +90,7 @@ public class WorkflowController {
     }
 
     /**
-     * Retrieves all statuses available in the project.
+     * Lấy danh sách tất cả trạng thái khả dụng trong dự án.
      */
     @GetMapping("/projects/{projectId}/statuses")
     @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
@@ -98,7 +102,7 @@ public class WorkflowController {
     }
 
     /**
-     * Creates a new status in the system.
+     * Tạo trạng thái (status) mới trong hệ thống hoặc dự án.
      */
     @PostMapping("/statuses")
     public ResponseEntity<ApiResponse<StatusResponse>> createStatus(
@@ -110,7 +114,45 @@ public class WorkflowController {
     }
 
     /**
-     * Retrieves details of a specific workflow by ID.
+     * Tạo trạng thái (status) mới dành riêng cho dự án.
+     */
+    @PostMapping("/projects/{projectId}/statuses")
+    @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
+    public ResponseEntity<ApiResponse<StatusResponse>> createProjectStatus(
+            @PathVariable("projectId") UUID projectId,
+            @Valid @RequestBody CreateStatusRequest request
+    ) {
+        request.setProjectId(projectId);
+        StatusResponse created = workflowService.createStatus(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(created, "Tạo trạng thái mới cho dự án thành công"));
+    }
+
+    /**
+     * Cập nhật thông tin trạng thái đã tồn tại trong hệ thống.
+     */
+    @PutMapping("/statuses/{statusId}")
+    public ResponseEntity<ApiResponse<StatusResponse>> updateStatus(
+            @PathVariable("statusId") UUID statusId,
+            @Valid @RequestBody UpdateStatusRequest request
+    ) {
+        StatusResponse updated = workflowService.updateStatus(statusId, request);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Cập nhật trạng thái thành công"));
+    }
+
+    /**
+     * Xóa trạng thái khỏi hệ thống (nếu không đang được sử dụng).
+     */
+    @DeleteMapping("/statuses/{statusId}")
+    public ResponseEntity<ApiResponse<Void>> deleteStatus(
+            @PathVariable("statusId") UUID statusId
+    ) {
+        workflowService.deleteStatus(statusId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Xóa trạng thái thành công"));
+    }
+
+    /**
+     * Lấy chi tiết workflow theo ID.
      */
     @GetMapping("/workflows/{workflowId}")
     public ResponseEntity<ApiResponse<WorkflowDetailResponse>> getWorkflowById(
@@ -121,20 +163,58 @@ public class WorkflowController {
     }
 
     /**
-     * Adds a new transition to a workflow.
+     * Tạo quy trình (workflow) mới.
+     */
+    @PostMapping("/workflows")
+    public ResponseEntity<ApiResponse<WorkflowResponse>> createWorkflow(
+            @Valid @RequestBody CreateWorkflowRequest request
+    ) {
+        WorkflowResponse created = workflowService.createWorkflow(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(created, "Tạo quy trình thành công"));
+    }
+
+    /**
+     * Cập nhật thông tin quy trình (workflow).
+     */
+    @PutMapping("/workflows/{workflowId}")
+    public ResponseEntity<ApiResponse<WorkflowResponse>> updateWorkflow(
+            @PathVariable("workflowId") UUID workflowId,
+            @Valid @RequestBody UpdateWorkflowRequest request
+    ) {
+        WorkflowResponse updated = workflowService.updateWorkflow(workflowId, request);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Cập nhật quy trình thành công"));
+    }
+
+    /**
+     * Thêm bước chuyển (transition) mới vào workflow.
      */
     @PostMapping("/workflows/{workflowId}/transitions")
     public ResponseEntity<ApiResponse<WorkflowTransitionResponse>> createTransition(
             @PathVariable("workflowId") UUID workflowId,
             @Valid @RequestBody CreateWorkflowTransitionRequest request
     ) {
+        request.setWorkflowId(workflowId);
         WorkflowTransitionResponse created = workflowService.createTransition(workflowId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(created, "Tạo bước chuyển quy trình thành công"));
     }
 
     /**
-     * Deletes a transition from a workflow.
+     * Cập nhật bước chuyển (transition) trong workflow.
+     */
+    @PutMapping("/workflows/{workflowId}/transitions/{transitionId}")
+    public ResponseEntity<ApiResponse<WorkflowTransitionResponse>> updateTransition(
+            @PathVariable("workflowId") UUID workflowId,
+            @PathVariable("transitionId") UUID transitionId,
+            @Valid @RequestBody UpdateWorkflowTransitionRequest request
+    ) {
+        WorkflowTransitionResponse updated = workflowService.updateTransition(workflowId, transitionId, request);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Cập nhật bước chuyển quy trình thành công"));
+    }
+
+    /**
+     * Xóa bước chuyển (transition) khỏi workflow.
      */
     @DeleteMapping("/workflows/{workflowId}/transitions/{transitionId}")
     public ResponseEntity<ApiResponse<Void>> deleteTransition(

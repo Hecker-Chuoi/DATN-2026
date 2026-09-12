@@ -10,6 +10,8 @@ import org.aspectj.lang.annotation.Before;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.PathVariable;
 
@@ -51,6 +53,14 @@ public class ProjectPermissionGuard {
 
             if (projectId == null) {
                 log.debug("Cannot extract projectId for permission check on method: {}", signature.toShortString());
+                return;
+            }
+
+            // System Admin (ROLE_ADMIN) has superuser access to all project operations
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.getAuthorities() != null && authentication.getAuthorities().stream()
+                    .anyMatch(a -> "ROLE_ADMIN".equalsIgnoreCase(a.getAuthority()) || "ADMIN".equalsIgnoreCase(a.getAuthority()))) {
+                log.debug("System admin bypassing project permission check for user {}", currentUserId);
                 return;
             }
 

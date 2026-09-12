@@ -10,11 +10,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateStatusRequest {
+
+    private UUID projectId;
 
     @NotBlank(message = "Tên trạng thái không được để trống")
     @Size(max = 100, message = "Tên trạng thái tối đa 100 ký tự")

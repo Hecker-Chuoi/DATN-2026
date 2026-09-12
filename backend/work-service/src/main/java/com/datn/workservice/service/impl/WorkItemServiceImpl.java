@@ -194,14 +194,23 @@ public class WorkItemServiceImpl implements WorkItemService {
 
         UUID projectId = parent.getProjectId();
 
-        // Find Subtask type in project
+        // Find Subtask type in project strictly by Level -1
         List<WorkItemType> types = workItemTypeRepository.findByProjectId(projectId);
-        WorkItemType subtaskType = types.stream()
-                .filter(t -> (t.getHierarchyLevel() != null && t.getHierarchyLevel() == -1)
-                        || "SUBTASK".equalsIgnoreCase(t.getCode())
-                        || Boolean.TRUE.equals(t.getIsSubtask()))
-                .findFirst()
-                .orElseThrow(() -> new BadRequestException("Loại công việc Sub-task chưa được cấu hình cho dự án này"));
+        WorkItemType subtaskType;
+        if (request.getTypeId() != null) {
+            subtaskType = types.stream()
+                    .filter(t -> t.getId().equals(request.getTypeId()))
+                    .findFirst()
+                    .orElseThrow(() -> new BadRequestException("Không tìm thấy loại công việc được chỉ định trong dự án"));
+            if (subtaskType.getHierarchyLevel() == null || subtaskType.getHierarchyLevel() != StrictHierarchyValidator.LEVEL_SUBTASK) {
+                throw new BadRequestException("Loại công việc được chọn không phải là Sub-task (Cấp bậc Level -1)");
+            }
+        } else {
+            subtaskType = types.stream()
+                    .filter(t -> t.getHierarchyLevel() != null && t.getHierarchyLevel() == StrictHierarchyValidator.LEVEL_SUBTASK)
+                    .findFirst()
+                    .orElseThrow(() -> new BadRequestException("Dự án chưa có loại công việc nào thuộc cấp bậc Sub-task (Level -1)"));
+        }
 
         CreateWorkItemRequest fullRequest = CreateWorkItemRequest.builder()
                 .projectId(projectId)
@@ -379,6 +388,18 @@ public class WorkItemServiceImpl implements WorkItemService {
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private UUID resolveInitialStatus(UUID projectId) {
+        if (projectId != null) {
+            List<Status> projectStatuses = statusRepository.findByProjectId(projectId);
+            Optional<Status> projectTodo = projectStatuses.stream()
+                    .filter(s -> s.getCategory() == StatusCategory.TODO)
+                    .findFirst();
+            if (projectTodo.isPresent()) {
+                return projectTodo.get().getId();
+            }
+            if (!projectStatuses.isEmpty()) {
+                return projectStatuses.get(0).getId();
+            }
+        }
         List<Status> todoStatuses = statusRepository.findByCategory(StatusCategory.TODO);
         if (!todoStatuses.isEmpty()) {
             return todoStatuses.get(0).getId();

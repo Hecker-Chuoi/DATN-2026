@@ -16,6 +16,7 @@ import java.util.UUID;
 public class StatusResponse {
 
     private UUID id;
+    private UUID projectId;
     private String name;
     private StatusCategory category;
     private String description;
