@@ -51,7 +51,7 @@ export function validateWorkItemForm(formData, parentItem = null) {
   }
 
   if (formData.typeCode === 'EPIC' && formData.parentId) {
-    errors.parentId = 'Sáng kiến lớn (Epic) là cấp bậc cao nhất và không được có công việc cha';
+    errors.parentId = 'Hạng mục lớn (Epic) là cấp bậc cao nhất và không được có công việc cha';
   }
 
   return {

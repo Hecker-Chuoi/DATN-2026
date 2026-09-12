@@ -292,6 +292,14 @@ export const projectApi = {
   getRoles: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/roles`),
 };
 
+// ─── 2.1. Project Work Item Types API (Custom Types per Project) ───────────────
+export const workItemTypeApi = {
+  listByProject: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/types`),
+  create: (projectId, data) => apiClient.post(`${WORK_BASE}/projects/${projectId}/types`, data),
+  update: (projectId, typeId, data) => apiClient.put(`${WORK_BASE}/projects/${projectId}/types/${typeId}`, data),
+  delete: (projectId, typeId) => apiClient.delete(`${WORK_BASE}/projects/${projectId}/types/${typeId}`),
+};
+
 // ─── 3. Work Items API (Jira-grade) ───────────────────────────────────────────
 export const workItemApi = {
   listAll: (params) => {
@@ -358,9 +366,17 @@ export const workflowApi = {
   getProjectWorkflowScheme: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/workflow/scheme`),
   updateProjectWorkflowScheme: (projectId, data) => apiClient.put(`${WORK_BASE}/projects/${projectId}/workflow/scheme`, data),
   getProjectStatuses: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/statuses`),
-  createStatus: (data) => apiClient.post(`${WORK_BASE}/statuses`, data),
+  createStatus: (data, projectId) => {
+    const pid = projectId || data?.projectId;
+    return pid ? apiClient.post(`${WORK_BASE}/projects/${pid}/statuses`, data) : apiClient.post(`${WORK_BASE}/statuses`, data);
+  },
+  updateStatus: (statusId, data) => apiClient.put(`${WORK_BASE}/statuses/${statusId}`, data),
+  deleteStatus: (statusId) => apiClient.delete(`${WORK_BASE}/statuses/${statusId}`),
   getWorkflowById: (workflowId) => apiClient.get(`${WORK_BASE}/workflows/${workflowId}`),
+  createWorkflow: (data) => apiClient.post(`${WORK_BASE}/workflows`, data),
+  updateWorkflow: (workflowId, data) => apiClient.put(`${WORK_BASE}/workflows/${workflowId}`, data),
   createTransition: (workflowId, data) => apiClient.post(`${WORK_BASE}/workflows/${workflowId}/transitions`, data),
+  updateTransition: (workflowId, transitionId, data) => apiClient.put(`${WORK_BASE}/workflows/${workflowId}/transitions/${transitionId}`, data),
   deleteTransition: (workflowId, transitionId) => apiClient.delete(`${WORK_BASE}/workflows/${workflowId}/transitions/${transitionId}`),
   getTransitions: (workItemId) => apiClient.get(`${WORK_BASE}/work-items/${workItemId}/transitions`),
   executeTransition: (workItemId, transitionId, data) => apiClient.post(`${WORK_BASE}/work-items/${workItemId}/transitions/${transitionId}`, data),

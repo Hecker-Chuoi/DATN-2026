@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   FolderKanban,
   Kanban,
@@ -14,7 +14,8 @@ import {
   MoreHorizontal,
   Link2,
   SlidersHorizontal,
-  Plus
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi } from '../api.js';
@@ -24,13 +25,20 @@ import ProjectWorkflowTab from '../components/project/ProjectWorkflowTab.jsx';
 import ProjectBoardView from '../components/boards/ProjectBoardView.jsx';
 import CreateWorkItemModal from '../components/items/CreateWorkItemModal.jsx';
 import WorkItemDetailModal from '../components/items/WorkItemDetailModal.jsx';
+import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('board'); // 'board' | 'backlog' | 'members' | 'workflow'
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      return sessionStorage.getItem(`project_${projectId}_active_tab`) || 'board';
+    } catch {
+      return 'board';
+    }
+  });
   const [isStarred, setIsStarred] = useState(false);
   const [members, setMembers] = useState([]);
 
@@ -40,11 +48,38 @@ export default function ProjectDetailPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
 
+  const outletContext = useOutletContext() || {};
+  const currentUser = outletContext.currentUser;
+
+  // Project Action Menu & Delete Modal State
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const actionMenuRef = useRef(null);
+
   const { isAdmin, canCreateIssue, canManageSprint, permissions } = useProjectPermission(projectId);
 
-  const fetchProject = async () => {
+  const isSystemAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN');
+  const isProjectLead = !!(currentUser && project?.leadUserId === currentUser.id);
+  const isProjectCreator = !!(currentUser && project?.createdBy === currentUser.id);
+  const canDelete = isAdmin || isSystemAdmin || isProjectLead || isProjectCreator;
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target)) {
+        setIsActionMenuOpen(false);
+      }
+    };
+    if (isActionMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isActionMenuOpen]);
+
+  const fetchProject = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       const [projRes, membersRes] = await Promise.all([
         projectApi.getById(projectId),
         projectApi.getMembers(projectId).catch(() => null),
@@ -58,7 +93,7 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.warn('Could not load project detail:', err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
@@ -153,19 +188,80 @@ export default function ProjectDetailPage() {
           >
             <Star size={15} fill={isStarred ? '#EAB308' : 'none'} />
           </button>
-          <button
-            style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#94A3B8',
-              padding: 2,
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <MoreHorizontal size={16} />
-          </button>
+          {canDelete && (
+            <div style={{ position: 'relative' }} ref={actionMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsActionMenuOpen(!isActionMenuOpen)}
+                style={{
+                  background: isActionMenuOpen ? '#F1F5F9' : 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: isActionMenuOpen ? '#0F172A' : '#94A3B8',
+                  padding: 4,
+                  borderRadius: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  transition: 'all 0.15s ease',
+                }}
+                title="Tùy chọn dự án"
+              >
+                <MoreHorizontal size={16} />
+              </button>
+
+              {isActionMenuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    marginTop: 6,
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 8,
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
+                    border: '1px solid #E2E8F0',
+                    minWidth: 200,
+                    zIndex: 50,
+                    overflow: 'hidden',
+                    padding: '4px',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      setIsDeleteModalOpen(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: 'none',
+                      backgroundColor: 'transparent',
+                      color: '#EF4444',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#FEF2F2';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <Trash2 size={14} color="#EF4444" />
+                    <span>Xóa dự án (Thùng rác)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -233,14 +329,19 @@ export default function ProjectDetailPage() {
             { id: 'board', label: 'Active Board', icon: Kanban },
             { id: 'backlog', label: 'Backlog', icon: ListTodo },
             { id: 'members', label: 'Members & Roles', icon: Users },
-            { id: 'workflow', label: 'Workflow & Statuses', icon: GitBranch },
+            { id: 'workflow', label: 'Cấu hình Dự án (Config)', icon: Settings },
           ].map((tab) => {
             const active = activeTab === tab.id;
             const TabIcon = tab.icon;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  try {
+                    sessionStorage.setItem(`project_${projectId}_active_tab`, tab.id);
+                  } catch (e) {}
+                }}
                 style={{
                   padding: '6px 14px',
                   borderRadius: 20,
@@ -266,7 +367,7 @@ export default function ProjectDetailPage() {
 
       {/* ─── Body Content ─── */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {loading ? (
+        {(loading && !project) ? (
           <div style={{ padding: 48, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
             Đang tải thông tin dự án...
           </div>
@@ -276,6 +377,7 @@ export default function ProjectDetailPage() {
               <ProjectBoardView
                 projectId={projectId}
                 projectKey={project?.key}
+                projectTypes={project?.workItemTypes || []}
                 canCreate={canCreateIssue || isAdmin}
                 onOpenCreateModal={() => setIsCreateItemModalOpen(true)}
                 onSelectWorkItem={handleOpenDetailModal}
@@ -317,7 +419,7 @@ export default function ProjectDetailPage() {
 
             {activeTab === 'workflow' && (
               <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-                <ProjectWorkflowTab projectId={projectId} isAdmin={isAdmin} />
+                <ProjectWorkflowTab projectId={projectId} isAdmin={isAdmin} onTypesUpdated={() => fetchProject(true)} />
               </div>
             )}
           </>
@@ -345,6 +447,16 @@ export default function ProjectDetailPage() {
         }}
         onItemUpdated={handleItemUpdated}
         members={members}
+      />
+
+      {/* ─── Delete Project Modal ─── */}
+      <DeleteProjectModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        project={project}
+        onDeleted={() => {
+          navigate('/projects');
+        }}
       />
     </div>
   );

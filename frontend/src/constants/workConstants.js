@@ -10,7 +10,7 @@ export const HIERARCHY_LEVELS = {
 };
 
 export const HIERARCHY_LABELS = {
-  [HIERARCHY_LEVELS.EPIC]: { label: 'Sáng kiến lớn / Epic', level: 1, code: 'EPIC' },
+  [HIERARCHY_LEVELS.EPIC]: { label: 'Hạng mục lớn (Epic)', level: 1, code: 'EPIC' },
   [HIERARCHY_LEVELS.STANDARD]: { label: 'Công việc tiêu chuẩn', level: 0, code: 'STANDARD' },
   [HIERARCHY_LEVELS.SUBTASK]: { label: 'Nhiệm vụ con / Subtask', level: -1, code: 'SUBTASK' },
 };
@@ -380,5 +380,80 @@ export function isHierarchyValid(parentLevel, childLevel) {
   if (parentLevel === HIERARCHY_LEVELS.EPIC && childLevel === HIERARCHY_LEVELS.STANDARD) return true;
   if (parentLevel === HIERARCHY_LEVELS.STANDARD && childLevel === HIERARCHY_LEVELS.SUBTASK) return true;
   return false;
+}
+
+// ─── Task Type Presets (Mẫu Cấu Hình Gợi Ý) ─────────────────────────────────
+export const TASK_TYPE_PRESETS = [
+  {
+    id: 'SOFTWARE_DEV',
+    name: 'Phát triển Phần mềm (Software)',
+    description: 'Chuẩn quy trình Scrum & Kanban cho đội ngũ kỹ thuật phần mềm, tích hợp Epic, Story, Task, Bug và Subtask.',
+    icon: 'Layers',
+    badgeColor: '#2563EB',
+    types: [
+      { name: 'Epic', code: 'EPIC', hierarchyLevel: 1, iconName: 'Zap', colorHex: '#9333EA', description: 'Mục tiêu lớn hoặc tập hợp tính năng phức tạp cần triển khai qua nhiều Sprint' },
+      { name: 'Story', code: 'STORY', hierarchyLevel: 0, iconName: 'Bookmark', colorHex: '#10B981', description: 'Yêu cầu nghiệp vụ hoặc tính năng nhìn từ góc độ người dùng cuối' },
+      { name: 'Task', code: 'TASK', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#3B82F6', description: 'Công việc kỹ thuật hoặc tác vụ phát triển tiêu chuẩn' },
+      { name: 'Bug', code: 'BUG', hierarchyLevel: 0, iconName: 'Bug', colorHex: '#EF4444', description: 'Lỗi phát sinh hoặc sự cố kỹ thuật cần khắc phục' },
+      { name: 'Subtask', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#06B6D4', description: 'Nhiệm vụ con chia nhỏ từ Story/Task/Bug' },
+    ],
+  },
+  {
+    id: 'CONSTRUCTION',
+    name: 'Xây dựng & Công trình (Construction)',
+    description: 'Chuyên biệt cho quản lý dự án xây dựng, quản lý gói thầu, thi công tại hiện trường và nghiệm thu.',
+    icon: 'Layers',
+    badgeColor: '#D97706',
+    types: [
+      { name: 'Hạng mục công trình', code: 'PHASE', hierarchyLevel: 1, iconName: 'Layers', colorHex: '#D97706', description: 'Gói thầu, giai đoạn xây dựng hoặc hạng mục công trình trọng điểm' },
+      { name: 'Công tác thi công', code: 'CONSTRUCT', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#2563EB', description: 'Nội dung thi công thực tế tại công trường' },
+      { name: 'Giám sát & Nghiệm thu', code: 'INSPECT', hierarchyLevel: 0, iconName: 'FileCheck', colorHex: '#059669', description: 'Kiểm tra chất lượng, nghiệm thu hồ sơ và khối lượng' },
+      { name: 'Sự cố công trường', code: 'INCIDENT', hierarchyLevel: 0, iconName: 'AlertTriangle', colorHex: '#DC2626', description: 'Sự cố an toàn, hư hỏng vật tư hoặc trục trặc hiện trường' },
+      { name: 'Chi tiết công tác', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#64748B', description: 'Tác vụ thi công chi tiết phân bổ cho từng đội thợ' },
+    ],
+  },
+  {
+    id: 'MARKETING',
+    name: 'Marketing & Truyền thông',
+    description: 'Dành cho chiến dịch marketing, quảng bá truyền thông, sáng tạo nội dung và sản xuất ấn phẩm.',
+    icon: 'Sparkles',
+    badgeColor: '#7C3AED',
+    types: [
+      { name: 'Chiến dịch', code: 'CAMPAIGN', hierarchyLevel: 1, iconName: 'Sparkles', colorHex: '#7C3AED', description: 'Chiến dịch tiếp thị tổng thể hoặc chuỗi sự kiện thương hiệu' },
+      { name: 'Sáng tạo nội dung', code: 'CONTENT', hierarchyLevel: 0, iconName: 'Bookmark', colorHex: '#0284C7', description: 'Bài viết truyền thông, kịch bản hoặc thông điệp quảng cáo' },
+      { name: 'Thiết kế ấn phẩm', code: 'DESIGN', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#EA580C', description: 'Thiết kế poster, banner, hình ảnh hoặc tài liệu đồ họa' },
+      { name: 'Kênh phân phối', code: 'CHANNEL', hierarchyLevel: 0, iconName: 'Sliders', colorHex: '#10B981', description: 'Triển khai trên các kênh MXH, báo đài hoặc quảng cáo trả phí' },
+      { name: 'Tác vụ biên tập', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#6B7280', description: 'Nhiệm vụ soạn thảo nháp, duyệt bài hoặc chỉnh sửa ảnh con' },
+    ],
+  },
+  {
+    id: 'AGILE_BASIC',
+    name: 'Mặc định Agile cơ bản',
+    description: 'Cấu hình tiêu chuẩn tối giản gồm đúng 3 cấp độ: Epic, Task và Subtask.',
+    icon: 'Zap',
+    badgeColor: '#10B981',
+    types: [
+      { name: 'Epic', code: 'EPIC', hierarchyLevel: 1, iconName: 'Zap', colorHex: '#9333EA', description: 'Hạng mục lớn bao quát nhiều công việc (Epic)' },
+      { name: 'Task', code: 'TASK', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#3B82F6', description: 'Công việc tiêu chuẩn (Standard task or action item)' },
+      { name: 'Subtask', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#06B6D4', description: 'Công việc con phụ thuộc (Sub-element of a parent task)' },
+    ],
+  },
+];
+
+export function resolveDynamicTypeConfig(type) {
+  if (!type) return WORK_ITEM_TYPE_CONFIG.TASK;
+  const hex = type.colorHex || '#3B82F6';
+  return {
+    id: type.id,
+    name: type.name || 'Task',
+    code: type.code || 'TASK',
+    hierarchyLevel: type.hierarchyLevel ?? 0,
+    color: hex,
+    bgColor: `${hex}1A`, // 10% opacity
+    borderColor: `${hex}4D`, // 30% opacity
+    icon: type.iconName || 'CheckSquare',
+    description: type.description || '',
+    isSubtask: type.isSubtask || type.hierarchyLevel === -1,
+  };
 }
 

@@ -81,6 +81,7 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
           <Outlet
             context={{
               teams,
+              currentUser,
               refreshTeams: fetchTeams,
               onOpenCreateProject: handleOpenCreateProject,
               onOpenCreateTeam: () => setIsCreateTeamModalOpen(true),

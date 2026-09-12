@@ -588,23 +588,44 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               <span style={{ fontWeight: 700, color: '#2563EB', fontSize: 14 }}>{item?.code || '...'}</span>
             </div>
 
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '3px 8px',
-                borderRadius: 6,
-                backgroundColor: typeInfo.color ? `${typeInfo.color}15` : '#EFF6FF',
-                border: `1px solid ${typeInfo.color ? `${typeInfo.color}40` : '#BFDBFE'}`,
-                color: typeInfo.color || '#2563EB',
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              <TypeIcon size={14} color={typeInfo.color} />
-              <span>{item?.typeName || typeInfo.label}</span>
-            </div>
+            {(() => {
+              const displayColor = item?.typeColor || typeInfo.color || '#2563EB';
+              const lvl = item?.hierarchyLevel;
+              const lvlLabel = lvl === 1 ? 'Cấp 1 • Epic' : lvl === 0 ? 'Cấp 0 • Chuẩn' : lvl === -1 ? 'Cấp -1 • Sub' : null;
+              return (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '3px 8px',
+                    borderRadius: 6,
+                    backgroundColor: `${displayColor}15`,
+                    border: `1px solid ${displayColor}40`,
+                    color: displayColor,
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  <TypeIcon size={14} color={displayColor} />
+                  <span>{item?.typeName || typeInfo.label}</span>
+                  {lvlLabel && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        backgroundColor: `${displayColor}25`,
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      {lvlLabel}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
 
             {item?.parentCode && (
               <div
