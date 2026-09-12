@@ -17,10 +17,13 @@ import {
   User,
   MoreHorizontal,
   Lock,
-  AlertTriangle
+  AlertTriangle,
+  X,
+  Zap,
+  GitCommit
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { workItemApi, workflowApi } from '../../api.js';
+import { workItemApi, workflowApi, workItemTypeApi } from '../../api.js';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 
 const TYPE_CONFIG = {
@@ -110,6 +113,7 @@ const getSubtaskProgressConfig = (subtaskCount, subtaskDoneCount) => {
 export default function ProjectBoardView({
   projectId,
   projectKey,
+  projectTypes: initialProjectTypes = [],
   canCreate = true,
   onOpenCreateModal,
   onSelectWorkItem,
@@ -117,17 +121,26 @@ export default function ProjectBoardView({
 }) {
   const [items, setItems] = useState([]);
   const [statuses, setStatuses] = useState([]);
+  const [types, setTypes] = useState(initialProjectTypes);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState('ALL');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('ALL');
+
+  useEffect(() => {
+    if (initialProjectTypes && initialProjectTypes.length > 0) {
+      setTypes(initialProjectTypes);
+    }
+  }, [initialProjectTypes]);
 
   const fetchBoardData = async () => {
     if (!projectId) return;
     try {
       setLoading(true);
-      const [itemsRes, workflowRes] = await Promise.all([
+      const [itemsRes, workflowRes, typesRes] = await Promise.all([
         workItemApi.listAll({ projectId, size: 100 }),
         workflowApi.getProjectWorkflow(projectId).catch(() => null),
+        workItemTypeApi.listByProject(projectId).catch(() => ({ data: [] })),
       ]);
 
       if (itemsRes && itemsRes.data) {
@@ -144,6 +157,10 @@ export default function ProjectBoardView({
           { id: 'inprogress', name: 'In Progress', category: 'IN_PROGRESS' },
           { id: 'done', name: 'Done', category: 'DONE' },
         ]);
+      }
+
+      if (typesRes && typesRes.data && typesRes.data.length > 0) {
+        setTypes(typesRes.data);
       }
     } catch (err) {
       console.error('Failed to load board data:', err);
@@ -164,11 +181,37 @@ export default function ProjectBoardView({
 
     const matchesType =
       selectedTypeFilter === 'ALL' ||
+      item.typeId === selectedTypeFilter ||
       item.typeCode === selectedTypeFilter ||
-      item.typeName?.toUpperCase() === selectedTypeFilter;
+      (item.typeName && item.typeName.toLowerCase() === selectedTypeFilter.toLowerCase());
 
-    return matchesSearch && matchesType;
+    const matchesStatus =
+      selectedStatusFilter === 'ALL' ||
+      item.statusId === selectedStatusFilter ||
+      (item.statusName && item.statusName.toLowerCase() === selectedStatusFilter.toLowerCase());
+
+    return matchesSearch && matchesType && matchesStatus;
   });
+
+  const typeFilterOptions =
+    types.length > 0
+      ? [
+          { key: 'ALL', label: 'Tất cả' },
+          ...types.map((t) => ({
+            key: t.id || t.code,
+            id: t.id,
+            code: t.code,
+            label: t.name || t.code,
+            color: t.colorHex || TYPE_CONFIG[t.code]?.color || '#2563EB',
+            level: t.hierarchyLevel,
+          })),
+        ]
+      : [
+          { key: 'ALL', label: 'Tất cả' },
+          { key: 'EPIC', label: 'Epic', color: '#6554C0' },
+          { key: 'TASK', label: 'Task', color: '#0052CC' },
+          { key: 'SUBTASK', label: 'Sub-task', color: '#0284C7' },
+        ];
 
   return (
     <div
@@ -192,7 +235,7 @@ export default function ProjectBoardView({
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, flexWrap: 'wrap' }}>
           {/* Search Box */}
           <div
             style={{
@@ -203,7 +246,7 @@ export default function ProjectBoardView({
               border: '1px solid #E2E8F0',
               borderRadius: 8,
               padding: '6px 12px',
-              maxWidth: 320,
+              maxWidth: 240,
               width: '100%',
             }}
           >
@@ -224,28 +267,109 @@ export default function ProjectBoardView({
             />
           </div>
 
-          {/* Type Filter Pills */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {['ALL', 'EPIC', 'STORY', 'TASK', 'BUG', 'SUBTASK'].map((t) => (
-              <button
-                key={t}
-                onClick={() => setSelectedTypeFilter(t)}
-                style={{
-                  border: 'none',
-                  padding: '4px 10px',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: selectedTypeFilter === t ? 700 : 500,
-                  backgroundColor: selectedTypeFilter === t ? '#EFF6FF' : '#F8FAFC',
-                  color: selectedTypeFilter === t ? '#2563EB' : '#64748B',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {t === 'ALL' ? 'Tất cả' : (TYPE_CONFIG[t]?.label || t)}
-              </button>
-            ))}
+          {/* Type Filter Pills (Dynamic from Project) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', marginRight: 2 }}>
+              Loại:
+            </span>
+            {typeFilterOptions.map((opt) => {
+              const isSelected =
+                selectedTypeFilter === opt.key ||
+                (opt.id && selectedTypeFilter === opt.id) ||
+                (opt.code && selectedTypeFilter === opt.code);
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setSelectedTypeFilter(isSelected && opt.key !== 'ALL' ? 'ALL' : opt.key)}
+                  style={{
+                    border: isSelected && opt.key !== 'ALL' ? `1px solid ${opt.color || '#2563EB'}50` : '1px solid transparent',
+                    padding: '4px 9px',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: isSelected ? 700 : 500,
+                    backgroundColor: isSelected ? (opt.key === 'ALL' ? '#EFF6FF' : `${opt.color || '#2563EB'}15`) : '#F8FAFC',
+                    color: isSelected ? (opt.color || '#2563EB') : '#64748B',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                >
+                  {opt.color && opt.key !== 'ALL' && (
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: opt.color }} />
+                  )}
+                  <span>{opt.label}</span>
+                </button>
+              );
+            })}
           </div>
+
+          {/* Status Filter (Dynamic from Project) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>
+              Trạng thái:
+            </span>
+            <select
+              value={selectedStatusFilter}
+              onChange={(e) => setSelectedStatusFilter(e.target.value)}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 6,
+                border: selectedStatusFilter !== 'ALL' ? '1px solid #3B82F6' : '1px solid #CBD5E1',
+                backgroundColor: selectedStatusFilter !== 'ALL' ? '#EFF6FF' : '#F8FAFC',
+                color: selectedStatusFilter !== 'ALL' ? '#1D4ED8' : '#334155',
+                fontSize: 12,
+                fontWeight: selectedStatusFilter !== 'ALL' ? 700 : 500,
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="ALL">Tất cả trạng thái ({items.length})</option>
+              {statuses.map((st) => {
+                const count = items.filter(
+                  (it) =>
+                    it.statusId === st.id ||
+                    (it.statusName && st.name && it.statusName.trim().toLowerCase() === st.name.trim().toLowerCase())
+                ).length;
+                return (
+                  <option key={st.id || st.name} value={st.id || st.name}>
+                    {st.name} ({count})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Reset Filters Button */}
+          {(selectedTypeFilter !== 'ALL' || selectedStatusFilter !== 'ALL' || searchQuery) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedTypeFilter('ALL');
+                setSelectedStatusFilter('ALL');
+                setSearchQuery('');
+              }}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#EF4444',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                padding: '4px 6px',
+                borderRadius: 4,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+              title="Đặt lại tất cả bộ lọc"
+            >
+              <X size={13} />
+              <span>Xóa lọc</span>
+            </button>
+          )}
         </div>
 
         {/* Nút Tạo Công Việc Nhanh */}
@@ -289,9 +413,15 @@ export default function ProjectBoardView({
         }}
       >
         {statuses.map((st) => {
-          const columnItems = filteredItems.filter(
-            (it) => it.statusId === st.id || it.statusCategory === st.category || it.statusName === st.name
-          );
+          const columnItems = filteredItems.filter((it) => {
+            if (it.statusId && st.id && it.statusId === st.id) {
+              return true;
+            }
+            if (it.statusName && st.name && it.statusName.trim().toLowerCase() === st.name.trim().toLowerCase()) {
+              return true;
+            }
+            return false;
+          });
 
           const getCategoryColor = (cat) => {
             if (cat === 'DONE') return '#10B981';
@@ -397,8 +527,15 @@ export default function ProjectBoardView({
                 ) : (
                   columnItems.map((item) => {
                     const rawTypeCode = (item.typeCode || item.typeName || 'TASK').toUpperCase().replace('-', '_');
+                    const matchedType = types.find(
+                      (t) =>
+                        t.id === item.typeId ||
+                        (item.typeCode && t.code?.toUpperCase() === item.typeCode.toUpperCase()) ||
+                        (item.typeName && t.name?.toLowerCase() === item.typeName.toLowerCase())
+                    );
                     const typeConfig = TYPE_CONFIG[rawTypeCode] || TYPE_CONFIG[rawTypeCode.replace('_', '')] || TYPE_CONFIG.TASK;
-                    const displayTypeName = item.typeName || typeConfig.label || rawTypeCode;
+                    const displayTypeName = item.typeName || matchedType?.name || typeConfig.label || rawTypeCode;
+                    const typeColor = item.typeColor || matchedType?.colorHex || typeConfig.color || '#2563EB';
 
                     const priorityConfig = getPriorityConfig(item.priority);
                     const PriorityIcon = priorityConfig.icon;
@@ -534,9 +671,9 @@ export default function ProjectBoardView({
                                 alignItems: 'center',
                                 fontSize: 10,
                                 fontWeight: 700,
-                                color: item.typeColor || typeConfig.color,
-                                backgroundColor: typeConfig.bgColor || '#EFF6FF',
-                                border: `1px solid ${typeConfig.borderColor || '#BFDBFE'}`,
+                                color: typeColor,
+                                backgroundColor: `${typeColor}15`,
+                                border: `1px solid ${typeColor}40`,
                                 padding: '1px 6px',
                                 borderRadius: 4,
                                 lineHeight: '16px',
