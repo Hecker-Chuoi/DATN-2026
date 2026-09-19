@@ -65,6 +65,8 @@ app:
   services:
     identity:
       url: http://localhost:8082
+    workspace:
+      url: http://localhost:8087
 
 logging:
   level:

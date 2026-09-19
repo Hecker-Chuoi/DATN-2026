@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    // Proxy /identity/** to API Gateway during development.
+    // Proxy /identity/**, /work/** va /workspace/** to API Gateway during development.
     // This avoids CORS issues and mirrors the production reverse-proxy setup.
     proxy: {
       '/identity': {
@@ -14,6 +14,10 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/work': {
+        target: 'http://localhost:8081',
+        changeOrigin: true,
+      },
+      '/workspace': {
         target: 'http://localhost:8081',
         changeOrigin: true,
       },

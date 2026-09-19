@@ -7,6 +7,7 @@ import com.datn.workservice.dto.response.ProjectDetailResponse;
 import com.datn.workservice.dto.response.ProjectResponse;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface ProjectService {
@@ -28,9 +29,14 @@ public interface ProjectService {
 
     /**
      * Lists and filters projects within a workspace or team with pagination and search.
+     *
+     * @param workspaceIds phạm vi workspace được phép xem. Controller có nhiệm vụ
+     *                     giải phạm vi này (một workspace đã xác minh quyền, hoặc
+     *                     toàn bộ workspace của người gọi). Danh sách rỗng cho ra
+     *                     trang trống.
      */
     PageResponse<ProjectResponse> getAllProjects(
-            UUID workspaceId,
+            List<UUID> workspaceIds,
             UUID teamId,
             String search,
             Boolean isTemplate,
@@ -40,7 +46,7 @@ public interface ProjectService {
     /**
      * Lists template projects.
      */
-    PageResponse<ProjectResponse> getTemplates(UUID workspaceId, Pageable pageable);
+    PageResponse<ProjectResponse> getTemplates(List<UUID> workspaceIds, Pageable pageable);
 
     /**
      * Updates an existing project.

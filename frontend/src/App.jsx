@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { userTokenStore, adminTokenStore, authApi, userApi } from './api.js';
 
@@ -13,6 +13,29 @@ import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import GoogleCallback from './pages/GoogleCallback.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
+import { WorkspaceProvider } from './context/WorkspaceContext.jsx';
+import CreateWorkspaceModal from './components/workspace/CreateWorkspaceModal.jsx';
+import WorkspaceRedirect from './components/workspace/WorkspaceRedirect.jsx';
+import WorkspaceListPage from './pages/WorkspaceListPage.jsx';
+import WorkspaceMembersPage from './pages/WorkspaceMembersPage.jsx';
+import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage.jsx';
+
+/**
+ * Vỏ cho toàn bộ phần đã đăng nhập.
+ *
+ * WorkspaceProvider phải nằm TRÊN WorkspaceLayout để trang /workspaces (chưa
+ * chọn workspace nên không có sidebar) cũng đọc được danh sách workspace.
+ * CreateWorkspaceModal cũng mount ở đây, một instance duy nhất dùng chung cho cả
+ * switcher trong Sidebar và trang danh sách.
+ */
+function AuthedShell() {
+  return (
+    <WorkspaceProvider>
+      <Outlet />
+      <CreateWorkspaceModal />
+    </WorkspaceProvider>
+  );
+}
 
 function App() {
   // ─── User Workspace Auth State ───
@@ -131,7 +154,7 @@ function App() {
           path="/login"
           element={
             isUserAuth ? (
-              <Navigate to="/projects" replace />
+              <Navigate to="/" replace />
             ) : (
               <UserLoginPage onLoginSuccess={handleUserLoginSuccess} />
             )
@@ -141,7 +164,7 @@ function App() {
           path="/register"
           element={
             isUserAuth ? (
-              <Navigate to="/projects" replace />
+              <Navigate to="/" replace />
             ) : (
               <RegisterPage />
             )
@@ -152,23 +175,29 @@ function App() {
           element={<GoogleCallback onLoginSuccess={handleUserLoginSuccess} />}
         />
 
-        {/* ─── 2. User Work Management Portal (Root `/`) ─── */}
-        <Route
-          path="/"
-          element={
-            isUserAuth ? (
-              <WorkspaceLayout currentUser={currentUser} onLogout={handleUserLogout} />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        >
-          <Route index element={<Navigate to="/projects" replace />} />
-          <Route path="projects" element={<ProjectListPage />} />
-          <Route path="projects/:projectId" element={<ProjectDetailPage />} />
-          <Route path="teams/:teamId" element={<TeamDetailPage />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="settings" element={<ProfilePage />} />
+        {/* ─── 2. User Work Management Portal (`/w/:workspaceId/**`) ─── */}
+        <Route element={isUserAuth ? <AuthedShell /> : <Navigate to="/login" replace />}>
+          {/* Chưa chọn workspace -> không có sidebar */}
+          <Route path="/workspaces" element={<WorkspaceListPage />} />
+
+          {/* Root và các đường dẫn phẳng cũ: điều hướng về workspace phù hợp,
+              để link đã bookmark không bị 404. */}
+          <Route index element={<WorkspaceRedirect />} />
+          <Route path="/projects" element={<WorkspaceRedirect sub="/projects" />} />
+          <Route path="/my-issues" element={<WorkspaceRedirect sub="/my-issues" />} />
+          <Route path="/profile" element={<WorkspaceRedirect sub="/profile" />} />
+
+          <Route
+            path="/w/:workspaceId"
+            element={<WorkspaceLayout currentUser={currentUser} onLogout={handleUserLogout} />}
+          >
+            <Route index element={<Navigate to="projects" replace />} />
+            <Route path="projects" element={<ProjectListPage />} />
+            <Route path="projects/:projectId" element={<ProjectDetailPage />} />
+            <Route path="teams/:teamId" element={<TeamDetailPage />} />
+            <Route path="members" element={<WorkspaceMembersPage />} />
+            <Route path="settings" element={<WorkspaceSettingsPage />} />
+            <Route path="profile" element={<ProfilePage />} />
           <Route
             path="my-issues"
             element={
@@ -196,6 +225,7 @@ function App() {
               </div>
             }
           />
+          </Route>
         </Route>
 
         {/* ─── 3. System Admin Portal (`/admin/**`) ─── */}
@@ -228,8 +258,9 @@ function App() {
           element={<Navigate to="/register" replace />}
         />
 
-        {/* Catch-all fallback */}
-        <Route path="*" element={<Navigate to="/projects" replace />} />
+        {/* Catch-all: về workspace phù hợp thay vì đường dẫn phẳng /projects
+            (vốn không còn tồn tại sau khi workspace vào URL). */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

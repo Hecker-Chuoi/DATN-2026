@@ -111,13 +111,13 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ProjectResponse> getAllProjects(
-            UUID workspaceId,
+            List<UUID> workspaceIds,
             UUID teamId,
             String search,
             Boolean isTemplate,
             Pageable pageable
     ) {
-        Specification<Project> spec = ProjectSpecification.withFilters(workspaceId, teamId, search, isTemplate, false);
+        Specification<Project> spec = ProjectSpecification.withFilters(workspaceIds, teamId, search, isTemplate, false);
         Page<Project> page = projectRepository.findAll(spec, pageable);
 
         List<ProjectResponse> content = page.getContent().stream()
@@ -137,8 +137,8 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<ProjectResponse> getTemplates(UUID workspaceId, Pageable pageable) {
-        return getAllProjects(workspaceId, null, null, true, pageable);
+    public PageResponse<ProjectResponse> getTemplates(List<UUID> workspaceIds, Pageable pageable) {
+        return getAllProjects(workspaceIds, null, null, true, pageable);
     }
 
     @Override

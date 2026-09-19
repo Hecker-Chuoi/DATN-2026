@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { NavLink, useNavigate, useLocation, useParams } from 'react-router-dom';
 import {
   Inbox,
   CheckCircle2,
@@ -14,8 +14,12 @@ import {
   Users,
   Building2,
   Compass,
-  LogOut
+  LogOut,
+  Settings
 } from 'lucide-react';
+import WorkspaceSwitcher from '../workspace/WorkspaceSwitcher.jsx';
+import { useWorkspaceRole } from '../../hooks/useWorkspaceRole.js';
+import { wsPath } from '../../utils/workspacePath.js';
 
 const TEAM_COLORS = [
   '#EC4899', // Pink
@@ -30,7 +34,19 @@ const TEAM_COLORS = [
 export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreateProject, currentUser, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { workspaceId } = useParams();
+  const { canCreateTeam, canCreateProject, canManageWorkspace } = useWorkspaceRole();
   const [expandedTeams, setExpandedTeams] = useState({ [teams[0]?.id]: true });
+
+  // Initializer của useState chỉ chạy MỘT lần, nên state accordion bị stale ngay
+  // khi danh sách team đổi - đúng điều xảy ra mỗi lần đổi workspace. Reset lại
+  // theo workspaceId để không còn key của workspace cũ.
+  useEffect(() => {
+    setExpandedTeams(teams[0]?.id ? { [teams[0].id]: true } : {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
+
+  const ws = (sub) => wsPath(workspaceId, sub);
 
   const toggleTeam = (teamId) => {
     setExpandedTeams((prev) => ({
@@ -62,33 +78,14 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
           borderBottom: '1px solid #F1F5F9',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              backgroundColor: '#2563EB',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#FFFFFF',
-              fontWeight: 700,
-              fontSize: 14,
-              boxShadow: '0 2px 4px rgba(37,99,235,0.2)',
-            }}
-          >
-            D
-          </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 4 }}>
-              DATN Workspace
-              <ChevronDown size={14} color="#64748B" />
-            </div>
-            <div style={{ fontSize: 11, color: '#64748B' }}>Free Plan</div>
-          </div>
+        {/* Block cũ ở đây là avatar chữ "D" + chữ "DATN Workspace" + ChevronDown
+            trang trí (đang trơ) + "Free Plan", tất cả hardcode. Nó vốn đã có đúng
+            hình dạng của một switcher trigger nên được thay thẳng bằng switcher thật. */}
+        <div style={{ flex: 1, minWidth: 0, margin: '-12px -12px -8px' }}>
+          <WorkspaceSwitcher />
         </div>
 
+        {canCreateProject && (
         <button
           onClick={() => onOpenCreateProject(null)}
           title="Tạo dự án nhanh"
@@ -110,22 +107,37 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         >
           <Plus size={15} />
         </button>
+        )}
       </div>
 
       {/* ─── 2. Main Navigation Links ─── */}
       <div style={{ padding: '14px 12px 6px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
         <NavItem
-          to="/projects"
+          to={ws('/projects')}
           icon={<FolderKanban size={17} color="#2563EB" />}
           label="Projects & Board"
-          active={location.pathname.startsWith('/projects')}
+          active={location.pathname.startsWith(ws('/projects'))}
         />
         <NavItem
-          to="/my-issues"
+          to={ws('/my-issues')}
           icon={<CheckCircle2 size={17} color="#10B981" />}
           label="My tasks"
-          active={location.pathname === '/my-issues'}
+          active={location.pathname === ws('/my-issues')}
         />
+        <NavItem
+          to={ws('/members')}
+          icon={<Users size={17} color="#8B5CF6" />}
+          label="Thành viên"
+          active={location.pathname === ws('/members')}
+        />
+        {canManageWorkspace && (
+          <NavItem
+            to={ws('/settings')}
+            icon={<Settings size={17} color="#64748B" />}
+            label="Cài đặt workspace"
+            active={location.pathname === ws('/settings')}
+          />
+        )}
       </div>
 
       <div style={{ margin: '8px 16px', height: 1, backgroundColor: '#F1F5F9' }} />
@@ -146,6 +158,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
           }}
         >
           <span>Your teams</span>
+          {canCreateTeam && (
           <button
             onClick={onOpenCreateTeam}
             title="Thêm nhóm mới"
@@ -163,6 +176,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
           >
             <Plus size={14} />
           </button>
+          )}
         </div>
 
         {loading ? (
@@ -170,12 +184,14 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         ) : teams.length === 0 ? (
           <div style={{ padding: '12px 8px', fontSize: 12, color: '#94A3B8' }}>
             Chưa có nhóm nào.{' '}
-            <span
-              onClick={onOpenCreateTeam}
-              style={{ color: '#2563EB', cursor: 'pointer', fontWeight: 600 }}
-            >
-              Tạo nhóm ngay
-            </span>
+            {canCreateTeam && (
+              <span
+                onClick={onOpenCreateTeam}
+                style={{ color: '#2563EB', cursor: 'pointer', fontWeight: 600 }}
+              >
+                Tạo nhóm ngay
+              </span>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -234,13 +250,13 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
                   {isExpanded && (
                     <div style={{ paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
                       <SubNavItem
-                        to={`/teams/${team.id}`}
+                        to={ws(`/teams/${team.id}`)}
                         icon={<Home size={14} />}
                         label="Home & Members"
-                        active={location.pathname === `/teams/${team.id}`}
+                        active={location.pathname === ws(`/teams/${team.id}`)}
                       />
                       <SubNavItem
-                        to={`/projects?teamId=${team.id}`}
+                        to={ws(`/projects?teamId=${team.id}`)}
                         icon={<Layers size={14} />}
                         label="Projects"
                         active={location.search.includes(`teamId=${team.id}`)}
@@ -265,7 +281,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         }}
       >
         <div
-          onClick={() => navigate('/profile')}
+          onClick={() => navigate(ws('/profile'))}
           title="Xem thông tin tài khoản"
           style={{
             display: 'flex',
@@ -276,16 +292,16 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
             padding: '6px 8px',
             borderRadius: 8,
             cursor: 'pointer',
-            backgroundColor: location.pathname === '/profile' ? '#EFF6FF' : 'transparent',
+            backgroundColor: location.pathname === ws('/profile') ? '#EFF6FF' : 'transparent',
             transition: 'all 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            if (location.pathname !== '/profile') {
+            if (location.pathname !== ws('/profile')) {
               e.currentTarget.style.backgroundColor = '#F8FAFC';
             }
           }}
           onMouseLeave={(e) => {
-            if (location.pathname !== '/profile') {
+            if (location.pathname !== ws('/profile')) {
               e.currentTarget.style.backgroundColor = 'transparent';
             }
           }}
@@ -312,7 +328,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
               style={{
                 fontSize: 12,
                 fontWeight: 600,
-                color: location.pathname === '/profile' ? '#2563EB' : '#0F172A',
+                color: location.pathname === ws('/profile') ? '#2563EB' : '#0F172A',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',

@@ -21,12 +21,17 @@ import {
   validateProjectForm,
   PROJECT_KEY_REGEX
 } from '../../utils/projectValidation.js';
+import { useWorkspace } from '../../context/WorkspaceContext.jsx';
+import { wsPath } from '../../utils/workspacePath.js';
 
 export default function CreateProjectModal({ isOpen, onClose, teams = [], defaultTeamId = null, onProjectCreated }) {
   const navigate = useNavigate();
+  const { currentWorkspaceId, currentWorkspace } = useWorkspace();
 
+  // workspaceId KHÔNG nằm trong formData: form không bao giờ cho sửa nó, nên nó
+  // không phải state của form. Trước đây nó là hằng số hardcode
+  // 'a0000000-0000-0000-0000-000000000001' ở cả hai chỗ (khởi tạo và re-init).
   const [formData, setFormData] = useState({
-    workspaceId: 'a0000000-0000-0000-0000-000000000001', // Default workspace
     teamId: defaultTeamId || (teams[0]?.id || ''),
     name: '',
     key: '',
@@ -44,7 +49,6 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
   useEffect(() => {
     if (isOpen) {
       setFormData({
-        workspaceId: 'a0000000-0000-0000-0000-000000000001',
         teamId: defaultTeamId || (teams[0]?.id || ''),
         name: '',
         key: '',
@@ -96,10 +100,18 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
       return;
     }
 
+    // validateProjectForm chỉ kiểm name/key/endDate nên sẽ để lọt trường hợp
+    // workspace chưa tải xong; không guard ở đây thì POST đi với
+    // workspaceId: undefined và backend trả 400 khó hiểu.
+    if (!currentWorkspaceId) {
+      setErrors({ name: 'Chưa xác định được workspace. Vui lòng tải lại trang.' });
+      return;
+    }
+
     try {
       setSubmitting(true);
       const payload = {
-        workspaceId: formData.workspaceId,
+        workspaceId: currentWorkspaceId,
         teamId: formData.teamId || undefined,
         name: formData.name.trim(),
         key: formData.key.trim().toUpperCase(),
@@ -122,7 +134,7 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
 
       // Navigate to the newly created project board
       if (createdProject?.id) {
-        navigate(`/projects/${createdProject.id}`);
+        navigate(wsPath(currentWorkspaceId, `/projects/${createdProject.id}`));
       }
     } catch (err) {
       console.error('Failed to create project:', err);
@@ -191,7 +203,9 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
             <div>
               <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Tạo Dự án Mới</h2>
               <p style={{ fontSize: 12, color: '#64748B', margin: '2px 0 0 0' }}>
-                Khởi tạo không gian làm việc Scrum hoặc Kanban cho nhóm của bạn
+                {currentWorkspace?.name
+                  ? `Trong workspace ${currentWorkspace.name}`
+                  : 'Khởi tạo không gian làm việc Scrum hoặc Kanban cho nhóm của bạn'}
               </p>
             </div>
           </div>

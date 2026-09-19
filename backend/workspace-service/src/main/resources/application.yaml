@@ -1,24 +1,36 @@
 server:
-  port: 8084
+  port: 8087
 
 spring:
   application:
     name: workspace-service
 
-  # ─── PostgreSQL (datn_main_db) ───────────────────────────
+  # ─── PostgreSQL (datn_main_db) ────────────────────────
   datasource:
     url: jdbc:postgresql://localhost:5433/datn_main_db
     username: postgres
     password: 123456
     driver-class-name: org.postgresql.Driver
 
+  # ─── Flyway ───
+  # Dùng chung datn_main_db với work-service nên PHẢI có history table riêng:
+  # work-service dùng flyway_work_schema_history, hai history không thấy hàng của nhau.
+  # baseline-on-migrate: DB đã có dữ liệu sẵn (teams/projects/users) trước khi service này ra đời.
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    table: flyway_workspace_schema_history
+    locations: classpath:db/migration
+
   jpa:
     hibernate:
-      ddl-auto: update
+      # Flyway sở hữu schema. Dùng 'validate' (không phải 'none') để lệch giữa
+      # DDL và entity fail ngay lúc boot thay vì hỏng âm thầm lúc chạy.
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
   # ─── OAuth2 Resource Server (Keycloak Token Validation) ──
@@ -29,7 +41,7 @@ spring:
           jwk-set-uri: http://localhost:8088/realms/datn-realm/protocol/openid-connect/certs
           issuer-uri: http://localhost:8088/realms/datn-realm
 
-  # ─── Redis Caching & Ephemeral State ───
+  # ─── Redis (cache sub -> users.id của CurrentUserResolver) ───
   data:
     redis:
       host: localhost
@@ -45,5 +57,5 @@ app:
 logging:
   level:
     root: INFO
-    com.datn.workservice: DEBUG
+    com.datn.workspaceservice: DEBUG
     org.hibernate.SQL: DEBUG

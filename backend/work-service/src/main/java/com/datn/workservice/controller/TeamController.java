@@ -5,7 +5,9 @@ import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ForbiddenException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.client.IdentityClient;
+import com.datn.workservice.client.WorkspaceClient;
 import com.datn.workservice.client.dto.UserResponse;
+import com.datn.workservice.dto.request.CreateTeamRequest;
 import com.datn.workservice.dto.response.TeamMemberResponse;
 import com.datn.workservice.entity.Project;
 import com.datn.workservice.entity.Team;
@@ -15,6 +17,8 @@ import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.repository.TeamRepository;
 import com.datn.workservice.security.SecurityUtils;
+import com.datn.workservice.security.WorkspaceAccessChecker;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -34,14 +38,21 @@ public class TeamController {
     private final TeamMemberRepository teamMemberRepository;
     private final ProjectRepository projectRepository;
     private final IdentityClient identityClient;
+    private final WorkspaceAccessChecker workspaceAccessChecker;
 
     /**
-     * Lấy danh sách tất cả các Team trong hệ thống (Dành cho Admin / Quản trị hệ sinh thái)
+     * Danh sách Team TRONG MỘT workspace.
+     * <p>
+     * workspaceId là BẮT BUỘC. Trước đây method này trả về teamRepository.findAll()
+     * - tức mọi team trong toàn hệ thống, cho bất kỳ ai đã đăng nhập, không có
+     * ranh giới tenant nào.
      */
     @GetMapping
-    public ResponseEntity<ApiResponse<List<Team>>> listAllTeams() {
-        List<Team> allTeams = teamRepository.findAll();
-        return ResponseEntity.ok(ApiResponse.success(allTeams));
+    public ResponseEntity<ApiResponse<List<Team>>> listTeamsInWorkspace(
+            @RequestParam("workspaceId") UUID workspaceId) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        workspaceAccessChecker.requireMember(workspaceId, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(teamRepository.findByWorkspaceId(workspaceId)));
     }
 
     /**
@@ -49,7 +60,8 @@ public class TeamController {
      * Dùng hiển thị trên Sidebar và danh sách nhóm của người dùng.
      */
     @GetMapping({"/my", "/me"})
-    public ResponseEntity<ApiResponse<List<Team>>> listMyTeams() {
+    public ResponseEntity<ApiResponse<List<Team>>> listMyTeams(
+            @RequestParam(value = "workspaceId", required = false) UUID workspaceId) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
         Set<UUID> userIds = getUserAliasIds(currentUserId);
         Set<UUID> teamIds = new HashSet<>();
@@ -64,6 +76,17 @@ public class TeamController {
         }
 
         List<Team> teams = teamRepository.findByIdIn(teamIds);
+
+        // Lọc theo workspace đang xem. Không có bước này thì đổi workspace trên
+        // UI vẫn thấy y nguyên danh sách team cũ, và tính năng multi-workspace
+        // chỉ là trang trí.
+        if (workspaceId != null) {
+            workspaceAccessChecker.requireMember(workspaceId, currentUserId);
+            teams = teams.stream()
+                    .filter(t -> workspaceId.equals(t.getWorkspaceId()))
+                    .toList();
+        }
+
         return ResponseEntity.ok(ApiResponse.success(teams));
     }
 
@@ -74,28 +97,39 @@ public class TeamController {
         return ResponseEntity.ok(ApiResponse.success(team));
     }
 
+    /**
+     * Tạo Team trong một workspace.
+     * <p>
+     * Đổi từ Map sang CreateTeamRequest có kiểu: DTO này đã tồn tại sẵn với
+     * NotNull workspaceId nhưng trước đây là dead code, nên Valid không bao giờ
+     * chạy và workspaceId bị nhét bằng chính user id của người tạo
+     * (comment cũ: "Placeholder workspace"). ĐÂY LÀ BREAKING CHANGE với frontend:
+     * body bắt buộc phải có workspaceId.
+     */
+    @Transactional
     @PostMapping
-    public ResponseEntity<ApiResponse<Team>> createTeam(@RequestBody Map<String, String> body) {
+    public ResponseEntity<ApiResponse<Team>> createTeam(@Valid @RequestBody CreateTeamRequest request) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
+
+        // GUEST và người ngoài không được tạo team trong workspace.
+        workspaceAccessChecker.requireAtLeast(request.getWorkspaceId(), currentUserId, "MEMBER");
+
         Team team = Team.builder()
-                .name(body.getOrDefault("name", "Nhóm mới"))
-                .description(body.get("description"))
+                .name(request.getName())
+                .description(request.getDescription())
                 .ownerId(currentUserId)
-                .workspaceId(currentUserId) // Placeholder workspace
+                .workspaceId(request.getWorkspaceId())
                 .build();
         Team saved = teamRepository.save(team);
 
-        // Automatically assign creator as LEADER
-        try {
-            TeamMember leader = TeamMember.builder()
-                    .teamId(saved.getId())
-                    .userId(currentUserId)
-                    .role(TeamRole.LEADER)
-                    .build();
-            teamMemberRepository.save(leader);
-        } catch (Exception ex) {
-            log.warn("Could not save initial team leader: {}", ex.getMessage());
-        }
+        // Người tạo là LEADER. KHÔNG bọc try/catch như trước: một team không có
+        // leader nào chính là trạng thái brick mà không ai còn quyền sửa vai trò,
+        // nên nếu bước này lỗi thì phải rollback cả việc tạo team.
+        teamMemberRepository.save(TeamMember.builder()
+                .teamId(saved.getId())
+                .userId(currentUserId)
+                .role(TeamRole.LEADER)
+                .build());
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(saved, "Tạo nhóm thành công"));

@@ -3,12 +3,20 @@ package com.datn.workservice.specification;
 import com.datn.workservice.entity.Project;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.util.List;
 import java.util.UUID;
 
 public class ProjectSpecification extends BaseSpecification {
 
+    /**
+     * @param workspaceIds phạm vi workspace được phép xem. null = không giới hạn
+     *                     (chỉ dùng cho lời gọi nội bộ), danh sách rỗng = không
+     *                     có quyền ở đâu nên trả trang trống. Trước đây tham số
+     *                     này là một UUID optional và không được enforce, nên bỏ
+     *                     trống nó là liệt kê MỌI project trong hệ thống.
+     */
     public static Specification<Project> withFilters(
-            UUID workspaceId,
+            List<UUID> workspaceIds,
             UUID teamId,
             String search,
             Boolean isTemplate,
@@ -16,8 +24,8 @@ public class ProjectSpecification extends BaseSpecification {
     ) {
         Specification<Project> spec = (root, query, cb) -> cb.conjunction();
 
-        if (workspaceId != null) {
-            spec = spec.and(hasFieldEqual("workspaceId", workspaceId));
+        if (workspaceIds != null) {
+            spec = spec.and(hasFieldIn("workspaceId", workspaceIds));
         }
 
         if (teamId != null) {
