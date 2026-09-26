@@ -75,7 +75,7 @@ public class ProjectPermissionGuard {
                 log.warn("Access denied: cannot resolve projectId for method {}", signature.toShortString());
                 throw new AccessDeniedException("Không xác định được dự án để kiểm tra quyền");
             }
-            check(projectId, currentUserId, requireProjectPerm.value(), "trong dự án");
+            check(projectId, currentUserId, requireProjectPerm.value(), "trên dự án");
         }
 
         if (requireTaskPerm != null) {

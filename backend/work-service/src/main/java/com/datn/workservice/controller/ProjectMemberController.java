@@ -24,6 +24,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProjectMemberController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET    /api/v1/work/projects/{projectId}/permissions/my         : Lấy quyền của người dùng hiện tại trong dự án
+     * GET    /api/v1/work/projects/{projectId}/members                : Lấy danh sách thành viên & vai trò trong dự án
+     * POST   /api/v1/work/projects/{projectId}/members                : Thêm thành viên vào dự án (Project Admin)
+     * PUT    /api/v1/work/projects/{projectId}/members/{userId}/role  : Cập nhật vai trò thành viên (Project Admin)
+     * DELETE /api/v1/work/projects/{projectId}/members/{userId}       : Xóa thành viên khỏi dự án (Project Admin)
+     * GET    /api/v1/work/projects/{projectId}/roles                  : Lấy danh sách vai trò của dự án
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final ProjectMemberService projectMemberService;
 
     /**
@@ -39,7 +50,7 @@ public class ProjectMemberController {
     }
 
     /**
-     * Retrieves all members and roles in this project.
+     * Lấy danh sách tất cả thành viên và vai trò trong dự án.
      */
     @GetMapping("/members")
     @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
@@ -51,7 +62,7 @@ public class ProjectMemberController {
     }
 
     /**
-     * Adds a member with role to this project.
+     * Thêm thành viên mới (kèm vai trò) vào dự án.
      */
     @PostMapping("/members")
     @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
@@ -66,7 +77,7 @@ public class ProjectMemberController {
     }
 
     /**
-     * Updates an existing member's role in this project.
+     * Cập nhật vai trò của thành viên đã tồn tại trong dự án.
      */
     @PutMapping("/members/{userId}/role")
     @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
@@ -82,7 +93,7 @@ public class ProjectMemberController {
     }
 
     /**
-     * Removes a member from this project.
+     * Xóa thành viên khỏi dự án.
      */
     @DeleteMapping("/members/{userId}")
     @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
@@ -96,7 +107,7 @@ public class ProjectMemberController {
     }
 
     /**
-     * Retrieves all project roles.
+     * Lấy danh sách tất cả vai trò của dự án.
      */
     @GetMapping("/roles")
     @RequireProjectPermission(PermissionKey.PROJECT_VIEW)

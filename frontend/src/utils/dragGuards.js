@@ -35,7 +35,7 @@ export function validateHierarchyDrop(draggedItem, targetParent) {
     if (parentLevel !== null) {
       return {
         allowed: false,
-        reason: 'Epic (Sáng kiến lớn) là cấp cao nhất, không thể nằm trong công việc khác!',
+        reason: 'Epic (Hạng mục lớn) là cấp cao nhất, không thể nằm trong công việc khác!',
         icon: 'Ban',
       };
     }

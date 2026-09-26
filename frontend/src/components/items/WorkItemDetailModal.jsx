@@ -34,31 +34,27 @@ import {
   FileArchive,
   Code as CodeIcon,
   Search,
-  Check
+  Check,
+  AlertTriangle,
+  Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workItemApi } from '../../api.js';
 import MemberSelect from '../common/MemberSelect.jsx';
+import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
+import ResolveSubtasksModal from '../modals/ResolveSubtasksModal.jsx';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
+import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
 
 const TYPE_ICONS = {
-  EPIC: { icon: Bookmark, color: '#6554C0', label: 'Epic' },
-  STORY: { icon: Bookmark, color: '#36B37E', label: 'Story' },
-  TASK: { icon: CheckSquare, color: '#0052CC', label: 'Task' },
-  BUG: { icon: CircleDot, color: '#E5493A', label: 'Bug' },
-  SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Sub-task' },
+  EPIC: { icon: Bookmark, color: '#6554C0', label: 'Hạng mục lớn' },
+  STORY: { icon: Bookmark, color: '#36B37E', label: 'Câu chuyện người dùng' },
+  TASK: { icon: CheckSquare, color: '#0052CC', label: 'Nhiệm vụ' },
+  BUG: { icon: CircleDot, color: '#E5493A', label: 'Lỗi phần mềm' },
+  SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Nhiệm vụ con' },
 };
 
-export default function WorkItemDetailModal({
-  itemId: initialItemId,
-  isOpen,
-  onClose,
-  onItemUpdated,
-  members = [],
-  currentUserId = null,
-  // Hàm kiểm tra quyền trong dự án (từ useProjectPermission). Mặc định từ chối để không lộ nút thao tác.
-  can = () => false,
-}) {
+export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [] }) {
   const [currentId, setCurrentId] = useState(initialItemId);
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -73,6 +69,9 @@ export default function WorkItemDetailModal({
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
+  const [showResolveSubtasksModal, setShowResolveSubtasksModal] = useState(false);
+  const [pendingTransitionId, setPendingTransitionId] = useState(null);
+  const [isResolvingSubtasks, setIsResolvingSubtasks] = useState(false);
 
   // Collaboration state
   const [comments, setComments] = useState([]);
@@ -218,13 +217,18 @@ export default function WorkItemDetailModal({
     }
   };
 
-  const handleExecuteTransition = async (transitionId) => {
+  const handleExecuteTransition = async (transitionId, resolveAllSubtasks = false) => {
     if (!transitionId) return;
     try {
+      if (resolveAllSubtasks) {
+        setIsResolvingSubtasks(true);
+      }
       setShowStatusDropdown(false);
-      const res = await workItemApi.executeTransition(currentId, transitionId, { comment: '' });
+      const res = await workItemApi.executeTransition(currentId, transitionId, { comment: '', resolveAllSubtasks });
       if (res && res.data) {
-        toast.success('Đã chuyển trạng thái thành công');
+        toast.success(resolveAllSubtasks ? 'Đã hoàn thành tất cả nhiệm vụ con và công việc cha!' : 'Đã chuyển trạng thái thành công');
+        setShowResolveSubtasksModal(false);
+        setPendingTransitionId(null);
         fetchDetail(currentId);
         fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
@@ -232,6 +236,8 @@ export default function WorkItemDetailModal({
     } catch (err) {
       console.error('Failed to transition item:', err);
       toast.error(err.response?.data?.message || err.message || 'Không thể chuyển trạng thái');
+    } finally {
+      setIsResolvingSubtasks(false);
     }
   };
 
@@ -428,8 +434,15 @@ export default function WorkItemDetailModal({
         size: 10,
       });
       const list = res?.data?.content || res?.data || [];
-      // Exclude current item
-      setLinkSearchResults(list.filter((it) => it.id !== currentId));
+      // Exclude: current item, parent item, and direct subtasks/children (Anti-Self-Parent rule)
+      const filtered = list.filter((it) => {
+        if (it.id === currentId) return false;
+        if (item?.parentId && it.id === item.parentId) return false;
+        if (item?.subtasks?.some((st) => st.id === it.id)) return false;
+        if (item?.childStories?.some((cs) => cs.id === it.id)) return false;
+        return true;
+      });
+      setLinkSearchResults(filtered);
     } catch (err) {
       console.debug('Failed to search link candidates:', err);
     } finally {
@@ -442,6 +455,18 @@ export default function WorkItemDetailModal({
       toast.error('Vui lòng chọn một công việc để liên kết');
       return;
     }
+
+    // Scale Mismatch check for BLOCKS between Epic and Subtask
+    const isCurrentEpic = item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC';
+    const isCurrentSubtask = item?.hierarchyLevel === -1 || item?.isSubtask || item?.typeCode === 'SUBTASK';
+    const isTargetEpic = selectedTargetItem?.hierarchyLevel === 1 || selectedTargetItem?.typeCode === 'EPIC';
+    const isTargetSubtask = selectedTargetItem?.hierarchyLevel === -1 || selectedTargetItem?.isSubtask || selectedTargetItem?.typeCode === 'SUBTASK';
+
+    if (linkRelationType === 'BLOCKS' && ((isCurrentEpic && isTargetSubtask) || (isCurrentSubtask && isTargetEpic))) {
+      toast.error('Không thể tạo liên kết BLOCKS trực tiếp giữa Epic và Sub-task (Scale Mismatch). Vui lòng liên kết ở cấp độ Story/Task.');
+      return;
+    }
+
     setIsCreatingLink(true);
     try {
       await workItemApi.createLink(currentId, {
@@ -492,22 +517,6 @@ export default function WorkItemDetailModal({
     if (diffDays < 7) return `${diffDays} ngày trước`;
     return date.toLocaleDateString('vi-VN');
   };
-
-  // ─── Quyền thao tác (ẩn/hiện UI; backend vẫn kiểm tra lại) ───
-  const canEdit = can('ISSUE_EDIT');
-  const canCreate = can('ISSUE_CREATE');
-  const canTransition = can('ISSUE_TRANSITION');
-  const canAssign = can('ISSUE_ASSIGN');
-  const canComment = can('COMMENT_CREATE');
-  const canEditOwnComment = can('COMMENT_EDIT_OWN');
-  const canDeleteOwnComment = can('COMMENT_DELETE_OWN');
-  const canDeleteAllComments = can('COMMENT_DELETE_ALL');
-  const canDeleteOwnAttachment = can('ATTACHMENT_DELETE_OWN');
-  const canDeleteAllAttachments = can('ATTACHMENT_DELETE_ALL');
-  const isMine = (ownerId) => Boolean(currentUserId && ownerId && String(ownerId) === String(currentUserId));
-  const canEditComment = (c) => isMine(c.authorId) && canEditOwnComment;
-  const canDeleteComment = (c) => (isMine(c.authorId) && canDeleteOwnComment) || canDeleteAllComments;
-  const canDeleteAttachment = (att) => (isMine(att.uploadedBy) && canDeleteOwnAttachment) || canDeleteAllAttachments;
 
   const priorityInfo = getPriorityConfig(item?.priority);
   const PriorityIcon = priorityInfo.icon;
@@ -580,23 +589,44 @@ export default function WorkItemDetailModal({
               <span style={{ fontWeight: 700, color: '#2563EB', fontSize: 14 }}>{item?.code || '...'}</span>
             </div>
 
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '3px 8px',
-                borderRadius: 6,
-                backgroundColor: typeInfo.color ? `${typeInfo.color}15` : '#EFF6FF',
-                border: `1px solid ${typeInfo.color ? `${typeInfo.color}40` : '#BFDBFE'}`,
-                color: typeInfo.color || '#2563EB',
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              <TypeIcon size={14} color={typeInfo.color} />
-              <span>{item?.typeName || typeInfo.label}</span>
-            </div>
+            {(() => {
+              const displayColor = item?.typeColor || typeInfo.color || '#2563EB';
+              const lvl = item?.hierarchyLevel;
+              const lvlLabel = lvl === 1 ? 'Cấp 1 • Hạng mục lớn' : lvl === 0 ? 'Cấp 0 • Tiêu chuẩn' : lvl === -1 ? 'Cấp -1 • Nhiệm vụ con' : null;
+              return (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '3px 8px',
+                    borderRadius: 6,
+                    backgroundColor: `${displayColor}15`,
+                    border: `1px solid ${displayColor}40`,
+                    color: displayColor,
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  <TypeIcon size={14} color={displayColor} />
+                  <span>{getTypeDisplayName(item?.typeName || typeInfo.label)}</span>
+                  {lvlLabel && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        backgroundColor: `${displayColor}25`,
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      {lvlLabel}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
 
             {item?.parentCode && (
               <div
@@ -631,28 +661,26 @@ export default function WorkItemDetailModal({
 
           {/* Action Buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {canEdit && (
-              <button
-                onClick={() => setShowLinkModal(true)}
-                style={{
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#FFFFFF',
-                  padding: '5px 10px',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  color: '#334155',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
-                title="Thêm liên kết công việc"
-              >
-                <Link2 size={14} color="#2563EB" />
-                <span>Link issue</span>
-              </button>
-            )}
+            <button
+              onClick={() => setShowLinkModal(true)}
+              style={{
+                border: '1px solid #CBD5E1',
+                backgroundColor: '#FFFFFF',
+                padding: '5px 10px',
+                borderRadius: 6,
+                cursor: 'pointer',
+                color: '#334155',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+              title="Thêm liên kết công việc"
+            >
+              <Link2 size={14} color="#2563EB" />
+              <span>Liên kết công việc</span>
+            </button>
             <button
               onClick={() => {
                 navigator.clipboard.writeText(window.location.href);
@@ -693,7 +721,7 @@ export default function WorkItemDetailModal({
         {/* ─── Modal Body (2 Columns Layout) ─── */}
         {loading ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>
-            Đang tải dữ liệu chi tiết Issue...
+            Đang tải dữ liệu chi tiết công việc...
           </div>
         ) : (
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -706,9 +734,134 @@ export default function WorkItemDetailModal({
                 borderRight: '1px solid #E2E8F0',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 24,
+                gap: 20,
               }}
             >
+              {/* ─── Warning Banners ─── */}
+              {item?.isBlocked && (
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#FEF2F2',
+                    border: '1px solid #FCA5A5',
+                    borderRadius: 8,
+                    color: '#991B1B',
+                    fontSize: 13,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
+                    <Lock size={16} color="#DC2626" />
+                    <span>CÔNG VIỆC ĐANG BỊ CẢN TRỞ</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#B91C1C', lineHeight: 1.5 }}>
+                    Công việc này không thể chuyển sang <strong>Đang thực hiện</strong> hoặc <strong>Hoàn thành</strong> vì đang bị cản trở bởi các công việc chưa xong:
+                  </div>
+                  {item?.blockingWorkItems && item.blockingWorkItems.length > 0 && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                      {item.blockingWorkItems.map((b) => (
+                        <span
+                          key={b.id}
+                          onClick={() => setCurrentId(b.id)}
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            backgroundColor: '#FFFFFF',
+                            border: '1px solid #FECACA',
+                            color: '#B91C1C',
+                            fontWeight: 600,
+                            fontSize: 12,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                          title={`Mở công việc cản trở: ${b.summary}`}
+                        >
+                          <Lock size={11} />
+                          <span>[{b.code}] {b.summary}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {item?.hasTimelineConflict && (
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#FFFBEB',
+                    border: '1px solid #FCD34D',
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    color: '#92400E',
+                    fontSize: 13,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <AlertTriangle size={18} color="#D97706" style={{ flexShrink: 0 }} />
+                    <div>
+                      <strong>Cảnh báo lệch hạn: </strong>
+                      <span>{item.timelineConflictMessage || 'Hạn chót của công việc con vượt quá hạn chót của công việc cha'}</span>
+                    </div>
+                  </div>
+                  {item?.parentId && item?.parent?.dueDate && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await workItemApi.update(currentId, { dueDate: item.parent.dueDate });
+                          toast.success(`Đã đồng bộ hạn chót theo công việc cha (${item.parent.dueDate})`);
+                          fetchDetail(currentId);
+                          fetchChangelogs(currentId);
+                        } catch (err) {
+                          toast.error('Lỗi khi đồng bộ hạn chót');
+                        }
+                      }}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: 6,
+                        border: '1px solid #F59E0B',
+                        backgroundColor: '#FFFFFF',
+                        color: '#B45309',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                      }}
+                    >
+                      Đồng bộ hạn theo công việc cha ({item.parent.dueDate})
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {item?.hasDependencyConflict && (
+                <div
+                  style={{
+                    padding: '10px 16px',
+                    backgroundColor: '#EFF6FF',
+                    border: '1px solid #BFDBFE',
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    color: '#1E40AF',
+                    fontSize: 13,
+                  }}
+                >
+                  <AlertCircle size={17} color="#2563EB" style={{ flexShrink: 0 }} />
+                  <span>{item.dependencyConflictMessage || 'Xung đột thời gian: Công việc cản trở kết thúc sau ngày bắt đầu dự kiến của công việc này'}</span>
+                </div>
+              )}
+
               {/* Summary */}
               <div>
                 {isEditingSummary ? (
@@ -732,18 +885,18 @@ export default function WorkItemDetailModal({
                   />
                 ) : (
                   <h2
-                    onClick={() => canEdit && setIsEditingSummary(true)}
+                    onClick={() => setIsEditingSummary(true)}
                     style={{
                       fontSize: 20,
                       fontWeight: 700,
                       color: '#0F172A',
-                      cursor: canEdit ? 'pointer' : 'default',
+                      cursor: 'pointer',
                       padding: '4px 0',
                       lineHeight: 1.3,
                     }}
-                    title={canEdit ? 'Click để chỉnh sửa tiêu đề' : undefined}
+                    title="Click để chỉnh sửa tiêu đề"
                   >
-                    {item?.summary || 'Untitled Issue'}
+                    {item?.summary || 'Chưa có tiêu đề'}
                   </h2>
                 )}
               </div>
@@ -751,8 +904,8 @@ export default function WorkItemDetailModal({
               {/* Description */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Description (Mô tả chi tiết)</span>
-                  {!isEditingDescription && canEdit && (
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Mô tả chi tiết</span>
+                  {!isEditingDescription && (
                     <button
                       onClick={() => setIsEditingDescription(true)}
                       style={{
@@ -825,21 +978,21 @@ export default function WorkItemDetailModal({
                   </div>
                 ) : (
                   <div
-                    onClick={() => canEdit && setIsEditingDescription(true)}
+                    onClick={() => setIsEditingDescription(true)}
                     style={{
                       padding: 12,
                       backgroundColor: '#F8FAFC',
                       borderRadius: 6,
                       fontSize: 13,
                       color: item?.description ? '#334155' : '#94A3B8',
-                      cursor: canEdit ? 'pointer' : 'default',
+                      cursor: 'pointer',
                       minHeight: 56,
                       lineHeight: 1.6,
                       whiteSpace: 'pre-wrap',
                       border: '1px solid #E2E8F0',
                     }}
                   >
-                    {item?.description || (canEdit ? 'Chưa có mô tả chi tiết. Bấm vào đây để thêm...' : 'Chưa có mô tả chi tiết.')}
+                    {item?.description || 'Chưa có mô tả chi tiết. Bấm vào đây để thêm...'}
                   </div>
                 )}
               </div>
@@ -850,29 +1003,27 @@ export default function WorkItemDetailModal({
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Link2 size={16} color="#2563EB" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Linked Issues</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Công việc liên kết</span>
                       <span style={{ fontSize: 11, backgroundColor: '#EFF6FF', color: '#2563EB', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
                         {links.length}
                       </span>
                     </div>
-                    {canEdit && (
-                      <button
-                        onClick={() => setShowLinkModal(true)}
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          color: '#2563EB',
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 3,
-                        }}
-                      >
-                        <Plus size={13} /> Thêm liên kết
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setShowLinkModal(true)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#2563EB',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 3,
+                      }}
+                    >
+                      <Plus size={13} /> Thêm liên kết
+                    </button>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -938,23 +1089,21 @@ export default function WorkItemDetailModal({
                                     color: lnk.linkedItemStatusColorHex || '#2563EB',
                                   }}
                                 >
-                                  {lnk.linkedItemStatusName || 'TO DO'}
+                                  {getStatusDisplayName(lnk.linkedItemStatusName || 'Cần làm')}
                                 </span>
-                                {canEdit && (
-                                  <button
-                                    onClick={() => handleDeleteLink(lnk.id)}
-                                    style={{
-                                      border: 'none',
-                                      background: 'transparent',
-                                      cursor: 'pointer',
-                                      color: '#94A3B8',
-                                      padding: 2,
-                                    }}
-                                    title="Gỡ bỏ liên kết"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => handleDeleteLink(lnk.id)}
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    cursor: 'pointer',
+                                    color: '#94A3B8',
+                                    padding: 2,
+                                  }}
+                                  title="Gỡ bỏ liên kết"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
                               </div>
                             </div>
                           );
@@ -965,170 +1114,262 @@ export default function WorkItemDetailModal({
                 </div>
               )}
 
-              {/* Sub-tasks Section */}
-              <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Sub-tasks</span>
-                    {subtaskTotal > 0 && (
-                      <span style={{ fontSize: 12, color: '#64748B' }}>
-                        {subtaskDone} of {subtaskTotal} completed ({Math.round(progressPercent)}%)
-                      </span>
-                    )}
-                  </div>
-                  {!isAddingSubtask && canCreate && (
-                    <button
-                      onClick={() => setIsAddingSubtask(true)}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: '#2563EB',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                      }}
-                    >
-                      <Plus size={14} />
-                      <span>Thêm Subtask</span>
-                    </button>
-                  )}
-                </div>
-
-                {subtaskTotal > 0 && (
-                  <div
-                    style={{
-                      height: 6,
-                      backgroundColor: '#E2E8F0',
-                      borderRadius: 3,
-                      overflow: 'hidden',
-                      marginBottom: 12,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${progressPercent}%`,
-                        height: '100%',
-                        backgroundColor: '#10B981',
-                        transition: 'width 0.3s ease',
-                      }}
-                    />
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {item?.subtasks?.map((sub) => {
-                    const isDone = sub.statusCategory === 'DONE';
-                    return (
-                      <div
-                        key={sub.id}
+              {/* Sub-tasks Section (Only for Level 0 Standard items, not Epics) */}
+              {(item?.hierarchyLevel !== 1 && item?.typeCode !== 'EPIC') && (
+                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Nhiệm vụ con</span>
+                      {subtaskTotal > 0 && (
+                        <span style={{ fontSize: 12, color: '#64748B' }}>
+                          {subtaskDone}/{subtaskTotal} hoàn thành ({Math.round(progressPercent)}%)
+                        </span>
+                      )}
+                    </div>
+                    {!isAddingSubtask && (
+                      <button
+                        onClick={() => setIsAddingSubtask(true)}
                         style={{
+                          border: 'none',
+                          background: 'transparent',
+                          color: '#2563EB',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '8px 12px',
-                          backgroundColor: '#F8FAFC',
-                          borderRadius: 6,
-                          border: '1px solid #E2E8F0',
-                          fontSize: 13,
+                          gap: 4,
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <CheckCircle2
-                            size={16}
-                            color={isDone ? '#10B981' : '#94A3B8'}
-                            style={{ cursor: 'pointer' }}
-                          />
-                          <span
-                            onClick={() => setCurrentId(sub.id)}
-                            style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', cursor: 'pointer' }}
-                          >
-                            {sub.code}
-                          </span>
-                          <span
-                            style={{
-                              color: isDone ? '#94A3B8' : '#0F172A',
-                              textDecoration: isDone ? 'line-through' : 'none',
-                            }}
-                          >
-                            {sub.summary}
-                          </span>
-                        </div>
-                        <span
+                        <Plus size={14} />
+                        <span>Thêm nhiệm vụ con</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {subtaskTotal > 0 && (
+                    <div
+                      style={{
+                        height: 6,
+                        backgroundColor: '#E2E8F0',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        marginBottom: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${progressPercent}%`,
+                          height: '100%',
+                          backgroundColor: '#10B981',
+                          transition: 'width 0.3s ease',
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {item?.subtasks?.map((sub) => {
+                      const isDone = sub.statusCategory === 'DONE';
+                      return (
+                        <div
+                          key={sub.id}
                           style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            padding: '2px 8px',
-                            borderRadius: 4,
-                            backgroundColor: sub.statusColorHex ? `${sub.statusColorHex}15` : '#EFF6FF',
-                            color: sub.statusColorHex || '#2563EB',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '8px 12px',
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: 6,
+                            border: '1px solid #E2E8F0',
+                            fontSize: 13,
                           }}
                         >
-                          {sub.statusName || 'TO DO'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <CheckCircle2
+                              size={16}
+                              color={isDone ? '#10B981' : '#94A3B8'}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            <span
+                              onClick={() => setCurrentId(sub.id)}
+                              style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', cursor: 'pointer' }}
+                            >
+                              {sub.code}
+                            </span>
+                            <span
+                              style={{
+                                color: isDone ? '#94A3B8' : '#0F172A',
+                                textDecoration: isDone ? 'line-through' : 'none',
+                              }}
+                            >
+                              {sub.summary}
+                            </span>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              backgroundColor: sub.statusColorHex ? `${sub.statusColorHex}20` : '#E2E8F0',
+                              color: sub.statusColorHex || '#475569',
+                            }}
+                          >
+                            {getStatusDisplayName(sub.statusName)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                {isAddingSubtask && (
-                  <form onSubmit={handleAddSubtask} style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                    <input
-                      type="text"
-                      value={newSubtaskTitle}
-                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                      placeholder="Nhập tiêu đề Sub-task..."
-                      autoFocus
-                      style={{
-                        flex: 1,
-                        fontSize: 13,
-                        padding: '6px 10px',
-                        borderRadius: 6,
-                        border: '1px solid #2563EB',
-                        outline: 'none',
-                      }}
-                    />
-                    <button
-                      type="submit"
-                      style={{
-                        backgroundColor: '#2563EB',
-                        color: '#FFFFFF',
-                        border: 'none',
-                        padding: '6px 14px',
-                        borderRadius: 6,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Tạo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingSubtask(false)}
-                      style={{
-                        backgroundColor: '#F1F5F9',
-                        color: '#475569',
-                        border: 'none',
-                        padding: '6px 14px',
-                        borderRadius: 6,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Hủy
-                    </button>
-                  </form>
-                )}
-              </div>
+                  {isAddingSubtask && (
+                    <form onSubmit={handleAddSubtask} style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                      <input
+                        type="text"
+                        value={newSubtaskTitle}
+                        onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                        placeholder="Nhập tiêu đề nhiệm vụ con..."
+                        autoFocus
+                        style={{
+                          flex: 1,
+                          fontSize: 13,
+                          padding: '6px 10px',
+                          borderRadius: 6,
+                          border: '1px solid #2563EB',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        style={{
+                          backgroundColor: '#2563EB',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          padding: '6px 14px',
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Tạo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingSubtask(false)}
+                        style={{
+                          backgroundColor: '#F1F5F9',
+                          color: '#475569',
+                          border: 'none',
+                          padding: '6px 14px',
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Hủy
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* ─── Epic Child Stories & Progress (Step 5.5) ─── */}
+              {(item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC') && (
+                <div style={{ border: '1px solid #E9D5FF', backgroundColor: '#FAF5FF', borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Bookmark size={16} color="#6554C0" />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#581C87' }}>
+                        Công việc trực thuộc Hạng mục lớn ({item?.childStories?.length || 0})
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#6554C0' }}>
+                      {item?.doneStoryPoints || 0} / {item?.totalStoryPoints || 0} điểm ước lượng hoàn thành
+                    </div>
+                  </div>
+
+                  {/* Epic Progress Bar */}
+                  {item?.totalStoryPoints > 0 && (
+                    <div style={{ width: '100%', height: 6, backgroundColor: '#E9D5FF', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
+                      <div
+                        style={{
+                          width: `${Math.min(100, Math.round(((item.doneStoryPoints || 0) / item.totalStoryPoints) * 100))}%`,
+                          height: '100%',
+                          backgroundColor: '#6554C0',
+                          transition: 'width 0.3s ease',
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Child Stories List */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {item?.childStories && item.childStories.length > 0 ? (
+                      item.childStories.map((cs) => {
+                        const isDone = cs.statusCategory === 'DONE';
+                        return (
+                          <div
+                            key={cs.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '8px 12px',
+                              backgroundColor: '#FFFFFF',
+                              borderRadius: 6,
+                              border: '1px solid #E9D5FF',
+                              fontSize: 13,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span
+                                onClick={() => setCurrentId(cs.id)}
+                                style={{ fontSize: 12, fontWeight: 700, color: '#6554C0', cursor: 'pointer' }}
+                              >
+                                {cs.code}
+                              </span>
+                              <span style={{ color: isDone ? '#94A3B8' : '#0F172A', textDecoration: isDone ? 'line-through' : 'none' }}>
+                                {cs.summary}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {cs.storyPoints != null && (
+                                <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4, backgroundColor: '#F3F0FF', color: '#6554C0' }}>
+                                  {cs.storyPoints} điểm
+                                </span>
+                              )}
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  padding: '2px 8px',
+                                  borderRadius: 4,
+                                  backgroundColor: cs.statusColorHex ? `${cs.statusColorHex}15` : '#EFF6FF',
+                                  color: cs.statusColorHex || '#2563EB',
+                                }}
+                              >
+                                {getStatusDisplayName(cs.statusName || 'Cần làm')}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div style={{ fontSize: 12, color: '#7E22CE', fontStyle: 'italic' }}>
+                        Chưa có công việc con nào được gắn vào Hạng mục lớn này.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* ─── Activity Tabs (Comments, Attachments, History) ─── */}
               <div style={{ marginTop: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20, borderBottom: '1px solid #E2E8F0', paddingBottom: 8, marginBottom: 16 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Activity:</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Hoạt động:</span>
                   <button
                     onClick={() => setActiveTab('comments')}
                     style={{
@@ -1142,7 +1383,7 @@ export default function WorkItemDetailModal({
                       paddingBottom: 4,
                     }}
                   >
-                    Comments ({comments.length})
+                    Bình luận ({comments.length})
                   </button>
                   <button
                     onClick={() => setActiveTab('attachments')}
@@ -1157,7 +1398,7 @@ export default function WorkItemDetailModal({
                       paddingBottom: 4,
                     }}
                   >
-                    Attachments ({attachments.length})
+                    Tệp đính kèm ({attachments.length})
                   </button>
                   <button
                     onClick={() => setActiveTab('history')}
@@ -1172,68 +1413,52 @@ export default function WorkItemDetailModal({
                       paddingBottom: 4,
                     }}
                   >
-                    History ({changelogs.length})
+                    Lịch sử ({changelogs.length})
                   </button>
                 </div>
 
                 {/* TAB 1: Threaded Comments (Step 5.4) */}
                 {activeTab === 'comments' && (
                   <div>
-                    {canComment ? (
-                      <form onSubmit={handleAddComment} style={{ marginBottom: 20 }}>
-                        <textarea
-                          rows={3}
-                          value={commentDraft}
-                          onChange={(e) => setCommentDraft(e.target.value)}
-                          placeholder="Thêm bình luận trao đổi (Hỗ trợ Markdown)..."
-                          style={{
-                            width: '100%',
-                            fontSize: 13,
-                            padding: 10,
-                            borderRadius: 6,
-                            border: '1px solid #CBD5E1',
-                            outline: 'none',
-                            fontFamily: 'inherit',
-                            resize: 'vertical',
-                            marginBottom: 8,
-                          }}
-                        />
-                        <button
-                          type="submit"
-                          disabled={!commentDraft.trim()}
-                          style={{
-                            backgroundColor: commentDraft.trim() ? '#2563EB' : '#94A3B8',
-                            color: '#FFFFFF',
-                            border: 'none',
-                            padding: '6px 14px',
-                            borderRadius: 6,
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: commentDraft.trim() ? 'pointer' : 'not-allowed',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                          }}
-                        >
-                          <Send size={12} />
-                          <span>Gửi bình luận</span>
-                        </button>
-                      </form>
-                    ) : (
-                      <div
+                    <form onSubmit={handleAddComment} style={{ marginBottom: 20 }}>
+                      <textarea
+                        rows={3}
+                        value={commentDraft}
+                        onChange={(e) => setCommentDraft(e.target.value)}
+                        placeholder="Thêm bình luận trao đổi (Hỗ trợ Markdown)..."
                         style={{
-                          marginBottom: 20,
-                          padding: '10px 12px',
+                          width: '100%',
+                          fontSize: 13,
+                          padding: 10,
                           borderRadius: 6,
-                          backgroundColor: '#F8FAFC',
-                          border: '1px dashed #CBD5E1',
+                          border: '1px solid #CBD5E1',
+                          outline: 'none',
+                          fontFamily: 'inherit',
+                          resize: 'vertical',
+                          marginBottom: 8,
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={!commentDraft.trim()}
+                        style={{
+                          backgroundColor: commentDraft.trim() ? '#2563EB' : '#94A3B8',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          padding: '6px 14px',
+                          borderRadius: 6,
                           fontSize: 12,
-                          color: '#64748B',
+                          fontWeight: 600,
+                          cursor: commentDraft.trim() ? 'pointer' : 'not-allowed',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
                         }}
                       >
-                        Bạn không có quyền bình luận trong dự án này.
-                      </div>
-                    )}
+                        <Send size={12} />
+                        <span>Gửi bình luận</span>
+                      </button>
+                    </form>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                       {comments.length === 0 ? (
@@ -1330,48 +1555,42 @@ export default function WorkItemDetailModal({
                               <div style={{ color: '#334155', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{c.body}</div>
                             )}
 
-                            {/* Comment Actions (theo quyền: COMMENT_CREATE / *_OWN / DELETE_ALL) */}
+                            {/* Comment Actions */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontSize: 11, color: '#64748B' }}>
-                              {canComment && (
-                                <button
-                                  onClick={() => {
-                                    setReplyParentId(replyParentId === c.id ? null : c.id);
-                                    setReplyDraft('');
-                                  }}
-                                  style={{
-                                    border: 'none',
-                                    background: 'transparent',
-                                    color: '#2563EB',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 3,
-                                    padding: 0,
-                                  }}
-                                >
-                                  <CornerDownRight size={12} /> Trả lời
-                                </button>
-                              )}
-                              {canEditComment(c) && (
-                                <button
-                                  onClick={() => {
-                                    setEditingCommentId(c.id);
-                                    setEditingCommentDraft(c.body);
-                                  }}
-                                  style={{ border: 'none', background: 'transparent', color: '#64748B', cursor: 'pointer', padding: 0 }}
-                                >
-                                  Chỉnh sửa
-                                </button>
-                              )}
-                              {canDeleteComment(c) && (
-                                <button
-                                  onClick={() => handleDeleteComment(c.id)}
-                                  style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
-                                >
-                                  Xóa
-                                </button>
-                              )}
+                              <button
+                                onClick={() => {
+                                  setReplyParentId(replyParentId === c.id ? null : c.id);
+                                  setReplyDraft('');
+                                }}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: '#2563EB',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 3,
+                                  padding: 0,
+                                }}
+                              >
+                                <CornerDownRight size={12} /> Trả lời
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingCommentId(c.id);
+                                  setEditingCommentDraft(c.body);
+                                }}
+                                style={{ border: 'none', background: 'transparent', color: '#64748B', cursor: 'pointer', padding: 0 }}
+                              >
+                                Chỉnh sửa
+                              </button>
+                              <button
+                                onClick={() => handleDeleteComment(c.id)}
+                                style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
+                              >
+                                Xóa
+                              </button>
                             </div>
 
                             {/* Inline Reply Form */}
@@ -1464,16 +1683,14 @@ export default function WorkItemDetailModal({
                                       <span style={{ fontSize: 10, color: '#94A3B8' }}>{formatRelativeTime(reply.createdAt)}</span>
                                     </div>
                                     <div style={{ color: '#334155', fontSize: 12, lineHeight: 1.4 }}>{reply.body}</div>
-                                    {canDeleteComment(reply) && (
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: 10, color: '#64748B' }}>
-                                        <button
-                                          onClick={() => handleDeleteComment(reply.id)}
-                                          style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
-                                        >
-                                          Xóa
-                                        </button>
-                                      </div>
-                                    )}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: 10, color: '#64748B' }}>
+                                      <button
+                                        onClick={() => handleDeleteComment(reply.id)}
+                                        style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
+                                      >
+                                        Xóa
+                                      </button>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -1488,61 +1705,45 @@ export default function WorkItemDetailModal({
                 {/* TAB 2: Attachments Dropzone (Step 5.4) */}
                 {activeTab === 'attachments' && (
                   <div>
-                    {/* Drag-and-drop Dropzone: cần ISSUE_EDIT để tải lên */}
-                    {canEdit ? (
-                      <div
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          setIsDraggingOver(true);
-                        }}
-                        onDragLeave={() => setIsDraggingOver(false)}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          setIsDraggingOver(false);
-                          handleFileUpload(e.dataTransfer.files);
-                        }}
-                        onClick={() => fileInputRef.current?.click()}
-                        style={{
-                          border: `2px dashed ${isDraggingOver ? '#2563EB' : '#CBD5E1'}`,
-                          backgroundColor: isDraggingOver ? '#EFF6FF' : '#F8FAFC',
-                          borderRadius: 8,
-                          padding: '24px 16px',
-                          textAlign: 'center',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
-                          marginBottom: 16,
-                        }}
-                      >
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          multiple
-                          onChange={(e) => handleFileUpload(e.target.files)}
-                          style={{ display: 'none' }}
-                        />
-                        <UploadCloud size={32} color="#2563EB" style={{ margin: '0 auto 8px' }} />
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
-                          {isUploadingFile ? 'Đang tải lên tệp...' : 'Kéo thả tệp vào đây hoặc Bấm để tải lên'}
-                        </div>
-                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-                          Hỗ trợ hình ảnh (PNG, JPG, SVG), tài liệu PDF, DOCX, ZIP tối đa 50MB
-                        </div>
+                    {/* Drag-and-drop Dropzone */}
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDraggingOver(true);
+                      }}
+                      onDragLeave={() => setIsDraggingOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDraggingOver(false);
+                        handleFileUpload(e.dataTransfer.files);
+                      }}
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        border: `2px dashed ${isDraggingOver ? '#2563EB' : '#CBD5E1'}`,
+                        backgroundColor: isDraggingOver ? '#EFF6FF' : '#F8FAFC',
+                        borderRadius: 8,
+                        padding: '24px 16px',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        marginBottom: 16,
+                      }}
+                    >
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        multiple
+                        onChange={(e) => handleFileUpload(e.target.files)}
+                        style={{ display: 'none' }}
+                      />
+                      <UploadCloud size={32} color="#2563EB" style={{ margin: '0 auto 8px' }} />
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
+                        {isUploadingFile ? 'Đang tải lên tệp...' : 'Kéo thả tệp vào đây hoặc Bấm để tải lên'}
                       </div>
-                    ) : (
-                      <div
-                        style={{
-                          marginBottom: 16,
-                          padding: '10px 12px',
-                          borderRadius: 6,
-                          backgroundColor: '#F8FAFC',
-                          border: '1px dashed #CBD5E1',
-                          fontSize: 12,
-                          color: '#64748B',
-                        }}
-                      >
-                        Bạn chỉ có quyền xem và tải về tệp đính kèm.
+                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                        Hỗ trợ hình ảnh (PNG, JPG, SVG), tài liệu PDF, DOCX, ZIP tối đa 50MB
                       </div>
-                    )}
+                    </div>
 
                     {/* Attachment List / Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
@@ -1633,21 +1834,19 @@ export default function WorkItemDetailModal({
                                 >
                                   <Download size={12} /> Tải về
                                 </a>
-                                {canDeleteAttachment(att) && (
-                                  <button
-                                    onClick={() => handleDeleteAttachment(att.id)}
-                                    style={{
-                                      border: 'none',
-                                      background: 'transparent',
-                                      color: '#DC2626',
-                                      cursor: 'pointer',
-                                      padding: 2,
-                                    }}
-                                    title="Xóa tệp"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => handleDeleteAttachment(att.id)}
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#DC2626',
+                                    cursor: 'pointer',
+                                    padding: 2,
+                                  }}
+                                  title="Xóa tệp"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
                               </div>
                             </div>
                           </div>
@@ -1722,29 +1921,27 @@ export default function WorkItemDetailModal({
             >
               {/* Status Section */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Status</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Trạng thái</span>
                 <div style={{ position: 'relative', marginTop: 6 }}>
                   <button
-                    onClick={() => canTransition && setShowStatusDropdown(!showStatusDropdown)}
-                    disabled={!canTransition}
-                    title={canTransition ? 'Chuyển trạng thái' : 'Bạn không có quyền chuyển trạng thái công việc'}
+                    onClick={() => setShowStatusDropdown(!showStatusDropdown)}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
                       borderRadius: 6,
                       border: '1px solid #CBD5E1',
-                      backgroundColor: canTransition ? '#FFFFFF' : '#F8FAFC',
+                      backgroundColor: '#FFFFFF',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      cursor: canTransition ? 'pointer' : 'not-allowed',
+                      cursor: 'pointer',
                       fontSize: 13,
                       fontWeight: 700,
                       color: item?.statusColorHex || '#2563EB',
                     }}
                   >
-                    <span>{item?.statusName || 'TO DO'}</span>
-                    {canTransition && <ChevronDown size={14} color="#64748B" />}
+                    <span>{getStatusDisplayName(item?.statusName || 'Cần làm')}</span>
+                    <ChevronDown size={14} color="#64748B" />
                   </button>
 
                   {showStatusDropdown && (
@@ -1766,10 +1963,24 @@ export default function WorkItemDetailModal({
                       {item?.availableTransitions?.length > 0 ? (
                         item.availableTransitions.map((t) => {
                           const tId = t.transitionId || t.id;
+                          const isDoneTransition = t.toStatusCategory === 'DONE' || t.toStatusName?.toUpperCase() === 'DONE';
+                          const incompleteDescendants = (item?.descendants && item.descendants.length > 0 ? item.descendants : (item?.subtasks || [])).filter(
+                            (st) => st.statusCategory !== 'DONE'
+                          );
+                          const hasIncompleteSubtasks = incompleteDescendants.length > 0;
+
                           return (
                             <div
                               key={tId}
-                              onClick={() => handleExecuteTransition(tId)}
+                              onClick={() => {
+                                if (isDoneTransition && hasIncompleteSubtasks) {
+                                  setShowStatusDropdown(false);
+                                  setPendingTransitionId(tId);
+                                  setShowResolveSubtasksModal(true);
+                                } else {
+                                  handleExecuteTransition(tId, false);
+                                }
+                              }}
                               style={{
                                 padding: '8px 12px',
                                 fontSize: 13,
@@ -1782,7 +1993,7 @@ export default function WorkItemDetailModal({
                               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
                               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                             >
-                              {t.name} (➔ {t.toStatusName})
+                              {t.name} (➔ {getStatusDisplayName(t.toStatusName)})
                             </div>
                           );
                         })
@@ -1798,12 +2009,10 @@ export default function WorkItemDetailModal({
 
               {/* Priority Section */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Độ ưu tiên (Priority)</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Độ ưu tiên</span>
                 <div style={{ position: 'relative', marginTop: 6 }}>
                   <button
-                    onClick={() => canEdit && setShowPriorityDropdown(!showPriorityDropdown)}
-                    disabled={!canEdit}
-                    title={canEdit ? 'Đổi độ ưu tiên' : 'Bạn không có quyền chỉnh sửa công việc'}
+                    onClick={() => setShowPriorityDropdown(!showPriorityDropdown)}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
@@ -1813,7 +2022,7 @@ export default function WorkItemDetailModal({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      cursor: canEdit ? 'pointer' : 'not-allowed',
+                      cursor: 'pointer',
                       fontSize: 13,
                       fontWeight: 700,
                       color: priorityInfo.color,
@@ -1888,14 +2097,13 @@ export default function WorkItemDetailModal({
 
               {/* Assignee Section */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Người thực hiện (Assignee)</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Người thực hiện</span>
                 <div style={{ marginTop: 6 }}>
                   <MemberSelect
                     members={members}
                     value={item?.assigneeId || ''}
                     onChange={handleUpdateAssignee}
-                    placeholder="Chưa gán (Unassigned)"
-                    disabled={!canAssign}
+                    placeholder="Chưa phân công"
                   />
                 </div>
               </div>
@@ -1903,7 +2111,7 @@ export default function WorkItemDetailModal({
               {/* Due Date Section */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Hạn chót (Due Date)</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Hạn chót</span>
                   {isOverdue && (
                     <span
                       style={{
@@ -1927,7 +2135,6 @@ export default function WorkItemDetailModal({
                   type="date"
                   value={item?.dueDate || ''}
                   onChange={(e) => handleUpdateDueDate(e.target.value)}
-                  disabled={!canEdit}
                   style={{
                     width: '100%',
                     marginTop: 6,
@@ -1946,32 +2153,114 @@ export default function WorkItemDetailModal({
 
               {/* Story Points */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Story Points</span>
-                <input
-                  type="number"
-                  step="0.5"
-                  defaultValue={item?.storyPoints || ''}
-                  onBlur={(e) => handleUpdateStoryPoints(e.target.value)}
-                  placeholder="0"
-                  disabled={!canEdit}
-                  style={{
-                    width: '100%',
-                    marginTop: 6,
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: '#0F172A',
-                    outline: 'none',
-                    backgroundColor: '#FFFFFF',
-                  }}
-                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Điểm ước lượng</span>
+                  <StoryPointsHelpTooltip size={12} align="sidebar" />
+                </div>
+                {item?.hierarchyLevel === -1 || item?.isSubtask || item?.typeCode === 'SUBTASK' ? (
+                  <div>
+                    <input
+                      type="text"
+                      disabled
+                      value="Không áp dụng"
+                      title="Nhiệm vụ con không tính điểm trực tiếp"
+                      style={{
+                        width: '100%',
+                        marginTop: 6,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '1px solid #E2E8F0',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#94A3B8',
+                        backgroundColor: '#F1F5F9',
+                        cursor: 'not-allowed',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+                      Nhiệm vụ con không tính điểm trực tiếp
+                    </div>
+                  </div>
+                ) : item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC' ? (
+                  <div>
+                    <input
+                      type="text"
+                      disabled
+                      value={`${item?.doneStoryPoints || 0} / ${item?.totalStoryPoints || 0} điểm`}
+                      title="Hạng mục lớn tự động tính điểm từ các công việc con"
+                      style={{
+                        width: '100%',
+                        marginTop: 6,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '1px solid #E2E8F0',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: '#6554C0',
+                        backgroundColor: '#F3F0FF',
+                        cursor: 'not-allowed',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <div style={{ fontSize: 11, color: '#6554C0', marginTop: 4 }}>
+                      Tự động tính từ các công việc con
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type="number"
+                    step="0.5"
+                    defaultValue={item?.storyPoints || ''}
+                    onBlur={(e) => handleUpdateStoryPoints(e.target.value)}
+                    placeholder="0"
+                    style={{
+                      width: '100%',
+                      marginTop: 6,
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '1px solid #CBD5E1',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#0F172A',
+                      outline: 'none',
+                      backgroundColor: '#FFFFFF',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Time Tracking Section (Step 5.5 Roll-up) */}
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Theo dõi thời gian</span>
+                <div style={{ marginTop: 6, padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: 6, border: '1px solid #E2E8F0', fontSize: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ color: '#64748B' }}>Đã thực hiện:</span>
+                    <strong style={{ color: '#0F172A' }}>
+                      {Math.round(((item?.timeSpentSeconds || 0) / 3600) * 10) / 10} giờ
+                    </strong>
+                  </div>
+                  {item?.subtasks && item.subtasks.length > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: '#0284C7' }}>
+                      <span>Tổng cộng dồn (Gồm nhiệm vụ con):</span>
+                      <strong>
+                        {Math.round(((item?.totalTimeSpentSeconds || 0) / 3600) * 10) / 10} giờ
+                      </strong>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B' }}>Ước lượng còn lại:</span>
+                    <strong style={{ color: '#0F172A' }}>
+                      {Math.round(((item?.remainingEstimateSeconds || 0) / 3600) * 10) / 10} giờ
+                    </strong>
+                  </div>
+                </div>
               </div>
 
               {/* Sprint info */}
               <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Sprint</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Chu kỳ làm việc</span>
                 <div
                   style={{
                     marginTop: 6,
@@ -1984,14 +2273,14 @@ export default function WorkItemDetailModal({
                     color: '#2563EB',
                   }}
                 >
-                  {item?.sprintName || 'Backlog'}
+                  {item?.sprintName || 'Danh sách tồn đọng'}
                 </div>
               </div>
 
               {/* Component & Version */}
               {item?.componentName && (
                 <div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Component</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Thành phần</span>
                   <div style={{ marginTop: 4, fontSize: 13, fontWeight: 600, color: '#334155' }}>
                     {item.componentName}
                   </div>
@@ -2000,8 +2289,8 @@ export default function WorkItemDetailModal({
 
               {/* Dates */}
               <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11, color: '#64748B' }}>
-                <div>Created: {item?.createdAt?.substring(0, 10)}</div>
-                <div>Updated: {item?.updatedAt?.substring(0, 10)}</div>
+                <div>Ngày tạo: {item?.createdAt?.substring(0, 10)}</div>
+                <div>Cập nhật: {item?.updatedAt?.substring(0, 10)}</div>
               </div>
             </div>
           </div>
@@ -2036,7 +2325,7 @@ export default function WorkItemDetailModal({
               onClick={(e) => e.stopPropagation()}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Liên kết công việc (Link issue)</h3>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Liên kết công việc</h3>
                 <button
                   onClick={() => setShowLinkModal(false)}
                   style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748B' }}
@@ -2047,7 +2336,7 @@ export default function WorkItemDetailModal({
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>
-                  Loại quan hệ (Relationship)
+                  Loại quan hệ
                 </label>
                 <select
                   value={linkRelationType}
@@ -2062,10 +2351,10 @@ export default function WorkItemDetailModal({
                     fontWeight: 600,
                   }}
                 >
-                  <option value="BLOCKS">Chặn (blocks)</option>
-                  <option value="RELATES_TO">Liên quan đến (relates to)</option>
-                  <option value="DUPLICATES">Trùng lặp với (duplicates)</option>
-                  <option value="CAUSES">Gây ra (causes)</option>
+                  <option value="BLOCKS">Cản trở / Chặn tiến độ</option>
+                  <option value="RELATES_TO">Có liên quan đến</option>
+                  <option value="DUPLICATES">Trùng lặp với</option>
+                  <option value="CAUSES">Gây ra / Nguyên nhân của</option>
                 </select>
               </div>
 
@@ -2182,6 +2471,21 @@ export default function WorkItemDetailModal({
             </div>
           </div>
         )}
+
+        {/* ─── Resolve Subtasks Modal (Step 5.5) ─── */}
+        <ResolveSubtasksModal
+          isOpen={showResolveSubtasksModal}
+          parentCode={item?.code}
+          parentSummary={item?.summary}
+          parentHierarchyLevel={item?.hierarchyLevel}
+          subtasks={item?.descendants && item.descendants.length > 0 ? item.descendants : (item?.subtasks || [])}
+          loading={isResolvingSubtasks}
+          onConfirm={() => handleExecuteTransition(pendingTransitionId, true)}
+          onCancel={() => {
+            setShowResolveSubtasksModal(false);
+            setPendingTransitionId(null);
+          }}
+        />
       </div>
     </div>
   );

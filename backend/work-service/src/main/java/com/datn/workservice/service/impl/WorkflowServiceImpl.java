@@ -32,6 +32,8 @@ public class WorkflowServiceImpl implements WorkflowService {
     private final WorkItemTypeRepository workItemTypeRepository;
     private final WorkflowEngineService workflowEngineService;
     private final ProjectAccessService projectAccessService;
+    private final WorkItemRepository workItemRepository;
+    private final BoardColumnStatusRepository boardColumnStatusRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -64,9 +66,34 @@ public class WorkflowServiceImpl implements WorkflowService {
 
         List<WorkflowTransition> transitions = workflowTransitionRepository.findByWorkflowId(workflowId);
 
-        // Fetch all statuses in system or used by transitions
-        Map<UUID, Status> statusMap = statusRepository.findAll().stream()
-                .collect(Collectors.toMap(Status::getId, s -> s, (s1, s2) -> s1));
+        List<Status> projectStatuses;
+        if (workflow.getProjectId() != null) {
+            projectStatuses = statusRepository.findByProjectId(workflow.getProjectId());
+            if (projectStatuses.isEmpty()) {
+                projectStatuses = statusRepository.findAll();
+            }
+        } else {
+            projectStatuses = statusRepository.findAll();
+        }
+
+        Map<UUID, Status> statusMap = new HashMap<>();
+        for (Status s : projectStatuses) {
+            statusMap.put(s.getId(), s);
+        }
+
+        // Ensure any status referenced by transitions is in statusMap even if not in projectStatuses
+        Set<UUID> missingIds = new HashSet<>();
+        for (WorkflowTransition t : transitions) {
+            if (t.getFromStatusId() != null && !statusMap.containsKey(t.getFromStatusId())) {
+                missingIds.add(t.getFromStatusId());
+            }
+            if (t.getToStatusId() != null && !statusMap.containsKey(t.getToStatusId())) {
+                missingIds.add(t.getToStatusId());
+            }
+        }
+        if (!missingIds.isEmpty()) {
+            statusRepository.findAllById(missingIds).forEach(s -> statusMap.put(s.getId(), s));
+        }
 
         List<WorkflowTransitionResponse> transitionResponses = transitions.stream().map(t -> {
             Status from = t.getFromStatusId() != null ? statusMap.get(t.getFromStatusId()) : null;
@@ -88,7 +115,7 @@ public class WorkflowServiceImpl implements WorkflowService {
                     .build();
         }).collect(Collectors.toList());
 
-        List<StatusResponse> statusResponses = statusMap.values().stream()
+        List<StatusResponse> statusResponses = projectStatuses.stream()
                 .sorted(Comparator.comparing(Status::getCategory).thenComparing(Status::getName))
                 .map(this::mapToStatusResponse)
                 .collect(Collectors.toList());
@@ -152,28 +179,61 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Transactional
     public WorkflowTransitionResponse createTransition(UUID workflowId, CreateWorkflowTransitionRequest request) {
         Workflow workflow = workflowRepository.findById(workflowId)
-                .orElseThrow(() -> new ResourceNotFoundException("Workflow not found with id: " + workflowId));
+                .orElseThrow(() -> new ResourceNotFoundException("Quy trình không tồn tại với ID: " + workflowId));
         assertWorkflowAccess(workflow, PermissionKey.PROJECT_ADMIN);
 
-        if (request.getFromStatusId() != null && !statusRepository.existsById(request.getFromStatusId())) {
-            throw new ResourceNotFoundException("From Status not found with id: " + request.getFromStatusId());
+        if (request.getToStatusId() == null) {
+            throw new BadRequestException("Trạng thái đích (toStatusId) là bắt buộc");
+        }
+
+        if (request.getName() == null || request.getName().trim().isBlank()) {
+            throw new BadRequestException("Tên bước chuyển không được để trống");
+        }
+        String trimmedName = request.getName().trim();
+
+        if (request.getFromStatusId() != null && request.getFromStatusId().equals(request.getToStatusId())) {
+            throw new BadRequestException("Trạng thái đích không được trùng với trạng thái bắt đầu");
+        }
+
+        Status fromStatus = null;
+        if (request.getFromStatusId() != null) {
+            fromStatus = statusRepository.findById(request.getFromStatusId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Trạng thái bắt đầu không tồn tại với ID: " + request.getFromStatusId()));
+            if (workflow.getProjectId() != null && fromStatus.getProjectId() != null && !fromStatus.getProjectId().equals(workflow.getProjectId())) {
+                throw new BadRequestException("Trạng thái bắt đầu không thuộc phạm vi dự án của quy trình này");
+            }
         }
 
         Status toStatus = statusRepository.findById(request.getToStatusId())
-                .orElseThrow(() -> new ResourceNotFoundException("To Status not found with id: " + request.getToStatusId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Trạng thái đích không tồn tại với ID: " + request.getToStatusId()));
+        if (workflow.getProjectId() != null && toStatus.getProjectId() != null && !toStatus.getProjectId().equals(workflow.getProjectId())) {
+            throw new BadRequestException("Trạng thái đích không thuộc phạm vi dự án của quy trình này");
+        }
+
+        // Kiểm tra trùng lặp bước chuyển giữa 2 trạng thái trong quy trình
+        boolean duplicatePath = request.getFromStatusId() == null
+                ? workflowTransitionRepository.existsByWorkflowIdAndFromStatusIdIsNullAndToStatusId(workflowId, request.getToStatusId())
+                : workflowTransitionRepository.existsByWorkflowIdAndFromStatusIdAndToStatusId(workflowId, request.getFromStatusId(), request.getToStatusId());
+        if (duplicatePath) {
+            throw new BadRequestException("Đã tồn tại bước chuyển giữa hai trạng thái này trong quy trình");
+        }
+
+        // Kiểm tra trùng tên bước chuyển trong cùng quy trình (không phân biệt hoa thường)
+        if (workflowTransitionRepository.existsByWorkflowIdAndNameIgnoreCase(workflowId, trimmedName)) {
+            throw new BadRequestException("Tên bước chuyển '" + trimmedName + "' đã tồn tại trong quy trình");
+        }
 
         WorkflowTransition transition = WorkflowTransition.builder()
                 .workflowId(workflowId)
                 .fromStatusId(request.getFromStatusId())
                 .toStatusId(request.getToStatusId())
-                .name(request.getName().trim())
+                .name(trimmedName)
                 .conditionsConfig(request.getConditionsConfig())
                 .validatorsConfig(request.getValidatorsConfig())
                 .postFunctionsConfig(request.getPostFunctionsConfig())
                 .build();
 
         WorkflowTransition saved = workflowTransitionRepository.save(transition);
-        Status fromStatus = request.getFromStatusId() != null ? statusRepository.findById(request.getFromStatusId()).orElse(null) : null;
 
         return WorkflowTransitionResponse.builder()
                 .id(saved.getId())
@@ -194,23 +254,61 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Override
     @Transactional
     public WorkflowTransitionResponse updateTransition(UUID workflowId, UUID transitionId, UpdateWorkflowTransitionRequest request) {
+        Workflow workflow = workflowRepository.findById(workflowId)
+                .orElseThrow(() -> new ResourceNotFoundException("Quy trình không tồn tại với ID: " + workflowId));
+
         WorkflowTransition transition = workflowTransitionRepository.findById(transitionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Transition not found with id: " + transitionId));
+                .orElseThrow(() -> new ResourceNotFoundException("Bước chuyển không tồn tại với ID: " + transitionId));
 
         if (!transition.getWorkflowId().equals(workflowId)) {
-            throw new BadRequestException("Transition does not belong to workflow: " + workflowId);
+            throw new BadRequestException("Bước chuyển không thuộc quy trình: " + workflowId);
         }
         assertWorkflowAdmin(workflowId);
 
+        // Xác định toStatus và fromStatus sau khi update
+        UUID targetToStatusId = request.getToStatusId() != null ? request.getToStatusId() : transition.getToStatusId();
+        UUID targetFromStatusId = request.getToStatusId() != null ? request.getFromStatusId() : (request.getFromStatusId() != null ? request.getFromStatusId() : transition.getFromStatusId());
+
+        if (targetFromStatusId != null && targetFromStatusId.equals(targetToStatusId)) {
+            throw new BadRequestException("Trạng thái đích không được trùng với trạng thái bắt đầu");
+        }
+
+        Status fromStatus = null;
+        if (targetFromStatusId != null) {
+            fromStatus = statusRepository.findById(targetFromStatusId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Trạng thái bắt đầu không tồn tại với ID: " + targetFromStatusId));
+            if (workflow.getProjectId() != null && fromStatus.getProjectId() != null && !fromStatus.getProjectId().equals(workflow.getProjectId())) {
+                throw new BadRequestException("Trạng thái bắt đầu không thuộc phạm vi dự án của quy trình này");
+            }
+        }
+
+        Status toStatus = statusRepository.findById(targetToStatusId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trạng thái đích không tồn tại với ID: " + targetToStatusId));
+        if (workflow.getProjectId() != null && toStatus.getProjectId() != null && !toStatus.getProjectId().equals(workflow.getProjectId())) {
+            throw new BadRequestException("Trạng thái đích không thuộc phạm vi dự án của quy trình này");
+        }
+
+        // Kiểm tra trùng lặp đường chuyển với bước chuyển khác trong cùng quy trình
+        Optional<WorkflowTransition> existingPath = targetFromStatusId == null
+                ? workflowTransitionRepository.findByWorkflowIdAndFromStatusIdIsNullAndToStatusId(workflowId, targetToStatusId)
+                : workflowTransitionRepository.findByWorkflowIdAndFromStatusIdAndToStatusId(workflowId, targetFromStatusId, targetToStatusId);
+        if (existingPath.isPresent() && !existingPath.get().getId().equals(transitionId)) {
+            throw new BadRequestException("Đã tồn tại bước chuyển giữa hai trạng thái này trong quy trình");
+        }
+
+        // Cập nhật tên nếu có truyền
         if (request.getName() != null && !request.getName().isBlank()) {
-            transition.setName(request.getName().trim());
+            String newName = request.getName().trim();
+            Optional<WorkflowTransition> existingName = workflowTransitionRepository.findByWorkflowIdAndNameIgnoreCase(workflowId, newName);
+            if (existingName.isPresent() && !existingName.get().getId().equals(transitionId)) {
+                throw new BadRequestException("Tên bước chuyển '" + newName + "' đã tồn tại trong quy trình");
+            }
+            transition.setName(newName);
         }
-        if (request.getFromStatusId() != null) {
-            transition.setFromStatusId(request.getFromStatusId());
-        }
-        if (request.getToStatusId() != null) {
-            transition.setToStatusId(request.getToStatusId());
-        }
+
+        transition.setFromStatusId(targetFromStatusId);
+        transition.setToStatusId(targetToStatusId);
+
         if (request.getConditionsConfig() != null) {
             transition.setConditionsConfig(request.getConditionsConfig());
         }
@@ -222,8 +320,6 @@ public class WorkflowServiceImpl implements WorkflowService {
         }
 
         WorkflowTransition updated = workflowTransitionRepository.save(transition);
-        Status fromStatus = updated.getFromStatusId() != null ? statusRepository.findById(updated.getFromStatusId()).orElse(null) : null;
-        Status toStatus = statusRepository.findById(updated.getToStatusId()).orElse(null);
 
         return WorkflowTransitionResponse.builder()
                 .id(updated.getId())
@@ -232,8 +328,8 @@ public class WorkflowServiceImpl implements WorkflowService {
                 .fromStatusName(fromStatus != null ? fromStatus.getName() : "Khởi tạo (Any / Initial)")
                 .fromStatusCategory(fromStatus != null ? fromStatus.getCategory() : StatusCategory.TODO)
                 .toStatusId(updated.getToStatusId())
-                .toStatusName(toStatus != null ? toStatus.getName() : "Unknown")
-                .toStatusCategory(toStatus != null ? toStatus.getCategory() : StatusCategory.TODO)
+                .toStatusName(toStatus.getName())
+                .toStatusCategory(toStatus.getCategory())
                 .name(updated.getName())
                 .conditionsConfig(updated.getConditionsConfig())
                 .validatorsConfig(updated.getValidatorsConfig())
@@ -257,7 +353,11 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Override
     @Transactional(readOnly = true)
     public List<StatusResponse> getProjectStatuses(UUID projectId) {
-        return statusRepository.findAll().stream()
+        List<Status> statuses = statusRepository.findByProjectId(projectId);
+        if (statuses.isEmpty()) {
+            statuses = statusRepository.findByProjectIdOrProjectIdIsNull(projectId);
+        }
+        return statuses.stream()
                 .sorted(Comparator.comparing(Status::getCategory).thenComparing(Status::getName))
                 .map(this::mapToStatusResponse)
                 .collect(Collectors.toList());
@@ -269,15 +369,18 @@ public class WorkflowServiceImpl implements WorkflowService {
         // Trạng thái dùng chung toàn hệ thống: cần là Administrator của dự án đang cấu hình, hoặc Global ADMIN
         if (request.getProjectId() != null) {
             projectAccessService.assertProjectPermission(request.getProjectId(), PermissionKey.PROJECT_ADMIN);
+            if (statusRepository.existsByProjectIdAndNameIgnoreCase(request.getProjectId(), request.getName().trim())) {
+                throw new BadRequestException("Trạng thái với tên '" + request.getName() + "' đã tồn tại trong dự án này");
+            }
         } else {
             projectAccessService.assertGlobalAdmin();
-        }
-
-        if (statusRepository.existsByName(request.getName().trim())) {
-            throw new BadRequestException("Trạng thái với tên '" + request.getName() + "' đã tồn tại");
+            if (statusRepository.existsByName(request.getName().trim())) {
+                throw new BadRequestException("Trạng thái với tên '" + request.getName() + "' đã tồn tại");
+            }
         }
 
         Status status = Status.builder()
+                .projectId(request.getProjectId())
                 .name(request.getName().trim())
                 .category(request.getCategory())
                 .description(request.getDescription())
@@ -285,8 +388,88 @@ public class WorkflowServiceImpl implements WorkflowService {
                 .build();
 
         Status saved = statusRepository.save(status);
-        log.info("Created new status '{}' with category {}", saved.getName(), saved.getCategory());
+        log.info("Created new status '{}' (ID={}) for project {}", saved.getName(), saved.getId(), saved.getProjectId());
         return mapToStatusResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public StatusResponse updateStatus(UUID statusId, UpdateStatusRequest request) {
+        Status status = statusRepository.findById(statusId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái với id: " + statusId));
+
+        if (request.getName() != null && !request.getName().trim().equalsIgnoreCase(status.getName())) {
+            if (status.getProjectId() != null) {
+                if (statusRepository.existsByProjectIdAndNameIgnoreCase(status.getProjectId(), request.getName().trim())) {
+                    throw new BadRequestException("Trạng thái với tên '" + request.getName() + "' đã tồn tại trong dự án này");
+                }
+            } else if (statusRepository.existsByName(request.getName().trim())) {
+                throw new BadRequestException("Trạng thái với tên '" + request.getName() + "' đã tồn tại");
+            }
+            status.setName(request.getName().trim());
+        }
+
+        if (request.getCategory() != null && request.getCategory() != status.getCategory()) {
+            if (status.getProjectId() != null) {
+                long count = statusRepository.countByProjectIdAndCategory(status.getProjectId(), status.getCategory());
+                if (count <= 1) {
+                    throw new BadRequestException("Không thể đổi danh mục của trạng thái này vì đây là trạng thái duy nhất thuộc danh mục "
+                            + status.getCategory() + ". Mỗi dự án bắt buộc phải duy trì tối thiểu 1 trạng thái cho từng danh mục (TODO, IN_PROGRESS, DONE)!");
+                }
+            }
+            status.setCategory(request.getCategory());
+        }
+
+        if (request.getDescription() != null) {
+            status.setDescription(request.getDescription().trim());
+        }
+
+        if (request.getColorHex() != null) {
+            status.setColorHex(request.getColorHex());
+        }
+
+        Status saved = statusRepository.save(status);
+        log.info("Updated status ID {} ('{}')", statusId, saved.getName());
+        return mapToStatusResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteStatus(UUID statusId) {
+        Status status = statusRepository.findById(statusId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái với id: " + statusId));
+
+        // 1. Minimum 1 per category check
+        if (status.getProjectId() != null) {
+            long count = statusRepository.countByProjectIdAndCategory(status.getProjectId(), status.getCategory());
+            if (count <= 1) {
+                throw new BadRequestException("Không thể xóa trạng thái cuối cùng thuộc danh mục " + status.getCategory()
+                        + ". Dự án bắt buộc phải duy trì tối thiểu 1 trạng thái cho mỗi danh mục (TODO, IN_PROGRESS, DONE)!");
+            }
+        }
+
+        // 2. WorkItem in-use check
+        long inUseCount = workItemRepository.countByStatusId(statusId);
+        if (inUseCount > 0) {
+            throw new BadRequestException("Không thể xóa trạng thái '" + status.getName()
+                    + "' vì đang có " + inUseCount + " công việc đang áp dụng trạng thái này!");
+        }
+
+        // 3. Delete any transitions using this status
+        List<WorkflowTransition> fromTransitions = workflowTransitionRepository.findByFromStatusId(statusId);
+        List<WorkflowTransition> toTransitions = workflowTransitionRepository.findByToStatusId(statusId);
+        if (!fromTransitions.isEmpty()) {
+            workflowTransitionRepository.deleteAll(fromTransitions);
+        }
+        if (!toTransitions.isEmpty()) {
+            workflowTransitionRepository.deleteAll(toTransitions);
+        }
+
+        // 4. Delete board column status mappings
+        boardColumnStatusRepository.deleteByStatusId(statusId);
+
+        statusRepository.delete(status);
+        log.info("Deleted status ID {} ('{}') from project {}", statusId, status.getName(), status.getProjectId());
     }
 
     @Override
@@ -413,6 +596,7 @@ public class WorkflowServiceImpl implements WorkflowService {
     private StatusResponse mapToStatusResponse(Status s) {
         return StatusResponse.builder()
                 .id(s.getId())
+                .projectId(s.getProjectId())
                 .name(s.getName())
                 .category(s.getCategory())
                 .description(s.getDescription())

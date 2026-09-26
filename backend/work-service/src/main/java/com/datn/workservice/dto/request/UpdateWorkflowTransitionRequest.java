@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -21,9 +23,9 @@ public class UpdateWorkflowTransitionRequest {
     @Size(max = 150, message = "Tên bước chuyển tối đa 150 ký tự")
     private String name;
 
-    private Object conditionsConfig;
+    private List<Map<String, Object>> conditionsConfig;
 
-    private Object validatorsConfig;
+    private List<Map<String, Object>> validatorsConfig;
 
-    private Object postFunctionsConfig;
+    private List<Map<String, Object>> postFunctionsConfig;
 }

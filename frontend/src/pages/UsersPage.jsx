@@ -40,11 +40,11 @@ export default function UsersPage({ currentUser, onLogout }) {
       setFetched(true);
     } catch (err) {
       if (err.status === 403) {
-        setError('403 Forbidden – You need ADMIN role to view this page. Gateway enforced the policy.');
+        setError('403 Forbidden – Bạn cần có vai trò Quản trị viên để truy cập trang này.');
       } else if (err.status === 401) {
-        setError('401 Unauthorized – JWT missing or expired. Please log in again.');
+        setError('401 Unauthorized – Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
       } else {
-        setError(err.message || 'Failed to load users.');
+        setError(err.message || 'Không thể tải danh sách người dùng.');
       }
     } finally {
       setLoading(false);
@@ -56,23 +56,23 @@ export default function UsersPage({ currentUser, onLogout }) {
   // Handlers for user actions
   const handleCreateUser = async () => {
     if (!createUsername.trim()) {
-      toast.error('Username is required');
+      toast.error('Vui lòng nhập tên đăng nhập');
       return;
     }
     if (!createPassword || createPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+      toast.error('Mật khẩu phải có ít nhất 6 ký tự');
       return;
     }
     setActionLoading(true);
     try {
       await userApi.adminCreate(createUsername.trim(), createPassword);
-      toast.success('User created successfully');
+      toast.success('Tạo người dùng mới thành công');
       setShowCreateModal(false);
       setCreateUsername('');
       setCreatePassword('');
       fetchUsers();
     } catch (err) {
-      toast.error(err.message || 'Failed to create user');
+      toast.error(err.message || 'Không thể tạo người dùng');
     } finally {
       setActionLoading(false);
     }
@@ -86,33 +86,33 @@ export default function UsersPage({ currentUser, onLogout }) {
 
   const handleResetPassword = async () => {
     if (!resetPasswordVal || resetPasswordVal.length < 6) {
-      toast.error('Password must be at least 6 characters');
+      toast.error('Mật khẩu phải có ít nhất 6 ký tự');
       return;
     }
     setActionLoading(true);
     try {
       await userApi.resetPassword(resetUserId, resetPasswordVal);
-      toast.success(`Password for ${resetUsername} reset successfully`);
+      toast.success(`Đã đặt lại mật khẩu cho ${resetUsername} thành công`);
       setShowResetModal(false);
       setResetPasswordVal('');
       setResetUserId('');
       setResetUsername('');
     } catch (err) {
-      toast.error(err.message || 'Failed to reset password');
+      toast.error(err.message || 'Không thể đặt lại mật khẩu');
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleDelete = async (u) => {
-    if (window.confirm(`Are you sure you want to delete user "${u.username}"?\nThis will disable their Keycloak account, mark them as suspended, and clean up team memberships/tasks.`)) {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa người dùng "${u.username}" không?\nTài khoản này sẽ bị khóa trên hệ thống và thu hồi quyền trong các dự án/nhiệm vụ liên quan.`)) {
       setActionLoading(true);
       try {
         await userApi.delete(u.id);
-        toast.success(`User "${u.username}" deleted successfully`);
+        toast.success(`Đã xóa người dùng "${u.username}" thành công`);
         fetchUsers();
       } catch (err) {
-        toast.error(err.message || 'Failed to delete user');
+        toast.error(err.message || 'Không thể xóa người dùng');
       } finally {
         setActionLoading(false);
       }
@@ -153,16 +153,16 @@ export default function UsersPage({ currentUser, onLogout }) {
       {/* ── Header ── */}
       <div className="page-header">
         <div>
-          <h2 className="page-title">User <span>Management</span></h2>
+          <h2 className="page-title">Quản Lý <span>Người Dùng</span></h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            Signed in as <strong style={{ color: 'var(--accent)' }}>{currentUser?.username}</strong>
-            {' · '}JWT validated by Gateway · identity-service
+            Đăng nhập với tài khoản <strong style={{ color: 'var(--accent)' }}>{currentUser?.username}</strong>
+            {' · '}Xác thực phiên qua Cổng kết nối
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <button className="btn btn-ghost btn-sm" onClick={fetchUsers} disabled={loading}>
             {loading ? <span className="spinner" style={{borderTopColor:'var(--text)'}} /> : '↻'}
-            {loading ? 'Refreshing…' : 'Refresh'}
+            {loading ? 'Đang tải...' : 'Làm mới'}
           </button>
           <button
             className="btn btn-sm"
@@ -179,7 +179,7 @@ export default function UsersPage({ currentUser, onLogout }) {
               fontFamily: 'inherit',
             }}
           >
-            + Add User
+            + Thêm người dùng
           </button>
           <button
             className="btn btn-sm"
@@ -199,15 +199,15 @@ export default function UsersPage({ currentUser, onLogout }) {
             onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#a8a29e'; e.currentTarget.style.color = '#1c1917'; }}
             onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d6d3d1'; e.currentTarget.style.color = '#78716c'; }}
           >
-            Sign out
+            Đăng xuất
           </button>
         </div>
       </div>
 
       {/* ── Request trace ── */}
       <div className="token-bar" style={{ marginBottom: '1.25rem' }}>
-        <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>GET (Bearer)</span>
-        <span>:8080/api/identity/v1/admin/users → Gateway validates JWT → :8082/v1/admin/users</span>
+        <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>Cổng kết nối</span>
+        <span>Hệ thống phân quyền & xác thực người dùng tập trung</span>
       </div>
 
       {/* ── Error ── */}
@@ -222,13 +222,13 @@ export default function UsersPage({ currentUser, onLogout }) {
         <div className="table-toolbar">
           <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
             {fetched ? (
-              <>{filtered.length} of {users.length} users</>
+              <>{filtered.length} trên {users.length} người dùng</>
             ) : ''}
           </div>
           <input
             className="search-input"
             type="text"
-            placeholder="Search by name or email…"
+            placeholder="Tìm kiếm theo họ tên hoặc thư điện tử..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -237,23 +237,23 @@ export default function UsersPage({ currentUser, onLogout }) {
         {loading && !fetched ? (
           <div className="state-box">
             <div className="icon"><span className="spinner" style={{ width: 36, height: 36, borderWidth: 3 }} /></div>
-            <p>Loading users from identity-service…</p>
+            <p>Đang tải danh sách người dùng...</p>
           </div>
         ) : !error && filtered.length === 0 ? (
           <div className="state-box">
             <div className="icon">🔍</div>
-            <p>{search ? 'No users match your search.' : 'No users found.'}</p>
+            <p>{search ? 'Không tìm thấy người dùng phù hợp.' : 'Chưa có người dùng nào.'}</p>
           </div>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>User</th>
-                <th>Username</th>
-                <th>Roles</th>
-                <th>Status</th>
-                <th>Joined</th>
-                <th>Actions</th>
+                <th>Người dùng</th>
+                <th>Tên đăng nhập</th>
+                <th>Vai trò</th>
+                <th>Trạng thái</th>
+                <th>Ngày tham gia</th>
+                <th>Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -275,7 +275,9 @@ export default function UsersPage({ currentUser, onLogout }) {
                     <div className="roles-cell">
                       {(u.roles && u.roles.length > 0)
                         ? [...u.roles].map((r) => (
-                            <span key={r} className={`badge ${roleColor(r)}`}>{r}</span>
+                            <span key={r} className={`badge ${roleColor(r)}`}>
+                              {r === 'ADMIN' ? 'QUẢN TRỊ VIÊN' : r === 'MANAGER' ? 'QUẢN LÝ' : 'THÀNH VIÊN'}
+                            </span>
                           ))
                         : <span className="badge badge-gray">—</span>
                       }
@@ -283,7 +285,7 @@ export default function UsersPage({ currentUser, onLogout }) {
                   </td>
                   <td>
                     <span className={`badge ${statusColor(u.status)}`}>
-                      {u.status || '—'}
+                      {u.status === 'ACTIVE' ? 'Hoạt động' : u.status || '—'}
                     </span>
                   </td>
                   <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
@@ -291,20 +293,6 @@ export default function UsersPage({ currentUser, onLogout }) {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{
-                          color: 'var(--accent, #ea580c)',
-                          padding: '2px 8px',
-                          fontSize: '0.75rem',
-                          fontWeight: '500',
-                          border: '1px solid currentColor',
-                          borderRadius: '4px',
-                        }}
-                        onClick={() => alert('Feature incoming: Role mapping has not been finalized yet.')}
-                      >
-                        Edit Roles
-                      </button>
                       <button
                         className="btn btn-ghost btn-sm"
                         style={{
@@ -317,7 +305,7 @@ export default function UsersPage({ currentUser, onLogout }) {
                         }}
                         onClick={() => handleOpenReset(u)}
                       >
-                        Reset Pass
+                        Đổi mật khẩu
                       </button>
                       <button
                         className="btn btn-ghost btn-sm"
@@ -331,7 +319,7 @@ export default function UsersPage({ currentUser, onLogout }) {
                         }}
                         onClick={() => handleDelete(u)}
                       >
-                        Delete
+                        Xóa
                       </button>
                     </div>
                   </td>
@@ -363,29 +351,29 @@ export default function UsersPage({ currentUser, onLogout }) {
             maxWidth: '400px',
             boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
           }}>
-            <h3 style={{ margin: '0 0 1rem 0', color: '#fff', fontSize: '1.25rem', fontWeight: '600' }}>Add New User</h3>
+            <h3 style={{ margin: '0 0 1rem 0', color: '#fff', fontSize: '1.25rem', fontWeight: '600' }}>Thêm Người Dùng Mới</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8125rem', color: '#a8a29e', marginBottom: '0.375rem' }}>Username</label>
+                <label style={{ display: 'block', fontSize: '0.8125rem', color: '#a8a29e', marginBottom: '0.375rem' }}>Tên đăng nhập</label>
                 <input
                   type="text"
                   className="search-input"
                   style={{ width: '100%', boxSizing: 'border-box', background: '#292524', border: '1px solid #44403c', borderRadius: '6px', padding: '0.5rem', color: '#fff' }}
                   value={createUsername}
                   onChange={(e) => setCreateUsername(e.target.value)}
-                  placeholder="Enter username"
+                  placeholder="Nhập tên đăng nhập..."
                   disabled={actionLoading}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8125rem', color: '#a8a29e', marginBottom: '0.375rem' }}>Password</label>
+                <label style={{ display: 'block', fontSize: '0.8125rem', color: '#a8a29e', marginBottom: '0.375rem' }}>Mật khẩu</label>
                 <input
                   type="password"
                   className="search-input"
                   style={{ width: '100%', boxSizing: 'border-box', background: '#292524', border: '1px solid #44403c', borderRadius: '6px', padding: '0.5rem', color: '#fff' }}
                   value={createPassword}
                   onChange={(e) => setCreatePassword(e.target.value)}
-                  placeholder="Enter password (min 6 chars)"
+                  placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)..."
                   disabled={actionLoading}
                 />
               </div>
@@ -396,7 +384,7 @@ export default function UsersPage({ currentUser, onLogout }) {
                 onClick={() => { setShowCreateModal(false); setCreateUsername(''); setCreatePassword(''); }}
                 disabled={actionLoading}
               >
-                Cancel
+                Hủy bỏ
               </button>
               <button
                 className="btn btn-sm"
@@ -404,7 +392,7 @@ export default function UsersPage({ currentUser, onLogout }) {
                 onClick={handleCreateUser}
                 disabled={actionLoading}
               >
-                {actionLoading ? 'Creating...' : 'Create'}
+                {actionLoading ? 'Đang tạo...' : 'Tạo người dùng'}
               </button>
             </div>
           </div>
@@ -432,20 +420,20 @@ export default function UsersPage({ currentUser, onLogout }) {
             maxWidth: '400px',
             boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
           }}>
-            <h3 style={{ margin: '0 0 0.5rem 0', color: '#fff', fontSize: '1.25rem', fontWeight: '600' }}>Reset Password</h3>
+            <h3 style={{ margin: '0 0 0.5rem 0', color: '#fff', fontSize: '1.25rem', fontWeight: '600' }}>Đặt Lại Mật Khẩu</h3>
             <p style={{ margin: '0 0 1rem 0', fontSize: '0.875rem', color: '#a8a29e' }}>
-              Enter new password for user <strong style={{ color: 'var(--accent, #ea580c)' }}>{resetUsername}</strong>
+              Nhập mật khẩu mới cho tài khoản <strong style={{ color: 'var(--accent, #ea580c)' }}>{resetUsername}</strong>
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.8125rem', color: '#a8a29e', marginBottom: '0.375rem' }}>New Password</label>
+                <label style={{ display: 'block', fontSize: '0.8125rem', color: '#a8a29e', marginBottom: '0.375rem' }}>Mật khẩu mới</label>
                 <input
                   type="password"
                   className="search-input"
                   style={{ width: '100%', boxSizing: 'border-box', background: '#292524', border: '1px solid #44403c', borderRadius: '6px', padding: '0.5rem', color: '#fff' }}
                   value={resetPasswordVal}
                   onChange={(e) => setResetPasswordVal(e.target.value)}
-                  placeholder="Enter new password (min 6 chars)"
+                  placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)..."
                   disabled={actionLoading}
                 />
               </div>
@@ -456,7 +444,7 @@ export default function UsersPage({ currentUser, onLogout }) {
                 onClick={() => { setShowResetModal(false); setResetPasswordVal(''); setResetUserId(''); setResetUsername(''); }}
                 disabled={actionLoading}
               >
-                Cancel
+                Hủy bỏ
               </button>
               <button
                 className="btn btn-sm"
@@ -464,7 +452,7 @@ export default function UsersPage({ currentUser, onLogout }) {
                 onClick={handleResetPassword}
                 disabled={actionLoading}
               >
-                {actionLoading ? 'Resetting...' : 'Reset Password'}
+                {actionLoading ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
               </button>
             </div>
           </div>

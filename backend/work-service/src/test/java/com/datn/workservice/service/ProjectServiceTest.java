@@ -127,8 +127,8 @@ class ProjectServiceTest {
             return types;
         });
 
-        Status statusMock = Status.builder().id(UUID.randomUUID()).name("To Do").category(StatusCategory.TODO).build();
-        when(statusRepository.findByName(anyString())).thenReturn(Optional.of(statusMock));
+        Status statusMock = Status.builder().id(UUID.randomUUID()).projectId(projectId).name("To Do").category(StatusCategory.TODO).build();
+        when(statusRepository.findByProjectIdAndNameIgnoreCase(any(UUID.class), anyString())).thenReturn(Optional.of(statusMock));
 
         Workflow workflowMock = Workflow.builder().id(UUID.randomUUID()).projectId(projectId).name("CBE Workflow").build();
         when(workflowRepository.save(any(Workflow.class))).thenReturn(workflowMock);
@@ -156,8 +156,8 @@ class ProjectServiceTest {
 
         // Verify sequence generation
         verify(atomicKeySequenceGenerator).createSequenceForProject("CBE");
-        // Verify 5 WorkItemTypes seeded
-        verify(workItemTypeRepository).saveAll(argThat(list -> ((List<?>) list).size() == 5));
+        // Verify 3 WorkItemTypes seeded (Epic, Task, Subtask)
+        verify(workItemTypeRepository).saveAll(argThat(list -> ((List<?>) list).size() == 3));
         // Verify Workflow created
         verify(workflowRepository).save(any(Workflow.class));
         // Verify Board and columns created

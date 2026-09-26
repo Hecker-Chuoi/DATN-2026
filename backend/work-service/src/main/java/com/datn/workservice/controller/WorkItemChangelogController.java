@@ -19,6 +19,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkItemChangelogController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET /api/v1/work/items/{itemId}/changelogs | /work-items/{itemId}/changelogs : Lấy lịch sử thay đổi của công việc
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final WorkItemAuditService auditService;
 
     @GetMapping({"/items/{itemId}/changelogs", "/work-items/{itemId}/changelogs"})

@@ -55,6 +55,7 @@ public class WorkItemDetailResponse {
     private WorkItemResponse parent;
     private List<WorkItemResponse> subtasks;
     private List<WorkItemResponse> childStories; // Populated when this item is an Epic
+    private List<WorkItemResponse> descendants;  // All recursive descendants (Stories + Subtasks)
 
     // Sprint info
     private UUID sprintId;
@@ -72,7 +73,19 @@ public class WorkItemDetailResponse {
     private Long originalEstimateSeconds;
     private Long remainingEstimateSeconds;
     private Long timeSpentSeconds;
+    private Long totalTimeSpentSeconds;
+    private Long totalRemainingEstimateSeconds;
+    private BigDecimal totalStoryPoints;
+    private BigDecimal doneStoryPoints;
     private String rank;
+
+    // Timeline & Link Conflict Flags
+    private Boolean hasTimelineConflict;
+    private String timelineConflictMessage;
+    private Boolean isBlocked;
+    private List<WorkItemResponse> blockingWorkItems;
+    private Boolean hasDependencyConflict;
+    private String dependencyConflictMessage;
 
     // Component & Version
     private UUID componentId;

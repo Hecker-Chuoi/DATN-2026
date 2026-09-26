@@ -82,10 +82,10 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
           </div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 4 }}>
-              DATN Workspace
+              Không gian làm việc DATN
               <ChevronDown size={14} color="#64748B" />
             </div>
-            <div style={{ fontSize: 11, color: '#64748B' }}>Free Plan</div>
+            <div style={{ fontSize: 11, color: '#64748B' }}>Gói miễn phí</div>
           </div>
         </div>
 
@@ -117,13 +117,13 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         <NavItem
           to="/projects"
           icon={<FolderKanban size={17} color="#2563EB" />}
-          label="Projects & Board"
+          label="Dự án & Bảng làm việc"
           active={location.pathname.startsWith('/projects')}
         />
         <NavItem
           to="/my-issues"
           icon={<CheckCircle2 size={17} color="#10B981" />}
-          label="My tasks"
+          label="Nhiệm vụ của tôi"
           active={location.pathname === '/my-issues'}
         />
       </div>
@@ -145,7 +145,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
             letterSpacing: '0.05em',
           }}
         >
-          <span>Your teams</span>
+          <span>Nhóm của bạn</span>
           <button
             onClick={onOpenCreateTeam}
             title="Thêm nhóm mới"
@@ -236,13 +236,13 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
                       <SubNavItem
                         to={`/teams/${team.id}`}
                         icon={<Home size={14} />}
-                        label="Home & Members"
+                        label="Trang chủ & Thành viên"
                         active={location.pathname === `/teams/${team.id}`}
                       />
                       <SubNavItem
                         to={`/projects?teamId=${team.id}`}
                         icon={<Layers size={14} />}
-                        label="Projects"
+                        label="Danh sách dự án"
                         active={location.search.includes(`teamId=${team.id}`)}
                       />
                     </div>

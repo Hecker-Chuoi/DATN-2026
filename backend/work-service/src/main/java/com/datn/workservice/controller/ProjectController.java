@@ -28,6 +28,19 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProjectController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * POST   /api/v1/work/projects                  : Tạo dự án mới (khởi tạo hệ sinh thái)
+     * GET    /api/v1/work/projects                  : Lấy danh sách dự án (lọc theo workspace/team + tìm kiếm + phân trang)
+     * GET    /api/v1/work/projects/templates        : Lấy danh sách dự án mẫu (templates)
+     * GET    /api/v1/work/projects/{projectId}      : Lấy chi tiết dự án theo ID
+     * GET    /api/v1/work/projects/key/{key}        : Lấy chi tiết dự án theo key
+     * PUT    /api/v1/work/projects/{projectId}      : Cập nhật thông tin dự án
+     * DELETE /api/v1/work/projects/{projectId}      : Xóa dự án (lưu trữ / chuyển vào thùng rác)
+     * POST   /api/v1/work/projects/{projectId}/restore : Khôi phục dự án đã lưu trữ
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final ProjectService projectService;
 
     @PostMapping

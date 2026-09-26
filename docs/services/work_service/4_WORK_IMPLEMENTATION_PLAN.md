@@ -12,7 +12,7 @@
 
 ---
 
-## 🗺️ TỔNG QUAN LỘ TRÌNH 9 GIAI ĐOẠN (24 BƯỚC THỰC THI)
+## 🗺️ TỔNG QUAN LỘ TRÌNH 9 GIAI ĐOẠN (25 BƯỚC THỰC THI)
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -41,7 +41,8 @@
 │ ├── Bước 5.1: DTOs cho Work Item đa năng & JSONB Custom Fields                                         │
 │ ├── Bước 5.2: Work Item CRUD & Optimistic Lock (BE) + Modal Chi tiết Issue chuẩn Jira (FE)             │
 │ ├── Bước 5.3: Nhật ký Audit Trail (BE: Changelog EntityListener + FE: Tab Lịch sử thay đổi Timeline)   │
-│ └── Bước 5.4: Comments Threaded, Attachments Dropzone & Linked Issues Widget (BE + FE)                 │
+│ ├── Bước 5.4: Comments Threaded, Attachments Dropzone & Linked Issues Widget (BE + FE)                 │
+│ └── Bước 5.5: Ràng buộc Thời gian, Sprint, Trạng thái Liên tầng & Issue Links (Fullstack BE + FE)       │
 ├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ GIAI ĐOẠN 6: SPRINT, BACKLOG & BẢNG CÔNG VIỆC (Sprint Lifecycle, Boards & Agile Reports)               │
 │ ├── Bước 6.1: Sprint Service (BE) + Màn hình Backlog (FE: Accordion Sprints, Start/Complete Modal)     │
@@ -178,6 +179,45 @@
 * **Frontend:** Khu vực bình luận Markdown, kéo thả tải tệp đính kèm và widget liên kết issue (Blocks, Relates to).
 * **Tiêu chí nghiệm thu (DoD):** Đăng bình luận, đính kèm file ảnh/PDF và tạo liên kết thành công.
 
+#### 🔹 Bước 5.5: Ràng buộc Thời gian, Sprint & Trạng thái Liên tầng và Liên kết Công việc (Hierarchy & Issue Links Engine Fullstack BE + FE)
+
+> ⚠️ **YÊU CẦU BẮT BUỘC FULLSTACK (BE + FE):**  
+> Toàn bộ các quy tắc liên tầng (Hierarchy) và quan hệ liên kết tương đối (Relative Tasks / Issue Links) **KHÔNG ĐƯỢC CHỈ LÀM Ở BACKEND** mà **BẮT BUỘC PHẢI ĐƯỢC TRIỂN KHAI ĐỒNG NHẤT TRÊN FRONTEND (React 19)**. Người dùng trực tiếp thao tác kéo thả trên Kanban Board, Backlog, Drawer chi tiết và Widget Linked Issues; do đó mọi cơ chế chặn hoàn thành, cảnh báo lệch hạn, huy hiệu ổ khóa cản trở, vô hiệu hóa nhập điểm và thanh tiến độ cuộn (Roll-up) phải có component UI tương tác trực quan chuẩn Jira Cloud.
+
+* **Backend (Java 21 / Spring Boot 3.x):**
+  - **1. Phân hệ Phân cấp Cấu trúc (Hierarchy Engine):**
+    - `Cascading Sprint Synchronizer`: Khi dời Task cha (Level 0) sang Sprint mới hoặc trả về Backlog qua `updateWorkItem`, tự động cập nhật đồng bộ `sprintId` cho tất cả Subtasks con (`parent_id = item.id`).
+    - `Subtask Blocking Guard`: Ràng buộc chặt chẽ khi chuyển trạng thái Task cha sang `StatusCategory.DONE`; nếu còn Subtask con chưa hoàn thành (`status.category != DONE`), chặn lại và thông báo lỗi `400 BAD REQUEST` (kèm danh sách Subtasks cản trở) hoặc cung cấp cờ `resolveAllSubtasks = true` để đóng đồng loạt.
+    - `Timeline Conflict Soft Warning`: So sánh `startDate` / `dueDate` giữa Subtask và Task cha; tự động trả về cờ `hasTimelineConflict = true` và `timelineConflictMessage` khi `subtask.dueDate > parent.dueDate` (cảnh báo mềm, không chặn cứng).
+    - `Roll-up Progress & Estimates Engine`: Tự động tính toán tổng hợp các trường cuộn dữ liệu trong `WorkItemDetailResponse`: `totalTimeSpentSeconds`, `totalRemainingEstimateSeconds`, `subtaskCount`, `subtaskDoneCount`, và đối với Epic tính `totalStoryPoints`, `doneStoryPoints` cùng danh sách `childStories`.
+    - `Auto-transition Parent Listener`: Tự động kích hoạt chuyển Task cha từ `TODO` sang `IN_PROGRESS` khi có Subtask con đầu tiên được kéo sang `IN_PROGRESS`.
+  - **2. Phân hệ Liên kết Tương đối (Relative Tasks / Issue Links Engine):**
+    - `LinkHierarchyValidator`:
+      * **Chặn liên kết Cha - Con ruột:** Cấm tuyệt đối tạo liên kết giữa Task cha và Subtask con của chính nó (`source.parentId == target.id || target.parentId == source.id`) để bảo toàn tính cô lập giữa phân cấp và liên kết.
+      * **Chặn Lệch pha Quy mô (Scale Mismatch):** Ngăn chặn liên kết `BLOCKS` trực tiếp giữa Epic (Level 1) và Subtask (Level -1) (bắt buộc liên kết qua Story trung gian).
+    - `Blocked Transition Guard (Issue Links)`: Trong `WorkflowEngineServiceImpl`, khi chuyển công việc sang `IN_PROGRESS` hoặc `DONE`, kiểm tra quan hệ `IS_BLOCKED_BY`. Nếu còn blocker chưa `DONE` (`statusCategory != DONE`), chặn chuyển trạng thái và thông báo công việc tiền đề cản trở.
+    - `Dependency Timeline Conflict Evaluator`: So sánh `blocker.dueDate > dependent.startDate` trong quan hệ `BLOCKS`, tự động trả về cờ `hasDependencyConflict = true`.
+    - `Auto-resolution on DUPLICATES`: Khi tạo liên kết `B DUPLICATES A`, tự động chuyển trạng thái B sang `DONE` (hoặc `CANCELLED`) kèm lý do `Resolution = DUPLICATE`.
+    - `Unblocking Event Publisher`: Khi Blocker A chuyển sang `DONE`, phát hành sự kiện giải phóng (Unblocked) cho các task bị chặn B; khi A bị Reopen $\rightarrow$ Tái kích hoạt trạng thái Blocked.
+* **Frontend (React 19 / Vite / TailwindCSS):**
+  - **1. Giao diện Phân cấp (Hierarchy UI):**
+    - `TimelineConflictBadge`: Huy hiệu màu vàng cam `⚠️ Hạn chót trễ hơn Task cha` trên thẻ Kanban/Scrum Board, danh sách Backlog và Drawer [`WorkItemDetailModal.jsx`](file:///d:/DATN-2026/frontend/src/components/items/WorkItemDetailModal.jsx). Kèm nút 1-click `[Đồng bộ hạn về Task cha]`.
+    - `ResolveSubtasksModal.jsx`: Modal popup khi đóng Task cha dở dang với lựa chọn `[Quay lại]` hoặc `[Đồng thời hoàn thành tất cả Sub-tasks con]`.
+    - Accordion kéo thả đồng bộ Sprint trên `ProjectBacklogPage.jsx`.
+    - Khóa ô nhập Story Points khi tạo/sửa Sub-task (`hierarchyLevel === -1`).
+    - Thanh đo lường tiến độ kép (Dual Progress Bar) cho Time Tracking và thanh phân bổ trạng thái 3 màu Tri-color của Epic.
+  - **2. Giao diện Liên kết Tương đối (Relative Links UI):**
+    - `BlockedCardBadge`: Thẻ công việc bị cản trở hiển thị huy hiệu ổ khóa đỏ `🔒 BLOCKED` trên Kanban Board và Drawer chi tiết.
+    - Gạch ngang tiêu đề (`~~CODE~~`) và làm mờ thẻ liên kết trong widget `LinkedIssues` khi công việc tiền đề đã `DONE`.
+    - Biểu tượng chấm than đỏ `⚠️ Lệch hạn phụ thuộc` trên widget `LinkedIssues` khi `blocker.dueDate > dependent.startDate`.
+    - Bộ lọc an toàn trong Modal `+ Link issue`: Tự động loại trừ chính nó, loại trừ cha/con ruột, và ẩn Sub-task khi Epic chọn quan hệ `BLOCKS`.
+* **Tiêu chí nghiệm thu (DoD):**
+  - Đổi Sprint Story cha $\rightarrow$ 100% Subtasks con tức thì mang `sprintId` mới cả trên UI lẫn CSDL.
+  - Kéo Story cha sang DONE khi còn Subtask hoặc còn Blocker chưa giải quyết $\rightarrow$ Bị chặn hoặc bật Modal xác nhận tương ứng.
+  - Thử tạo liên kết giữa Cha và Con ruột hoặc Epic BLOCKS Subtask $\rightarrow$ Bị chặn từ chối kèm thông báo lỗi rõ ràng.
+  - Gắn liên kết DUPLICATES $\rightarrow$ Thẻ trùng tự động đóng với Resolution `DUPLICATE`.
+  - Toàn bộ unit tests & integration tests cho Hierarchy và Relative Links pass 100%.
+
 ---
 
 ### GIAI ĐOẠN 6: SPRINT, BACKLOG & BẢNG CÔNG VIỆC (SCRUM & KANBAN)
@@ -255,7 +295,7 @@
 | **Giai đoạn 2** | Thuật toán Atomic Sequence, LexoRank $O(1)$, Hierarchy | 🟡 **Tiếp theo** | Các service thuật toán cốt lõi |
 | **Giai đoạn 3** | Quản trị Dự án, WorkItemTypes, Auto-seed & RBAC | ⚪ Chờ thực thi | API CRUD Project + Frontend Project List |
 | **Giai đoạn 4** | Dynamic Workflow Engine FSM (Conditions, Validators, Post-fns) | ⚪ Chờ thực thi | Động cơ chuyển trạng thái linh hoạt |
-| **Giai đoạn 5** | Work Items, JSONB Custom Fields, Modal Chi tiết & Audit Trail | ⚪ Chờ thực thi | Modal Issue chuẩn Jira & EntityListener Changelog |
+| **Giai đoạn 5** | Work Items, Custom Fields, Modal Chi tiết, Hierarchy & Issue Links Engine | ⚪ Chờ thực thi | Modal Issue Jira, Hierarchy & Relative Links Engine, Changelog |
 | **Giai đoạn 6** | Sprint Lifecycle, Backlog Accordion, Kanban Board & Reports | ⚪ Chờ thực thi | Kéo thả DnD Board & Burndown Chart |
 | **Giai đoạn 7** | Components, Versions, Labels & Template Deep Cloning | ⚪ Chờ thực thi | Two-Pass Shifting Date Engine |
 | **Giai đoạn 8** | JQL Search Engine, Automation Rules, WebSocket & Outbox | ⚪ Chờ thực thi | Realtime STOMP & Kafka Outbox |

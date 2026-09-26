@@ -2,6 +2,7 @@ package com.datn.workservice.controller;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.common.exception.BadRequestException;
+import com.datn.common.exception.ForbiddenException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.client.IdentityClient;
 import com.datn.workservice.client.dto.UserResponse;
@@ -44,6 +45,22 @@ import java.util.*;
 @RequestMapping("/api/v1/work/teams")
 @RequiredArgsConstructor
 public class TeamController {
+
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET    /api/v1/work/teams                            : Lấy danh sách tất cả Team (Admin)
+     * GET    /api/v1/work/teams/my | /me                   : Lấy danh sách Team người dùng hiện tại tham gia
+     * GET    /api/v1/work/teams/{teamId}                   : Lấy chi tiết Team theo ID
+     * POST   /api/v1/work/teams                            : Tạo Team mới (người tạo là Leader)
+     * PUT    /api/v1/work/teams/{teamId}                   : Cập nhật thông tin Team (Leader/Owner)
+     * DELETE /api/v1/work/teams/{teamId}                   : Xóa Team (chỉ Owner)
+     * POST   /api/v1/work/teams/{teamId}/leave             : Rời khỏi Team (thành viên tự rời)
+     * GET    /api/v1/work/teams/{teamId}/members           : Lấy danh sách thành viên của Team
+     * POST   /api/v1/work/teams/{teamId}/members           : Thêm thành viên vào Team (Leader/Owner)
+     * PUT    /api/v1/work/teams/{teamId}/members/{userId}/role : Cập nhật vai trò thành viên (Leader)
+     * DELETE /api/v1/work/teams/{teamId}/members/{userId}  : Xóa thành viên khỏi Team (Leader/Owner)
+     * ────────────────────────────────────────────────────────────────────────
+     */
 
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
@@ -92,16 +109,21 @@ public class TeamController {
                 .name(body.getOrDefault("name", "Nhóm mới"))
                 .description(body.get("description"))
                 .ownerId(currentUserId)
-                .workspaceId(currentUserId) // Placeholder workspace
+                .workspaceId(currentUserId) // Workspace tạm thời (placeholder)
                 .build();
         Team saved = teamRepository.save(team);
 
-        // Người tạo luôn là LEADER của nhóm
-        teamMemberRepository.save(TeamMember.builder()
-                .teamId(saved.getId())
-                .userId(currentUserId)
-                .role(TeamRole.LEADER)
-                .build());
+        // Tự động gán người tạo làm LEADER
+        try {
+            TeamMember leader = TeamMember.builder()
+                    .teamId(saved.getId())
+                    .userId(currentUserId)
+                    .role(TeamRole.LEADER)
+                    .build();
+            teamMemberRepository.save(leader);
+        } catch (Exception ex) {
+            log.warn("Could not save initial team leader: {}", ex.getMessage());
+        }
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(saved, "Tạo nhóm thành công"));
@@ -196,7 +218,8 @@ public class TeamController {
         List<UUID> userIds = members.stream().map(TeamMember::getUserId).toList();
         Map<UUID, UserResponse> userMap = fetchUsers(userIds);
 
-        List<TeamMemberResponse> result = new ArrayList<>();
+        // Gộp theo người dùng để tránh trùng lặp khi dữ liệu cũ tồn tại cả KeycloakId và DbId
+        Map<String, TeamMemberResponse> dedupMap = new LinkedHashMap<>();
         for (TeamMember m : members) {
             UserResponse u = userMap.get(m.getUserId());
             String fullName = null;
@@ -213,7 +236,16 @@ public class TeamController {
                 }
             }
 
-            result.add(TeamMemberResponse.builder()
+            String dedupKey = (email != null && !email.isBlank()) ? email.toLowerCase() : m.getUserId().toString();
+            if (dedupMap.containsKey(dedupKey)) {
+                // Giữ vai trò LEADER nếu một trong hai bản ghi là LEADER
+                if (m.getRole() == TeamRole.LEADER) {
+                    dedupMap.get(dedupKey).setRole(TeamRole.LEADER);
+                }
+                continue;
+            }
+
+            TeamMemberResponse resp = TeamMemberResponse.builder()
                     .id(m.getId())
                     .teamId(m.getTeamId())
                     .userId(m.getUserId())
@@ -222,10 +254,12 @@ public class TeamController {
                     .username(username)
                     .email(email)
                     .fullName(fullName != null ? fullName : "Thành viên (" + m.getUserId().toString().substring(0, 8) + ")")
-                    .build());
+                    .build();
+
+            dedupMap.put(dedupKey, resp);
         }
 
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return ResponseEntity.ok(ApiResponse.success(new ArrayList<>(dedupMap.values())));
     }
 
     @Transactional

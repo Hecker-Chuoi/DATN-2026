@@ -1,42 +1,44 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useOutletContext } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   FolderKanban,
   Kanban,
   ListTodo,
+  Layers,
+  Sparkles,
   Users,
+  ShieldCheck,
+  Settings,
   GitBranch,
   Star,
   MoreHorizontal,
   Link2,
+  SlidersHorizontal,
   Plus,
-  ShieldCheck
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi } from '../api.js';
 import { useProjectPermission } from '../hooks/useProjectPermission.js';
-import AccessDenied from '../components/common/AccessDenied.jsx';
 import ProjectMembersTab from '../components/project/ProjectMembersTab.jsx';
 import ProjectWorkflowTab from '../components/project/ProjectWorkflowTab.jsx';
 import ProjectBoardView from '../components/boards/ProjectBoardView.jsx';
 import CreateWorkItemModal from '../components/items/CreateWorkItemModal.jsx';
 import WorkItemDetailModal from '../components/items/WorkItemDetailModal.jsx';
-
-const ROLE_LABELS = {
-  ADMINISTRATOR: { label: 'Administrator', bg: '#FAF5FF', color: '#7E22CE', border: '#E9D5FF' },
-  MEMBER: { label: 'Member', bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
-  VIEWER: { label: 'Viewer', bg: '#F8FAFC', color: '#475569', border: '#E2E8F0' },
-  ADMIN: { label: 'System Admin', bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
-};
+import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
-  const { currentUser } = useOutletContext() || {};
-
+  const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
-  const [activeTab, setActiveTab] = useState('board'); // 'board' | 'backlog' | 'members' | 'workflow'
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      return sessionStorage.getItem(`project_${projectId}_active_tab`) || 'board';
+    } catch {
+      return 'board';
+    }
+  });
   const [isStarred, setIsStarred] = useState(false);
   const [members, setMembers] = useState([]);
 
@@ -46,80 +48,73 @@ export default function ProjectDetailPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
 
-  // ─── Quyền của người dùng hiện tại trong dự án (backend là nguồn sự thật) ───
-  const perm = useProjectPermission(projectId);
-  const { can, isAdmin, isLead, isGlobalAdmin, role } = perm;
+  const outletContext = useOutletContext() || {};
+  const currentUser = outletContext.currentUser;
 
-  // Keycloak id là định danh work-service dùng cho authorId / uploadedBy / assigneeId
-  const currentUserId = currentUser?.keycloakId || currentUser?.id || null;
+  // Project Action Menu & Delete Modal State
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const actionMenuRef = useRef(null);
 
-  const fetchProject = async () => {
+  const { isAdmin, canCreateIssue, canManageSprint, permissions } = useProjectPermission(projectId);
+
+  const isSystemAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN');
+  const isProjectLead = !!(currentUser && project?.leadUserId === currentUser.id);
+  const isProjectCreator = !!(currentUser && project?.createdBy === currentUser.id);
+  const canDelete = isAdmin || isSystemAdmin || isProjectLead || isProjectCreator;
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target)) {
+        setIsActionMenuOpen(false);
+      }
+    };
+    if (isActionMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isActionMenuOpen]);
+
+  const fetchProject = async (isBackground = false) => {
     try {
-      setLoading(true);
-      setLoadError(null);
+      if (!isBackground) setLoading(true);
       const [projRes, membersRes] = await Promise.all([
-        projectApi.getById(projectId, { skipErrorToast: true }),
-        projectApi.getMembers(projectId, { skipErrorToast: true }).catch(() => null),
+        projectApi.getById(projectId),
+        projectApi.getMembers(projectId).catch(() => null),
       ]);
       if (projRes && projRes.data) {
         setProject(projRes.data);
       }
       if (membersRes && membersRes.data) {
-        setMembers(Array.isArray(membersRes.data) ? membersRes.data : []);
+        setMembers(membersRes.data);
       }
     } catch (err) {
       console.warn('Could not load project detail:', err);
-      setLoadError(err);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
-  // Chỉ tải dữ liệu dự án sau khi backend xác nhận user có quyền xem
   useEffect(() => {
-    if (projectId && perm.status === 'ready') {
+    if (projectId) {
       fetchProject();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, perm.status]);
+  }, [projectId]);
 
   const handleOpenDetailModal = (itemId) => {
     setSelectedItemId(itemId);
     setIsDetailModalOpen(true);
   };
 
-  const handleItemCreated = () => {
+  const handleItemCreated = (newItem) => {
     setBoardRefreshKey((prev) => prev + 1);
   };
 
-  const handleItemUpdated = () => {
+  const handleItemUpdated = (updatedItem) => {
     setBoardRefreshKey((prev) => prev + 1);
   };
-
-  // ─── Trạng thái truy cập ───
-  if (perm.forbidden || loadError?.status === 403) {
-    return <AccessDenied status={403} />;
-  }
-  if (perm.notFound || loadError?.status === 404) {
-    return <AccessDenied status={404} />;
-  }
-  if (perm.status === 'error') {
-    return (
-      <AccessDenied
-        status={403}
-        title="Không kiểm tra được quyền truy cập"
-        message={perm.error?.message || 'Không thể kết nối tới máy chủ. Vui lòng thử lại sau.'}
-      />
-    );
-  }
-
-  const roleBadge = ROLE_LABELS[role] || null;
-  const availableTabs = [
-    { id: 'board', label: 'Active Board', icon: Kanban },
-    { id: 'backlog', label: 'Backlog', icon: ListTodo },
-    { id: 'members', label: 'Members & Roles', icon: Users },
-    { id: 'workflow', label: 'Workflow & Statuses', icon: GitBranch },
-  ];
 
   return (
     <div
@@ -162,7 +157,7 @@ export default function ProjectDetailPage() {
             <FolderKanban size={14} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
-            <span>{project?.name || 'Project Details'}</span>
+            <span>{project?.name || 'Chi tiết dự án'}</span>
             {project?.key && (
               <span
                 style={{
@@ -178,29 +173,6 @@ export default function ProjectDetailPage() {
               </span>
             )}
           </div>
-
-          {/* Vai trò của tôi trong dự án */}
-          {roleBadge && (
-            <span
-              title={isLead ? 'Bạn là Trưởng dự án (Project Lead)' : isGlobalAdmin ? 'Quản trị viên hệ thống' : 'Vai trò của bạn trong dự án'}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: 11,
-                fontWeight: 600,
-                color: roleBadge.color,
-                backgroundColor: roleBadge.bg,
-                border: `1px solid ${roleBadge.border}`,
-                padding: '2px 8px',
-                borderRadius: 10,
-              }}
-            >
-              <ShieldCheck size={11} />
-              <span>{isLead ? 'Project Lead' : roleBadge.label}</span>
-            </span>
-          )}
-
           <button
             onClick={() => setIsStarred(!isStarred)}
             style={{
@@ -216,48 +188,107 @@ export default function ProjectDetailPage() {
           >
             <Star size={15} fill={isStarred ? '#EAB308' : 'none'} />
           </button>
-          <button
-            style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#94A3B8',
-              padding: 2,
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <MoreHorizontal size={16} />
-          </button>
+          {canDelete && (
+            <div style={{ position: 'relative' }} ref={actionMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsActionMenuOpen(!isActionMenuOpen)}
+                style={{
+                  background: isActionMenuOpen ? '#F1F5F9' : 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: isActionMenuOpen ? '#0F172A' : '#94A3B8',
+                  padding: 4,
+                  borderRadius: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  transition: 'all 0.15s ease',
+                }}
+                title="Tùy chọn dự án"
+              >
+                <MoreHorizontal size={16} />
+              </button>
+
+              {isActionMenuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    marginTop: 6,
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 8,
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
+                    border: '1px solid #E2E8F0',
+                    minWidth: 200,
+                    zIndex: 50,
+                    overflow: 'hidden',
+                    padding: '4px',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      setIsDeleteModalOpen(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: 'none',
+                      backgroundColor: 'transparent',
+                      color: '#EF4444',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#FEF2F2';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <Trash2 size={14} color="#EF4444" />
+                    <span>Xóa dự án (Thùng rác)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Nút Tạo Issue: chỉ hiện khi có quyền ISSUE_CREATE */}
-          {can('ISSUE_CREATE') && (
-            <button
-              onClick={() => setIsCreateItemModalOpen(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                backgroundColor: '#2563EB',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: 6,
-                padding: '5px 12px',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: '0 1px 2px rgba(37,99,235,0.2)',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1D4ED8')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2563EB')}
-            >
-              <Plus size={14} />
-              <span>Tạo công việc</span>
-            </button>
-          )}
+          {/* Nút Tạo Issue nổi bật trên Header */}
+          <button
+            onClick={() => setIsCreateItemModalOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: '#2563EB',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: 6,
+              padding: '5px 12px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(37,99,235,0.2)',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1D4ED8')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2563EB')}
+          >
+            <Plus size={14} />
+            <span>Tạo công việc</span>
+          </button>
 
           <button
             onClick={() => {
@@ -292,14 +323,25 @@ export default function ProjectDetailPage() {
           gap: 12,
         }}
       >
+        {/* Navigation Pills */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {availableTabs.map((tab) => {
+          {[
+            { id: 'board', label: 'Bảng làm việc', icon: Kanban },
+            { id: 'backlog', label: 'Danh sách tồn đọng', icon: ListTodo },
+            { id: 'members', label: 'Thành viên & Vai trò', icon: Users },
+            { id: 'workflow', label: 'Cấu hình Dự án', icon: Settings },
+          ].map((tab) => {
             const active = activeTab === tab.id;
             const TabIcon = tab.icon;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  try {
+                    sessionStorage.setItem(`project_${projectId}_active_tab`, tab.id);
+                  } catch (e) {}
+                }}
                 style={{
                   padding: '6px 14px',
                   borderRadius: 20,
@@ -325,9 +367,9 @@ export default function ProjectDetailPage() {
 
       {/* ─── Body Content ─── */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {perm.loading || loading ? (
+        {(loading && !project) ? (
           <div style={{ padding: 48, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
-            {perm.loading ? 'Đang kiểm tra quyền truy cập...' : 'Đang tải thông tin dự án...'}
+            Đang tải thông tin dự án...
           </div>
         ) : (
           <>
@@ -335,7 +377,8 @@ export default function ProjectDetailPage() {
               <ProjectBoardView
                 projectId={projectId}
                 projectKey={project?.key}
-                canCreate={can('ISSUE_CREATE')}
+                projectTypes={project?.workItemTypes || []}
+                canCreate={canCreateIssue || isAdmin}
                 onOpenCreateModal={() => setIsCreateItemModalOpen(true)}
                 onSelectWorkItem={handleOpenDetailModal}
                 refreshKey={boardRefreshKey}
@@ -360,29 +403,23 @@ export default function ProjectDetailPage() {
                   <ListTodo size={24} />
                 </div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>
-                  Backlog & Lập kế hoạch Sprint
+                  Danh sách tồn đọng & Kế hoạch Chu kỳ
                 </h3>
                 <p style={{ fontSize: 13, color: '#64748B' }}>
-                  Quản lý danh sách công việc tồn đọng (Product Backlog) và phân bổ Sprint.
+                  Quản lý danh sách công việc tồn đọng và phân bổ theo từng chu kỳ làm việc.
                 </p>
               </div>
             )}
 
             {activeTab === 'members' && (
               <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-                <ProjectMembersTab
-                  projectId={projectId}
-                  project={project}
-                  isAdmin={isAdmin}
-                  currentUserId={currentUserId}
-                  onMembersUpdated={fetchProject}
-                />
+                <ProjectMembersTab projectId={projectId} isAdmin={isAdmin} />
               </div>
             )}
 
             {activeTab === 'workflow' && (
               <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-                <ProjectWorkflowTab projectId={projectId} project={project} isAdmin={isAdmin} />
+                <ProjectWorkflowTab projectId={projectId} isAdmin={isAdmin} onTypesUpdated={() => fetchProject(true)} />
               </div>
             )}
           </>
@@ -410,10 +447,18 @@ export default function ProjectDetailPage() {
         }}
         onItemUpdated={handleItemUpdated}
         members={members}
-        projectId={projectId}
-        currentUserId={currentUserId}
-        can={can}
+      />
+
+      {/* ─── Delete Project Modal ─── */}
+      <DeleteProjectModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        project={project}
+        onDeleted={() => {
+          navigate('/projects');
+        }}
       />
     </div>
   );
 }
+

@@ -21,11 +21,19 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkItemTransitionController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET  /api/v1/work/work-items/{id}/transitions                : Lấy các bước chuyển khả dụng từ trạng thái hiện tại
+     * POST /api/v1/work/work-items/{id}/transitions/{transitionId} : Thực hiện chuyển trạng thái theo transitionId trên path
+     * POST /api/v1/work/work-items/{id}/transitions                : Thực hiện chuyển trạng thái (transitionId trong body)
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final WorkflowEngineService workflowEngineService;
 
     /**
-     * Retrieves all available transitions from the current status of the work item
-     * evaluated for the authenticated user.
+     * Lấy danh sách các bước chuyển khả dụng từ trạng thái hiện tại của công việc,
+     * được đánh giá dựa trên người dùng đã xác thực.
      */
     @GetMapping
     @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
@@ -38,7 +46,7 @@ public class WorkItemTransitionController {
     }
 
     /**
-     * Executes a specific workflow transition by transition ID in the path.
+     * Thực hiện bước chuyển trạng thái theo transitionId truyền trên đường dẫn (path).
      */
     @PostMapping("/{transitionId}")
     @RequireTaskPermission(PermissionKey.ISSUE_TRANSITION)
@@ -58,7 +66,7 @@ public class WorkItemTransitionController {
     }
 
     /**
-     * Executes a workflow transition with transition ID specified in the request body.
+     * Thực hiện bước chuyển trạng thái với transitionId được truyền trong body của request.
      */
     @PostMapping
     @RequireTaskPermission(PermissionKey.ISSUE_TRANSITION)

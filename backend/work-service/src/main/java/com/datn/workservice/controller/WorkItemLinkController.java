@@ -23,6 +23,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkItemLinkController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET    /api/v1/work/items/{itemId}/links | /work-items/{itemId}/links              : Lấy danh sách liên kết của công việc
+     * POST   /api/v1/work/items/{itemId}/links | /work-items/{itemId}/links              : Tạo liên kết giữa hai công việc
+     * DELETE /api/v1/work/items/{itemId}/links/{linkId} | /work-items/{itemId}/links/{linkId} : Xóa liên kết của công việc
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final WorkItemLinkService linkService;
 
     @GetMapping({"/items/{itemId}/links", "/work-items/{itemId}/links"})

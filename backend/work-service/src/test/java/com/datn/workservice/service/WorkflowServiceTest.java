@@ -42,6 +42,10 @@ class WorkflowServiceTest {
     private WorkflowEngineService workflowEngineService;
     @Mock
     private ProjectAccessService projectAccessService;
+    @Mock
+    private WorkItemRepository workItemRepository;
+    @Mock
+    private BoardColumnStatusRepository boardColumnStatusRepository;
 
     @InjectMocks
     private WorkflowServiceImpl workflowService;
@@ -148,9 +152,10 @@ class WorkflowServiceTest {
     @DisplayName("Create Transition: Saves transition when source and target statuses exist")
     void testCreateTransition_Success() {
         when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
-        when(statusRepository.existsById(todoStatusId)).thenReturn(true);
-        when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
         when(statusRepository.findById(todoStatusId)).thenReturn(Optional.of(todoStatus));
+        when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
+        when(workflowTransitionRepository.existsByWorkflowIdAndFromStatusIdAndToStatusId(workflowId, todoStatusId, inProgressStatusId)).thenReturn(false);
+        when(workflowTransitionRepository.existsByWorkflowIdAndNameIgnoreCase(workflowId, "Start Progress")).thenReturn(false);
 
         WorkflowTransition transition = WorkflowTransition.builder()
                 .id(UUID.randomUUID())
@@ -171,6 +176,175 @@ class WorkflowServiceTest {
         WorkflowTransitionResponse response = workflowService.createTransition(workflowId, request);
         assertThat(response).isNotNull();
         assertThat(response.getName()).isEqualTo("Start Progress");
+    }
+
+    @Test
+    @DisplayName("Create Transition: Throws BadRequest when fromStatus equals toStatus")
+    void testCreateTransition_SameStatus_ThrowsBadRequest() {
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+
+        CreateWorkflowTransitionRequest request = CreateWorkflowTransitionRequest.builder()
+                .workflowId(workflowId)
+                .fromStatusId(todoStatusId)
+                .toStatusId(todoStatusId)
+                .name("Self Transition")
+                .build();
+
+        assertThatThrownBy(() -> workflowService.createTransition(workflowId, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("không được trùng");
+    }
+
+    @Test
+    @DisplayName("Create Transition: Throws BadRequest when transition path already exists")
+    void testCreateTransition_DuplicatePath_ThrowsBadRequest() {
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        when(statusRepository.findById(todoStatusId)).thenReturn(Optional.of(todoStatus));
+        when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
+        when(workflowTransitionRepository.existsByWorkflowIdAndFromStatusIdAndToStatusId(workflowId, todoStatusId, inProgressStatusId)).thenReturn(true);
+
+        CreateWorkflowTransitionRequest request = CreateWorkflowTransitionRequest.builder()
+                .workflowId(workflowId)
+                .fromStatusId(todoStatusId)
+                .toStatusId(inProgressStatusId)
+                .name("Start Progress Again")
+                .build();
+
+        assertThatThrownBy(() -> workflowService.createTransition(workflowId, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Đã tồn tại bước chuyển giữa hai trạng thái này");
+    }
+
+    @Test
+    @DisplayName("Create Transition: Throws BadRequest when duplicate initial transition path exists")
+    void testCreateTransition_DuplicateInitialPath_ThrowsBadRequest() {
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        when(statusRepository.findById(todoStatusId)).thenReturn(Optional.of(todoStatus));
+        when(workflowTransitionRepository.existsByWorkflowIdAndFromStatusIdIsNullAndToStatusId(workflowId, todoStatusId)).thenReturn(true);
+
+        CreateWorkflowTransitionRequest request = CreateWorkflowTransitionRequest.builder()
+                .workflowId(workflowId)
+                .fromStatusId(null)
+                .toStatusId(todoStatusId)
+                .name("Create 2")
+                .build();
+
+        assertThatThrownBy(() -> workflowService.createTransition(workflowId, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Đã tồn tại bước chuyển giữa hai trạng thái này");
+    }
+
+    @Test
+    @DisplayName("Create Transition: Throws BadRequest when transition name already exists")
+    void testCreateTransition_DuplicateName_ThrowsBadRequest() {
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        when(statusRepository.findById(todoStatusId)).thenReturn(Optional.of(todoStatus));
+        when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
+        when(workflowTransitionRepository.existsByWorkflowIdAndFromStatusIdAndToStatusId(workflowId, todoStatusId, inProgressStatusId)).thenReturn(false);
+        when(workflowTransitionRepository.existsByWorkflowIdAndNameIgnoreCase(workflowId, "Start Progress")).thenReturn(true);
+
+        CreateWorkflowTransitionRequest request = CreateWorkflowTransitionRequest.builder()
+                .workflowId(workflowId)
+                .fromStatusId(todoStatusId)
+                .toStatusId(inProgressStatusId)
+                .name("Start Progress")
+                .build();
+
+        assertThatThrownBy(() -> workflowService.createTransition(workflowId, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("đã tồn tại trong quy trình");
+    }
+
+    @Test
+    @DisplayName("Create Transition: Throws BadRequest when status belongs to a different project")
+    void testCreateTransition_StatusDifferentProject_ThrowsBadRequest() {
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        Status foreignStatus = Status.builder()
+                .id(UUID.randomUUID())
+                .projectId(UUID.randomUUID()) // Different project!
+                .name("Foreign Status")
+                .category(StatusCategory.IN_PROGRESS)
+                .build();
+        when(statusRepository.findById(todoStatusId)).thenReturn(Optional.of(todoStatus));
+        when(statusRepository.findById(foreignStatus.getId())).thenReturn(Optional.of(foreignStatus));
+
+        CreateWorkflowTransitionRequest request = CreateWorkflowTransitionRequest.builder()
+                .workflowId(workflowId)
+                .fromStatusId(todoStatusId)
+                .toStatusId(foreignStatus.getId())
+                .name("Go to Foreign")
+                .build();
+
+        assertThatThrownBy(() -> workflowService.createTransition(workflowId, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("không thuộc phạm vi dự án");
+    }
+
+    @Test
+    @DisplayName("Update Transition: Successfully updates transition and allows clearing fromStatusId to null")
+    void testUpdateTransition_Success() {
+        UUID transitionId = UUID.randomUUID();
+        WorkflowTransition existing = WorkflowTransition.builder()
+                .id(transitionId)
+                .workflowId(workflowId)
+                .fromStatusId(todoStatusId)
+                .toStatusId(inProgressStatusId)
+                .name("Old Name")
+                .build();
+
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        when(workflowTransitionRepository.findById(transitionId)).thenReturn(Optional.of(existing));
+        when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
+        when(workflowTransitionRepository.findByWorkflowIdAndFromStatusIdIsNullAndToStatusId(workflowId, inProgressStatusId)).thenReturn(Optional.empty());
+        when(workflowTransitionRepository.findByWorkflowIdAndNameIgnoreCase(workflowId, "New Name")).thenReturn(Optional.empty());
+        when(workflowTransitionRepository.save(any(WorkflowTransition.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateWorkflowTransitionRequest updateReq = UpdateWorkflowTransitionRequest.builder()
+                .fromStatusId(null) // Clear to null (Initial/Any)
+                .toStatusId(inProgressStatusId)
+                .name("New Name")
+                .build();
+
+        WorkflowTransitionResponse updated = workflowService.updateTransition(workflowId, transitionId, updateReq);
+        assertThat(updated).isNotNull();
+        assertThat(updated.getName()).isEqualTo("New Name");
+        assertThat(updated.getFromStatusId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Update Transition: Throws BadRequest when updating to duplicate transition path")
+    void testUpdateTransition_DuplicatePath_ThrowsBadRequest() {
+        UUID transitionId = UUID.randomUUID();
+        UUID otherTransitionId = UUID.randomUUID();
+        WorkflowTransition existing = WorkflowTransition.builder()
+                .id(transitionId)
+                .workflowId(workflowId)
+                .fromStatusId(todoStatusId)
+                .toStatusId(inProgressStatusId)
+                .name("Current")
+                .build();
+
+        WorkflowTransition another = WorkflowTransition.builder()
+                .id(otherTransitionId)
+                .workflowId(workflowId)
+                .fromStatusId(null)
+                .toStatusId(inProgressStatusId)
+                .name("Existing Null To InProgress")
+                .build();
+
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
+        when(workflowTransitionRepository.findById(transitionId)).thenReturn(Optional.of(existing));
+        when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
+        when(workflowTransitionRepository.findByWorkflowIdAndFromStatusIdIsNullAndToStatusId(workflowId, inProgressStatusId)).thenReturn(Optional.of(another));
+
+        UpdateWorkflowTransitionRequest updateReq = UpdateWorkflowTransitionRequest.builder()
+                .fromStatusId(null)
+                .toStatusId(inProgressStatusId)
+                .build();
+
+        assertThatThrownBy(() -> workflowService.updateTransition(workflowId, transitionId, updateReq))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Đã tồn tại bước chuyển giữa hai trạng thái này");
     }
 
     @Test
@@ -200,7 +374,7 @@ class WorkflowServiceTest {
                 .projectId(projectId)
                 .build();
 
-        when(statusRepository.existsByName("In Review")).thenReturn(false);
+        when(statusRepository.existsByProjectIdAndNameIgnoreCase(projectId, "In Review")).thenReturn(false);
         when(statusRepository.save(any(Status.class))).thenAnswer(inv -> {
             Status s = inv.getArgument(0);
             s.setId(UUID.randomUUID());

@@ -20,7 +20,7 @@ export default function Header({ currentUser, onLogout, onOpenCreateProject }) {
       return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#64748B' }}>
           <Link to="/projects" style={{ color: '#64748B', textDecoration: 'none', fontWeight: 500 }}>
-            Projects
+            Dự án
           </Link>
           <ChevronRight size={14} />
           <span style={{ color: '#0F172A', fontWeight: 600 }}>Chi tiết Dự án</span>
@@ -33,7 +33,7 @@ export default function Header({ currentUser, onLogout, onOpenCreateProject }) {
     if (location.pathname.startsWith('/teams/')) {
       return <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Chi tiết Nhóm</span>;
     }
-    return <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Work Management</span>;
+    return <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Quản lý Công việc</span>;
   };
 
   const isAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN');
@@ -124,7 +124,7 @@ export default function Header({ currentUser, onLogout, onOpenCreateProject }) {
             }}
           >
             <ShieldAlert size={14} />
-            <span>Admin</span>
+            <span>Quản trị</span>
           </Link>
         )}
 

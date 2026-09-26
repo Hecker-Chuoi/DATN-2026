@@ -22,7 +22,6 @@ import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,8 +58,8 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
             return false;
         }
 
-        // 1. Project Lead & Creator are implicit administrators of the project
-        if (isImplicitAdmin(project, userId)) {
+        // 1. Project Lead & Creator have super-admin privileges over the project
+        if (userId.equals(project.getLeadUserId()) || userId.equals(project.getCreatedBy())) {
             return true;
         }
 
@@ -97,41 +96,42 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
 
-        List<RoleAssignment> assignments = currentUserId == null
-                ? List.of()
-                : roleAssignmentRepository.findByProjectIdAndUserId(projectId, currentUserId);
+        boolean isLead = currentUserId.equals(project.getLeadUserId()) || currentUserId.equals(project.getCreatedBy());
 
-        String roleName = assignments.stream()
-                .map(a -> projectRoleRepository.findById(a.getRoleId()).map(ProjectRole::getName).orElse(null))
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparingInt(this::rolePriority))
-                .findFirst()
-                .orElse(null);
-
-        boolean implicitAdmin = currentUserId != null && isImplicitAdmin(project, currentUserId);
-        boolean isLead = currentUserId != null && currentUserId.equals(project.getLeadUserId());
-
-        if (isGlobalAdmin || implicitAdmin) {
+        if (isGlobalAdmin || isLead) {
+            List<String> allPerms = Arrays.stream(PermissionKey.values())
+                    .map(Enum::name)
+                    .collect(Collectors.toList());
             return MyProjectPermissionsResponse.builder()
                     .projectId(projectId)
-                    .roleName(roleName != null ? roleName : (implicitAdmin ? ROLE_ADMINISTRATOR : null))
+                    .roleName(ROLE_ADMINISTRATOR)
                     .isLead(isLead)
                     .isGlobalAdmin(isGlobalAdmin)
-                    .permissions(allPermissionKeys())
+                    .permissions(allPerms)
                     .build();
         }
 
+        List<RoleAssignment> assignments = roleAssignmentRepository.findByProjectIdAndUserId(projectId, currentUserId);
         if (assignments.isEmpty()) {
-            throw new AccessDeniedException("Bạn không phải thành viên của dự án này");
+            return MyProjectPermissionsResponse.builder()
+                    .projectId(projectId)
+                    .roleName(null)
+                    .isLead(false)
+                    .isGlobalAdmin(false)
+                    .permissions(Collections.emptyList())
+                    .build();
         }
 
         Set<String> permissions = new LinkedHashSet<>();
         permissions.add(PermissionKey.PROJECT_VIEW.name());
+        String primaryRoleName = ROLE_MEMBER;
+
         for (RoleAssignment assignment : assignments) {
             ProjectRole role = projectRoleRepository.findById(assignment.getRoleId()).orElse(null);
             if (role == null) continue;
+            primaryRoleName = role.getName();
             if (ROLE_ADMINISTRATOR.equalsIgnoreCase(role.getName())) {
-                permissions.addAll(allPermissionKeys());
+                Arrays.stream(PermissionKey.values()).forEach(pk -> permissions.add(pk.name()));
                 break;
             }
             permissionSchemeEntryRepository.findByProjectIdAndRoleId(projectId, role.getId())
@@ -140,7 +140,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
 
         return MyProjectPermissionsResponse.builder()
                 .projectId(projectId)
-                .roleName(roleName)
+                .roleName(primaryRoleName)
                 .isLead(false)
                 .isGlobalAdmin(false)
                 .permissions(new ArrayList<>(permissions))

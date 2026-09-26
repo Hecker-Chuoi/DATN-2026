@@ -251,7 +251,7 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
             {/* Project Key */}
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                Project Key <span style={{ color: '#EF4444' }}>*</span>
+                Mã dự án (Tiền tố viết tắt) <span style={{ color: '#EF4444' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
                 <input
@@ -355,10 +355,10 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1D4ED8', fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
                   <Zap size={16} />
-                  <span>Scrum</span>
+                  <span>Quy trình Scrum</span>
                 </div>
                 <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.4 }}>
-                  Phát triển lặp theo chu kỳ Sprint, quản lý Backlog và biểu đồ Burndown.
+                  Phát triển lặp theo chu kỳ, quản lý danh sách công việc tồn đọng và biểu đồ tiến độ.
                 </p>
               </div>
 
@@ -396,10 +396,10 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1D4ED8', fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
                   <Kanban size={16} />
-                  <span>Kanban</span>
+                  <span>Bảng Kanban</span>
                 </div>
                 <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.4 }}>
-                  Luồng công việc liên tục, trực quan hóa trạng thái và giới hạn WIP.
+                  Luồng công việc liên tục, trực quan hóa trạng thái và giới hạn số lượng công việc đang làm.
                 </p>
               </div>
             </div>
@@ -490,7 +490,7 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
               style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#2563EB' }}
             />
             <label htmlFor="isTemplate" style={{ fontSize: 13, color: '#334155', cursor: 'pointer', userSelect: 'none' }}>
-              Đặt làm <strong>Dự án mẫu (Template)</strong> để tái sử dụng cho các dự án sau
+              Đặt làm <strong>Dự án mẫu</strong> để tái sử dụng cấu hình cho các dự án sau
             </label>
           </div>
 

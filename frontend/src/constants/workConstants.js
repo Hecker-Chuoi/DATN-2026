@@ -10,9 +10,9 @@ export const HIERARCHY_LEVELS = {
 };
 
 export const HIERARCHY_LABELS = {
-  [HIERARCHY_LEVELS.EPIC]: { label: 'Sáng kiến lớn / Epic', level: 1, code: 'EPIC' },
+  [HIERARCHY_LEVELS.EPIC]: { label: 'Hạng mục lớn', level: 1, code: 'EPIC' },
   [HIERARCHY_LEVELS.STANDARD]: { label: 'Công việc tiêu chuẩn', level: 0, code: 'STANDARD' },
-  [HIERARCHY_LEVELS.SUBTASK]: { label: 'Nhiệm vụ con / Subtask', level: -1, code: 'SUBTASK' },
+  [HIERARCHY_LEVELS.SUBTASK]: { label: 'Nhiệm vụ con', level: -1, code: 'SUBTASK' },
 };
 
 // ─── Work Item Types ──────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ export const WORK_ITEM_TYPES = {
 export const WORK_ITEM_TYPE_CONFIG = {
   EPIC: {
     code: 'EPIC',
-    name: 'Epic',
+    name: 'Hạng mục lớn',
     hierarchyLevel: HIERARCHY_LEVELS.EPIC,
     color: '#9333ea', // Purple
     bgColor: '#f3e8ff',
@@ -37,7 +37,7 @@ export const WORK_ITEM_TYPE_CONFIG = {
   },
   STORY: {
     code: 'STORY',
-    name: 'Story',
+    name: 'Câu chuyện người dùng',
     hierarchyLevel: HIERARCHY_LEVELS.STANDARD,
     color: '#16a34a', // Green
     bgColor: '#dcfce7',
@@ -47,7 +47,7 @@ export const WORK_ITEM_TYPE_CONFIG = {
   },
   TASK: {
     code: 'TASK',
-    name: 'Task',
+    name: 'Nhiệm vụ',
     hierarchyLevel: HIERARCHY_LEVELS.STANDARD,
     color: '#2563eb', // Blue
     bgColor: '#dbeafe',
@@ -57,7 +57,7 @@ export const WORK_ITEM_TYPE_CONFIG = {
   },
   BUG: {
     code: 'BUG',
-    name: 'Bug',
+    name: 'Lỗi phần mềm',
     hierarchyLevel: HIERARCHY_LEVELS.STANDARD,
     color: '#dc2626', // Red
     bgColor: '#fee2e2',
@@ -67,7 +67,7 @@ export const WORK_ITEM_TYPE_CONFIG = {
   },
   SUB_TASK: {
     code: 'SUB_TASK',
-    name: 'Sub-task',
+    name: 'Nhiệm vụ con',
     hierarchyLevel: HIERARCHY_LEVELS.SUBTASK,
     color: '#0284c7', // Sky
     bgColor: '#e0f2fe',
@@ -75,6 +75,54 @@ export const WORK_ITEM_TYPE_CONFIG = {
     icon: 'GitCommit',
     isSubtask: true,
   },
+};
+
+// ─── Vietnamese Display Helpers ───────────────────────────────────────────────
+export const getTypeDisplayName = (typeCodeOrName) => {
+  if (!typeCodeOrName) return 'Nhiệm vụ';
+  const t = String(typeCodeOrName).trim().toUpperCase().replace('-', '_');
+  if (t === 'EPIC') return 'Hạng mục lớn';
+  if (t === 'STORY' || t === 'USER_STORY') return 'Câu chuyện người dùng';
+  if (t === 'TASK') return 'Nhiệm vụ';
+  if (t === 'BUG') return 'Lỗi phần mềm';
+  if (t === 'SUBTASK' || t === 'SUB_TASK') return 'Nhiệm vụ con';
+  return typeCodeOrName;
+};
+
+export const getStatusDisplayName = (statusName) => {
+  if (!statusName) return '';
+  const s = String(statusName).trim().toUpperCase();
+  if (s === 'TO DO' || s === 'TODO') return 'Cần làm';
+  if (s === 'IN PROGRESS' || s === 'IN_PROGRESS') return 'Đang thực hiện';
+  if (s === 'IN REVIEW' || s === 'IN_REVIEW' || s === 'REVIEW') return 'Chờ duyệt';
+  if (s === 'DONE') return 'Hoàn thành';
+  return statusName;
+};
+
+export const getStatusCategoryDisplayName = (category) => {
+  if (!category) return '';
+  const c = String(category).trim().toUpperCase();
+  if (c === 'TODO' || c === 'TO_DO') return 'Cần làm';
+  if (c === 'IN_PROGRESS') return 'Đang thực hiện';
+  if (c === 'DONE') return 'Hoàn thành';
+  return category;
+};
+
+export const getPriorityDisplayName = (priority) => {
+  if (!priority) return 'Trung bình';
+  const p = String(priority).trim().toUpperCase();
+  if (p === 'HIGHEST' || p === 'BLOCKER') return 'Khẩn cấp';
+  if (p === 'HIGH') return 'Cao';
+  if (p === 'MEDIUM') return 'Trung bình';
+  if (p === 'LOW') return 'Thấp';
+  if (p === 'LOWEST') return 'Rất thấp';
+  return priority;
+};
+
+export const getHierarchyDisplayName = (level) => {
+  if (level === 1) return 'Cấp 1 • Hạng mục lớn';
+  if (level === -1) return 'Cấp -1 • Nhiệm vụ con';
+  return 'Cấp 0 • Tiêu chuẩn';
 };
 
 // ─── Status Categories (Jira 3 Core Categories) ─────────────────────────────
@@ -214,11 +262,11 @@ export const LINK_TYPES = {
 };
 
 export const LINK_TYPE_CONFIG = {
-  BLOCKS: { outward: 'Khóa / Chặn (Blocks)', inward: 'Bị khóa bởi (Is blocked by)', isBlocking: true },
-  RELATES_TO: { outward: 'Liên quan tới (Relates to)', inward: 'Liên quan tới (Relates to)', isBlocking: false },
-  DUPLICATES: { outward: 'Trùng lặp với (Duplicates)', inward: 'Bị trùng lặp bởi (Is duplicated by)', isBlocking: false },
-  CLONES: { outward: 'Nhân bản từ (Clones)', inward: 'Bị nhân bản bởi (Is cloned by)', isBlocking: false },
-  CAUSES: { outward: 'Gây ra (Causes)', inward: 'Gây ra bởi (Is caused by)', isBlocking: false },
+  BLOCKS: { outward: 'Chặn tiến độ của', inward: 'Bị chặn tiến độ bởi', isBlocking: true },
+  RELATES_TO: { outward: 'Liên quan tới', inward: 'Có liên quan tới', isBlocking: false },
+  DUPLICATES: { outward: 'Trùng lặp với', inward: 'Bị trùng lặp bởi', isBlocking: false },
+  CLONES: { outward: 'Nhân bản từ', inward: 'Bị nhân bản bởi', isBlocking: false },
+  CAUSES: { outward: 'Gây ra lỗi', inward: 'Bị gây ra bởi', isBlocking: false },
 };
 
 // ─── Project Types ──────────────────────────────────────────────────────────
@@ -230,14 +278,14 @@ export const PROJECT_TYPES = {
 export const PROJECT_TYPE_CONFIG = {
   SCRUM: {
     code: 'SCRUM',
-    name: 'Scrum Agile',
-    description: 'Quy trình lặp Sprint, quản lý Backlog, Burndown Chart và Point ước lượng.',
+    name: 'Quy trình Scrum',
+    description: 'Quy trình lặp theo chu kỳ, quản lý danh sách tồn đọng, biểu đồ tiến độ và điểm ước lượng.',
     icon: 'RotateCw',
   },
   KANBAN: {
     code: 'KANBAN',
-    name: 'Kanban Board',
-    description: 'Luồng công việc liên tục (Continuous flow) với WIP Limits kiểm soát tiến độ.',
+    name: 'Bảng Kanban',
+    description: 'Luồng công việc liên tục với giới hạn việc đang làm để kiểm soát tiến độ.',
     icon: 'Kanban',
   },
 };
@@ -291,69 +339,69 @@ export const CUSTOM_FIELD_TYPES = {
 export const WORKFLOW_CONDITION_TYPES = {
   ASSIGNEE_ONLY: {
     code: 'ASSIGNEE_ONLY',
-    name: 'Chỉ người được giao việc (Assignee Only)',
-    desc: 'Chỉ thành viên đang được chỉ định xử lý issue mới nhìn thấy và bấm được nút chuyển trạng thái.',
+    name: 'Chỉ người được giao việc',
+    desc: 'Chỉ thành viên đang được chỉ định xử lý công việc mới nhìn thấy và bấm được nút chuyển trạng thái.',
   },
   PERMISSION_REQUIRED: {
     code: 'PERMISSION_REQUIRED',
-    name: 'Yêu cầu quyền hạn dự án (Permission Required)',
-    desc: 'Yêu cầu người thực hiện có quyền hạn cụ thể (ví dụ: ISSUE_TRANSITION, SPRINT_MANAGE).',
+    name: 'Yêu cầu quyền hạn dự án',
+    desc: 'Yêu cầu người thực hiện có quyền hạn cụ thể trong dự án.',
   },
   ROLE_REQUIRED: {
     code: 'ROLE_REQUIRED',
-    name: 'Yêu cầu vai trò nội bộ (Role Required)',
-    desc: 'Chỉ thành viên có vai trò cụ thể trong dự án (ví dụ: ADMINISTRATOR, LEAD) mới được phép.',
+    name: 'Yêu cầu vai trò nội bộ',
+    desc: 'Chỉ thành viên có vai trò cụ thể trong dự án (ví dụ: Quản trị viên, Trưởng nhóm) mới được phép.',
   },
   ONLY_CREATOR: {
     code: 'ONLY_CREATOR',
-    name: 'Chỉ người tạo (Reporter Only)',
-    desc: 'Chỉ người khởi tạo issue mới được phép thực hiện bước chuyển này.',
+    name: 'Chỉ người tạo công việc',
+    desc: 'Chỉ người khởi tạo công việc mới được phép thực hiện bước chuyển này.',
   },
 };
 
 export const WORKFLOW_VALIDATOR_TYPES = {
   FIELD_REQUIRED: {
     code: 'FIELD_REQUIRED',
-    name: 'Bắt buộc điền trường dữ liệu (Field Required)',
-    desc: 'Kiểm tra và bắt buộc nhập các trường chỉ định (ví dụ: resolution, fixVersionId) trước khi chuyển.',
+    name: 'Bắt buộc điền trường dữ liệu',
+    desc: 'Kiểm tra và bắt buộc nhập các trường chỉ định (ví dụ: lý do hoàn thành) trước khi chuyển.',
   },
   ALL_SUBTASKS_DONE: {
     code: 'ALL_SUBTASKS_DONE',
-    name: 'Toàn bộ Subtask phải hoàn thành (All Subtasks Done)',
-    desc: 'Bắt buộc toàn bộ các nhiệm vụ con (Sub-tasks) phải ở trạng thái DONE trước khi đóng Story/Task cha.',
+    name: 'Toàn bộ nhiệm vụ con phải hoàn thành',
+    desc: 'Bắt buộc toàn bộ các nhiệm vụ con phải ở trạng thái Hoàn thành trước khi đóng công việc cha.',
   },
   ESTIMATE_REQUIRED: {
     code: 'ESTIMATE_REQUIRED',
-    name: 'Bắt buộc có ước lượng (Estimate Required)',
-    desc: 'Yêu cầu phải có điểm Story Points hoặc thời gian ước lượng trước khi bắt đầu xử lý.',
+    name: 'Bắt buộc có ước lượng',
+    desc: 'Yêu cầu phải có điểm ước lượng hoặc thời gian dự kiến trước khi bắt đầu xử lý.',
   },
 };
 
 export const WORKFLOW_POST_FUNCTION_TYPES = {
   SET_RESOLVED_TIME: {
     code: 'SET_RESOLVED_TIME',
-    name: 'Ghi nhận thời gian giải quyết (Set Resolved Time)',
-    desc: 'Tự động gán trường resolved_at = thời điểm hiện tại khi issue chuyển sang trạng thái DONE.',
+    name: 'Ghi nhận thời gian giải quyết',
+    desc: 'Tự động gán thời điểm hoàn tất là thời điểm hiện tại khi công việc chuyển sang trạng thái Hoàn thành.',
   },
   CLEAR_RESOLUTION: {
     code: 'CLEAR_RESOLUTION',
-    name: 'Xóa kết quả giải quyết (Clear Resolution)',
-    desc: 'Tự động xóa resolution và resolved_at khi issue được mở lại (Reopened).',
+    name: 'Xóa kết quả giải quyết',
+    desc: 'Tự động xóa lý do và thời điểm giải quyết khi công việc được mở lại.',
   },
   AUTO_ASSIGN_LEAD: {
     code: 'AUTO_ASSIGN_LEAD',
-    name: 'Tự động gán cho Trưởng dự án / Component (Auto Assign Lead)',
-    desc: 'Tự động gán assignee cho người phụ trách khi chuyển trạng thái (ví dụ khi cần Review).',
+    name: 'Tự động gán cho Trưởng dự án / Thành phần',
+    desc: 'Tự động gán người thực hiện cho trưởng bộ phận khi chuyển trạng thái.',
   },
   AUTO_TRANSITION_PARENT: {
     code: 'AUTO_TRANSITION_PARENT',
-    name: 'Tự động chuyển trạng thái Item Cha (Auto Transition Parent)',
-    desc: 'Tự động cập nhật trạng thái Story cha khi các Sub-task con hoàn thành.',
+    name: 'Tự động chuyển trạng thái công việc cha',
+    desc: 'Tự động cập nhật trạng thái công việc cha khi các nhiệm vụ con hoàn thành.',
   },
   EMIT_AUDIT_LOG: {
     code: 'EMIT_AUDIT_LOG',
-    name: 'Ghi nhật ký thay đổi (Emit Changelog)',
-    desc: 'Ghi vết lịch sử chuyển đổi trạng thái vào bảng work_item_changelogs.',
+    name: 'Ghi nhật ký thay đổi',
+    desc: 'Ghi vết lịch sử chuyển đổi trạng thái vào nhật ký hệ thống.',
   },
 };
 
@@ -380,5 +428,80 @@ export function isHierarchyValid(parentLevel, childLevel) {
   if (parentLevel === HIERARCHY_LEVELS.EPIC && childLevel === HIERARCHY_LEVELS.STANDARD) return true;
   if (parentLevel === HIERARCHY_LEVELS.STANDARD && childLevel === HIERARCHY_LEVELS.SUBTASK) return true;
   return false;
+}
+
+// ─── Task Type Presets (Mẫu Cấu Hình Gợi Ý) ─────────────────────────────────
+export const TASK_TYPE_PRESETS = [
+  {
+    id: 'SOFTWARE_DEV',
+    name: 'Phát triển Phần mềm',
+    description: 'Chuẩn quy trình lặp và bảng làm việc cho đội ngũ kỹ thuật phần mềm, tích hợp Hạng mục lớn, Câu chuyện người dùng, Nhiệm vụ, Lỗi phần mềm và Nhiệm vụ con.',
+    icon: 'Layers',
+    badgeColor: '#2563EB',
+    types: [
+      { name: 'Hạng mục lớn', code: 'EPIC', hierarchyLevel: 1, iconName: 'Zap', colorHex: '#9333EA', description: 'Mục tiêu lớn hoặc tập hợp tính năng phức tạp cần triển khai qua nhiều chu kỳ' },
+      { name: 'Câu chuyện người dùng', code: 'STORY', hierarchyLevel: 0, iconName: 'Bookmark', colorHex: '#10B981', description: 'Yêu cầu nghiệp vụ hoặc tính năng nhìn từ góc độ người dùng cuối' },
+      { name: 'Nhiệm vụ', code: 'TASK', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#3B82F6', description: 'Công việc kỹ thuật hoặc tác vụ phát triển tiêu chuẩn' },
+      { name: 'Lỗi phần mềm', code: 'BUG', hierarchyLevel: 0, iconName: 'Bug', colorHex: '#EF4444', description: 'Lỗi phát sinh hoặc sự cố kỹ thuật cần khắc phục' },
+      { name: 'Nhiệm vụ con', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#06B6D4', description: 'Nhiệm vụ con chia nhỏ từ công việc cha' },
+    ],
+  },
+  {
+    id: 'CONSTRUCTION',
+    name: 'Xây dựng & Công trình',
+    description: 'Chuyên biệt cho quản lý dự án xây dựng, quản lý gói thầu, thi công tại hiện trường và nghiệm thu.',
+    icon: 'Layers',
+    badgeColor: '#D97706',
+    types: [
+      { name: 'Hạng mục công trình', code: 'PHASE', hierarchyLevel: 1, iconName: 'Layers', colorHex: '#D97706', description: 'Gói thầu, giai đoạn xây dựng hoặc hạng mục công trình trọng điểm' },
+      { name: 'Công tác thi công', code: 'CONSTRUCT', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#2563EB', description: 'Nội dung thi công thực tế tại công trường' },
+      { name: 'Giám sát & Nghiệm thu', code: 'INSPECT', hierarchyLevel: 0, iconName: 'FileCheck', colorHex: '#059669', description: 'Kiểm tra chất lượng, nghiệm thu hồ sơ và khối lượng' },
+      { name: 'Sự cố công trường', code: 'INCIDENT', hierarchyLevel: 0, iconName: 'AlertTriangle', colorHex: '#DC2626', description: 'Sự cố an toàn, hư hỏng vật tư hoặc trục trặc hiện trường' },
+      { name: 'Chi tiết công tác', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#64748B', description: 'Tác vụ thi công chi tiết phân bổ cho từng đội thợ' },
+    ],
+  },
+  {
+    id: 'MARKETING',
+    name: 'Marketing & Truyền thông',
+    description: 'Dành cho chiến dịch tiếp thị, quảng bá truyền thông, sáng tạo nội dung và sản xuất ấn phẩm.',
+    icon: 'Sparkles',
+    badgeColor: '#7C3AED',
+    types: [
+      { name: 'Chiến dịch', code: 'CAMPAIGN', hierarchyLevel: 1, iconName: 'Sparkles', colorHex: '#7C3AED', description: 'Chiến dịch tiếp thị tổng thể hoặc chuỗi sự kiện thương hiệu' },
+      { name: 'Sáng tạo nội dung', code: 'CONTENT', hierarchyLevel: 0, iconName: 'Bookmark', colorHex: '#0284C7', description: 'Bài viết truyền thông, kịch bản hoặc thông điệp quảng cáo' },
+      { name: 'Thiết kế ấn phẩm', code: 'DESIGN', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#EA580C', description: 'Thiết kế biểu ngữ, áp phích, hình ảnh hoặc tài liệu đồ họa' },
+      { name: 'Kênh phân phối', code: 'CHANNEL', hierarchyLevel: 0, iconName: 'Sliders', colorHex: '#10B981', description: 'Triển khai trên các kênh mạng xã hội, báo đài hoặc quảng cáo' },
+      { name: 'Tác vụ biên tập', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#6B7280', description: 'Nhiệm vụ soạn thảo nháp, duyệt bài hoặc chỉnh sửa ảnh' },
+    ],
+  },
+  {
+    id: 'AGILE_BASIC',
+    name: 'Mặc định cơ bản',
+    description: 'Cấu hình tiêu chuẩn tối giản gồm đúng 3 cấp độ: Hạng mục lớn, Nhiệm vụ và Nhiệm vụ con.',
+    icon: 'Zap',
+    badgeColor: '#10B981',
+    types: [
+      { name: 'Hạng mục lớn', code: 'EPIC', hierarchyLevel: 1, iconName: 'Zap', colorHex: '#9333EA', description: 'Hạng mục lớn bao quát nhiều công việc' },
+      { name: 'Nhiệm vụ', code: 'TASK', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#3B82F6', description: 'Công việc tiêu chuẩn' },
+      { name: 'Nhiệm vụ con', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#06B6D4', description: 'Công việc con trực thuộc công việc cha' },
+    ],
+  },
+];
+
+export function resolveDynamicTypeConfig(type) {
+  if (!type) return WORK_ITEM_TYPE_CONFIG.TASK;
+  const hex = type.colorHex || '#3B82F6';
+  return {
+    id: type.id,
+    name: type.name || 'Task',
+    code: type.code || 'TASK',
+    hierarchyLevel: type.hierarchyLevel ?? 0,
+    color: hex,
+    bgColor: `${hex}1A`, // 10% opacity
+    borderColor: `${hex}4D`, // 30% opacity
+    icon: type.iconName || 'CheckSquare',
+    description: type.description || '',
+    isSubtask: type.isSubtask || type.hierarchyLevel === -1,
+  };
 }
 

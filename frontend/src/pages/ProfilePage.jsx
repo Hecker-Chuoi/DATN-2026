@@ -136,7 +136,7 @@ export default function ProfilePage() {
             onMouseEnter={(e) => (e.currentTarget.style.color = '#2563EB')}
             onMouseLeave={(e) => (e.currentTarget.style.color = '#64748B')}
           >
-            Workspace
+            Không gian làm việc
           </span>
           <span>/</span>
           <span style={{ fontWeight: 600, color: '#0F172A' }}>Tài khoản cá nhân</span>
@@ -285,7 +285,7 @@ export default function ProfilePage() {
                     }}
                   >
                     <Shield size={12} />
-                    {role === 'ADMIN' ? 'Hệ thống Quản trị (Admin)' : 'Thành viên (User)'}
+                    {role === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'}
                   </span>
                 ))}
               </div>
@@ -332,10 +332,10 @@ export default function ProfilePage() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <InfoRow label="Họ và tên" value={profile?.fullName || '—'} />
-              <InfoRow label="Tên đăng nhập (Username)" value={profile?.username || '—'} />
+              <InfoRow label="Tên đăng nhập" value={profile?.username || '—'} />
               <InfoRow label="Họ & tên đệm" value={profile?.firstName || '—'} />
               <InfoRow label="Tên" value={profile?.lastName || '—'} />
-              <InfoRow label="Địa chỉ Email" value={profile?.email || '—'} />
+              <InfoRow label="Địa chỉ thư điện tử" value={profile?.email || '—'} />
               <InfoRow
                 label="Ngày tạo tài khoản"
                 value={
@@ -383,7 +383,7 @@ export default function ProfilePage() {
                   Định danh & Bảo mật
                 </h3>
                 <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>
-                  Mã ID định danh nghiệp vụ và xác thực
+                  Mã định danh nghiệp vụ và xác thực tài khoản
                 </p>
               </div>
             </div>
@@ -393,10 +393,10 @@ export default function ProfilePage() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: 500, color: '#64748B' }}>
-                    User ID (Mã định danh CSDL)
+                    Mã người dùng
                   </span>
                   <button
-                    onClick={() => handleCopy(profile?.id, 'User ID')}
+                    onClick={() => handleCopy(profile?.id, 'Mã người dùng')}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -411,8 +411,8 @@ export default function ProfilePage() {
                       borderRadius: 4,
                     }}
                   >
-                    {copiedField === 'User ID' ? <Check size={12} color="#059669" /> : <Copy size={12} />}
-                    {copiedField === 'User ID' ? 'Đã chép' : 'Sao chép'}
+                    {copiedField === 'Mã người dùng' ? <Check size={12} color="#059669" /> : <Copy size={12} />}
+                    {copiedField === 'Mã người dùng' ? 'Đã chép' : 'Sao chép'}
                   </button>
                 </div>
                 <div
@@ -435,10 +435,10 @@ export default function ProfilePage() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: 500, color: '#64748B' }}>
-                    Keycloak ID (Auth Subject)
+                    Mã xác thực tài khoản
                   </span>
                   <button
-                    onClick={() => handleCopy(profile?.keycloakId, 'Keycloak ID')}
+                    onClick={() => handleCopy(profile?.keycloakId, 'Mã xác thực')}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -453,8 +453,8 @@ export default function ProfilePage() {
                       borderRadius: 4,
                     }}
                   >
-                    {copiedField === 'Keycloak ID' ? <Check size={12} color="#059669" /> : <Copy size={12} />}
-                    {copiedField === 'Keycloak ID' ? 'Đã chép' : 'Sao chép'}
+                    {copiedField === 'Mã xác thực' ? <Check size={12} color="#059669" /> : <Copy size={12} />}
+                    {copiedField === 'Mã xác thực' ? 'Đã chép' : 'Sao chép'}
                   </button>
                 </div>
                 <div
@@ -479,7 +479,7 @@ export default function ProfilePage() {
                 value={
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
                     <Sparkles size={14} color="#D97706" />
-                    {isGoogleAccount ? 'Google OAuth2 (Tài khoản Google)' : 'Tài khoản hệ thống (Keycloak)'}
+                    {isGoogleAccount ? 'Tài khoản Google' : 'Tài khoản hệ thống'}
                   </span>
                 }
               />
@@ -499,7 +499,7 @@ export default function ProfilePage() {
                       borderRadius: 4,
                     }}
                   >
-                    {profile?.status === 'ACTIVE' ? 'Đang hoạt động (ACTIVE)' : profile?.status || '—'}
+                    {profile?.status === 'ACTIVE' ? 'Đang hoạt động' : profile?.status || '—'}
                   </span>
                 }
               />
@@ -523,13 +523,13 @@ export default function ProfilePage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
             <QuickLinkCard
               icon={<Layers size={18} color="#2563EB" />}
-              title="Danh sách dự án (Projects)"
+              title="Danh sách dự án"
               desc="Xem và quản lý các dự án bạn đang tham gia"
               onClick={() => navigate('/projects')}
             />
             <QuickLinkCard
               icon={<Users size={18} color="#7C3AED" />}
-              title="Nhóm làm việc (Teams)"
+              title="Nhóm làm việc"
               desc="Xem danh sách nhóm và các thành viên cộng tác"
               onClick={() => navigate('/projects')}
             />

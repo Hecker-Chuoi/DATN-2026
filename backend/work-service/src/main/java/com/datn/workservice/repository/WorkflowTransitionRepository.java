@@ -13,6 +13,11 @@ public interface WorkflowTransitionRepository extends JpaRepository<WorkflowTran
     List<WorkflowTransition> findByWorkflowId(UUID workflowId);
     List<WorkflowTransition> findByWorkflowIdAndFromStatusId(UUID workflowId, UUID fromStatusId);
     Optional<WorkflowTransition> findByWorkflowIdAndFromStatusIdAndToStatusId(UUID workflowId, UUID fromStatusId, UUID toStatusId);
+    Optional<WorkflowTransition> findByWorkflowIdAndFromStatusIdIsNullAndToStatusId(UUID workflowId, UUID toStatusId);
+    Optional<WorkflowTransition> findByWorkflowIdAndNameIgnoreCase(UUID workflowId, String name);
+    boolean existsByWorkflowIdAndFromStatusIdAndToStatusId(UUID workflowId, UUID fromStatusId, UUID toStatusId);
+    boolean existsByWorkflowIdAndFromStatusIdIsNullAndToStatusId(UUID workflowId, UUID toStatusId);
+    boolean existsByWorkflowIdAndNameIgnoreCase(UUID workflowId, String name);
     List<WorkflowTransition> findByFromStatusId(UUID fromStatusId);
     List<WorkflowTransition> findByToStatusId(UUID toStatusId);
 }

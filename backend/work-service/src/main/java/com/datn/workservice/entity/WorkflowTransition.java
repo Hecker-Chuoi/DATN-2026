@@ -5,6 +5,8 @@ import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -33,15 +35,25 @@ public class WorkflowTransition {
     @Column(nullable = false, length = 150)
     private String name;
 
+    /**
+     * Conditions config (JSONB array). Use List<Map> so Hibernate 6 can correctly
+     * serialize/deserialize the JSON array via Jackson without ambiguous Object type.
+     */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "conditions_config", columnDefinition = "jsonb")
-    private Object conditionsConfig;
+    private List<Map<String, Object>> conditionsConfig;
 
+    /**
+     * Validators config (JSONB array).
+     */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "validators_config", columnDefinition = "jsonb")
-    private Object validatorsConfig;
+    private List<Map<String, Object>> validatorsConfig;
 
+    /**
+     * Post-functions config (JSONB array).
+     */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "post_functions_config", columnDefinition = "jsonb")
-    private Object postFunctionsConfig;
+    private List<Map<String, Object>> postFunctionsConfig;
 }

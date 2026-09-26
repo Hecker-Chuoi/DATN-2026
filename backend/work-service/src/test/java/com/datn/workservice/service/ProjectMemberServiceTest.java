@@ -258,14 +258,14 @@ class ProjectMemberServiceTest {
     }
 
     @Test
-    @DisplayName("getMyPermissions: Outsider (no role assignment) is denied with AccessDeniedException")
-    void testGetMyPermissions_AsOutsider_Denied() {
+    @DisplayName("getMyPermissions: Outsider (no role assignment) receives empty permissions")
+    void testGetMyPermissions_AsOutsider_EmptyPermissions() {
         UUID outsiderId = UUID.randomUUID();
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
         when(roleAssignmentRepository.findByProjectIdAndUserId(projectId, outsiderId)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> projectMemberService.getMyPermissions(projectId, outsiderId, false))
-                .isInstanceOf(AccessDeniedException.class);
+        MyProjectPermissionsResponse response = projectMemberService.getMyPermissions(projectId, outsiderId, false);
+        assertThat(response.getPermissions()).isEmpty();
     }
 
     @Test
@@ -273,7 +273,6 @@ class ProjectMemberServiceTest {
     void testGetMyPermissions_AsGlobalAdmin_ReturnsAll() {
         UUID adminId = UUID.randomUUID();
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
-        when(roleAssignmentRepository.findByProjectIdAndUserId(projectId, adminId)).thenReturn(List.of());
 
         MyProjectPermissionsResponse response = projectMemberService.getMyPermissions(projectId, adminId, true);
 

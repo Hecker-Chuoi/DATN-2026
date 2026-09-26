@@ -127,9 +127,9 @@ class WorkflowDtoValidationTest {
                 .fromStatusId(UUID.randomUUID())
                 .toStatusId(UUID.randomUUID())
                 .name("Resolve Issue")
-                .conditionsConfig(List.of(condition))
-                .validatorsConfig(List.of(wfValidator))
-                .postFunctionsConfig(List.of(postFunction))
+                .conditionsConfig(List.of(Map.of("type", condition.getType())))
+                .validatorsConfig(List.of(Map.of("type", wfValidator.getType(), "params", wfValidator.getParams())))
+                .postFunctionsConfig(List.of(Map.of("type", postFunction.getType(), "params", postFunction.getParams())))
                 .build();
 
         Set<ConstraintViolation<CreateWorkflowTransitionRequest>> violations = validator.validate(request);
@@ -137,16 +137,15 @@ class WorkflowDtoValidationTest {
     }
 
     @Test
-    @DisplayName("CreateWorkflowTransitionRequest: Fails on null workflowId or blank name")
+    @DisplayName("CreateWorkflowTransitionRequest: Fails on null toStatusId or blank name")
     void testCreateWorkflowTransitionRequest_MissingFields() {
         CreateWorkflowTransitionRequest request = CreateWorkflowTransitionRequest.builder()
-                .workflowId(null)
                 .toStatusId(null)
                 .name("  ")
                 .build();
 
         Set<ConstraintViolation<CreateWorkflowTransitionRequest>> violations = validator.validate(request);
-        assertThat(violations).hasSize(3);
+        assertThat(violations).hasSize(2);
     }
 
     @Test

@@ -27,6 +27,15 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkItemAttachmentController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET    /api/v1/work/items/{itemId}/attachments | /work-items/{itemId}/attachments                     : Lấy danh sách tệp đính kèm
+     * POST   /api/v1/work/items/{itemId}/attachments | /work-items/{itemId}/attachments                     : Tải lên tệp đính kèm (multipart)
+     * DELETE /api/v1/work/items/{itemId}/attachments/{attachmentId} | /work-items/{itemId}/attachments/{attachmentId} : Xóa tệp đính kèm
+     * GET    /api/v1/work/attachments/{attachmentId}/download | /items/{itemId}/attachments/{attachmentId}/download  : Tải xuống tệp đính kèm
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final WorkItemAttachmentService attachmentService;
 
     @GetMapping({"/items/{itemId}/attachments", "/work-items/{itemId}/attachments"})

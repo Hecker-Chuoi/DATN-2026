@@ -33,6 +33,20 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkItemController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * POST   /api/v1/work/projects/{projectId}/items   : Tạo công việc (work item) mới trong dự án
+     * GET    /api/v1/work/projects/{projectId}/items   : Lấy danh sách công việc của dự án (lọc + phân trang)
+     * GET    /api/v1/work/items/{id}                   : Lấy chi tiết công việc theo ID
+     * GET    /api/v1/work/items/code/{code}            : Lấy chi tiết công việc theo mã (code)
+     * GET    /api/v1/work/items/{id}/subtasks          : Lấy danh sách công việc con (subtasks)
+     * POST   /api/v1/work/items/{id}/subtasks          : Tạo công việc con cho công việc cha
+     * PUT    /api/v1/work/items/{id}                   : Cập nhật thông tin công việc
+     * PATCH  /api/v1/work/items/{id}/rank              : Cập nhật vị trí (rank) của công việc
+     * DELETE /api/v1/work/items/{id}                   : Xóa công việc
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final WorkItemService workItemService;
 
     @PostMapping("/projects/{projectId}/items")

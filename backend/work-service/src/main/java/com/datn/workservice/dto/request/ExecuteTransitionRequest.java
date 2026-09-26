@@ -35,4 +35,9 @@ public class ExecuteTransitionRequest {
      * Optional field updates captured during transition dialog (e.g. fixVersionId, assigneeId, customFields)
      */
     private Map<String, Object> fields;
+
+    /**
+     * If true and target status category is DONE, auto-resolve all incomplete subtasks.
+     */
+    private Boolean resolveAllSubtasks;
 }

@@ -15,4 +15,10 @@ public interface StatusRepository extends JpaRepository<Status, UUID>, JpaSpecif
     Optional<Status> findByName(String name);
     List<Status> findByCategory(StatusCategory category);
     boolean existsByName(String name);
+
+    List<Status> findByProjectId(UUID projectId);
+    List<Status> findByProjectIdOrProjectIdIsNull(UUID projectId);
+    Optional<Status> findByProjectIdAndNameIgnoreCase(UUID projectId, String name);
+    boolean existsByProjectIdAndNameIgnoreCase(UUID projectId, String name);
+    long countByProjectIdAndCategory(UUID projectId, StatusCategory category);
 }

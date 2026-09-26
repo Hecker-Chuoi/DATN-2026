@@ -30,6 +30,9 @@ public interface WorkItemRepository extends JpaRepository<WorkItem, UUID>, JpaSp
     long countByProjectId(UUID projectId);
     long countBySprintId(UUID sprintId);
     long countBySprintIdAndStatusId(UUID sprintId, UUID statusId);
+    boolean existsByTypeId(UUID typeId);
+    long countByTypeId(UUID typeId);
+    long countByStatusId(UUID statusId);
 
     @Query("SELECT wi FROM WorkItem wi WHERE wi.projectId = :projectId AND wi.deletedAt IS NULL ORDER BY wi.rank ASC")
     List<WorkItem> findActiveByProjectIdOrderByRankAsc(@Param("projectId") UUID projectId);

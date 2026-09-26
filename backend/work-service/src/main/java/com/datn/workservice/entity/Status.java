@@ -22,6 +22,9 @@ public class Status {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
+    @Column(name = "project_id")
+    private UUID projectId;
+
     @Column(nullable = false, length = 100)
     private String name;
 
