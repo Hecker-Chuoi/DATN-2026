@@ -1,7 +1,7 @@
 /**
  * api.js – Centralized HTTP client using Axios with Silent Token Refresh
  *
- * Vite dev server proxies /identity/** and /work/** → API Gateway :9991
+ * Vite dev server proxies /identity/** and /work/** → API Gateway :8081
  * (see vite.config.js → server.proxy).
  */
 import axios from 'axios';

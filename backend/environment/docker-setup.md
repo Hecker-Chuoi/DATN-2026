@@ -79,7 +79,7 @@ docker compose -f docker-compose.infra.yml ps
 ```
 
 Các dịch vụ sẽ mở tại các cổng:
-- **Keycloak Server**: [http://localhost:9998](http://localhost:9998) (Tài khoản: `admin` / `admin`)
+- **Keycloak Server**: [http://localhost:8088](http://localhost:8088) (Tài khoản: `admin` / `admin`)
 - **PostgreSQL App DB (`datn_main_db`)**: `localhost:5433` (Tài khoản: `postgres` / `123456`)
 - **pgAdmin 4**: [http://localhost:5050](http://localhost:5050) (Tài khoản: `admin@admin.com` / `admin`)
 - **Redis**: `localhost:6380`
@@ -92,7 +92,7 @@ Các dịch vụ sẽ mở tại các cổng:
 
 Sau khi Keycloak chạy, import file [`realm-export_08082026.json`](file:///d:/DATN-2026/backend/environment/keycloak/realm-export_08082026.json) (đã cấu hình sẵn Client ID `datn-backend` và Google Identity Provider):
 
-1. Truy cập [http://localhost:9998](http://localhost:9998) ➔ Đăng nhập với `admin` / `admin`.
+1. Truy cập [http://localhost:8088](http://localhost:8088) ➔ Đăng nhập với `admin` / `admin`.
 2. Menu góc trái bấm chọn dropdown Realm (mặc định là `master`) ➔ Bấm **Create Realm**.
 3. Tại phần **Resource file**, bấm **Browse** và chọn file:
    ```text
@@ -109,19 +109,19 @@ Sau khi Keycloak chạy, import file [`realm-export_08082026.json`](file:///d:/D
 ### 1. Khởi chạy Backend Services:
 Mở 3 terminal riêng biệt tại thư mục `backend/`:
 
-- **Terminal 1 - API Gateway (Cổng 9991)**:
+- **Terminal 1 - API Gateway (Cổng 8081)**:
   ```powershell
   cd d:\DATN-2026\backend
   ./mvnw spring-boot:run -pl api-gateway
   ```
 
-- **Terminal 2 - Identity Service (Cổng 9992)**:
+- **Terminal 2 - Identity Service (Cổng 8082)**:
   ```powershell
   cd d:\DATN-2026\backend
   ./mvnw spring-boot:run -pl identity-service
   ```
 
-- **Terminal 3 - Work Service (Cổng 9993)**:
+- **Terminal 3 - Work Service (Cổng 8083)**:
   ```powershell
   cd d:\DATN-2026\backend
   ./mvnw spring-boot:run -pl work-service

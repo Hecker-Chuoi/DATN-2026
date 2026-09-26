@@ -98,6 +98,7 @@ services:
     ports:
       - "9992:9992"
     environment:
+      SPRING_PROFILES_ACTIVE: tuananh
       SPRING_DATASOURCE_URL: jdbc:postgresql://app-db:5432/datn_main_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: "123456"
@@ -159,6 +160,7 @@ services:
       - "9991:9991"
     environment:
       SPRING_CLOUD_GATEWAY_ROUTES_0_ID: identity-service
+      SPRING_PROFILES_ACTIVE: tuananh
       SPRING_CLOUD_GATEWAY_ROUTES_0_URI: http://identity-service:9992
       SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0: Path=/identity/**
       SPRING_CLOUD_GATEWAY_ROUTES_0_FILTERS_0: StripPrefix=1

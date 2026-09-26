@@ -204,16 +204,16 @@ flowchart TB
         JWT["JWT<br/>sub = userId<br/>realm_access.roles = [ADMIN | USER]"]
     end
 
-    subgraph GW["API Gateway :9991"]
+    subgraph GW["API Gateway :8081"]
         AUTHN["Xác minh chữ ký JWT<br/>Header Authorization hoặc cookie access_token<br/>permitAll: /identity/api/v1/auth/**"]
     end
 
-    subgraph ID["identity-service :9992"]
+    subgraph ID["identity-service :8082"]
         IDADMIN["/api/v1/admin/**<br/>hasRole('ADMIN')"]
         IDME["/api/v1/users/me, /search<br/>isAuthenticated()"]
     end
 
-    subgraph WS["work-service :9993"]
+    subgraph WS["work-service :8083"]
         direction TB
         GLOBAL{"Global ADMIN?"}
         subgraph PROJ["Phạm vi dự án"]
@@ -450,7 +450,7 @@ Frontend chỉ dùng kết quả này để **ẩn/hiện giao diện**. Backend
 
 ### 5.0 Chuẩn bị
 
-1. Tạo 5 tài khoản: `an`, `binh`, `cuong`, `dung`, `em`. Vào Keycloak Admin (http://localhost:9998) gán realm role `ADMIN` cho `an`, các tài khoản còn lại chỉ `USER`.
+1. Tạo 5 tài khoản: `an`, `binh`, `cuong`, `dung`, `em`. Vào Keycloak Admin (http://localhost:8088) gán realm role `ADMIN` cho `an`, các tài khoản còn lại chỉ `USER`.
 2. Đăng nhập `binh`, tạo team **DEV** (binh là trưởng nhóm), rồi tạo dự án **BLOG** (key `BLOG`) gắn team DEV. `binh` tự động là Lead + ADMINISTRATOR. Chỉ trưởng nhóm mới tạo được dự án.
 3. `binh` vào tab **Thành viên & Vai trò**, thêm `cuong` với vai trò MEMBER, `dung` với vai trò VIEWER. Không thêm `em`.
 4. `binh` tạo 2 công việc: `BLOG-1` (giao cho `cuong`), `BLOG-2` (chưa giao). Trên `BLOG-1`, `binh` viết 1 bình luận và tải lên 1 tệp.

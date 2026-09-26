@@ -222,7 +222,7 @@ export default function LoginPage({ onLoginSuccess }) {
                 </div>
                 <div className="mockup-row-item">
                   <span style={{ fontWeight: 600 }}>Spring API Gateway</span>
-                  <span style={{ color: '#0070f3', fontWeight: 600 }}>Port 9991</span>
+                  <span style={{ color: '#0070f3', fontWeight: 600 }}>Port 8081</span>
                 </div>
               </div>
             </div>

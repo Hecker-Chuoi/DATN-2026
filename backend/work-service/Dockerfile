@@ -24,6 +24,6 @@ WORKDIR /app
 # Copy built jar from builder stage
 COPY --from=builder /app/work-service/target/*.jar app.jar
 
-EXPOSE 9993
+EXPOSE 8083
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
