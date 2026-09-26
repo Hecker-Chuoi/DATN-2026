@@ -97,7 +97,7 @@
         "attributes": {}
       },
       {
-        "id": "0abb56e4-3e2b-43b4-9992-6700b3ed8262",
+        "id": "0abb56e4-3e2b-43b4-8082-6700b3ed8262",
         "name": "uma_authorization",
         "description": "${role_uma_authorization}",
         "composite": false,
@@ -693,7 +693,7 @@
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "http://localhost:9991/*"
+        "http://localhost:8081/*"
       ],
       "webOrigins": [
         "*"
@@ -710,7 +710,7 @@
       "protocol": "openid-connect",
       "attributes": {
         "oidc.ciba.grant.enabled": "false",
-        "post.logout.redirect.uris": "http://localhost:9991/*",
+        "post.logout.redirect.uris": "http://localhost:8081/*",
         "oauth2.device.authorization.grant.enabled": "false",
         "backchannel.logout.session.required": "true",
         "backchannel.logout.revoke.offline.tokens": "false"

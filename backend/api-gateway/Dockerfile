@@ -24,6 +24,6 @@ WORKDIR /app
 # Copy built jar from builder stage
 COPY --from=builder /app/api-gateway/target/*.jar app.jar
 
-EXPOSE 9991
+EXPOSE 8081
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

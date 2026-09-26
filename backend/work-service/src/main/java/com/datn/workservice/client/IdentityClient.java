@@ -18,7 +18,7 @@ import java.util.UUID;
  */
 @FeignClient(
         name = "identity-service",
-        url = "${app.services.identity.url:http://localhost:9992}"
+        url = "${app.services.identity.url:http://localhost:8082}"
 )
 public interface IdentityClient {
 

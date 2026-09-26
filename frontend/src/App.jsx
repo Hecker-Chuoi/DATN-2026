@@ -20,6 +20,9 @@ import VerifyEmailPage from './pages/VerifyEmailPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 
+// Keycloak public URL (đổi qua .env.local: VITE_KEYCLOAK_URL) – mặc định cổng 8088 dùng chung của nhóm
+const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8088';
+
 function App() {
   // ─── User Workspace Auth State ───
   const [isUserAuth, setIsUserAuth] = useState(() => {
@@ -68,7 +71,7 @@ function App() {
     setIsUserAuth(false);
     setCurrentUser(null);
 
-    const keycloakLogoutUrl = `http://localhost:9998/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/login')}`;
+    const keycloakLogoutUrl = `${KEYCLOAK_URL}/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/login')}`;
     window.location.href = keycloakLogoutUrl;
   };
 
@@ -91,7 +94,7 @@ function App() {
       console.warn('Backend logout error:', err);
     }
 
-    const keycloakLogoutUrl = `http://localhost:9998/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/admin/login')}`;
+    const keycloakLogoutUrl = `${KEYCLOAK_URL}/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/admin/login')}`;
     window.location.href = keycloakLogoutUrl;
   };
 

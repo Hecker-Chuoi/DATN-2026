@@ -97,7 +97,7 @@
         "attributes": {}
       },
       {
-        "id": "0abb56e4-3e2b-43b4-9992-6700b3ed8262",
+        "id": "0abb56e4-3e2b-43b4-8082-6700b3ed8262",
         "name": "uma_authorization",
         "description": "${role_uma_authorization}",
         "composite": false,
@@ -694,7 +694,7 @@
       "clientAuthenticatorType": "client-secret",
       "secret": "pBchukVams8pHwBHnPvzTY86e3ou2Ym7",
       "redirectUris": [
-        "http://localhost:9991/*",
+        "http://localhost:8081/*",
         "http://localhost:5173/auth/callback",
         "http://localhost:5173/*"
       ],
@@ -716,7 +716,7 @@
         "oidc.ciba.grant.enabled": "false",
         "client.secret.creation.time": "1786176062",
         "backchannel.logout.session.required": "true",
-        "post.logout.redirect.uris": "http://localhost:9991/*##http://localhost:5173/*##+",
+        "post.logout.redirect.uris": "http://localhost:8081/*##http://localhost:5173/*##+",
         "display.on.consent.screen": "false",
         "oauth2.device.authorization.grant.enabled": "false",
         "backchannel.logout.revoke.offline.tokens": "false"
