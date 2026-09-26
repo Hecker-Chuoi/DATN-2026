@@ -482,6 +482,7 @@ export default function ProjectBoardView({
                   </span>
                 </div>
 
+                {canCreate && (
                 <button
                   onClick={() => onOpenCreateModal && onOpenCreateModal()}
                   style={{
@@ -498,6 +499,7 @@ export default function ProjectBoardView({
                 >
                   <Plus size={15} />
                 </button>
+                )}
               </div>
 
               {/* Card List in Column */}

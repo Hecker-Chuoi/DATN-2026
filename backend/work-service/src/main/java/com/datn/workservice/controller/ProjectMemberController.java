@@ -4,10 +4,12 @@ import com.datn.common.dto.ApiResponse;
 import com.datn.workservice.dto.request.AssignProjectRoleRequest;
 import com.datn.workservice.dto.response.MyProjectPermissionsResponse;
 import com.datn.workservice.dto.response.ProjectRoleResponse;
+import com.datn.workservice.dto.response.InvitationResponse;
 import com.datn.workservice.dto.response.RoleAssignmentResponse;
 import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.security.RequireProjectPermission;
 import com.datn.workservice.security.SecurityUtils;
+import com.datn.workservice.service.InvitationService;
 import com.datn.workservice.service.ProjectMemberService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,7 @@ public class ProjectMemberController {
      */
 
     private final ProjectMemberService projectMemberService;
+    private final InvitationService invitationService;
 
     /**
      * Retrieves role & permissions of current user in this project.
@@ -66,14 +69,15 @@ public class ProjectMemberController {
      */
     @PostMapping("/members")
     @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
-    public ResponseEntity<ApiResponse<RoleAssignmentResponse>> addMemberToProject(
+    public ResponseEntity<ApiResponse<InvitationResponse>> addMemberToProject(
             @PathVariable("projectId") UUID projectId,
             @Valid @RequestBody AssignProjectRoleRequest request
     ) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
-        RoleAssignmentResponse response = projectMemberService.addMemberToProject(projectId, request, currentUserId);
+        // Không thêm trực tiếp: gửi lời mời, người được mời chấp nhận mới có role_assignment (InvitationService.accept)
+        InvitationResponse response = invitationService.inviteToProject(projectId, request.getUserId(), request.getRoleId(), currentUserId);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(response, "Thêm thành viên vào dự án thành công"));
+                .body(ApiResponse.success(response, "Đã gửi lời mời tham gia dự án"));
     }
 
     /**

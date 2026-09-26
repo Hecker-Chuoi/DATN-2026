@@ -118,6 +118,7 @@ class ProjectServiceTest {
                 .build();
 
         when(projectRepository.existsByKeyIgnoreCase("CBE")).thenReturn(false);
+        when(projectAccessService.isGlobalAdmin()).thenReturn(true); // không gắn nhóm -> cần Global ADMIN
         when(projectRepository.save(any(Project.class))).thenReturn(savedProject);
 
         // Mock ecosystem dependencies
@@ -271,7 +272,50 @@ class ProjectServiceTest {
         when(teamRepository.findById(teamId)).thenReturn(Optional.of(
                 Team.builder().id(teamId).name("Other Team").ownerId(UUID.randomUUID()).workspaceId(workspaceId).build()));
         when(projectAccessService.isGlobalAdmin()).thenReturn(false);
-        when(teamMemberRepository.existsByTeamIdAndUserId(teamId, currentUserId)).thenReturn(false);
+        when(teamMemberRepository.findByTeamIdAndUserId(teamId, currentUserId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> projectService.createProject(request, currentUserId))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(projectRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createProject: Team MEMBER (not LEADER) cannot create a project for the team")
+    void testCreateProjectRejectsTeamMemberWhoIsNotLeader() {
+        UUID teamId = UUID.randomUUID();
+        CreateProjectRequest request = CreateProjectRequest.builder()
+                .workspaceId(workspaceId)
+                .teamId(teamId)
+                .name("Member Project")
+                .key("MBR")
+                .build();
+
+        when(projectRepository.existsByKeyIgnoreCase("MBR")).thenReturn(false);
+        when(teamRepository.findById(teamId)).thenReturn(Optional.of(
+                Team.builder().id(teamId).name("Team").ownerId(UUID.randomUUID()).workspaceId(workspaceId).build()));
+        when(projectAccessService.isGlobalAdmin()).thenReturn(false);
+        when(teamMemberRepository.findByTeamIdAndUserId(teamId, currentUserId)).thenReturn(Optional.of(
+                com.datn.workservice.entity.TeamMember.builder().teamId(teamId).userId(currentUserId)
+                        .role(com.datn.workservice.enums.TeamRole.MEMBER).build()));
+
+        assertThatThrownBy(() -> projectService.createProject(request, currentUserId))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(projectRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createProject: Non-admin cannot create a project without a team")
+    void testCreateProjectWithoutTeamRequiresGlobalAdmin() {
+        CreateProjectRequest request = CreateProjectRequest.builder()
+                .workspaceId(workspaceId)
+                .name("Personal Project")
+                .key("PRS")
+                .build();
+
+        when(projectRepository.existsByKeyIgnoreCase("PRS")).thenReturn(false);
+        when(projectAccessService.isGlobalAdmin()).thenReturn(false);
 
         assertThatThrownBy(() -> projectService.createProject(request, currentUserId))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);

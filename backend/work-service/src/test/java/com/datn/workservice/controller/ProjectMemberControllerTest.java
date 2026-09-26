@@ -40,6 +40,9 @@ class ProjectMemberControllerTest {
     private ProjectMemberService projectMemberService;
 
     @Mock
+    private com.datn.workservice.service.InvitationService invitationService;
+
+    @Mock
     private SecurityContext securityContext;
 
     @Mock
@@ -130,25 +133,26 @@ class ProjectMemberControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/work/projects/{projectId}/members - Adds member successfully")
-    void testAddMemberToProject_Success() throws Exception {
+    @DisplayName("POST /api/v1/work/projects/{projectId}/members - Sends an invitation instead of adding directly")
+    void testAddMemberToProject_CreatesInvitation() throws Exception {
         UUID targetUserId = UUID.randomUUID();
         AssignProjectRoleRequest request = AssignProjectRoleRequest.builder()
                 .userId(targetUserId)
                 .roleId(roleId)
                 .build();
 
-        RoleAssignmentResponse response = RoleAssignmentResponse.builder()
+        com.datn.workservice.dto.response.InvitationResponse response = com.datn.workservice.dto.response.InvitationResponse.builder()
                 .id(UUID.randomUUID())
-                .projectId(projectId)
-                .userId(targetUserId)
-                .roleId(roleId)
+                .type(com.datn.workservice.enums.InvitationType.PROJECT)
+                .targetId(projectId)
+                .inviteeUserId(targetUserId)
+                .inviteeName("new_member")
                 .roleName("MEMBER")
-                .username("new_member")
-                .assignedAt(LocalDateTime.now())
+                .status(com.datn.workservice.enums.InvitationStatus.PENDING)
+                .createdAt(LocalDateTime.now())
                 .build();
 
-        when(projectMemberService.addMemberToProject(eq(projectId), any(AssignProjectRoleRequest.class), eq(currentUserId)))
+        when(invitationService.inviteToProject(eq(projectId), eq(targetUserId), eq(roleId), eq(currentUserId)))
                 .thenReturn(response);
 
         mockMvc.perform(post("/api/v1/work/projects/{projectId}/members", projectId)
@@ -156,8 +160,11 @@ class ProjectMemberControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.username").value("new_member"))
-                .andExpect(jsonPath("$.message").value("Thêm thành viên vào dự án thành công"));
+                .andExpect(jsonPath("$.data.inviteeName").value("new_member"))
+                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andExpect(jsonPath("$.message").value("Đã gửi lời mời tham gia dự án"));
+
+        verify(projectMemberService, never()).addMemberToProject(any(), any(), any());
     }
 
     @Test

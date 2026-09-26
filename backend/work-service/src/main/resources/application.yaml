@@ -1,5 +1,5 @@
 server:
-  port: 8083
+  port: 9993
 
 spring:
   application:
@@ -33,8 +33,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          jwk-set-uri: http://localhost:8088/realms/datn-realm/protocol/openid-connect/certs
-          issuer-uri: http://localhost:8088/realms/datn-realm
+          jwk-set-uri: http://localhost:9998/realms/datn-realm/protocol/openid-connect/certs
+          issuer-uri: http://localhost:9998/realms/datn-realm
 
   # ─── Redis Caching & Ephemeral State ───
   data:
@@ -64,7 +64,7 @@ minio:
 app:
   services:
     identity:
-      url: http://localhost:8082
+      url: http://localhost:9992
 
 logging:
   level:

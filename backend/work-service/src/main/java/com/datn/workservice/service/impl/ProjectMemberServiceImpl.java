@@ -201,6 +201,30 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
 
     @Override
     @Transactional
+    public void syncTeamMemberToProjects(UUID teamId, UUID userId, TeamRole teamRole) {
+        if (teamId == null || userId == null || teamRole == null) return;
+        for (Project project : projectRepository.findByTeamId(teamId)) {
+            List<ProjectRole> roles = projectRoleRepository.findByProjectId(project.getId());
+            ProjectRole targetRole = teamRole == TeamRole.LEADER ? findRole(roles, ROLE_ADMINISTRATOR)
+                    : teamRole == TeamRole.VIEWER ? findRole(roles, ROLE_VIEWER)
+                    : findRole(roles, ROLE_MEMBER);
+            if (targetRole == null) continue;
+
+            List<RoleAssignment> existing = roleAssignmentRepository.findByProjectIdAndUserId(project.getId(), userId);
+            if (existing.isEmpty()) {
+                roleAssignmentRepository.save(RoleAssignment.builder()
+                        .projectId(project.getId()).userId(userId).roleId(targetRole.getId()).build());
+            } else {
+                for (RoleAssignment ra : existing) {
+                    ra.setRoleId(targetRole.getId());
+                    roleAssignmentRepository.save(ra);
+                }
+            }
+        }
+    }
+
+    @Override
+    @Transactional
     public void syncTeamMembersToProject(UUID projectId) {
         Project project = projectRepository.findById(projectId).orElse(null);
         if (project == null || project.getTeamId() == null) return;
@@ -406,7 +430,8 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     /**
      * Normalizes any user identifier (identity DB id or Keycloak id) to the Keycloak id used by work-service.
      */
-    private UUID canonicalUserId(UUID anyId) {
+    @Override
+    public UUID canonicalUserId(UUID anyId) {
         if (anyId == null) return null;
         UserResponse user = fetchUser(anyId);
         if (user != null && user.getKeycloakId() != null) {

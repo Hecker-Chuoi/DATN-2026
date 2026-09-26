@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi, userApi } from '../../api.js';
+import PendingInvitations from '../common/PendingInvitations.jsx';
 
 const ROLE_COLORS = {
   ADMINISTRATOR: { bg: '#FAF5FF', text: '#7E22CE', border: '#E9D5FF' },
@@ -102,6 +103,7 @@ const PERMISSION_DEFINITIONS = [
 
 export default function ProjectMembersTab({ projectId, project, isAdmin, onMembersUpdated }) {
   const [members, setMembers] = useState([]);
+  const [inviteTick, setInviteTick] = useState(0); // đổi để PendingInvitations tải lại sau khi gửi lời mời
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -174,8 +176,9 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
         roleId: selectedRoleId,
       });
 
-      toast.success('Đã thêm thành viên vào dự án thành công!');
+      toast.success('Đã gửi lời mời. Người được mời cần chấp nhận để trở thành thành viên.');
       setIsAddModalOpen(false);
+      setInviteTick((t) => t + 1);
       fetchMembersAndRoles();
       if (onMembersUpdated) onMembersUpdated();
     } catch (err) {
@@ -294,6 +297,9 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
           boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
         }}
       >
+        <div style={{ padding: '0 18px' }}>
+          <PendingInvitations projectId={projectId} canManage={isAdmin} refreshKey={inviteTick} />
+        </div>
         <div
           style={{
             display: 'grid',

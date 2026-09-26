@@ -7,6 +7,8 @@ import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.client.IdentityClient;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.response.TeamMemberResponse;
+import com.datn.workservice.dto.response.InvitationResponse;
+import com.datn.workservice.dto.response.TeamResponse;
 import com.datn.workservice.entity.Project;
 import com.datn.workservice.entity.ProjectRole;
 import com.datn.workservice.entity.RoleAssignment;
@@ -19,6 +21,8 @@ import com.datn.workservice.repository.RoleAssignmentRepository;
 import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.repository.TeamRepository;
 import com.datn.workservice.security.SecurityUtils;
+import com.datn.workservice.service.InvitationService;
+import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -68,6 +72,8 @@ public class TeamController {
     private final ProjectRoleRepository projectRoleRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final IdentityClient identityClient;
+    private final InvitationService invitationService;
+    private final ProjectMemberService projectMemberService;
 
     /**
      * Danh sách tất cả Team trong hệ thống (chỉ dành cho Global ADMIN).
@@ -82,16 +88,29 @@ public class TeamController {
      * Danh sách Team mà người dùng hiện tại tham gia (Owner hoặc Member).
      */
     @GetMapping({"/my", "/me"})
-    public ResponseEntity<ApiResponse<List<Team>>> listMyTeams() {
+    public ResponseEntity<ApiResponse<List<TeamResponse>>> listMyTeams() {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
-        Set<UUID> teamIds = new HashSet<>();
-        teamMemberRepository.findByUserId(currentUserId).forEach(m -> teamIds.add(m.getTeamId()));
-        teamRepository.findByOwnerId(currentUserId).forEach(t -> teamIds.add(t.getId()));
+        Map<UUID, TeamRole> roleByTeam = new HashMap<>();
+        teamMemberRepository.findByUserId(currentUserId).forEach(m -> roleByTeam.put(m.getTeamId(), m.getRole()));
+        teamRepository.findByOwnerId(currentUserId).forEach(t -> roleByTeam.put(t.getId(), TeamRole.LEADER));
 
-        if (teamIds.isEmpty()) {
+        if (roleByTeam.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success(Collections.emptyList()));
         }
-        return ResponseEntity.ok(ApiResponse.success(teamRepository.findByIdIn(teamIds)));
+        // Kèm myRole để frontend biết user có phải trưởng nhóm không (chỉ trưởng nhóm được tạo dự án)
+        List<TeamResponse> result = teamRepository.findByIdIn(roleByTeam.keySet()).stream()
+                .map(t -> TeamResponse.builder()
+                        .id(t.getId())
+                        .workspaceId(t.getWorkspaceId())
+                        .name(t.getName())
+                        .description(t.getDescription())
+                        .ownerId(t.getOwnerId())
+                        .createdAt(t.getCreatedAt())
+                        .updatedAt(t.getUpdatedAt())
+                        .myRole(currentUserId.equals(t.getOwnerId()) ? TeamRole.LEADER : roleByTeam.get(t.getId()))
+                        .build())
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 
     @GetMapping("/{teamId}")
@@ -150,11 +169,12 @@ public class TeamController {
     }
 
     /**
-     * Xóa nhóm (chỉ Chủ sở hữu / Owner).
+     * Xóa nhóm: trưởng nhóm (người tạo hoặc thành viên role LEADER) hoặc Global ADMIN.
+     * Người tạo team luôn là LEADER (createTeam tự gán) nên "owner" và "leader" là một.
      */
     @Transactional
     @DeleteMapping("/{teamId}")
-    @PreAuthorize("@teamSecurity.isOwner(#teamId)")
+    @PreAuthorize("@teamSecurity.isLeader(#teamId)")
     public ResponseEntity<ApiResponse<Void>> deleteTeam(@PathVariable("teamId") @P("teamId") UUID teamId) {
         Team team = requireTeam(teamId);
 
@@ -265,7 +285,7 @@ public class TeamController {
     @Transactional
     @PostMapping("/{teamId}/members")
     @PreAuthorize("@teamSecurity.isLeader(#teamId)")
-    public ResponseEntity<ApiResponse<TeamMemberResponse>> addMember(
+    public ResponseEntity<ApiResponse<InvitationResponse>> addMember(
             @PathVariable("teamId") @P("teamId") UUID teamId,
             @RequestBody Map<String, String> body
     ) {
@@ -283,21 +303,10 @@ public class TeamController {
 
         TeamRole role = parseRole(body.get("role"), TeamRole.MEMBER);
 
-        TeamMember savedMember = teamMemberRepository.findByTeamIdAndUserId(teamId, targetUserId)
-                .map(existing -> {
-                    existing.setRole(role);
-                    return teamMemberRepository.save(existing);
-                })
-                .orElseGet(() -> teamMemberRepository.save(TeamMember.builder()
-                        .teamId(teamId)
-                        .userId(targetUserId)
-                        .role(role)
-                        .build()));
-
-        // Đồng bộ vào các dự án của nhóm
-        syncMemberToTeamProjects(teamId, savedMember.getUserId(), savedMember.getRole());
-
-        return ResponseEntity.ok(ApiResponse.success(toResponse(savedMember), "Thêm thành viên thành công"));
+        // Không thêm trực tiếp: gửi lời mời, người được mời chấp nhận mới thành thành viên (InvitationService.accept)
+        InvitationResponse invitation = invitationService.inviteToTeam(teamId, targetUserId, role, SecurityUtils.getCurrentUserId());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(invitation, "Đã gửi lời mời tham gia nhóm"));
     }
 
     @Transactional
@@ -381,39 +390,7 @@ public class TeamController {
     }
 
     private void syncMemberToTeamProjects(UUID teamId, UUID userId, TeamRole teamRole) {
-        if (teamId == null || userId == null || teamRole == null) return;
-        List<Project> projects = projectRepository.findByTeamId(teamId);
-
-        for (Project project : projects) {
-            List<ProjectRole> roles = projectRoleRepository.findByProjectId(project.getId());
-            if (roles.isEmpty()) continue;
-
-            ProjectRole adminRole = findRole(roles, "ADMINISTRATOR");
-            ProjectRole memberRole = findRole(roles, "MEMBER");
-            ProjectRole viewerRole = findRole(roles, "VIEWER");
-
-            ProjectRole targetRole = memberRole;
-            if (teamRole == TeamRole.LEADER) {
-                targetRole = adminRole;
-            } else if (teamRole == TeamRole.VIEWER) {
-                targetRole = viewerRole;
-            }
-            if (targetRole == null) continue;
-
-            List<RoleAssignment> existing = roleAssignmentRepository.findByProjectIdAndUserId(project.getId(), userId);
-            if (existing.isEmpty()) {
-                roleAssignmentRepository.save(RoleAssignment.builder()
-                        .projectId(project.getId())
-                        .userId(userId)
-                        .roleId(targetRole.getId())
-                        .build());
-            } else {
-                for (RoleAssignment ra : existing) {
-                    ra.setRoleId(targetRole.getId());
-                    roleAssignmentRepository.save(ra);
-                }
-            }
-        }
+        projectMemberService.syncTeamMemberToProjects(teamId, userId, teamRole);
     }
 
     private void removeMemberFromTeamProjects(UUID teamId, UUID userId) {
@@ -423,10 +400,6 @@ public class TeamController {
             if (userId.equals(project.getLeadUserId())) continue;
             roleAssignmentRepository.deleteByProjectIdAndUserId(project.getId(), userId);
         }
-    }
-
-    private static ProjectRole findRole(List<ProjectRole> roles, String name) {
-        return roles.stream().filter(r -> name.equalsIgnoreCase(r.getName())).findFirst().orElse(null);
     }
 
     private static String firstNonBlank(String... values) {

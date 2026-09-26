@@ -5,6 +5,7 @@ import com.datn.workservice.dto.response.MyProjectPermissionsResponse;
 import com.datn.workservice.dto.response.ProjectRoleResponse;
 import com.datn.workservice.dto.response.RoleAssignmentResponse;
 import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.enums.TeamRole;
 
 import java.util.List;
 import java.util.UUID;
@@ -54,4 +55,15 @@ public interface ProjectMemberService {
      * (LEADER -> ADMINISTRATOR, MEMBER -> MEMBER, VIEWER -> VIEWER). Existing assignments are kept.
      */
     void syncTeamMembersToProject(UUID projectId);
+
+    /**
+     * Upserts one team member into every project of the team
+     * (LEADER -> ADMINISTRATOR, VIEWER -> VIEWER, else MEMBER). Existing assignments are updated to the new role.
+     */
+    void syncTeamMemberToProjects(UUID teamId, UUID userId, TeamRole teamRole);
+
+    /**
+     * Normalizes any user id (identity DB id or Keycloak sub) to the Keycloak sub used in work-service tables.
+     */
+    UUID canonicalUserId(UUID anyId);
 }

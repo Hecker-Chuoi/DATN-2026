@@ -1,5 +1,5 @@
 server:
-  port: 8082
+  port: 9992
 
 spring:
   application:
@@ -27,12 +27,12 @@ spring:
       resourceserver:
         jwt:
           # Keycloak JWKS endpoint for signature verification
-          jwk-set-uri: http://localhost:8088/realms/datn-realm/protocol/openid-connect/certs
-          issuer-uri: http://localhost:8088/realms/datn-realm
+          jwk-set-uri: http://localhost:9998/realms/datn-realm/protocol/openid-connect/certs
+          issuer-uri: http://localhost:9998/realms/datn-realm
 
 # ─── Keycloak Admin Client ──────────────────────────────────────────────
 keycloak:
-  server-url: http://localhost:8088
+  server-url: http://localhost:9998
   realm: datn-realm
   admin:
     username: admin
@@ -44,4 +44,14 @@ keycloak:
   # Lấy từ: Keycloak Admin → datn-realm → Clients → datn-backend → Credentials
   client:
     client-id: datn-backend
-    client-secret: aHyLbQ4knDq8VdIr5lWZV6i1fOhIK41X
+    client-secret: pBchukVams8pHwBHnPvzTY86e3ou2Ym7
+
+# ─── Xác thực email / quên mật khẩu (email gửi qua notification-service) ───
+app:
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
+  services:
+    notification:
+      url: ${APP_SERVICES_NOTIFICATION_URL:http://localhost:9994}
+  verification:
+    email-ttl-hours: 24
+    reset-ttl-minutes: 30

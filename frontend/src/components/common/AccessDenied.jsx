@@ -1,27 +1,52 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, SearchX, ArrowLeft } from 'lucide-react';
+import { ShieldAlert, SearchX, LockKeyhole, ArrowLeft } from 'lucide-react';
+
+const PRESETS = {
+  401: {
+    Icon: LockKeyhole,
+    label: '401 UNAUTHORIZED',
+    bg: '#E0E7FF',
+    color: '#4338CA',
+    title: 'Phiên đăng nhập đã hết hạn',
+    message: 'Vui lòng đăng nhập lại để tiếp tục sử dụng hệ thống.',
+    backTo: '/login',
+    backLabel: 'Đăng nhập lại',
+  },
+  403: {
+    Icon: ShieldAlert,
+    label: '403 FORBIDDEN',
+    bg: '#FEE2E2',
+    color: '#DC2626',
+    title: 'Bạn không có quyền truy cập dự án này',
+    message: 'Bạn không phải thành viên của dự án. Hãy liên hệ Trưởng dự án (Project Lead) hoặc Administrator để được thêm vào.',
+    backTo: '/projects',
+    backLabel: 'Quay lại danh sách dự án',
+  },
+  404: {
+    Icon: SearchX,
+    label: '404 NOT FOUND',
+    bg: '#FEF3C7',
+    color: '#B45309',
+    title: 'Không tìm thấy trang',
+    message: 'Đường dẫn không tồn tại hoặc nội dung đã bị xóa.',
+    backTo: '/projects',
+    backLabel: 'Về trang chủ',
+  },
+};
 
 /**
- * Màn hình thay thế nội dung khi backend trả 403 (không có quyền) hoặc 404 (không tồn tại).
+ * Trang lỗi dùng chung: 401 (hết phiên), 403 (không có quyền), 404 (không tồn tại).
+ * Dùng làm route `/401`, `/403`, `/404`, catch-all `*`, hoặc thay nội dung trang khi API trả lỗi.
  */
-export default function AccessDenied({
-  status = 403,
-  title,
-  message,
-  backTo = '/projects',
-  backLabel = 'Quay lại danh sách dự án',
-}) {
+export default function AccessDenied({ status = 403, title, message, backTo, backLabel }) {
   const navigate = useNavigate();
-  const isNotFound = status === 404;
-  const Icon = isNotFound ? SearchX : ShieldAlert;
-
-  const resolvedTitle = title || (isNotFound ? 'Không tìm thấy dự án' : 'Bạn không có quyền truy cập dự án này');
-  const resolvedMessage =
-    message ||
-    (isNotFound
-      ? 'Dự án không tồn tại hoặc đã bị xóa.'
-      : 'Bạn không phải thành viên của dự án. Hãy liên hệ Trưởng dự án (Project Lead) hoặc Administrator để được thêm vào.');
+  const preset = PRESETS[status] || PRESETS[403];
+  const { Icon } = preset;
+  const resolvedTitle = title || preset.title;
+  const resolvedMessage = message || preset.message;
+  const resolvedBackTo = backTo || preset.backTo;
+  const resolvedBackLabel = backLabel || preset.backLabel;
 
   return (
     <div
@@ -50,8 +75,8 @@ export default function AccessDenied({
             width: 56,
             height: 56,
             borderRadius: 14,
-            backgroundColor: isNotFound ? '#FEF3C7' : '#FEE2E2',
-            color: isNotFound ? '#B45309' : '#DC2626',
+            backgroundColor: preset.bg,
+            color: preset.color,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -61,12 +86,12 @@ export default function AccessDenied({
           <Icon size={28} />
         </div>
         <div style={{ fontSize: 12, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.08em', marginBottom: 6 }}>
-          {isNotFound ? '404 NOT FOUND' : '403 FORBIDDEN'}
+          {preset.label}
         </div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: '0 0 8px 0' }}>{resolvedTitle}</h2>
         <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6, margin: '0 0 20px 0' }}>{resolvedMessage}</p>
         <button
-          onClick={() => navigate(backTo)}
+          onClick={() => navigate(resolvedBackTo)}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -82,7 +107,7 @@ export default function AccessDenied({
           }}
         >
           <ArrowLeft size={14} />
-          <span>{backLabel}</span>
+          <span>{resolvedBackLabel}</span>
         </button>
       </div>
     </div>

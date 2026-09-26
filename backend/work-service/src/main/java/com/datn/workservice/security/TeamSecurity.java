@@ -31,15 +31,7 @@ public class TeamSecurity {
         return SecurityUtils.isGlobalAdmin();
     }
 
-    public boolean isOwner(UUID teamId) {
-        if (isGlobalAdmin()) return true;
-        UUID userId = SecurityUtils.getCurrentUserIdOptional().orElse(null);
-        if (teamId == null || userId == null) return false;
-        return teamRepository.findById(teamId)
-                .map(team -> userId.equals(team.getOwnerId()))
-                .orElse(false);
-    }
-
+    /** Trưởng nhóm = người tạo (teams.owner_id) hoặc thành viên có role LEADER. */
     public boolean isLeader(UUID teamId) {
         if (isGlobalAdmin()) return true;
         UUID userId = SecurityUtils.getCurrentUserIdOptional().orElse(null);

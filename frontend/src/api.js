@@ -1,7 +1,7 @@
 /**
  * api.js – Centralized HTTP client using Axios with Silent Token Refresh
  *
- * Vite dev server proxies /identity/** and /work/** → API Gateway :8081
+ * Vite dev server proxies /identity/** and /work/** → API Gateway :9991
  * (see vite.config.js → server.proxy).
  */
 import axios from 'axios';
@@ -153,6 +153,13 @@ apiClient.interceptors.request.use(
 let isRefreshing = false;
 let failedQueue = [];
 
+// Hết phiên (không có / không refresh được token): đưa về trang 401 (user) hoặc trang đăng nhập admin.
+const AUTH_PAGE_RE = /^\/(login|register|401|auth\/callback|admin\/login|admin\/auth\/callback)/;
+const redirectToSessionExpired = (isAdminRoute) => {
+  if (typeof window === 'undefined' || AUTH_PAGE_RE.test(window.location.pathname)) return;
+  window.location.replace(isAdminRoute ? '/admin/login' : '/401');
+};
+
 const processQueue = (error, token = null) => {
   failedQueue.forEach((prom) => {
     if (error) {
@@ -197,6 +204,7 @@ apiClient.interceptors.response.use(
 
       if (!refreshToken) {
         store.clear();
+        redirectToSessionExpired(isAdminRoute);
         return Promise.reject(error);
       }
 
@@ -238,6 +246,7 @@ apiClient.interceptors.response.use(
       } catch (refreshErr) {
         processQueue(refreshErr, null);
         store.clear();
+        redirectToSessionExpired(isAdminRoute);
         return Promise.reject(refreshErr);
       } finally {
         isRefreshing = false;
@@ -275,6 +284,11 @@ export const authApi = {
     }),
   googleCallback: (code, redirectUri) =>
     apiClient.post(`${AUTH_BASE}/google/callback`, { code, redirectUri }),
+  // Xác thực email & quên mật khẩu (link trong email trỏ tới /verify-email và /reset-password của frontend)
+  verifyEmail: (token) => apiClient.get(`${AUTH_BASE}/verify-email`, { params: { token }, skipErrorToast: true }),
+  resendVerification: (identifier) => apiClient.post(`${AUTH_BASE}/resend-verification`, { identifier }),
+  forgotPassword: (email) => apiClient.post(`${AUTH_BASE}/forgot-password`, { email }),
+  resetPassword: (token, newPassword) => apiClient.post(`${AUTH_BASE}/reset-password`, { token, newPassword }),
 };
 
 // ─── User API ─────────────────────────────────────────────────────────────────
@@ -313,6 +327,15 @@ export const teamApi = {
 };
 
 // ─── 2. Projects API ──────────────────────────────────────────────────────────
+export const invitationApi = {
+  my: () => apiClient.get(`${WORK_BASE}/invitations/my`, { skipErrorToast: true }),
+  forTeam: (teamId) => apiClient.get(`${WORK_BASE}/invitations`, { params: { teamId }, skipErrorToast: true }),
+  forProject: (projectId) => apiClient.get(`${WORK_BASE}/invitations`, { params: { projectId }, skipErrorToast: true }),
+  accept: (id) => apiClient.post(`${WORK_BASE}/invitations/${id}/accept`),
+  decline: (id) => apiClient.post(`${WORK_BASE}/invitations/${id}/decline`),
+  cancel: (id) => apiClient.delete(`${WORK_BASE}/invitations/${id}`),
+};
+
 export const projectApi = {
   listAll: (params) => apiClient.get(`${WORK_BASE}/projects`, { params }),
   listTemplates: () => apiClient.get(`${WORK_BASE}/projects/templates`),

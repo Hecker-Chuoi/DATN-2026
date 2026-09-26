@@ -10,11 +10,11 @@ export default defineConfig({
     // This avoids CORS issues and mirrors the production reverse-proxy setup.
     proxy: {
       '/identity': {
-        target: 'http://127.0.0.1:8081',
+        target: 'http://127.0.0.1:9991',
         changeOrigin: true,
       },
       '/work': {
-        target: 'http://127.0.0.1:8081',
+        target: 'http://127.0.0.1:9991',
         changeOrigin: true,
       },
     },

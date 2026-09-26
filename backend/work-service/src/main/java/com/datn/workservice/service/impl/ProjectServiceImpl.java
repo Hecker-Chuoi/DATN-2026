@@ -17,6 +17,7 @@ import com.datn.workservice.enums.DefaultAssigneeType;
 import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.enums.ProjectType;
 import com.datn.workservice.enums.StatusCategory;
+import com.datn.workservice.enums.TeamRole;
 import com.datn.workservice.repository.*;
 import com.datn.workservice.service.AtomicKeySequenceGenerator;
 import com.datn.workservice.service.ProjectAccessService;
@@ -240,19 +241,38 @@ public class ProjectServiceImpl implements ProjectService {
      * Chỉ thành viên/owner của team (hoặc Global ADMIN) mới được gắn dự án vào team.
      * Nếu chỉ định Project Lead khác người tạo thì Lead cũng phải thuộc team.
      */
+    /**
+     * Chỉ trưởng nhóm (owner hoặc TeamRole.LEADER) của nhóm được chọn, hoặc Global ADMIN, mới được tạo dự án.
+     * Dự án không gắn nhóm chỉ Global ADMIN tạo được (tránh lách quy tắc bằng cách bỏ trống nhóm).
+     */
     private void validateTeamMembership(UUID teamId, UUID currentUserId, UUID leadUserId) {
-        if (teamId == null) return;
+        boolean globalAdmin = projectAccessService.isGlobalAdmin();
+
+        if (teamId == null) {
+            if (!globalAdmin) {
+                throw new AccessDeniedException("Chỉ trưởng nhóm mới được tạo dự án. Hãy chọn nhóm mà bạn là trưởng nhóm");
+            }
+            return;
+        }
 
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
 
-        if (!projectAccessService.isGlobalAdmin() && !isTeamMember(team, currentUserId)) {
-            throw new AccessDeniedException("Bạn không phải thành viên của nhóm này nên không thể gắn dự án vào nhóm");
+        if (!globalAdmin && !isTeamLeader(team, currentUserId)) {
+            throw new AccessDeniedException("Chỉ trưởng nhóm (LEADER) mới được tạo dự án cho nhóm này");
         }
 
         if (leadUserId != null && !leadUserId.equals(currentUserId) && !isTeamMember(team, leadUserId)) {
             throw new BadRequestException("Trưởng dự án (Project Lead) phải là thành viên của nhóm");
         }
+    }
+
+    private boolean isTeamLeader(Team team, UUID userId) {
+        if (team == null || userId == null) return false;
+        if (userId.equals(team.getOwnerId())) return true;
+        return teamMemberRepository.findByTeamIdAndUserId(team.getId(), userId)
+                .map(m -> m.getRole() == TeamRole.LEADER)
+                .orElse(false);
     }
 
     private boolean isTeamMember(Team team, UUID userId) {

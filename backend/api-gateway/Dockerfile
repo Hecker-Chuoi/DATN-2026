@@ -8,6 +8,7 @@ COPY common/pom.xml ./common/
 COPY identity-service/pom.xml ./identity-service/
 COPY api-gateway/pom.xml ./api-gateway/
 COPY work-service/pom.xml ./work-service/
+COPY notification-service/pom.xml ./notification-service/
 
 # Copy source code of common & api-gateway
 COPY common/src ./common/src
@@ -23,6 +24,6 @@ WORKDIR /app
 # Copy built jar from builder stage
 COPY --from=builder /app/api-gateway/target/*.jar app.jar
 
-EXPOSE 8081
+EXPOSE 9991
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

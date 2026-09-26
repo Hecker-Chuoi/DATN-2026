@@ -14,7 +14,8 @@ import {
   Users,
   Building2,
   Compass,
-  LogOut
+  LogOut,
+  Mail
 } from 'lucide-react';
 
 const TEAM_COLORS = [
@@ -27,7 +28,7 @@ const TEAM_COLORS = [
   '#6366F1'  // Indigo
 ];
 
-export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreateProject, currentUser, onLogout }) {
+export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreateProject, canCreateProject = true, invitationCount = 0, currentUser, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [expandedTeams, setExpandedTeams] = useState({ [teams[0]?.id]: true });
@@ -89,6 +90,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
           </div>
         </div>
 
+        {canCreateProject && (
         <button
           onClick={() => onOpenCreateProject(null)}
           title="Tạo dự án nhanh"
@@ -110,6 +112,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         >
           <Plus size={15} />
         </button>
+        )}
       </div>
 
       {/* ─── 2. Main Navigation Links ─── */}
@@ -125,6 +128,13 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
           icon={<CheckCircle2 size={17} color="#10B981" />}
           label="Nhiệm vụ của tôi"
           active={location.pathname === '/my-issues'}
+        />
+        <NavItem
+          to="/invitations"
+          icon={<Mail size={17} color="#F59E0B" />}
+          label="Lời mời"
+          badge={invitationCount}
+          active={location.pathname === '/invitations'}
         />
       </div>
 
@@ -368,7 +378,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
   );
 }
 
-function NavItem({ to, icon, label, active }) {
+function NavItem({ to, icon, label, active, badge = 0 }) {
   return (
     <NavLink
       to={to}
@@ -399,7 +409,12 @@ function NavItem({ to, icon, label, active }) {
       }}
     >
       {icon}
-      <span>{label}</span>
+      <span style={{ flex: 1 }}>{label}</span>
+      {badge > 0 && (
+        <span style={{ fontSize: 11, fontWeight: 700, backgroundColor: '#F59E0B', color: '#FFFFFF', padding: '1px 7px', borderRadius: 10 }}>
+          {badge}
+        </span>
+      )}
     </NavLink>
   );
 }

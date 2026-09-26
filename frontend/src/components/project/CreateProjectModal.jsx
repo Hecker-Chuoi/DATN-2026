@@ -22,7 +22,8 @@ import {
   PROJECT_KEY_REGEX
 } from '../../utils/projectValidation.js';
 
-export default function CreateProjectModal({ isOpen, onClose, teams = [], defaultTeamId = null, onProjectCreated }) {
+// teams: chỉ những nhóm mà user là trưởng nhóm (hoặc mọi nhóm với Global ADMIN); allowPersonal: cho phép dự án không gắn nhóm (chỉ ADMIN)
+export default function CreateProjectModal({ isOpen, onClose, teams = [], defaultTeamId = null, allowPersonal = false, onProjectCreated }) {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -93,6 +94,10 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
     const validation = validateProjectForm(formData);
     if (!validation.isValid) {
       setErrors(validation.errors);
+      return;
+    }
+    if (!allowPersonal && !formData.teamId) {
+      setErrors({ teamId: 'Chỉ trưởng nhóm mới được tạo dự án. Hãy chọn nhóm mà bạn là trưởng nhóm.' });
       return;
     }
 
@@ -305,13 +310,20 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
                   boxSizing: 'border-box',
                 }}
               >
-                <option value="">-- Cá nhân (Không thuộc nhóm) --</option>
+                {allowPersonal ? (
+                  <option value="">-- Cá nhân (Không thuộc nhóm) --</option>
+                ) : (
+                  teams.length === 0 && <option value="">-- Bạn chưa là trưởng nhóm nào --</option>
+                )}
                 {teams.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
                   </option>
                 ))}
               </select>
+              {errors.teamId && (
+                <div style={{ fontSize: 12, color: '#EF4444', marginTop: 4 }}>{errors.teamId}</div>
+              )}
             </div>
           </div>
 

@@ -26,7 +26,7 @@ import CreateProjectModal from '../components/project/CreateProjectModal.jsx';
 import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
 
 export default function ProjectListPage() {
-  const { teams, currentUser } = useOutletContext() || {};
+  const { teams, currentUser, leaderTeams = teams, canCreateProject = true, isSystemAdmin = false } = useOutletContext() || {};
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const teamIdFilter = searchParams.get('teamId') || '';
@@ -275,6 +275,7 @@ export default function ProjectListPage() {
             />
           </div>
 
+          {canCreateProject && (
           <button
             onClick={() => setIsCreateModalOpen(true)}
             style={{
@@ -295,6 +296,7 @@ export default function ProjectListPage() {
             <Plus size={14} />
             <span>Tạo dự án mới</span>
           </button>
+          )}
 
           <button
             onClick={fetchProjects}
@@ -354,6 +356,7 @@ export default function ProjectListPage() {
             <p style={{ fontSize: 13, color: '#64748B', maxWidth: 420, margin: '0 auto 20px auto', lineHeight: 1.5 }}>
               Bắt đầu tạo dự án Scrum hoặc Kanban đầu tiên để tự động khởi tạo Workflow, Board và quản lý công việc.
             </p>
+            {canCreateProject ? (
             <button
               onClick={() => setIsCreateModalOpen(true)}
               style={{
@@ -374,6 +377,9 @@ export default function ProjectListPage() {
               <Plus size={15} />
               <span>Tạo dự án mới ngay</span>
             </button>
+            ) : (
+              <p style={{ fontSize: 12, color: '#94A3B8' }}>Chỉ trưởng nhóm mới có thể tạo dự án. Hãy nhờ trưởng nhóm thêm bạn vào dự án.</p>
+            )}
           </div>
         ) : (
           <div
@@ -591,7 +597,8 @@ export default function ProjectListPage() {
       <CreateProjectModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        teams={teams}
+        teams={leaderTeams}
+        allowPersonal={isSystemAdmin}
         defaultTeamId={teamIdFilter || undefined}
         onProjectCreated={handleProjectCreated}
       />

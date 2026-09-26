@@ -6,6 +6,7 @@ import com.datn.identity_service.dto.request.AdminCreateUserRequest;
 import com.datn.identity_service.dto.request.ResetPasswordRequest;
 import com.datn.identity_service.dto.response.UserResponse;
 import com.datn.identity_service.entity.User;
+import com.datn.identity_service.exception.EmailNotVerifiedException;
 import com.datn.identity_service.exception.ResourceNotFoundException;
 import com.datn.identity_service.exception.UserAlreadyExistsException;
 import com.datn.identity_service.repository.UserRepository;
@@ -36,6 +37,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final KeycloakService keycloakService;
     private final WorkDataCleanupService workDataCleanupService;
+    private final AccountVerificationService accountVerificationService;
 
 
     /**
@@ -55,13 +57,14 @@ public class UserService {
             throw new UserAlreadyExistsException("Email '" + request.getEmail() + "' is already registered");
         }
 
-        // 2. Create user in Keycloak
+        // 2. Create user in Keycloak (disabled cho tới khi xác thực email)
         String keycloakId = keycloakService.createUser(
                 request.getUsername(),
                 request.getPassword(),
                 request.getEmail(),
                 request.getFirstName(),
-                request.getLastName()
+                request.getLastName(),
+                false
         );
 
         // 3. Assign default realm role 'USER' in Keycloak (ADMIN chỉ được cấp thủ công qua API admin)
@@ -75,14 +78,42 @@ public class UserService {
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
                 .roles(Set.copyOf(DEFAULT_ROLES))
-                .status(User.UserStatus.ACTIVE)
+                .status(User.UserStatus.INACTIVE) // chờ xác thực email (AccountVerificationService.verifyEmail -> ACTIVE)
                 .build();
 
         user = userRepository.save(user);
         keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
-        log.info("Registered new user: username='{}', keycloakId='{}', userId='{}'", user.getUsername(), keycloakId, user.getId());
+        log.info("Registered new user (pending email verification): username='{}', keycloakId='{}', userId='{}'",
+                user.getUsername(), keycloakId, user.getId());
+
+        // 5. Gửi email xác thực (fail-safe: lỗi gửi mail không chặn đăng ký, người dùng có thể gửi lại)
+        accountVerificationService.sendEmailVerification(user);
 
         return UserResponse.from(user);
+    }
+
+    /**
+     * Chặn đăng nhập khi tài khoản chưa xác thực email (trước khi gọi Keycloak để có thông báo rõ ràng).
+     * identifier = username hoặc email.
+     */
+    @Transactional(readOnly = true)
+    public void assertEmailVerified(String identifier) {
+        userRepository.findByUsername(identifier)
+                .or(() -> userRepository.findByEmail(identifier))
+                .filter(u -> u.getStatus() == User.UserStatus.INACTIVE)
+                .ifPresent(u -> {
+                    throw new EmailNotVerifiedException(
+                            "Tài khoản chưa xác thực email. Vui lòng kiểm tra hộp thư " + maskEmail(u.getEmail())
+                                    + " hoặc yêu cầu gửi lại email xác thực.");
+                });
+    }
+
+    private static String maskEmail(String email) {
+        if (email == null || !email.contains("@")) return "";
+        int at = email.indexOf('@');
+        String local = email.substring(0, at);
+        String shown = local.length() <= 2 ? local.substring(0, 1) : local.substring(0, 2);
+        return shown + "***" + email.substring(at);
     }
 
     /**
