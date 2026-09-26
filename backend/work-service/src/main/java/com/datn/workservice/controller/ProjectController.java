@@ -12,6 +12,7 @@ import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.service.ProjectService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/work/projects")
 @RequiredArgsConstructor
@@ -51,6 +53,9 @@ public class ProjectController {
                 .body(ApiResponse.success(response, "Dự án đã được tạo và khởi tạo hệ sinh thái thành công"));
     }
 
+    /**
+     * Danh sách dự án mà người dùng hiện tại được truy cập (Global ADMIN thấy tất cả).
+     */
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ProjectResponse>>> getAllProjects(
             @RequestParam(required = false) UUID workspaceId,
@@ -59,8 +64,10 @@ public class ProjectController {
             @RequestParam(required = false) Boolean isTemplate,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        boolean includeAll = SecurityUtils.isGlobalAdmin();
         PageResponse<ProjectResponse> response = projectService.getAllProjects(
-                workspaceId, teamId, search, isTemplate, pageable
+                workspaceId, teamId, search, isTemplate, pageable, currentUserId, includeAll
         );
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -70,7 +77,9 @@ public class ProjectController {
             @RequestParam(required = false) UUID workspaceId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        PageResponse<ProjectResponse> response = projectService.getTemplates(workspaceId, pageable);
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        boolean includeAll = SecurityUtils.isGlobalAdmin();
+        PageResponse<ProjectResponse> response = projectService.getTemplates(workspaceId, pageable, currentUserId, includeAll);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -83,6 +92,9 @@ public class ProjectController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    /**
+     * Tra cứu theo Key: quyền PROJECT_VIEW được kiểm tra trong service sau khi resolve project.
+     */
     @GetMapping("/key/{key}")
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectByKey(
             @PathVariable("key") String key

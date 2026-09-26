@@ -1,56 +1,57 @@
-import { useState, useEffect, useCallback } from 'react';
-import { projectApi } from '../api.js';
+import { useCallback, useEffect } from 'react';
+import { usePermission } from '../context/PermissionContext';
 
-export function useProjectPermission(projectId) {
-  const [permissions, setPermissions] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchPermissions = useCallback(async () => {
-    if (!projectId) {
-      setPermissions([]);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const res = await projectApi.getMyPermissions(projectId);
-      if (res && res.data) {
-        setPermissions(Array.isArray(res.data) ? res.data : []);
-      }
-    } catch (err) {
-      console.warn('Could not load user project permissions:', err);
-      setPermissions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
+/**
+ * Hook kiểm tra quyền của người dùng hiện tại trong một dự án.
+ *
+ * Tự động tải GET /projects/{id}/permissions/my lần đầu (cache trong PermissionContext).
+ *
+ * @param {string} projectId UUID dự án
+ * @returns {{
+ *   loading: boolean, status: string, forbidden: boolean, notFound: boolean, error: any,
+ *   role: string|null, isLead: boolean, isGlobalAdmin: boolean, isAdmin: boolean,
+ *   canCreateIssue: boolean, canManageSprint: boolean, permissions: string[],
+ *   can: (permissionCode: string) => boolean, refresh: () => Promise<any>
+ * }}
+ */
+export const useProjectPermission = (projectId) => {
+  const ctx = usePermission();
+  const entry = projectId ? ctx.projectPermissions[projectId] : undefined;
+  const needsLoad = Boolean(projectId) && !entry;
+  const { loadProjectPermissions } = ctx;
 
   useEffect(() => {
-    fetchPermissions();
-  }, [fetchPermissions]);
+    if (needsLoad) {
+      loadProjectPermissions(projectId);
+    }
+  }, [needsLoad, projectId, loadProjectPermissions]);
 
   const can = useCallback(
-    (permissionKey) => {
-      if (!permissionKey) return false;
-      return permissions.includes('PROJECT_ADMIN') || permissions.includes(permissionKey);
-    },
-    [permissions]
+    (permissionCode) => ctx.hasPermission(projectId, permissionCode),
+    [ctx, projectId]
   );
 
+  const status = entry?.status || (projectId ? 'loading' : 'idle');
+  const permissions = entry?.permissions || [];
+  const isGlobalAdmin = ctx.isGlobalAdmin || Boolean(entry?.isGlobalAdmin);
+  const isAdmin = isGlobalAdmin || permissions.includes('PROJECT_ADMIN');
+
   return {
-    permissions,
-    loading,
-    can,
-    refetchPermissions: fetchPermissions,
-    isAdmin: can('PROJECT_ADMIN'),
+    loading: status === 'loading',
+    status,
+    forbidden: status === 'forbidden',
+    notFound: status === 'notfound',
+    error: entry?.error || null,
+    role: entry?.roleName || (isGlobalAdmin ? 'ADMIN' : null),
+    isLead: Boolean(entry?.isLead),
+    isGlobalAdmin,
+    isAdmin,
     canCreateIssue: can('ISSUE_CREATE'),
-    canEditIssue: can('ISSUE_EDIT'),
-    canDeleteIssue: can('ISSUE_DELETE'),
-    canTransitionIssue: can('ISSUE_TRANSITION'),
-    canAssignIssue: can('ISSUE_ASSIGN'),
     canManageSprint: can('SPRINT_MANAGE'),
-    canManageRelease: can('RELEASE_MANAGE'),
-    canComment: can('COMMENT_CREATE'),
+    permissions,
+    can,
+    refresh: () => loadProjectPermissions(projectId, { force: true }),
   };
-}
+};
+
+export default useProjectPermission;

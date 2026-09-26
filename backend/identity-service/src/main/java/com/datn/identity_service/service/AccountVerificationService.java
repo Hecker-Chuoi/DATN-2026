@@ -1,0 +1,170 @@
+package com.datn.identity_service.service;
+
+import com.datn.identity_service.client.NotificationClient;
+import com.datn.identity_service.entity.User;
+import com.datn.identity_service.entity.VerificationToken;
+import com.datn.identity_service.exception.InvalidTokenException;
+import com.datn.identity_service.exception.ResourceNotFoundException;
+import com.datn.identity_service.repository.UserRepository;
+import com.datn.identity_service.repository.VerificationTokenRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.Base64;
+import java.util.Optional;
+
+/**
+ * Xác thực email sau đăng ký và đặt lại mật khẩu qua link email.
+ * Trạng thái "chưa xác thực" = users.status INACTIVE + Keycloak user disabled.
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class AccountVerificationService {
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private final VerificationTokenRepository tokenRepository;
+    private final UserRepository userRepository;
+    private final KeycloakService keycloakService;
+    private final NotificationClient notificationClient;
+
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
+
+    @Value("${app.verification.email-ttl-hours:24}")
+    private long emailTtlHours;
+
+    @Value("${app.verification.reset-ttl-minutes:30}")
+    private long resetTtlMinutes;
+
+    // ─── Xác thực email ─────────────────────────────────────────────────────
+
+    /** Tạo token mới (vô hiệu token cũ) và gửi email xác thực. Trả về false nếu không gửi được mail. */
+    @Transactional
+    public boolean sendEmailVerification(User user) {
+        String token = issueToken(user, VerificationToken.Type.EMAIL_VERIFY, Duration.ofHours(emailTtlHours));
+        String link = frontendUrl + "/verify-email?token=" + token;
+        String html = layout("Xác thực địa chỉ email",
+                "Chào " + displayName(user) + ",<br/><br/>Cảm ơn bạn đã đăng ký DATN-2026. Nhấn nút bên dưới để xác thực email và kích hoạt tài khoản. "
+                        + "Liên kết có hiệu lực trong " + emailTtlHours + " giờ.",
+                link, "Xác thực email");
+        return notificationClient.sendEmail(user.getEmail(), "[DATN-2026] Xác thực email của bạn", html);
+    }
+
+    @Transactional
+    public User verifyEmail(String token) {
+        VerificationToken vt = requireUsable(token, VerificationToken.Type.EMAIL_VERIFY);
+        User user = userRepository.findById(vt.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng của token này"));
+        if (user.getStatus() == User.UserStatus.INACTIVE) {
+            keycloakService.activateVerifiedUser(user.getKeycloakId());
+            user.setStatus(User.UserStatus.ACTIVE);
+            userRepository.save(user);
+        }
+        vt.setUsedAt(LocalDateTime.now());
+        tokenRepository.save(vt);
+        log.info("Email verified for user {}", user.getUsername());
+        return user;
+    }
+
+    /** identifier = email hoặc username. Chỉ gửi khi tài khoản đang chờ xác thực. */
+    @Transactional
+    public void resendVerification(String identifier) {
+        Optional<User> found = userRepository.findByEmail(identifier)
+                .or(() -> userRepository.findByUsername(identifier));
+        if (found.isEmpty()) {
+            throw new ResourceNotFoundException("Không tìm thấy tài khoản với thông tin: " + identifier);
+        }
+        User user = found.get();
+        if (user.getStatus() != User.UserStatus.INACTIVE) {
+            throw new InvalidTokenException("Tài khoản này đã được xác thực, bạn có thể đăng nhập");
+        }
+        if (!sendEmailVerification(user)) {
+            throw new InvalidTokenException("Không gửi được email lúc này, vui lòng thử lại sau");
+        }
+    }
+
+    // ─── Quên mật khẩu ──────────────────────────────────────────────────────
+
+    /** Luôn kết thúc lặng lẽ để không lộ email nào tồn tại. */
+    @Transactional
+    public void requestPasswordReset(String email) {
+        userRepository.findByEmail(email).ifPresent(user -> {
+            if (user.getStatus() == User.UserStatus.SUSPENDED) return;
+            String token = issueToken(user, VerificationToken.Type.PASSWORD_RESET, Duration.ofMinutes(resetTtlMinutes));
+            String link = frontendUrl + "/reset-password?token=" + token;
+            String html = layout("Đặt lại mật khẩu",
+                    "Chào " + displayName(user) + ",<br/><br/>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản <b>" + user.getUsername() + "</b>. "
+                            + "Nhấn nút bên dưới để đặt mật khẩu mới. Liên kết có hiệu lực trong " + resetTtlMinutes + " phút. "
+                            + "Nếu bạn không yêu cầu, hãy bỏ qua email này.",
+                    link, "Đặt lại mật khẩu");
+            notificationClient.sendEmail(user.getEmail(), "[DATN-2026] Đặt lại mật khẩu", html);
+        });
+    }
+
+    @Transactional
+    public void resetPassword(String token, String newPassword) {
+        VerificationToken vt = requireUsable(token, VerificationToken.Type.PASSWORD_RESET);
+        User user = userRepository.findById(vt.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng của token này"));
+        keycloakService.resetUserPassword(user.getKeycloakId(), newPassword);
+        vt.setUsedAt(LocalDateTime.now());
+        tokenRepository.save(vt);
+        log.info("Password reset via email for user {}", user.getUsername());
+    }
+
+    // ─── helpers ────────────────────────────────────────────────────────────
+
+    private String issueToken(User user, VerificationToken.Type type, Duration ttl) {
+        tokenRepository.deleteByUserIdAndType(user.getId(), type);
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        tokenRepository.save(VerificationToken.builder()
+                .userId(user.getId())
+                .token(token)
+                .type(type)
+                .expiresAt(LocalDateTime.now().plus(ttl))
+                .build());
+        return token;
+    }
+
+    private VerificationToken requireUsable(String token, VerificationToken.Type type) {
+        if (token == null || token.isBlank()) {
+            throw new InvalidTokenException("Thiếu token");
+        }
+        VerificationToken vt = tokenRepository.findByTokenAndType(token.trim(), type)
+                .orElseThrow(() -> new InvalidTokenException("Liên kết không hợp lệ"));
+        if (vt.getUsedAt() != null) {
+            throw new InvalidTokenException("Liên kết này đã được sử dụng");
+        }
+        if (!vt.isUsable()) {
+            throw new InvalidTokenException("Liên kết đã hết hạn, vui lòng yêu cầu lại");
+        }
+        return vt;
+    }
+
+    private static String displayName(User user) {
+        String full = ((user.getFirstName() == null ? "" : user.getFirstName()) + " "
+                + (user.getLastName() == null ? "" : user.getLastName())).trim();
+        return full.isEmpty() ? user.getUsername() : full;
+    }
+
+    private static String layout(String title, String body, String link, String buttonLabel) {
+        return "<div style=\"font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a\">"
+                + "<h2 style=\"color:#2563eb;margin:0 0 16px\">" + title + "</h2>"
+                + "<p style=\"font-size:14px;line-height:1.6\">" + body + "</p>"
+                + "<p style=\"margin:24px 0\"><a href=\"" + link + "\" style=\"background:#2563eb;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600\">"
+                + buttonLabel + "</a></p>"
+                + "<p style=\"font-size:12px;color:#64748b\">Nếu nút không hoạt động, sao chép liên kết sau vào trình duyệt:<br/>"
+                + "<a href=\"" + link + "\">" + link + "</a></p>"
+                + "</div>";
+    }
+}

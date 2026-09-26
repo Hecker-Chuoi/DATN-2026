@@ -426,7 +426,6 @@ class WorkflowEngineServiceTest {
         when(workflowTransitionRepository.findById(transitionId)).thenReturn(Optional.of(transition));
         when(statusRepository.findById(doneStatusId)).thenReturn(Optional.of(doneStatus));
         when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
-        when(statusRepository.findByCategory(StatusCategory.DONE)).thenReturn(List.of(doneStatus));
         when(workItemRepository.save(any(WorkItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UUID subtaskId = UUID.randomUUID();
@@ -478,7 +477,6 @@ class WorkflowEngineServiceTest {
         when(workflowTransitionRepository.findById(transitionId)).thenReturn(Optional.of(transition));
         when(statusRepository.findById(doneStatusId)).thenReturn(Optional.of(doneStatus));
         when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
-        when(statusRepository.findByCategory(StatusCategory.DONE)).thenReturn(List.of(doneStatus));
         when(workItemRepository.save(any(WorkItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UUID storyId = UUID.randomUUID();

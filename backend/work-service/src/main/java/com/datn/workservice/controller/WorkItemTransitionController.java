@@ -8,6 +8,8 @@ import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.service.WorkflowEngineService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireTaskPermission;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,6 +36,7 @@ public class WorkItemTransitionController {
      * được đánh giá dựa trên người dùng đã xác thực.
      */
     @GetMapping
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<List<AvailableTransitionResponse>>> getAvailableTransitions(
             @PathVariable("id") UUID workItemId
     ) {
@@ -46,6 +49,7 @@ public class WorkItemTransitionController {
      * Thực hiện bước chuyển trạng thái theo transitionId truyền trên đường dẫn (path).
      */
     @PostMapping("/{transitionId}")
+    @RequireTaskPermission(PermissionKey.ISSUE_TRANSITION)
     public ResponseEntity<ApiResponse<WorkItem>> executeTransitionById(
             @PathVariable("id") UUID workItemId,
             @PathVariable("transitionId") UUID transitionId,
@@ -65,6 +69,7 @@ public class WorkItemTransitionController {
      * Thực hiện bước chuyển trạng thái với transitionId được truyền trong body của request.
      */
     @PostMapping
+    @RequireTaskPermission(PermissionKey.ISSUE_TRANSITION)
     public ResponseEntity<ApiResponse<WorkItem>> executeTransition(
             @PathVariable("id") UUID workItemId,
             @Valid @RequestBody ExecuteTransitionRequest request

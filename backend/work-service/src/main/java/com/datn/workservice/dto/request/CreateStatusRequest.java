@@ -32,4 +32,6 @@ public class CreateStatusRequest {
 
     @Pattern(regexp = "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", message = "Mã màu phải là định dạng Hex (VD: #10B981)")
     private String colorHex;
+
+
 }

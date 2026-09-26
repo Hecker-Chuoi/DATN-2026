@@ -13,6 +13,8 @@ export default function UserLoginPage({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -40,8 +42,21 @@ export default function UserLoginPage({ onLoginSuccess }) {
       navigate('/projects');
     } catch (err) {
       setError(err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin!');
+      setNeedsVerification(err?.status === 403); // 403 = tài khoản chưa xác thực email
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      setResending(true);
+      const res = await authApi.resendVerification(form.username.trim());
+      toast.success(res?.message || 'Đã gửi lại email xác thực.');
+    } catch {
+      // interceptor đã hiện toast lỗi
+    } finally {
+      setResending(false);
     }
   };
 
@@ -129,6 +144,18 @@ export default function UserLoginPage({ onLoginSuccess }) {
             }}
           >
             {error}
+            {needsVerification && (
+              <div style={{ marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resending || !form.username}
+                  style={{ background: 'none', border: 'none', color: '#2563EB', fontWeight: 600, cursor: 'pointer', padding: 0, fontSize: 13 }}
+                >
+                  {resending ? 'Đang gửi...' : 'Gửi lại email xác thực'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -270,6 +297,10 @@ export default function UserLoginPage({ onLoginSuccess }) {
           Chưa có tài khoản?{' '}
           <Link to="/register" style={{ color: '#2563EB', fontWeight: 600, textDecoration: 'none' }}>
             Đăng ký ngay
+          </Link>
+          {' · '}
+          <Link to="/forgot-password" style={{ color: '#64748B', fontWeight: 600, textDecoration: 'none' }}>
+            Quên mật khẩu?
           </Link>
         </div>
 

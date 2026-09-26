@@ -39,7 +39,8 @@ import {
   Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { workItemApi } from '../../api.js';
+import { workItemApi, getUserKeycloakId } from '../../api.js';
+import { useProjectPermission } from '../../hooks/useProjectPermission.js';
 import MemberSelect from '../common/MemberSelect.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import ResolveSubtasksModal from '../modals/ResolveSubtasksModal.jsx';
@@ -59,6 +60,18 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('comments'); // 'comments' | 'history' | 'attachments'
+
+  // Phân quyền màn hình: chỉ ẩn/vô hiệu nút; backend vẫn kiểm tra lại (xem docs 12_WORK_AUTHZ_PRESENTATION mục 4.5)
+  const { can } = useProjectPermission(item?.projectId);
+  const myId = getUserKeycloakId();
+  const canEdit = can('ISSUE_EDIT');
+  const canAssign = can('ISSUE_ASSIGN');
+  const canTransition = can('ISSUE_TRANSITION');
+  const canCreateSubtask = can('ISSUE_CREATE');
+  const canComment = can('COMMENT_CREATE');
+  const canEditComment = (c) => c?.authorId === myId && can('COMMENT_EDIT_OWN');
+  const canDeleteComment = (c) => can('COMMENT_DELETE_ALL') || (c?.authorId === myId && can('COMMENT_DELETE_OWN'));
+  const canDeleteAttachment = (a) => can('ATTACHMENT_DELETE_ALL') || (a?.uploadedBy === myId && can('ATTACHMENT_DELETE_OWN'));
 
   // Inline edit state
   const [isEditingSummary, setIsEditingSummary] = useState(false);
@@ -175,6 +188,25 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
       fetchLinks(currentId);
       fetchChangelogs(currentId);
     }
+  }, [isOpen, currentId]);
+
+  // Đồng bộ bình luận / tệp / lịch sử từ người dùng khác khi modal đang mở.
+  // ponytail: polling 5s, dừng khi tab ẩn; nâng lên WebSocket STOMP (/work/ws-work) khi cần realtime thực sự.
+  useEffect(() => {
+    if (!isOpen || !currentId) return undefined;
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchComments(currentId);
+      fetchAttachments(currentId);
+      fetchChangelogs(currentId);
+    };
+    const timer = setInterval(tick, 5000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, currentId]);
 
   if (!isOpen) return null;
@@ -661,6 +693,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
           {/* Action Buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {canEdit && (
             <button
               onClick={() => setShowLinkModal(true)}
               style={{
@@ -681,6 +714,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               <Link2 size={14} color="#2563EB" />
               <span>Liên kết công việc</span>
             </button>
+            )}
             <button
               onClick={() => {
                 navigator.clipboard.writeText(window.location.href);
@@ -885,7 +919,8 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   />
                 ) : (
                   <h2
-                    onClick={() => setIsEditingSummary(true)}
+                    onClick={() => canEdit && setIsEditingSummary(true)}
+                    title={canEdit ? 'Nhấn để sửa tiêu đề' : undefined}
                     style={{
                       fontSize: 20,
                       fontWeight: 700,
@@ -905,9 +940,9 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Mô tả chi tiết</span>
-                  {!isEditingDescription && (
+                  {!isEditingDescription && canEdit && (
                     <button
-                      onClick={() => setIsEditingDescription(true)}
+                      onClick={() => canEdit && setIsEditingDescription(true)}
                       style={{
                         border: 'none',
                         background: 'transparent',
@@ -978,7 +1013,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   </div>
                 ) : (
                   <div
-                    onClick={() => setIsEditingDescription(true)}
+                    onClick={() => canEdit && setIsEditingDescription(true)}
                     style={{
                       padding: 12,
                       backgroundColor: '#F8FAFC',
@@ -1008,6 +1043,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         {links.length}
                       </span>
                     </div>
+                    {canEdit && (
                     <button
                       onClick={() => setShowLinkModal(true)}
                       style={{
@@ -1024,6 +1060,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     >
                       <Plus size={13} /> Thêm liên kết
                     </button>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1091,6 +1128,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                 >
                                   {getStatusDisplayName(lnk.linkedItemStatusName || 'Cần làm')}
                                 </span>
+                                {canEdit && (
                                 <button
                                   onClick={() => handleDeleteLink(lnk.id)}
                                   style={{
@@ -1104,6 +1142,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                 >
                                   <Trash2 size={14} />
                                 </button>
+                                )}
                               </div>
                             </div>
                           );
@@ -1126,7 +1165,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         </span>
                       )}
                     </div>
-                    {!isAddingSubtask && (
+                    {!isAddingSubtask && canCreateSubtask && (
                       <button
                         onClick={() => setIsAddingSubtask(true)}
                         style={{
@@ -1420,6 +1459,10 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 {/* TAB 1: Threaded Comments (Step 5.4) */}
                 {activeTab === 'comments' && (
                   <div>
+                    {!canComment && (
+                      <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 16 }}>Bạn không có quyền bình luận trong dự án này.</div>
+                    )}
+                    {canComment && (
                     <form onSubmit={handleAddComment} style={{ marginBottom: 20 }}>
                       <textarea
                         rows={3}
@@ -1459,6 +1502,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         <span>Gửi bình luận</span>
                       </button>
                     </form>
+                    )}
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                       {comments.length === 0 ? (
@@ -1557,6 +1601,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
                             {/* Comment Actions */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, fontSize: 11, color: '#64748B' }}>
+                              {canComment && (
                               <button
                                 onClick={() => {
                                   setReplyParentId(replyParentId === c.id ? null : c.id);
@@ -1576,6 +1621,8 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                               >
                                 <CornerDownRight size={12} /> Trả lời
                               </button>
+                              )}
+                              {canEditComment(c) && (
                               <button
                                 onClick={() => {
                                   setEditingCommentId(c.id);
@@ -1585,12 +1632,15 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                               >
                                 Chỉnh sửa
                               </button>
+                              )}
+                              {canDeleteComment(c) && (
                               <button
                                 onClick={() => handleDeleteComment(c.id)}
                                 style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
                               >
                                 Xóa
                               </button>
+                              )}
                             </div>
 
                             {/* Inline Reply Form */}
@@ -1684,12 +1734,14 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                     </div>
                                     <div style={{ color: '#334155', fontSize: 12, lineHeight: 1.4 }}>{reply.body}</div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: 10, color: '#64748B' }}>
+                                      {canDeleteComment(reply) && (
                                       <button
                                         onClick={() => handleDeleteComment(reply.id)}
                                         style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0 }}
                                       >
                                         Xóa
                                       </button>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
@@ -1705,7 +1757,8 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 {/* TAB 2: Attachments Dropzone (Step 5.4) */}
                 {activeTab === 'attachments' && (
                   <div>
-                    {/* Drag-and-drop Dropzone */}
+                    {/* Drag-and-drop Dropzone (cần ISSUE_EDIT) */}
+                    {canEdit && (
                     <div
                       onDragOver={(e) => {
                         e.preventDefault();
@@ -1744,6 +1797,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         Hỗ trợ hình ảnh (PNG, JPG, SVG), tài liệu PDF, DOCX, ZIP tối đa 50MB
                       </div>
                     </div>
+                    )}
 
                     {/* Attachment List / Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
@@ -1834,6 +1888,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                 >
                                   <Download size={12} /> Tải về
                                 </a>
+                                {canDeleteAttachment(att) && (
                                 <button
                                   onClick={() => handleDeleteAttachment(att.id)}
                                   style={{
@@ -1847,6 +1902,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                 >
                                   <Trash2 size={13} />
                                 </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1924,7 +1980,9 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Trạng thái</span>
                 <div style={{ position: 'relative', marginTop: 6 }}>
                   <button
-                    onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                    onClick={() => canTransition && setShowStatusDropdown(!showStatusDropdown)}
+                    disabled={!canTransition}
+                    title={canTransition ? undefined : 'Bạn không có quyền chuyển trạng thái'}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
@@ -2012,7 +2070,8 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Độ ưu tiên</span>
                 <div style={{ position: 'relative', marginTop: 6 }}>
                   <button
-                    onClick={() => setShowPriorityDropdown(!showPriorityDropdown)}
+                    onClick={() => canEdit && setShowPriorityDropdown(!showPriorityDropdown)}
+                    disabled={!canEdit}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
@@ -2103,6 +2162,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     members={members}
                     value={item?.assigneeId || ''}
                     onChange={handleUpdateAssignee}
+                    disabled={!canAssign}
                     placeholder="Chưa phân công"
                   />
                 </div>
@@ -2134,6 +2194,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 <input
                   type="date"
                   value={item?.dueDate || ''}
+                  disabled={!canEdit}
                   onChange={(e) => handleUpdateDueDate(e.target.value)}
                   style={{
                     width: '100%',
@@ -2212,6 +2273,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     type="number"
                     step="0.5"
                     defaultValue={item?.storyPoints || ''}
+                    disabled={!canEdit}
                     onBlur={(e) => handleUpdateStoryPoints(e.target.value)}
                     placeholder="0"
                     style={{

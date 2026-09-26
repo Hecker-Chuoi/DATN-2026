@@ -1,9 +1,9 @@
 package com.datn.workservice.controller;
 
 import com.datn.workservice.dto.request.AssignProjectRoleRequest;
+import com.datn.workservice.dto.response.MyProjectPermissionsResponse;
 import com.datn.workservice.dto.response.ProjectRoleResponse;
 import com.datn.workservice.dto.response.RoleAssignmentResponse;
-import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.service.ProjectMemberService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -38,6 +38,9 @@ class ProjectMemberControllerTest {
 
     @Mock
     private ProjectMemberService projectMemberService;
+
+    @Mock
+    private com.datn.workservice.service.InvitationService invitationService;
 
     @Mock
     private SecurityContext securityContext;
@@ -80,19 +83,27 @@ class ProjectMemberControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/work/projects/{projectId}/permissions/my - Returns permissions")
+    @DisplayName("GET /api/v1/work/projects/{projectId}/permissions/my - Returns role & permissions")
     void testGetMyPermissions_Success() throws Exception {
-        when(projectMemberService.getMyPermissions(projectId, currentUserId))
-                .thenReturn(List.of("PROJECT_VIEW", "ISSUE_CREATE", "SPRINT_MANAGE"));
+        MyProjectPermissionsResponse response = MyProjectPermissionsResponse.builder()
+                .projectId(projectId)
+                .roleName("MEMBER")
+                .isLead(false)
+                .isGlobalAdmin(false)
+                .permissions(List.of("PROJECT_VIEW", "ISSUE_CREATE", "SPRINT_MANAGE"))
+                .build();
+        when(projectMemberService.getMyPermissions(projectId, currentUserId, false)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/work/projects/{projectId}/permissions/my", projectId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0]").value("PROJECT_VIEW"))
-                .andExpect(jsonPath("$.data[1]").value("ISSUE_CREATE"))
-                .andExpect(jsonPath("$.data[2]").value("SPRINT_MANAGE"));
+                .andExpect(jsonPath("$.data.roleName").value("MEMBER"))
+                .andExpect(jsonPath("$.data.isLead").value(false))
+                .andExpect(jsonPath("$.data.permissions[0]").value("PROJECT_VIEW"))
+                .andExpect(jsonPath("$.data.permissions[1]").value("ISSUE_CREATE"))
+                .andExpect(jsonPath("$.data.permissions[2]").value("SPRINT_MANAGE"));
 
-        verify(projectMemberService).getMyPermissions(projectId, currentUserId);
+        verify(projectMemberService).getMyPermissions(projectId, currentUserId, false);
     }
 
     @Test
@@ -122,25 +133,26 @@ class ProjectMemberControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/work/projects/{projectId}/members - Adds member successfully")
-    void testAddMemberToProject_Success() throws Exception {
+    @DisplayName("POST /api/v1/work/projects/{projectId}/members - Sends an invitation instead of adding directly")
+    void testAddMemberToProject_CreatesInvitation() throws Exception {
         UUID targetUserId = UUID.randomUUID();
         AssignProjectRoleRequest request = AssignProjectRoleRequest.builder()
                 .userId(targetUserId)
                 .roleId(roleId)
                 .build();
 
-        RoleAssignmentResponse response = RoleAssignmentResponse.builder()
+        com.datn.workservice.dto.response.InvitationResponse response = com.datn.workservice.dto.response.InvitationResponse.builder()
                 .id(UUID.randomUUID())
-                .projectId(projectId)
-                .userId(targetUserId)
-                .roleId(roleId)
+                .type(com.datn.workservice.enums.InvitationType.PROJECT)
+                .targetId(projectId)
+                .inviteeUserId(targetUserId)
+                .inviteeName("new_member")
                 .roleName("MEMBER")
-                .username("new_member")
-                .assignedAt(LocalDateTime.now())
+                .status(com.datn.workservice.enums.InvitationStatus.PENDING)
+                .createdAt(LocalDateTime.now())
                 .build();
 
-        when(projectMemberService.addMemberToProject(eq(projectId), any(AssignProjectRoleRequest.class), eq(currentUserId)))
+        when(invitationService.inviteToProject(eq(projectId), eq(targetUserId), eq(roleId), eq(currentUserId)))
                 .thenReturn(response);
 
         mockMvc.perform(post("/api/v1/work/projects/{projectId}/members", projectId)
@@ -148,8 +160,11 @@ class ProjectMemberControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.username").value("new_member"))
-                .andExpect(jsonPath("$.message").value("Thêm thành viên vào dự án thành công"));
+                .andExpect(jsonPath("$.data.inviteeName").value("new_member"))
+                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andExpect(jsonPath("$.message").value("Đã gửi lời mời tham gia dự án"));
+
+        verify(projectMemberService, never()).addMemberToProject(any(), any(), any());
     }
 
     @Test

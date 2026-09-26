@@ -6,6 +6,7 @@ import com.datn.identity_service.dto.request.RegisterRequest;
 import com.datn.common.dto.ApiResponse;
 import com.datn.identity_service.dto.response.TokenResponse;
 import com.datn.identity_service.dto.response.UserResponse;
+import com.datn.identity_service.service.AccountVerificationService;
 import com.datn.identity_service.service.KeycloakService;
 import com.datn.identity_service.service.UserService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -29,7 +30,59 @@ public class AuthController {
 
     private final UserService     userService;
     private final KeycloakService keycloakService;
+    private final AccountVerificationService accountVerificationService;
 
+
+    // ─── Xác thực email & quên mật khẩu (public, email gửi qua notification-service) ───
+
+    /** Link trong email xác thực trỏ tới frontend /verify-email?token=..., frontend gọi endpoint này. */
+    @GetMapping("/verify-email")
+    public ResponseEntity<ApiResponse<UserResponse>> verifyEmail(@RequestParam("token") String token) {
+        UserResponse user = UserResponse.from(accountVerificationService.verifyEmail(token));
+        return ResponseEntity.ok(ApiResponse.success(user, "Xác thực email thành công. Bạn có thể đăng nhập."));
+    }
+
+    /** body: { "identifier": "<email hoặc username>" } */
+    @PostMapping("/resend-verification")
+    public ResponseEntity<ApiResponse<Void>> resendVerification(@RequestBody Map<String, String> body) {
+        String identifier = firstNonBlank(body.get("identifier"), body.get("email"), body.get("username"));
+        if (identifier == null) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Vui lòng nhập email hoặc username"));
+        }
+        accountVerificationService.resendVerification(identifier.trim());
+        return ResponseEntity.ok(ApiResponse.success(null, "Đã gửi lại email xác thực. Vui lòng kiểm tra hộp thư."));
+    }
+
+    /** body: { "email": "..." } — luôn trả 200 để không lộ email nào tồn tại */
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Vui lòng nhập email"));
+        }
+        accountVerificationService.requestPasswordReset(email.trim());
+        return ResponseEntity.ok(ApiResponse.success(null,
+                "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu."));
+    }
+
+    /** body: { "token": "...", "newPassword": "..." } */
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@RequestBody Map<String, String> body) {
+        String token = body.get("token");
+        String newPassword = body.get("newPassword");
+        if (newPassword == null || newPassword.length() < 6) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Mật khẩu mới phải có ít nhất 6 ký tự"));
+        }
+        accountVerificationService.resetPassword(token, newPassword);
+        return ResponseEntity.ok(ApiResponse.success(null, "Đặt lại mật khẩu thành công. Hãy đăng nhập bằng mật khẩu mới."));
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String v : values) {
+            if (v != null && !v.isBlank()) return v;
+        }
+        return null;
+    }
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<UserResponse>> register(
@@ -46,6 +99,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<TokenResponse>> login(
             @Valid @RequestBody LoginRequest request) {
 
+        userService.assertEmailVerified(request.getUsername()); // 403 nếu chưa xác thực email
         TokenResponse token = keycloakService.login(request.getUsername(), request.getPassword());
         ResponseCookie cookie = buildAccessTokenCookie(token.getAccessToken(), token.getExpiresIn());
         

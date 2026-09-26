@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { teamApi, userApi } from '../api.js';
+import PendingInvitations from '../components/common/PendingInvitations.jsx';
 
 export default function TeamDetailPage() {
   const { teamId } = useParams();
@@ -34,6 +35,7 @@ export default function TeamDetailPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [team, setTeam] = useState(null);
   const [members, setMembers] = useState([]);
+  const [inviteTick, setInviteTick] = useState(0); // đổi để PendingInvitations tải lại sau khi gửi lời mời
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('members'); // 'overview' | 'documents' | 'members'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -241,8 +243,9 @@ export default function TeamDetailPage() {
         role: memberRole,
       });
 
-      toast.success('Đã thêm thành viên vào nhóm!');
+      toast.success('Đã gửi lời mời. Người được mời cần chấp nhận để trở thành thành viên.');
       setIsAddModalOpen(false);
+      setInviteTick((t) => t + 1);
       fetchTeamData();
     } catch (err) {
       const msg = err.response?.data?.message || 'Không tìm thấy người dùng hoặc có lỗi xảy ra.';
@@ -387,7 +390,7 @@ export default function TeamDetailPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {isCurrentUserOwner && (
+          {isCurrentUserLeader && (
             <button
               onClick={handleDeleteTeam}
               disabled={submitting}
@@ -413,7 +416,7 @@ export default function TeamDetailPage() {
                 e.currentTarget.style.backgroundColor = '#FEF2F2';
                 e.currentTarget.style.borderColor = '#FEE2E2';
               }}
-              title="Xóa nhóm (Chỉ dành cho Chủ sở hữu)"
+              title="Xóa nhóm (Chỉ dành cho Trưởng nhóm)"
             >
               <Trash2 size={13} />
               <span>Xóa nhóm</span>
@@ -582,6 +585,9 @@ export default function TeamDetailPage() {
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
         {activeTab === 'members' && (
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '0 24px' }}>
+              <PendingInvitations teamId={teamId} canManage={isCurrentUserLeader} refreshKey={inviteTick} />
+            </div>
             {/* Table Header */}
             <div
               style={{
@@ -767,7 +773,7 @@ export default function TeamDetailPage() {
                 <div>
                   <div style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Vai trò của bạn</div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: isCurrentUserOwner ? '#DC2626' : isCurrentUserLeader ? '#2563EB' : '#0F172A' }}>
-                    {isCurrentUserOwner ? 'Chủ sở hữu' : isCurrentUserLeader ? 'Trưởng nhóm' : isCurrentUserMember ? 'Thành viên' : 'Người xem'}
+                    {isCurrentUserOwner ? 'Trưởng nhóm (người tạo)' : isCurrentUserLeader ? 'Trưởng nhóm' : isCurrentUserMember ? 'Thành viên' : 'Người xem'}
                   </div>
                 </div>
               </div>
@@ -789,7 +795,7 @@ export default function TeamDetailPage() {
                 </h4>
               </div>
 
-              {isCurrentUserOwner ? (
+              {isCurrentUserLeader ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#7F1D1D' }}>Xóa nhóm làm việc này</div>

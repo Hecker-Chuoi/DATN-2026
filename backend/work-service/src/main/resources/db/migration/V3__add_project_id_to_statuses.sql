@@ -1,6 +1,6 @@
 ﻿-- ============================================================================
 -- DATN-2026: WORK SERVICE
--- Flyway Migration: V2__add_project_id_to_statuses.sql
+-- Flyway Migration: V3__add_project_id_to_statuses.sql
 -- Description: Add project_id column to statuses table to support project-scoped statuses
 -- ============================================================================
 

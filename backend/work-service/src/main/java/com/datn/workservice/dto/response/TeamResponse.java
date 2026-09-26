@@ -23,4 +23,6 @@ public class TeamResponse {
     private Long projectCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** Vai trò của người gọi trong nhóm (owner được coi là LEADER); null nếu không phải thành viên. */
+    private com.datn.workservice.enums.TeamRole myRole;
 }

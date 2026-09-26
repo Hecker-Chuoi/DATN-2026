@@ -38,6 +38,14 @@ class WorkflowServiceTest {
     private StatusRepository statusRepository;
     @Mock
     private WorkItemTypeRepository workItemTypeRepository;
+    @Mock
+    private WorkflowEngineService workflowEngineService;
+    @Mock
+    private ProjectAccessService projectAccessService;
+    @Mock
+    private WorkItemRepository workItemRepository;
+    @Mock
+    private BoardColumnStatusRepository boardColumnStatusRepository;
 
     @InjectMocks
     private WorkflowServiceImpl workflowService;
@@ -350,8 +358,33 @@ class WorkflowServiceTest {
                 .build();
 
         when(workflowTransitionRepository.findById(transitionId)).thenReturn(Optional.of(transition));
+        when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(workflow));
 
         workflowService.deleteTransition(workflowId, transitionId);
         verify(workflowTransitionRepository, times(1)).delete(transition);
+        verify(projectAccessService).assertProjectPermission(projectId, com.datn.workservice.enums.PermissionKey.PROJECT_ADMIN);
+    }
+
+    @Test
+    @DisplayName("Create Status: Requires PROJECT_ADMIN of the given project")
+    void testCreateStatus_ChecksProjectAdmin() {
+        CreateStatusRequest request = CreateStatusRequest.builder()
+                .name("In Review")
+                .category(StatusCategory.IN_PROGRESS)
+                .projectId(projectId)
+                .build();
+
+        when(statusRepository.existsByProjectIdAndNameIgnoreCase(projectId, "In Review")).thenReturn(false);
+        when(statusRepository.save(any(Status.class))).thenAnswer(inv -> {
+            Status s = inv.getArgument(0);
+            s.setId(UUID.randomUUID());
+            return s;
+        });
+
+        StatusResponse response = workflowService.createStatus(request);
+
+        assertThat(response.getName()).isEqualTo("In Review");
+        verify(projectAccessService).assertProjectPermission(projectId, com.datn.workservice.enums.PermissionKey.PROJECT_ADMIN);
+        verify(projectAccessService, never()).assertGlobalAdmin();
     }
 }

@@ -2,6 +2,7 @@ package com.datn.workservice.exception;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.common.exception.BadRequestException;
+import com.datn.common.exception.ForbiddenException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.common.exception.UnauthorizedException;
 import lombok.extern.slf4j.Slf4j;
@@ -88,6 +89,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage() != null ? ex.getMessage() : "Access denied: insufficient permissions"));
     }
 
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException ex) {
+        log.warn("Forbidden: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(ex.getMessage() != null ? ex.getMessage() : "Bạn không có quyền thực hiện thao tác này"));
+    }
+
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex) {
         log.warn("Authentication error: {}", ex.getMessage());
@@ -100,6 +108,9 @@ public class GlobalExceptionHandler {
         Throwable undeclared = ex.getUndeclaredThrowable();
         if (undeclared instanceof AccessDeniedException ade) {
             return handleAccessDenied(ade);
+        }
+        if (undeclared instanceof ForbiddenException fe) {
+            return handleForbidden(fe);
         }
         if (undeclared instanceof BadRequestException bre) {
             return handleBadRequest(bre);
@@ -118,6 +129,9 @@ public class GlobalExceptionHandler {
         Throwable target = ex.getTargetException();
         if (target instanceof AccessDeniedException ade) {
             return handleAccessDenied(ade);
+        }
+        if (target instanceof ForbiddenException fe) {
+            return handleForbidden(fe);
         }
         if (target instanceof BadRequestException bre) {
             return handleBadRequest(bre);

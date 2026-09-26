@@ -26,12 +26,14 @@ import ProjectBoardView from '../components/boards/ProjectBoardView.jsx';
 import CreateWorkItemModal from '../components/items/CreateWorkItemModal.jsx';
 import WorkItemDetailModal from '../components/items/WorkItemDetailModal.jsx';
 import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
+import AccessDenied from '../components/common/AccessDenied.jsx';
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [errorStatus, setErrorStatus] = useState(null); // 403 / 404 từ GET /projects/{id}
   const [activeTab, setActiveTab] = useState(() => {
     try {
       return sessionStorage.getItem(`project_${projectId}_active_tab`) || 'board';
@@ -56,7 +58,7 @@ export default function ProjectDetailPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const actionMenuRef = useRef(null);
 
-  const { isAdmin, canCreateIssue, canManageSprint, permissions } = useProjectPermission(projectId);
+  const { isAdmin, canCreateIssue, canManageSprint, permissions, forbidden, notFound } = useProjectPermission(projectId);
 
   const isSystemAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN');
   const isProjectLead = !!(currentUser && project?.leadUserId === currentUser.id);
@@ -81,8 +83,8 @@ export default function ProjectDetailPage() {
     try {
       if (!isBackground) setLoading(true);
       const [projRes, membersRes] = await Promise.all([
-        projectApi.getById(projectId),
-        projectApi.getMembers(projectId).catch(() => null),
+        projectApi.getById(projectId, { skipErrorToast: true }),
+        projectApi.getMembers(projectId, { skipErrorToast: true }).catch(() => null),
       ]);
       if (projRes && projRes.data) {
         setProject(projRes.data);
@@ -91,7 +93,11 @@ export default function ProjectDetailPage() {
         setMembers(membersRes.data);
       }
     } catch (err) {
-      console.warn('Could not load project detail:', err);
+      if (err?.status === 403 || err?.status === 404) {
+        setErrorStatus(err.status);
+      } else {
+        toast.error(err?.message || 'Không tải được thông tin dự án');
+      }
     } finally {
       if (!isBackground) setLoading(false);
     }
@@ -115,6 +121,10 @@ export default function ProjectDetailPage() {
   const handleItemUpdated = (updatedItem) => {
     setBoardRefreshKey((prev) => prev + 1);
   };
+
+  // Người ngoài dự án / dự án không tồn tại: thay toàn bộ nội dung bằng trang lỗi (không render khung trang + toast)
+  if (errorStatus === 404 || notFound) return <AccessDenied status={404} title="Không tìm thấy dự án" message="Dự án không tồn tại hoặc đã bị xóa." />;
+  if (errorStatus === 403 || forbidden) return <AccessDenied status={403} />;
 
   return (
     <div

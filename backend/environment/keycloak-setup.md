@@ -6,7 +6,7 @@ Tài liệu này hướng dẫn cách cấu hình Keycloak bằng file export c�
 
 ## Thông tin môi trường Keycloak
 
-- **URL Admin Console**: [http://localhost:8088](http://localhost:8088)
+- **URL Admin Console**: [http://localhost:9998](http://localhost:9998)
 - **Tài khoản quản trị Keycloak (Master Realm)**:
   - **Username**: `admin`
   - **Password**: `admin`
@@ -19,7 +19,7 @@ Tài liệu này hướng dẫn cách cấu hình Keycloak bằng file export c�
 
 Nếu container Keycloak đã chạy (`docker compose -f docker-compose.infra.yml up -d`), bạn có thể import trực tiếp qua giao diện:
 
-1. Mở trình duyệt truy cập: **[http://localhost:8088](http://localhost:8088)**
+1. Mở trình duyệt truy cập: **[http://localhost:9998](http://localhost:9998)**
 2. Đăng nhập với tài khoản:
    - **Username**: `admin`
    - **Password**: `admin`
@@ -41,7 +41,7 @@ Nếu container Keycloak đã chạy (`docker compose -f docker-compose.infra.ym
 - **Valid redirect URIs**:
   - `http://localhost:5173/*`
   - `http://localhost:3000/*`
-  - `http://localhost:8081/*`
+  - `http://localhost:9991/*`
 - **Web Origins**: `*` hoặc `http://localhost:5173`, `http://localhost:3000`
 - **Client Secret**: Kiểm tra tại tab **Credentials** ➔ `pBchukVams8pHwBHnPvzTY86e3ou2Ym7` *(trùng với file `application.yaml` của `identity-service`)*.
 
@@ -55,7 +55,7 @@ Nếu container Keycloak đã chạy (`docker compose -f docker-compose.infra.ym
 2. Menu trái chọn **Identity Providers** ➔ Chọn **Google** (hoặc bấm Add provider ➔ Google nếu chưa có).
 3. Copy đường dẫn **Redirect URI** hiển thị trên Keycloak:
    ```text
-   http://localhost:8088/realms/datn-realm/broker/google/endpoint
+   http://localhost:9998/realms/datn-realm/broker/google/endpoint
    ```
 4. Vào [Google Cloud Console](https://console.cloud.google.com/) ➔ **APIs & Services** ➔ **Credentials**:
    - Thêm Redirect URI trên vào danh sách **Authorized redirect URIs**.

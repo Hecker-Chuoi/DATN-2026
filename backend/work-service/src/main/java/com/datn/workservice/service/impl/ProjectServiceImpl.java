@@ -17,8 +17,11 @@ import com.datn.workservice.enums.DefaultAssigneeType;
 import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.enums.ProjectType;
 import com.datn.workservice.enums.StatusCategory;
+import com.datn.workservice.enums.TeamRole;
 import com.datn.workservice.repository.*;
 import com.datn.workservice.service.AtomicKeySequenceGenerator;
+import com.datn.workservice.service.ProjectAccessService;
+import com.datn.workservice.service.ProjectMemberService;
 import com.datn.workservice.service.ProjectService;
 import com.datn.workservice.specification.ProjectSpecification;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,9 +57,12 @@ public class ProjectServiceImpl implements ProjectService {
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final PermissionSchemeEntryRepository permissionSchemeEntryRepository;
     private final WorkItemRepository workItemRepository;
+    private final TeamMemberRepository teamMemberRepository;
 
     private final AtomicKeySequenceGenerator atomicKeySequenceGenerator;
     private final IdentityClient identityClient;
+    private final ProjectAccessService projectAccessService;
+    private final ProjectMemberService projectMemberService;
 
     @Override
     @Transactional
@@ -66,6 +73,9 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         UUID leadUserId = request.getLeadUserId() != null ? request.getLeadUserId() : currentUserId;
+
+        // Chỉ thành viên của team (hoặc Global ADMIN) mới được gắn dự án vào team đó
+        validateTeamMembership(request.getTeamId(), currentUserId, leadUserId);
 
         Project project = Project.builder()
                 .workspaceId(request.getWorkspaceId())
@@ -105,6 +115,7 @@ public class ProjectServiceImpl implements ProjectService {
     public ProjectDetailResponse getProjectByKey(String key) {
         Project project = projectRepository.findByKeyIgnoreCase(key.trim())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với mã Key: " + key));
+        projectAccessService.assertProjectPermission(project.getId(), PermissionKey.PROJECT_VIEW);
         return mapToProjectDetailResponse(project);
     }
 
@@ -115,13 +126,28 @@ public class ProjectServiceImpl implements ProjectService {
             UUID teamId,
             String search,
             Boolean isTemplate,
-            Pageable pageable
+            Pageable pageable,
+            UUID currentUserId,
+            boolean includeAll
     ) {
         Specification<Project> spec = ProjectSpecification.withFilters(workspaceId, teamId, search, isTemplate, false);
+
+        Map<UUID, String> myRoles = currentUserId != null ? resolveMyRoles(currentUserId) : Collections.emptyMap();
+        if (!includeAll) {
+            if (currentUserId == null) {
+                return PageResponse.of(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0L, 0, true, true);
+            }
+            spec = spec.and(ProjectSpecification.accessibleBy(currentUserId, myRoles.keySet()));
+        }
+
         Page<Project> page = projectRepository.findAll(spec, pageable);
 
         List<ProjectResponse> content = page.getContent().stream()
-                .map(this::mapToProjectResponse)
+                .map(p -> {
+                    ProjectResponse response = mapToProjectResponse(p);
+                    response.setMyRole(resolveMyRoleLabel(p, currentUserId, myRoles));
+                    return response;
+                })
                 .collect(Collectors.toList());
 
         return PageResponse.of(
@@ -137,8 +163,8 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<ProjectResponse> getTemplates(UUID workspaceId, Pageable pageable) {
-        return getAllProjects(workspaceId, null, null, true, pageable);
+    public PageResponse<ProjectResponse> getTemplates(UUID workspaceId, Pageable pageable, UUID currentUserId, boolean includeAll) {
+        return getAllProjects(workspaceId, null, null, true, pageable, currentUserId, includeAll);
     }
 
     @Override
@@ -151,11 +177,16 @@ public class ProjectServiceImpl implements ProjectService {
             throw new BadRequestException("Không thể cập nhật dự án đã bị xóa");
         }
 
+        boolean teamChanged = false;
+        boolean leadChanged = false;
+
         if (request.getName() != null && !request.getName().isBlank()) {
             project.setName(request.getName().trim());
         }
-        if (request.getTeamId() != null) {
+        if (request.getTeamId() != null && !request.getTeamId().equals(project.getTeamId())) {
+            validateTeamMembership(request.getTeamId(), currentUserId, null);
             project.setTeamId(request.getTeamId());
+            teamChanged = true;
         }
         if (request.getDescription() != null) {
             project.setDescription(request.getDescription());
@@ -163,8 +194,17 @@ public class ProjectServiceImpl implements ProjectService {
         if (request.getIconUrl() != null) {
             project.setIconUrl(request.getIconUrl());
         }
-        if (request.getLeadUserId() != null) {
-            project.setLeadUserId(request.getLeadUserId());
+        if (request.getLeadUserId() != null && !request.getLeadUserId().equals(project.getLeadUserId())) {
+            UUID newLead = request.getLeadUserId();
+            boolean isProjectMember = !roleAssignmentRepository.findByProjectIdAndUserId(projectId, newLead).isEmpty();
+            boolean isTeamMember = project.getTeamId() != null && teamRepository.findById(project.getTeamId())
+                    .map(t -> isTeamMember(t, newLead))
+                    .orElse(false);
+            if (!isProjectMember && !isTeamMember) {
+                throw new BadRequestException("Trưởng dự án (Project Lead) mới phải là thành viên của dự án hoặc của nhóm");
+            }
+            project.setLeadUserId(newLead);
+            leadChanged = true;
         }
         if (request.getDefaultAssigneeType() != null) {
             project.setDefaultAssigneeType(request.getDefaultAssigneeType());
@@ -184,7 +224,125 @@ public class ProjectServiceImpl implements ProjectService {
 
         Project updatedProject = projectRepository.save(project);
         log.info("Project updated: ID={}, Name={}", updatedProject.getId(), updatedProject.getName());
+
+        if (leadChanged) {
+            ensureAdministratorAssignment(updatedProject.getId(), updatedProject.getLeadUserId());
+        }
+        if (teamChanged) {
+            projectMemberService.syncTeamMembersToProject(updatedProject.getId());
+        }
+
         return mapToProjectResponse(updatedProject);
+    }
+
+    // ─── ACCESS VALIDATION HELPERS ─────────────────────────────────────────────
+
+    /**
+     * Chỉ thành viên/owner của team (hoặc Global ADMIN) mới được gắn dự án vào team.
+     * Nếu chỉ định Project Lead khác người tạo thì Lead cũng phải thuộc team.
+     */
+    /**
+     * Chỉ trưởng nhóm (owner hoặc TeamRole.LEADER) của nhóm được chọn, hoặc Global ADMIN, mới được tạo dự án.
+     * Dự án không gắn nhóm chỉ Global ADMIN tạo được (tránh lách quy tắc bằng cách bỏ trống nhóm).
+     */
+    private void validateTeamMembership(UUID teamId, UUID currentUserId, UUID leadUserId) {
+        boolean globalAdmin = projectAccessService.isGlobalAdmin();
+
+        if (teamId == null) {
+            if (!globalAdmin) {
+                throw new AccessDeniedException("Chỉ trưởng nhóm mới được tạo dự án. Hãy chọn nhóm mà bạn là trưởng nhóm");
+            }
+            return;
+        }
+
+        Team team = teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
+
+        if (!globalAdmin && !isTeamLeader(team, currentUserId)) {
+            throw new AccessDeniedException("Chỉ trưởng nhóm (LEADER) mới được tạo dự án cho nhóm này");
+        }
+
+        if (leadUserId != null && !leadUserId.equals(currentUserId) && !isTeamMember(team, leadUserId)) {
+            throw new BadRequestException("Trưởng dự án (Project Lead) phải là thành viên của nhóm");
+        }
+    }
+
+    private boolean isTeamLeader(Team team, UUID userId) {
+        if (team == null || userId == null) return false;
+        if (userId.equals(team.getOwnerId())) return true;
+        return teamMemberRepository.findByTeamIdAndUserId(team.getId(), userId)
+                .map(m -> m.getRole() == TeamRole.LEADER)
+                .orElse(false);
+    }
+
+    private boolean isTeamMember(Team team, UUID userId) {
+        if (team == null || userId == null) return false;
+        if (userId.equals(team.getOwnerId())) return true;
+        return teamMemberRepository.existsByTeamIdAndUserId(team.getId(), userId);
+    }
+
+    /**
+     * Đảm bảo user có vai trò ADMINISTRATOR trong dự án (dùng khi đổi Project Lead).
+     */
+    private void ensureAdministratorAssignment(UUID projectId, UUID userId) {
+        if (userId == null) return;
+        ProjectRole adminRole = projectRoleRepository.findByProjectId(projectId).stream()
+                .filter(r -> "ADMINISTRATOR".equalsIgnoreCase(r.getName()))
+                .findFirst()
+                .orElse(null);
+        if (adminRole == null) return;
+
+        List<RoleAssignment> existing = roleAssignmentRepository.findByProjectIdAndUserId(projectId, userId);
+        if (existing.isEmpty()) {
+            roleAssignmentRepository.save(RoleAssignment.builder()
+                    .projectId(projectId)
+                    .userId(userId)
+                    .roleId(adminRole.getId())
+                    .build());
+        } else {
+            RoleAssignment assignment = existing.get(0);
+            if (!adminRole.getId().equals(assignment.getRoleId())) {
+                assignment.setRoleId(adminRole.getId());
+                roleAssignmentRepository.save(assignment);
+            }
+        }
+    }
+
+    /**
+     * Map projectId -> tên vai trò cao nhất của user trong dự án đó.
+     */
+    private Map<UUID, String> resolveMyRoles(UUID userId) {
+        List<RoleAssignment> assignments = roleAssignmentRepository.findByUserId(userId);
+        if (assignments == null || assignments.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Set<UUID> roleIds = assignments.stream().map(RoleAssignment::getRoleId).collect(Collectors.toSet());
+        Map<UUID, String> roleNames = projectRoleRepository.findAllById(roleIds).stream()
+                .collect(Collectors.toMap(ProjectRole::getId, ProjectRole::getName, (a, b) -> a));
+
+        Map<UUID, String> result = new HashMap<>();
+        for (RoleAssignment assignment : assignments) {
+            String name = roleNames.getOrDefault(assignment.getRoleId(), "MEMBER");
+            result.merge(assignment.getProjectId(), name,
+                    (oldName, newName) -> rolePriority(newName) < rolePriority(oldName) ? newName : oldName);
+        }
+        return result;
+    }
+
+    private String resolveMyRoleLabel(Project project, UUID userId, Map<UUID, String> myRoles) {
+        if (userId == null) return null;
+        if (userId.equals(project.getLeadUserId()) || userId.equals(project.getCreatedBy())) {
+            return "ADMINISTRATOR";
+        }
+        return myRoles.get(project.getId());
+    }
+
+    private static int rolePriority(String roleName) {
+        if ("ADMINISTRATOR".equalsIgnoreCase(roleName)) return 0;
+        if ("MEMBER".equalsIgnoreCase(roleName)) return 1;
+        if ("VIEWER".equalsIgnoreCase(roleName)) return 2;
+        return 3;
     }
 
     @Override
@@ -360,7 +518,10 @@ public class ProjectServiceImpl implements ProjectService {
                 PermissionKey.ISSUE_EDIT,
                 PermissionKey.ISSUE_TRANSITION,
                 PermissionKey.ISSUE_ASSIGN,
-                PermissionKey.COMMENT_CREATE
+                PermissionKey.COMMENT_CREATE,
+                PermissionKey.COMMENT_EDIT_OWN,
+                PermissionKey.COMMENT_DELETE_OWN,
+                PermissionKey.ATTACHMENT_DELETE_OWN
         ).stream()
                 .map(pk -> PermissionSchemeEntry.builder()
                         .projectId(project.getId())
@@ -369,14 +530,19 @@ public class ProjectServiceImpl implements ProjectService {
                         .build())
                 .toList();
 
-        // Seed permission entries for VIEWER
+        // Seed permission entries for VIEWER (read-only + trao đổi bằng bình luận, giống Observer trong thiết kế)
         List<PermissionSchemeEntry> viewerEntries = List.of(
-                PermissionSchemeEntry.builder()
+                PermissionKey.PROJECT_VIEW,
+                PermissionKey.COMMENT_CREATE,
+                PermissionKey.COMMENT_EDIT_OWN,
+                PermissionKey.COMMENT_DELETE_OWN
+        ).stream()
+                .map(pk -> PermissionSchemeEntry.builder()
                         .projectId(project.getId())
                         .roleId(viewerRole.getId())
-                        .permissionKey(PermissionKey.PROJECT_VIEW.name())
-                        .build()
-        );
+                        .permissionKey(pk.name())
+                        .build())
+                .toList();
 
         List<PermissionSchemeEntry> allEntries = new ArrayList<>();
         allEntries.addAll(adminEntries);
@@ -395,6 +561,29 @@ public class ProjectServiceImpl implements ProjectService {
                     .userId(userId)
                     .roleId(adminRole.getId())
                     .build());
+        }
+
+        // Auto-assign Team Members if project belongs to a Team
+        if (project.getTeamId() != null) {
+            List<TeamMember> teamMembers = teamMemberRepository.findByTeamId(project.getTeamId());
+            for (TeamMember tm : teamMembers) {
+                if (tm.getUserId() != null && !adminUserIds.contains(tm.getUserId())) {
+                    UUID targetRoleId = memberRole.getId();
+                    if (tm.getRole() == com.datn.workservice.enums.TeamRole.LEADER) {
+                        targetRoleId = adminRole.getId();
+                    } else if (tm.getRole() == com.datn.workservice.enums.TeamRole.VIEWER) {
+                        targetRoleId = viewerRole.getId();
+                    }
+
+                    if (!roleAssignmentRepository.existsByProjectIdAndUserIdAndRoleId(project.getId(), tm.getUserId(), targetRoleId)) {
+                        roleAssignmentRepository.save(RoleAssignment.builder()
+                                .projectId(project.getId())
+                                .userId(tm.getUserId())
+                                .roleId(targetRoleId)
+                                .build());
+                    }
+                }
+            }
         }
 
         log.info("Project ecosystem seeded successfully for project: ID={}", project.getId());

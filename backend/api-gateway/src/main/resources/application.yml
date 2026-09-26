@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: 9991
 
 spring:
   application:
@@ -9,14 +9,14 @@ spring:
     gateway:
       routes:
         - id: identity-service
-          uri: http://localhost:8082
+          uri: http://localhost:9992
           predicates:
             - Path=/identity/api/**, /identity/actuator/**
           filters:
             - StripPrefix=1
 
         - id: work-service
-          uri: http://localhost:8083
+          uri: http://localhost:9993
           predicates:
             - Path=/work/api/**, /work/actuator/**, /work/ws-work/**
           filters:
@@ -48,8 +48,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          jwk-set-uri: http://localhost:8088/realms/datn-realm/protocol/openid-connect/certs
-          issuer-uri: http://localhost:8088/realms/datn-realm
+          jwk-set-uri: http://localhost:9998/realms/datn-realm/protocol/openid-connect/certs
+          issuer-uri: http://localhost:9998/realms/datn-realm
 management:
   endpoints:
     web:

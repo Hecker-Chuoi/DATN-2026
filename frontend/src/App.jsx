@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { userTokenStore, adminTokenStore, authApi, userApi } from './api.js';
+import { PermissionProvider } from './context/PermissionContext.jsx';
 
 import WorkspaceLayout from './components/layout/WorkspaceLayout.jsx';
 import ProjectListPage from './pages/ProjectListPage.jsx';
@@ -13,6 +14,11 @@ import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import GoogleCallback from './pages/GoogleCallback.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
+import AccessDenied from './components/common/AccessDenied.jsx';
+import InvitationsPage from './pages/InvitationsPage.jsx';
+import VerifyEmailPage from './pages/VerifyEmailPage.jsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 
 function App() {
   // ─── User Workspace Auth State ───
@@ -62,7 +68,7 @@ function App() {
     setIsUserAuth(false);
     setCurrentUser(null);
 
-    const keycloakLogoutUrl = `http://localhost:8088/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/login')}`;
+    const keycloakLogoutUrl = `http://localhost:9998/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/login')}`;
     window.location.href = keycloakLogoutUrl;
   };
 
@@ -85,12 +91,13 @@ function App() {
       console.warn('Backend logout error:', err);
     }
 
-    const keycloakLogoutUrl = `http://localhost:8088/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/admin/login')}`;
+    const keycloakLogoutUrl = `http://localhost:9998/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/admin/login')}`;
     window.location.href = keycloakLogoutUrl;
   };
 
   return (
     <BrowserRouter>
+     <PermissionProvider currentUser={currentUser}>
       {/* ─── Global Toast Notifications Container ─── */}
       <Toaster
         position="bottom-right"
@@ -151,6 +158,10 @@ function App() {
           path="/auth/callback"
           element={<GoogleCallback onLoginSuccess={handleUserLoginSuccess} />}
         />
+        {/* Public: link từ email xác thực / đặt lại mật khẩu (identity-service gửi qua notification-service) */}
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* ─── 2. User Work Management Portal (Root `/`) ─── */}
         <Route
@@ -167,6 +178,10 @@ function App() {
           <Route path="projects" element={<ProjectListPage />} />
           <Route path="projects/:projectId" element={<ProjectDetailPage />} />
           <Route path="teams/:teamId" element={<TeamDetailPage />} />
+          <Route path="invitations" element={<InvitationsPage />} />
+          <Route path="403" element={<AccessDenied status={403} title="Bạn không có quyền truy cập" message="Bạn không có quyền xem nội dung này. Hãy liên hệ người quản trị để được cấp quyền." />} />
+          <Route path="404" element={<AccessDenied status={404} />} />
+          <Route path="*" element={<AccessDenied status={404} />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="settings" element={<ProfilePage />} />
           <Route
@@ -228,9 +243,10 @@ function App() {
           element={<Navigate to="/register" replace />}
         />
 
-        {/* Catch-all fallback */}
-        <Route path="*" element={<Navigate to="/projects" replace />} />
+        {/* 401: phiên hết hạn (interceptor chuyển hướng tới đây khi refresh token thất bại) */}
+        <Route path="/401" element={<AccessDenied status={401} />} />
       </Routes>
+     </PermissionProvider>
     </BrowserRouter>
   );
 }
