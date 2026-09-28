@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +31,24 @@ public interface WorkItemRepository extends JpaRepository<WorkItem, UUID>, JpaSp
     long countByProjectId(UUID projectId);
     long countBySprintId(UUID sprintId);
     long countBySprintIdAndStatusId(UUID sprintId, UUID statusId);
+
+    // --- Giai doan 6: bien the loc soft-delete + truy van theo lo cho Board/Backlog/Report ---
+    List<WorkItem> findBySprintIdAndDeletedAtIsNullOrderByRankAsc(UUID sprintId);
+    List<WorkItem> findBySprintIdInAndDeletedAtIsNull(Collection<UUID> sprintIds);
+    List<WorkItem> findByProjectIdAndSprintIdIsNullAndDeletedAtIsNullOrderByRankAsc(UUID projectId);
+    List<WorkItem> findByParentIdInAndDeletedAtIsNull(Collection<UUID> parentIds);
+    long countBySprintIdAndDeletedAtIsNull(UUID sprintId);
+    long countBySprintIdAndStatusIdInAndDeletedAtIsNull(UUID sprintId, Collection<UUID> statusIds);
+
+    @Query("SELECT wi FROM WorkItem wi WHERE wi.projectId = :projectId AND wi.deletedAt IS NULL "
+            + "AND wi.statusId IN :statusIds ORDER BY wi.rank ASC")
+    List<WorkItem> findActiveByProjectIdAndStatusIdIn(@Param("projectId") UUID projectId,
+                                                      @Param("statusIds") Collection<UUID> statusIds);
+
+    @Query("SELECT COUNT(wi) FROM WorkItem wi WHERE wi.projectId = :projectId AND wi.deletedAt IS NULL "
+            + "AND wi.statusId IN :statusIds")
+    long countActiveByProjectIdAndStatusIdIn(@Param("projectId") UUID projectId,
+                                             @Param("statusIds") Collection<UUID> statusIds);
 
     @Query("SELECT wi FROM WorkItem wi WHERE wi.projectId = :projectId AND wi.deletedAt IS NULL ORDER BY wi.rank ASC")
     List<WorkItem> findActiveByProjectIdOrderByRankAsc(@Param("projectId") UUID projectId);

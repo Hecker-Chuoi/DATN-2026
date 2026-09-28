@@ -6,6 +6,11 @@ import { userTokenStore, adminTokenStore, authApi, userApi } from './api.js';
 import WorkspaceLayout from './components/layout/WorkspaceLayout.jsx';
 import ProjectListPage from './pages/ProjectListPage.jsx';
 import ProjectDetailPage from './pages/ProjectDetailPage.jsx';
+import ProjectBoardPage from './pages/ProjectBoardPage.jsx';
+import ProjectBacklogPage from './pages/ProjectBacklogPage.jsx';
+import ProjectReportsPage from './pages/ProjectReportsPage.jsx';
+import ProjectMembersPage from './pages/ProjectMembersPage.jsx';
+import ProjectWorkflowPage from './pages/ProjectWorkflowPage.jsx';
 import TeamDetailPage from './pages/TeamDetailPage.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import UserLoginPage from './pages/UserLoginPage.jsx';
@@ -193,7 +198,16 @@ function App() {
           >
             <Route index element={<Navigate to="projects" replace />} />
             <Route path="projects" element={<ProjectListPage />} />
-            <Route path="projects/:projectId" element={<ProjectDetailPage />} />
+            {/* ProjectDetailPage dong vai tro layout: header + tab bar + <Outlet/>.
+                Nho vay moi tab co URL rieng, deep-link va nut Back cua trinh duyet hoat dong dung. */}
+            <Route path="projects/:projectId" element={<ProjectDetailPage />}>
+              <Route index element={<Navigate to="board" replace />} />
+              <Route path="board" element={<ProjectBoardPage />} />
+              <Route path="backlog" element={<ProjectBacklogPage />} />
+              <Route path="reports" element={<ProjectReportsPage />} />
+              <Route path="members" element={<ProjectMembersPage />} />
+              <Route path="workflow" element={<ProjectWorkflowPage />} />
+            </Route>
             <Route path="teams/:teamId" element={<TeamDetailPage />} />
             <Route path="members" element={<WorkspaceMembersPage />} />
             <Route path="settings" element={<WorkspaceSettingsPage />} />

@@ -210,7 +210,9 @@ apiClient.interceptors.response.use(
     const body = error.response?.data;
     const msg = body?.message || error.message || 'Lỗi kết nối máy chủ';
 
-    if (error.response?.status !== 401 || !originalRequest?._retry) {
+    // skipErrorToast: cho phep call site tu quan ly thong bao (vi du keo tha tren Board
+    // can thong diep rieng cho 409). Khong truyen co thi hanh vi giu nguyen nhu cu.
+    if ((error.response?.status !== 401 || !originalRequest?._retry) && !originalRequest?.skipErrorToast) {
       toast.error(msg, { id: msg });
     }
 
@@ -368,18 +370,54 @@ export const workflowApi = {
 
 // ─── 4. Boards & Backlog API ──────────────────────────────────────────────────
 export const boardApi = {
-  getBoardData: (boardId) => apiClient.get(`${WORK_BASE}/boards/${boardId}/data`),
-  moveCard: (boardId, itemId, data) =>
-    apiClient.put(`${WORK_BASE}/boards/${boardId}/items/${itemId}/move`, data),
-  getBacklog: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/backlog`),
+  listByProject: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/boards`),
+  create: (projectId, data) => apiClient.post(`${WORK_BASE}/projects/${projectId}/boards`, data),
+  getById: (boardId) => apiClient.get(`${WORK_BASE}/boards/${boardId}`),
+  update: (boardId, data) => apiClient.put(`${WORK_BASE}/boards/${boardId}`, data),
+  delete: (boardId) => apiClient.delete(`${WORK_BASE}/boards/${boardId}`),
+
+  // Du lieu day du de ve bang: columns + swimlanes + cards (phang, kem columnId/rank/version)
+  getBoardData: (boardId, params) => apiClient.get(`${WORK_BASE}/boards/${boardId}/data`, { params }),
+
+  // config cho phep truyen { skipErrorToast: true } khi keo tha de tu xu ly loi 409 / WIP
+  moveCard: (boardId, itemId, data, config) =>
+    apiClient.put(`${WORK_BASE}/boards/${boardId}/items/${itemId}/move`, data, config),
+
+  getBacklog: (projectId, params) => apiClient.get(`${WORK_BASE}/projects/${projectId}/backlog`, { params }),
+
+  getColumns: (boardId) => apiClient.get(`${WORK_BASE}/boards/${boardId}/columns`),
+  updateColumns: (boardId, columns) =>
+    apiClient.put(`${WORK_BASE}/boards/${boardId}/columns`, { columns }),
+  getSwimlanes: (boardId) => apiClient.get(`${WORK_BASE}/boards/${boardId}/swimlanes`),
+  updateSwimlanes: (boardId, swimlanes) =>
+    apiClient.put(`${WORK_BASE}/boards/${boardId}/swimlanes`, { swimlanes }),
 };
 
-// ─── 5. Sprints API ───────────────────────────────────────────────────────────
+// ─── 5. Sprints API (Scrum Lifecycle & Reports) ───────────────────────────────
 export const sprintApi = {
+  listByProject: (projectId, params) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/sprints`, { params }),
+  getById: (sprintId) => apiClient.get(`${WORK_BASE}/sprints/${sprintId}`),
   create: (projectId, data) => apiClient.post(`${WORK_BASE}/projects/${projectId}/sprints`, data),
-  start: (sprintId) => apiClient.post(`${WORK_BASE}/sprints/${sprintId}/start`),
+  update: (sprintId, data) => apiClient.put(`${WORK_BASE}/sprints/${sprintId}`, data),
+  delete: (sprintId) => apiClient.delete(`${WORK_BASE}/sprints/${sprintId}`),
+
+  start: (sprintId, data) => apiClient.post(`${WORK_BASE}/sprints/${sprintId}/start`, data),
   close: (sprintId, data) => apiClient.post(`${WORK_BASE}/sprints/${sprintId}/close`, data),
-  getBurndown: (sprintId) => apiClient.get(`${WORK_BASE}/sprints/${sprintId}/burndown`),
+
+  addItems: (sprintId, itemIds) =>
+    apiClient.post(`${WORK_BASE}/sprints/${sprintId}/items`, { itemIds }),
+  // Dung POST .../items/remove thay vi DELETE kem body: mot so gateway loai bo body cua DELETE
+  removeItems: (sprintId, itemIds) =>
+    apiClient.post(`${WORK_BASE}/sprints/${sprintId}/items/remove`, { itemIds }),
+
+  // Bao cao Agile
+  getBurndown: (sprintId, params) =>
+    apiClient.get(`${WORK_BASE}/sprints/${sprintId}/burndown`, { params }),
+  getReport: (sprintId) => apiClient.get(`${WORK_BASE}/sprints/${sprintId}/report`),
+  getVelocity: (projectId, params) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/velocity`, { params }),
+  getCfd: (projectId, params) => apiClient.get(`${WORK_BASE}/projects/${projectId}/cfd`, { params }),
 };
 
 // ─── 6. Components & Versions API ─────────────────────────────────────────────

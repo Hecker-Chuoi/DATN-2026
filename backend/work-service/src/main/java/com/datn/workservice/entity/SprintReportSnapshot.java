@@ -8,6 +8,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -49,7 +50,7 @@ public class SprintReportSnapshot {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "snapshot_data", columnDefinition = "jsonb", nullable = false)
-    private Object snapshotData;
+    private Map<String, Object> snapshotData;
 
     @Column(name = "closed_by", nullable = false)
     private UUID closedBy;

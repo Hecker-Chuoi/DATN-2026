@@ -46,6 +46,12 @@ public class Sprint {
     @Column(name = "completed_date")
     private LocalDateTime completedDate;
 
+    /** Optimistic locking: chong hai nguoi cung start/complete mot Sprint. */
+    @jakarta.persistence.Version
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer version = 0;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;

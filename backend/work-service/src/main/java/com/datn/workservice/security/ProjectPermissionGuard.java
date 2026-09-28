@@ -1,5 +1,6 @@
 package com.datn.workservice.security;
 
+import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ import java.util.UUID;
 public class ProjectPermissionGuard {
 
     private final ProjectMemberService projectMemberService;
+    private final ProjectScopeResolver projectScopeResolver;
 
     @Before("@annotation(com.datn.workservice.security.RequireProjectPermission) || @within(com.datn.workservice.security.RequireProjectPermission)")
     public void checkPermission(JoinPoint joinPoint) {
@@ -47,7 +49,7 @@ public class ProjectPermissionGuard {
             }
 
             UUID currentUserId = currentUserIdOpt.get();
-            UUID projectId = resolveProjectId(joinPoint, method);
+            UUID projectId = resolveProjectId(joinPoint, method, requirePerm);
 
             if (projectId == null) {
                 log.debug("Cannot extract projectId for permission check on method: {}", signature.toShortString());
@@ -65,7 +67,9 @@ public class ProjectPermissionGuard {
                         "Bạn không có quyền thực hiện thao tác này (" + requiredPermission.name() + ") trong dự án"
                 );
             }
-        } catch (AccessDeniedException e) {
+        } catch (AccessDeniedException | ResourceNotFoundException e) {
+            // ResourceNotFoundException tới từ ProjectScopeResolver khi board/sprint không tồn tại:
+            // phải trả 404 thay vì bị bọc thành lỗi hệ thống 500.
             throw e;
         } catch (Exception e) {
             log.error("Unexpected error in ProjectPermissionGuard: {}", e.getMessage(), e);
@@ -73,7 +77,7 @@ public class ProjectPermissionGuard {
         }
     }
 
-    private UUID resolveProjectId(JoinPoint joinPoint, Method method) {
+    private UUID resolveProjectId(JoinPoint joinPoint, Method method, RequireProjectPermission requirePerm) {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         String[] parameterNames = signature.getParameterNames();
         Object[] args = joinPoint.getArgs();
@@ -83,13 +87,20 @@ public class ProjectPermissionGuard {
             return null;
         }
 
+        // 0. Endpoint định danh theo tài nguyên con (board/sprint/work item):
+        //    lấy ID theo tên khai báo rồi truy ngược ra projectId.
+        if (requirePerm.source() != ProjectIdSource.PROJECT) {
+            UUID rawId = findUuidArg(parameterNames, args, paramAnnotations, requirePerm.param());
+            return rawId == null ? null : projectScopeResolver.resolveProjectId(requirePerm.source(), rawId);
+        }
+
         // 1. Inspect @PathVariable annotations
         for (int i = 0; i < args.length; i++) {
             if (i < paramAnnotations.length && args[i] instanceof UUID uuid) {
                 for (Annotation ann : paramAnnotations[i]) {
                     if (ann instanceof PathVariable pv) {
                         String pvName = pv.value().isEmpty() ? pv.name() : pv.value();
-                        if ("projectId".equalsIgnoreCase(pvName) || pvName.isEmpty()) {
+                        if ("projectId".equalsIgnoreCase(pvName)) {
                             return uuid;
                         }
                     }
@@ -109,14 +120,9 @@ public class ProjectPermissionGuard {
             }
         }
 
-        // 3. Fallback: First UUID argument in method
-        for (Object arg : args) {
-            if (arg instanceof UUID uuid) {
-                return uuid;
-            }
-        }
-
-        // 4. Inspect DTO argument with getProjectId()
+        // 3. Inspect DTO argument with getProjectId()
+        //    Đã bỏ fallback "UUID đầu tiên": với /sprints/{sprintId} nó coi sprintId là
+        //    projectId, khiến mọi endpoint sprint/board bị từ chối 403 vô điều kiện.
         for (Object arg : args) {
             if (arg != null) {
                 try {
@@ -131,5 +137,44 @@ public class ProjectPermissionGuard {
         }
 
         return null;
+    }
+
+    /**
+     * Tìm tham số UUID mang ID tài nguyên: ưu tiên @PathVariable đúng tên, rồi tên tham số,
+     * cuối cùng mới tới tham số UUID duy nhất của method.
+     */
+    private UUID findUuidArg(String[] parameterNames, Object[] args,
+                             Annotation[][] paramAnnotations, String preferredName) {
+        if (preferredName != null && !preferredName.isBlank()) {
+            for (int i = 0; i < args.length; i++) {
+                if (!(args[i] instanceof UUID uuid)) {
+                    continue;
+                }
+                if (i < paramAnnotations.length) {
+                    for (Annotation ann : paramAnnotations[i]) {
+                        if (ann instanceof PathVariable pv) {
+                            String pvName = pv.value().isEmpty() ? pv.name() : pv.value();
+                            if (preferredName.equalsIgnoreCase(pvName)) {
+                                return uuid;
+                            }
+                        }
+                    }
+                }
+                if (parameterNames != null && i < parameterNames.length
+                        && preferredName.equalsIgnoreCase(parameterNames[i])) {
+                    return uuid;
+                }
+            }
+        }
+
+        UUID sole = null;
+        int count = 0;
+        for (Object arg : args) {
+            if (arg instanceof UUID uuid) {
+                sole = uuid;
+                count++;
+            }
+        }
+        return count == 1 ? sole : null;
     }
 }

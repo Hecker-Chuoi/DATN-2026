@@ -53,7 +53,7 @@ const TYPE_ICONS = {
   SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Sub-task' },
 };
 
-export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [] }) {
+export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [], sprints = [], canManageSprint = true }) {
   const [currentId, setCurrentId] = useState(initialItemId);
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -267,6 +267,20 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
     } catch (err) {
       console.error('Failed to update assignee:', err);
       toast.error('Lỗi khi cập nhật người thực hiện');
+    }
+  };
+
+  const handleUpdateSprint = async (newSprintId) => {
+    try {
+      const res = await workItemApi.update(currentId, { sprintId: newSprintId || null });
+      if (res && res.data) {
+        setItem(res.data);
+        toast.success(newSprintId ? 'Đã chuyển Sprint' : 'Đã đưa về Backlog');
+        fetchChangelogs(currentId);
+        if (onItemUpdated) onItemUpdated(res.data);
+      }
+    } catch (err) {
+      console.warn('Không đổi được Sprint:', err);
     }
   };
 
@@ -2239,20 +2253,54 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               {/* Sprint info */}
               <div>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Sprint</span>
-                <div
-                  style={{
-                    marginTop: 6,
-                    padding: '8px 12px',
-                    backgroundColor: '#EFF6FF',
-                    borderRadius: 6,
-                    border: '1px solid #BFDBFE',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: '#2563EB',
-                  }}
-                >
-                  {item?.sprintName || 'Backlog'}
-                </div>
+                {/* Sub-task di theo Sprint cua cong viec cha nen khong cho doi rieng */}
+                {item?.hierarchyLevel === -1 || !canManageSprint || sprints.length === 0 ? (
+                  <div
+                    title={
+                      item?.hierarchyLevel === -1
+                        ? 'Sub-task đi theo Sprint của công việc cha'
+                        : undefined
+                    }
+                    style={{
+                      marginTop: 6,
+                      padding: '8px 12px',
+                      backgroundColor: '#EFF6FF',
+                      borderRadius: 6,
+                      border: '1px solid #BFDBFE',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: '#2563EB',
+                    }}
+                  >
+                    {item?.sprintName || 'Backlog'}
+                  </div>
+                ) : (
+                  <select
+                    value={item?.sprintId || ''}
+                    onChange={(e) => handleUpdateSprint(e.target.value || null)}
+                    style={{
+                      marginTop: 6,
+                      width: '100%',
+                      padding: '8px 12px',
+                      backgroundColor: '#EFF6FF',
+                      borderRadius: 6,
+                      border: '1px solid #BFDBFE',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: '#2563EB',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">Backlog</option>
+                    {sprints
+                      .filter((sp) => sp.state !== 'CLOSED')
+                      .map((sp) => (
+                        <option key={sp.id} value={sp.id}>
+                          {sp.name}
+                        </option>
+                      ))}
+                  </select>
+                )}
               </div>
 
               {/* Component & Version */}
