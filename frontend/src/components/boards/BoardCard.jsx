@@ -74,7 +74,7 @@ export default function BoardCard({ item, isOverlay = false, onSelect, dragHandl
           )}
           {item.isBlocked && (
             <span title="Bị công việc tiền đề cản trở" style={badge('#DC2626', '#FEF2F2', '#FECACA')}>
-              <Lock size={10} /> BLOCKED
+              <Lock size={10} /> Bị chặn
             </span>
           )}
           {item.isOverdue && (

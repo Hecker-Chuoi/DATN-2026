@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
-import { teamApi } from '../../api.js';
+import { teamApi, invitationApi } from '../../api.js';
 import CreateProjectModal from '../project/CreateProjectModal.jsx';
 import CreateTeamModal from '../modals/CreateTeamModal.jsx';
 import { useWorkspace } from '../../context/WorkspaceContext.jsx';
@@ -40,10 +40,31 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
     fetchTeams();
   }, [fetchTeams]);
 
+  // Lời mời đang chờ: nguồn chung cho badge sidebar và trang /invitations. Poll 30s là đủ, không cần WebSocket.
+  const [invitations, setInvitations] = useState([]);
+  const fetchInvitations = async () => {
+    try {
+      const res = await invitationApi.my();
+      setInvitations(Array.isArray(res?.data) ? res.data : []);
+    } catch {
+      setInvitations([]);
+    }
+  };
+  useEffect(() => {
+    fetchInvitations();
+    const timer = setInterval(fetchInvitations, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   const handleOpenCreateProject = (teamId = null) => {
     setSelectedTeamIdForProject(teamId);
     setIsCreateProjectModalOpen(true);
   };
+
+  // Chỉ trưởng nhóm (myRole LEADER, owner cũng là LEADER) hoặc Global ADMIN mới được tạo dự án; backend chặn lại lần nữa.
+  const isSystemAdmin = Boolean(currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN'));
+  const leaderTeams = isSystemAdmin ? teams : teams.filter((t) => t.myRole === 'LEADER');
+  const canCreateProject = isSystemAdmin || leaderTeams.length > 0;
 
   // Deep-link vào workspace mình không thuộc: hiện trạng thái rõ ràng, thay vì
   // sidebar rỗng kèm một loạt request lỗi.
@@ -108,6 +129,7 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
         loading={loadingTeams}
         onOpenCreateTeam={() => setIsCreateTeamModalOpen(true)}
         onOpenCreateProject={handleOpenCreateProject}
+        invitationCount={invitations.length}
         currentUser={currentUser}
         onLogout={onLogout}
       />
@@ -136,6 +158,12 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
           <Outlet
             context={{
               teams,
+              leaderTeams,
+              canCreateProject,
+              isSystemAdmin,
+              currentUser,
+              invitations,
+              refreshInvitations: fetchInvitations,
               refreshTeams: fetchTeams,
               onOpenCreateProject: handleOpenCreateProject,
               onOpenCreateTeam: () => setIsCreateTeamModalOpen(true),
@@ -157,7 +185,8 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
       <CreateProjectModal
         isOpen={isCreateProjectModalOpen}
         onClose={() => setIsCreateProjectModalOpen(false)}
-        teams={teams}
+        teams={leaderTeams}
+        allowPersonal={isSystemAdmin}
         defaultTeamId={selectedTeamIdForProject}
         onProjectCreated={() => {
           fetchTeams();

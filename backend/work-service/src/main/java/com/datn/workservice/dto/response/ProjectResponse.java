@@ -34,4 +34,7 @@ public class ProjectResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime deletedAt;
+
+    /** Vai trò của người dùng hiện tại trong dự án (ADMINISTRATOR / MEMBER / VIEWER), null nếu không xác định. */
+    private String myRole;
 }

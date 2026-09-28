@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, NavLink, Outlet } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useOutletContext, NavLink, Outlet } from 'react-router-dom';
 import {
   FolderKanban,
   Kanban,
@@ -15,21 +15,26 @@ import {
   MoreHorizontal,
   Link2,
   SlidersHorizontal,
-  Plus
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi, sprintApi } from '../api.js';
 import { useProjectPermission } from '../hooks/useProjectPermission.js';
 import { ProjectProvider } from '../context/ProjectContext.jsx';
 import { isScrumProject } from '../utils/projectType.js';
+import { wsPath } from '../utils/workspacePath.js';
 import CreateWorkItemModal from '../components/items/CreateWorkItemModal.jsx';
 import WorkItemDetailModal from '../components/items/WorkItemDetailModal.jsx';
+import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
+import AccessDenied from '../components/common/AccessDenied.jsx';
 
 export default function ProjectDetailPage() {
-  const { projectId } = useParams();
+  const { projectId, workspaceId } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [errorStatus, setErrorStatus] = useState(null); // 403 / 404 từ GET /projects/{id}
   const [isStarred, setIsStarred] = useState(false);
   const [members, setMembers] = useState([]);
   const [sprints, setSprints] = useState([]);
@@ -41,15 +46,42 @@ export default function ProjectDetailPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
 
-  const { isAdmin, canCreateIssue, canManageSprint, permissions } = useProjectPermission(projectId);
+  const outletContext = useOutletContext() || {};
+  const currentUser = outletContext.currentUser;
 
-  const fetchProject = async () => {
+  // Project Action Menu & Delete Modal State
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const actionMenuRef = useRef(null);
+
+  const { isAdmin, canCreateIssue, canManageSprint, permissions, forbidden, notFound } = useProjectPermission(projectId);
+
+  const isSystemAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN');
+  const isProjectLead = !!(currentUser && project?.leadUserId === currentUser.id);
+  const isProjectCreator = !!(currentUser && project?.createdBy === currentUser.id);
+  const canDelete = isAdmin || isSystemAdmin || isProjectLead || isProjectCreator;
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target)) {
+        setIsActionMenuOpen(false);
+      }
+    };
+    if (isActionMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isActionMenuOpen]);
+
+  const fetchProject = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       const [projRes, membersRes, sprintRes] = await Promise.all([
-        projectApi.getById(projectId),
-        projectApi.getMembers(projectId).catch(() => null),
-        sprintApi.listByProject(projectId).catch(() => null),
+        projectApi.getById(projectId, { skipErrorToast: true }),
+        projectApi.getMembers(projectId, { skipErrorToast: true }).catch(() => null),
+        sprintApi.listByProject(projectId, undefined, { skipErrorToast: true }).catch(() => null),
       ]);
       if (projRes && projRes.data) {
         setProject(projRes.data);
@@ -61,9 +93,13 @@ export default function ProjectDetailPage() {
         setSprints(sprintRes.data);
       }
     } catch (err) {
-      console.warn('Could not load project detail:', err);
+      if (err?.status === 403 || err?.status === 404) {
+        setErrorStatus(err.status);
+      } else {
+        toast.error(err?.message || 'Không tải được thông tin dự án');
+      }
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
@@ -108,6 +144,10 @@ export default function ProjectDetailPage() {
     openCreateItem: handleOpenCreateItem,
   };
 
+  // Người ngoài dự án / dự án không tồn tại: thay toàn bộ nội dung bằng trang lỗi (không render khung trang + toast)
+  if (errorStatus === 404 || notFound) return <AccessDenied status={404} title="Không tìm thấy dự án" message="Dự án không tồn tại hoặc đã bị xóa." />;
+  if (errorStatus === 403 || forbidden) return <AccessDenied status={403} />;
+
   return (
     <div
       style={{
@@ -149,7 +189,7 @@ export default function ProjectDetailPage() {
             <FolderKanban size={14} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
-            <span>{project?.name || 'Project Details'}</span>
+            <span>{project?.name || 'Chi tiết dự án'}</span>
             {project?.key && (
               <span
                 style={{
@@ -180,19 +220,80 @@ export default function ProjectDetailPage() {
           >
             <Star size={15} fill={isStarred ? '#EAB308' : 'none'} />
           </button>
-          <button
-            style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#94A3B8',
-              padding: 2,
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <MoreHorizontal size={16} />
-          </button>
+          {canDelete && (
+            <div style={{ position: 'relative' }} ref={actionMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsActionMenuOpen(!isActionMenuOpen)}
+                style={{
+                  background: isActionMenuOpen ? '#F1F5F9' : 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: isActionMenuOpen ? '#0F172A' : '#94A3B8',
+                  padding: 4,
+                  borderRadius: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  transition: 'all 0.15s ease',
+                }}
+                title="Tùy chọn dự án"
+              >
+                <MoreHorizontal size={16} />
+              </button>
+
+              {isActionMenuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    marginTop: 6,
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 8,
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
+                    border: '1px solid #E2E8F0',
+                    minWidth: 200,
+                    zIndex: 50,
+                    overflow: 'hidden',
+                    padding: '4px',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      setIsDeleteModalOpen(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: 'none',
+                      backgroundColor: 'transparent',
+                      color: '#EF4444',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#FEF2F2';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <Trash2 size={14} color="#EF4444" />
+                    <span>Xóa dự án (Thùng rác)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -257,11 +358,11 @@ export default function ProjectDetailPage() {
         {/* Navigation Pills - dieu huong bang nested route de deep-link va nut Back hoat dong */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {[
-            { to: 'board', label: 'Active Board', icon: Kanban, visible: true },
-            { to: 'backlog', label: 'Backlog', icon: ListTodo, visible: isScrumProject(project) },
-            { to: 'reports', label: 'Reports', icon: BarChart3, visible: true },
-            { to: 'members', label: 'Members & Roles', icon: Users, visible: true },
-            { to: 'workflow', label: 'Workflow & Statuses', icon: GitBranch, visible: true },
+            { to: 'board', label: 'Bảng làm việc', icon: Kanban, visible: true },
+            { to: 'backlog', label: 'Danh sách tồn đọng', icon: ListTodo, visible: isScrumProject(project) },
+            { to: 'reports', label: 'Báo cáo', icon: BarChart3, visible: true },
+            { to: 'members', label: 'Thành viên & Vai trò', icon: Users, visible: true },
+            { to: 'workflow', label: 'Cấu hình Dự án', icon: Settings, visible: true },
           ]
             .filter((tab) => tab.visible)
             .map((tab) => {
@@ -296,7 +397,7 @@ export default function ProjectDetailPage() {
 
       {/* ─── Body Content: cac tab con render qua <Outlet/> ─── */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {loading ? (
+        {(loading && !project) ? (
           <div style={{ padding: 48, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
             Đang tải thông tin dự án...
           </div>
@@ -338,6 +439,16 @@ export default function ProjectDetailPage() {
         members={members}
         sprints={sprints}
         canManageSprint={canManageSprint || isAdmin}
+      />
+
+      {/* ─── Delete Project Modal ─── */}
+      <DeleteProjectModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        project={project}
+        onDeleted={() => {
+          navigate(wsPath(workspaceId, '/projects'));
+        }}
       />
     </div>
   );

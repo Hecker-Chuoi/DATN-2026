@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Layers, CalendarClock } from 'lucide-react';
+import { Search, Layers, CalendarClock, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useProjectContext } from '../context/ProjectContext.jsx';
 import { useBoardData } from '../hooks/useBoardData.js';
 import { boardApi, sprintApi } from '../api.js';
-import { SURFACE, typeToken } from '../constants/jiraTokens.js';
+import { SURFACE } from '../constants/jiraTokens.js';
+import { getTypeDisplayName, getStatusDisplayName } from '../constants/workConstants.js';
 import { boardTypeOf } from '../utils/projectType.js';
 import InteractiveBoard from '../components/boards/InteractiveBoard.jsx';
 import SprintStateBadge from '../components/sprints/SprintStateBadge.jsx';
 import CompleteSprintModal from '../components/sprints/CompleteSprintModal.jsx';
-
-const TYPE_FILTERS = ['ALL', 'EPIC', 'STORY', 'TASK', 'BUG', 'SUBTASK'];
 
 /**
  * Route /board. Tu chon bo cuc Scrum hay Kanban dua tren loai bang:
@@ -26,6 +25,7 @@ export default function ProjectBoardPage() {
   const [boardsLoading, setBoardsLoading] = useState(true);
   const [q, setQ] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [completeOpen, setCompleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [futureSprints, setFutureSprints] = useState([]);
@@ -57,8 +57,8 @@ export default function ProjectBoardPage() {
   }, [refreshKey, boardId, reload]);
 
   const filteredColumns = useMemo(
-    () => columns.map((c) => ({ ...c, items: c.items.filter((i) => matches(i, q, typeFilter)) })),
-    [columns, q, typeFilter]
+    () => columns.map((c) => ({ ...c, items: c.items.filter((i) => matches(i, q, typeFilter, statusFilter)) })),
+    [columns, q, typeFilter, statusFilter]
   );
 
   /** InteractiveBoard tra ve mang cot da cap nhat; ghi nguoc vao `cards` phang. */
@@ -89,6 +89,25 @@ export default function ProjectBoardPage() {
       </div>
     );
   }
+
+  // Loai cong viec lay tu chinh du an thay vi mang hardcode: du an co thể tuy bien loai.
+  const typeOptions = [
+    { key: 'ALL', label: 'Tất cả' },
+    ...(project?.workItemTypes || []).map((t) => ({
+      key: String(t.code || t.name || '').toUpperCase().replace('-', '_'),
+      label: getTypeDisplayName(t.code || t.name),
+    })),
+  ];
+
+  // So the theo tung trang thai, de nguoi dung biet loc ra bao nhieu truoc khi bam.
+  const statusCounts = new Map();
+  for (const col of columns) {
+    for (const it of col.items) {
+      if (it.statusName) statusCounts.set(it.statusName, (statusCounts.get(it.statusName) || 0) + 1);
+    }
+  }
+
+  const hasFilter = q || typeFilter !== 'ALL' || statusFilter !== 'ALL';
 
   const isScrum = boardTypeOf(project, data) === 'SCRUM' || data?.boardType === 'SCRUM';
   const sprint = data?.activeSprint;
@@ -136,12 +155,12 @@ export default function ProjectBoardPage() {
             style={{ width: '100%', padding: '6px 10px 6px 28px', borderRadius: 6, border: `1px solid ${SURFACE.border}`, fontSize: 13, outline: 'none', color: SURFACE.text }}
           />
         </div>
-        {TYPE_FILTERS.map((t) => {
-          const active = typeFilter === t;
+        {typeOptions.map((t) => {
+          const active = typeFilter === t.key;
           return (
             <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
+              key={t.key}
+              onClick={() => setTypeFilter(t.key)}
               style={{
                 padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: active ? 600 : 500,
                 cursor: 'pointer',
@@ -150,10 +169,39 @@ export default function ProjectBoardPage() {
                 color: active ? '#1D4ED8' : SURFACE.textMuted,
               }}
             >
-              {t === 'ALL' ? 'Tất cả' : typeToken(t).label}
+              {t.label}
             </button>
           );
         })}
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          style={{
+            padding: '6px 10px', borderRadius: 6, border: `1px solid ${SURFACE.border}`,
+            fontSize: 12, backgroundColor: '#FFFFFF', color: SURFACE.text, cursor: 'pointer',
+          }}
+        >
+          <option value="ALL">Mọi trạng thái</option>
+          {[...statusCounts.entries()].map(([name, count]) => (
+            <option key={name} value={name}>
+              {getStatusDisplayName(name)} ({count})
+            </option>
+          ))}
+        </select>
+
+        {hasFilter && (
+          <button
+            onClick={() => { setQ(''); setTypeFilter('ALL'); setStatusFilter('ALL'); }}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '5px 10px', borderRadius: 6, border: `1px solid ${SURFACE.border}`,
+              backgroundColor: '#FFFFFF', color: SURFACE.textMuted, fontSize: 12, cursor: 'pointer',
+            }}
+          >
+            <X size={12} /> Xoá lọc
+          </button>
+        )}
         {data?.swimlaneStrategy && (
           <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: SURFACE.textMuted }}>
             <Layers size={13} /> Phân luồng: {data.swimlaneStrategy}
@@ -198,10 +246,13 @@ export default function ProjectBoardPage() {
   );
 }
 
-function matches(item, q, typeFilter) {
+function matches(item, q, typeFilter, statusFilter) {
   if (typeFilter !== 'ALL') {
     const code = String(item.typeCode || item.typeName || '').toUpperCase().replace('-', '_');
     if (code !== typeFilter && code.replace('_', '') !== typeFilter) return false;
+  }
+  if (statusFilter && statusFilter !== 'ALL' && item.statusName !== statusFilter) {
+    return false;
   }
   if (q) {
     const n = q.trim().toLowerCase();

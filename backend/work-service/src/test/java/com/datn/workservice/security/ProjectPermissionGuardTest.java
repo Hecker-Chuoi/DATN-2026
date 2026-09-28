@@ -124,13 +124,39 @@ class ProjectPermissionGuardTest {
     }
 
     @Test
-    @DisplayName("Outsider user not in project has zero permissions")
+    @DisplayName("Outsider user not in project has zero permissions (deny by default, including PROJECT_VIEW)")
     void testOutsiderHasNoPermissions() {
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
         when(roleAssignmentRepository.findByProjectIdAndUserId(projectId, outsiderUserId)).thenReturn(List.of());
 
-        assertThat(projectMemberService.hasPermission(projectId, outsiderUserId, PermissionKey.PROJECT_VIEW)).isTrue();
+        assertThat(projectMemberService.hasPermission(projectId, outsiderUserId, PermissionKey.PROJECT_VIEW)).isFalse();
         assertThat(projectMemberService.hasPermission(projectId, outsiderUserId, PermissionKey.ISSUE_CREATE)).isFalse();
         assertThat(projectMemberService.hasPermission(projectId, outsiderUserId, PermissionKey.PROJECT_ADMIN)).isFalse();
+    }
+
+    @Test
+    @DisplayName("Any project member (e.g. VIEWER) can browse the project but cannot create issues")
+    void testViewerCanBrowseOnly() {
+        UUID viewerUserId = UUID.randomUUID();
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(roleAssignmentRepository.findByProjectIdAndUserId(projectId, viewerUserId)).thenReturn(List.of(
+                RoleAssignment.builder().projectId(projectId).userId(viewerUserId).roleId(viewerRole.getId()).build()
+        ));
+        when(projectRoleRepository.findById(viewerRole.getId())).thenReturn(Optional.of(viewerRole));
+        when(permissionSchemeEntryRepository.existsByProjectIdAndRoleIdAndPermissionKey(
+                projectId, viewerRole.getId(), PermissionKey.ISSUE_CREATE.name()
+        )).thenReturn(false);
+
+        assertThat(projectMemberService.hasPermission(projectId, viewerUserId, PermissionKey.PROJECT_VIEW)).isTrue();
+        assertThat(projectMemberService.hasPermission(projectId, viewerUserId, PermissionKey.ISSUE_CREATE)).isFalse();
+    }
+
+    @Test
+    @DisplayName("Soft-deleted project grants no permission to anyone but Global ADMIN (handled by guard)")
+    void testDeletedProjectDeniesAll() {
+        project.setDeletedAt(java.time.LocalDateTime.now());
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+
+        assertThat(projectMemberService.hasPermission(projectId, leadUserId, PermissionKey.PROJECT_VIEW)).isFalse();
     }
 }

@@ -567,7 +567,9 @@ public class BoardServiceImpl implements BoardService {
     // ───────────────────────────── helpers ─────────────────────────────
 
     private void seedDefaultColumns(Board board) {
-        List<Status> statuses = statusRepository.findAll();
+        // Tu V3, status thuoc ve tung du an. Phai loc theo projectId, neu khong cot cua bang
+        // nay se anh xa nham sang status cua du an khac (project_id NULL la status cu dung chung).
+        List<Status> statuses = statusRepository.findByProjectIdOrProjectIdIsNull(board.getProjectId());
         record Seed(String name, StatusCategory category) {}
         List<Seed> seeds = List.of(
                 new Seed("Cần làm", StatusCategory.TODO),

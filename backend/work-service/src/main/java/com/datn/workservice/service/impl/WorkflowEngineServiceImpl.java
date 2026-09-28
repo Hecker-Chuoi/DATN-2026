@@ -183,8 +183,10 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                         .toList();
                 if (!incompleteDescendants.isEmpty()) {
                     if (request != null && Boolean.TRUE.equals(request.getResolveAllSubtasks())) {
-                        List<Status> doneStatuses = statusRepository.findByCategory(StatusCategory.DONE);
-                        Status defaultDone = !doneStatuses.isEmpty() ? doneStatuses.get(0) : toStatus;
+                        List<Status> projectDoneStatuses = statusRepository.findByProjectId(workItem.getProjectId()).stream()
+                                .filter(s -> s.getCategory() == StatusCategory.DONE)
+                                .toList();
+                        Status defaultDone = !projectDoneStatuses.isEmpty() ? projectDoneStatuses.get(0) : toStatus;
                         for (WorkItem desc : incompleteDescendants) {
                             Status oldDescStatus = statusRepository.findById(desc.getStatusId()).orElse(null);
                             desc.setStatusId(defaultDone.getId());

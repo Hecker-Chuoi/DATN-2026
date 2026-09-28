@@ -30,23 +30,34 @@ public interface ProjectService {
     /**
      * Lists and filters projects within a workspace or team with pagination and search.
      *
-     * @param workspaceIds phạm vi workspace được phép xem. Controller có nhiệm vụ
-     *                     giải phạm vi này (một workspace đã xác minh quyền, hoặc
-     *                     toàn bộ workspace của người gọi). Danh sách rỗng cho ra
-     *                     trang trống.
+     * <p>Hai tầng lọc bổ sung cho nhau:
+     * <ul>
+     *   <li>{@code workspaceIds} — phạm vi workspace được phép xem. Controller giải
+     *       phạm vi này (một workspace đã xác minh quyền, hoặc toàn bộ workspace của
+     *       người gọi). Danh sách rỗng cho ra trang trống.</li>
+     *   <li>{@code includeAll} — false thì chỉ trả về dự án người dùng truy cập được
+     *       (member, lead hoặc người tạo); true dành cho Global ADMIN.</li>
+     * </ul>
      */
     PageResponse<ProjectResponse> getAllProjects(
             List<UUID> workspaceIds,
             UUID teamId,
             String search,
             Boolean isTemplate,
-            Pageable pageable
+            Pageable pageable,
+            UUID currentUserId,
+            boolean includeAll
     );
 
     /**
-     * Lists template projects.
+     * Lists template projects accessible to the current user.
      */
-    PageResponse<ProjectResponse> getTemplates(List<UUID> workspaceIds, Pageable pageable);
+    PageResponse<ProjectResponse> getTemplates(
+            List<UUID> workspaceIds,
+            Pageable pageable,
+            UUID currentUserId,
+            boolean includeAll
+    );
 
     /**
      * Updates an existing project.

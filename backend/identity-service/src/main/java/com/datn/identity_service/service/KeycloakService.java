@@ -54,8 +54,16 @@ public class KeycloakService {
      */
     public String createUser(String username, String password, String email,
             String firstName, String lastName) {
+        return createUser(username, password, email, firstName, lastName, true);
+    }
+
+    /**
+     * enabled = false: tài khoản chờ xác thực email (Keycloak từ chối đăng nhập cho tới khi {@link #activateVerifiedUser}).
+     */
+    public String createUser(String username, String password, String email,
+            String firstName, String lastName, boolean enabled) {
         // Init Object user of keycloak = userDetail
-        UserRepresentation user = buildUserRepresentation(username, email, firstName, lastName);
+        UserRepresentation user = buildUserRepresentation(username, email, firstName, lastName, enabled);
         // define what field is credential(password,...)
         CredentialRepresentation credential = buildPasswordCredential(password);
         user.setCredentials(Collections.singletonList(credential));
@@ -441,15 +449,32 @@ public class KeycloakService {
     }
 
     private UserRepresentation buildUserRepresentation(String username, String email,
-            String firstName, String lastName) {
+            String firstName, String lastName, boolean enabled) {
         UserRepresentation user = new UserRepresentation();
         user.setUsername(username);
         user.setEmail(email);
         user.setFirstName(firstName);
         user.setLastName(lastName);
-        user.setEnabled(true);
-        user.setEmailVerified(true);
+        user.setEnabled(enabled);
+        user.setEmailVerified(enabled);
         return user;
+    }
+
+    /**
+     * Sau khi người dùng bấm link xác thực email: bật tài khoản và đánh dấu email đã xác thực.
+     */
+    public void activateVerifiedUser(String keycloakUserId) {
+        try {
+            UserResource userResource = getRealmResource().users().get(keycloakUserId);
+            UserRepresentation user = userResource.toRepresentation();
+            user.setEnabled(true);
+            user.setEmailVerified(true);
+            userResource.update(user);
+            log.info("Activated Keycloak user '{}' after email verification", keycloakUserId);
+        } catch (Exception e) {
+            log.error("Failed to activate Keycloak user: {}", e.getMessage(), e);
+            throw new KeycloakException("Failed to activate user in Keycloak: " + e.getMessage());
+        }
     }
 
     private CredentialRepresentation buildPasswordCredential(String password) {

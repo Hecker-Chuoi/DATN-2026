@@ -156,7 +156,7 @@ export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
 
           <div>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-              Tên nhóm (Team Name) <span style={{ color: '#EF4444' }}>*</span>
+              Tên nhóm làm việc <span style={{ color: '#EF4444' }}>*</span>
             </label>
             <input
               type="text"
@@ -165,7 +165,7 @@ export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
                 setName(e.target.value);
                 if (error) setError('');
               }}
-              placeholder="Ví dụ: Backend Core Team, Frontend Squad, UI/UX..."
+              placeholder="Ví dụ: Nhóm Phụ trách Nền tảng, Nhóm Giao diện người dùng..."
               autoFocus
               style={{
                 width: '100%',

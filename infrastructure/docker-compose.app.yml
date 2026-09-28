@@ -5,7 +5,7 @@ services:
   # ─────────────────────────────────────────────
   identity-service:
     build:
-      context: ..
+      context: ../backend
       dockerfile: identity-service/Dockerfile
     container_name: identity-service
     restart: unless-stopped
@@ -36,7 +36,7 @@ services:
   # ─────────────────────────────────────────────
   api-gateway:
     build:
-      context: ..
+      context: ../backend
       dockerfile: api-gateway/Dockerfile
     container_name: api-gateway
     restart: unless-stopped
@@ -62,7 +62,7 @@ services:
   # ─────────────────────────────────────────────
   frontend:
     build:
-      context: ../../frontend
+      context: ../frontend
       dockerfile: Dockerfile
     container_name: frontend-app
     restart: unless-stopped

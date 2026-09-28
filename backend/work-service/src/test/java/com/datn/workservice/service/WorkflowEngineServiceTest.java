@@ -207,7 +207,7 @@ class WorkflowEngineServiceTest {
                 .fromStatusId(todoStatusId)
                 .toStatusId(inProgressStatusId)
                 .name("Start Progress")
-                .conditionsConfig(List.of(condition))
+                .conditionsConfig(List.of(Map.of("type", condition.getType())))
                 .build();
 
         when(workflowTransitionRepository.findByWorkflowId(workflowId)).thenReturn(List.of(t1));
@@ -277,7 +277,7 @@ class WorkflowEngineServiceTest {
                 .fromStatusId(inProgressStatusId)
                 .toStatusId(doneStatusId)
                 .name("Approve & Done")
-                .validatorsConfig(List.of(validatorConfig))
+                .validatorsConfig(List.of(Map.of("type", validatorConfig.getType())))
                 .build();
 
         when(workflowTransitionRepository.findById(transitionId)).thenReturn(Optional.of(transition));
@@ -350,7 +350,7 @@ class WorkflowEngineServiceTest {
                 .fromStatusId(todoStatusId)
                 .toStatusId(inProgressStatusId)
                 .name("Start Progress")
-                .conditionsConfig(List.of(condition))
+                .conditionsConfig(List.of(Map.of("type", condition.getType())))
                 .build();
 
         when(workflowTransitionRepository.findById(transitionId)).thenReturn(Optional.of(transition));
@@ -426,7 +426,6 @@ class WorkflowEngineServiceTest {
         when(workflowTransitionRepository.findById(transitionId)).thenReturn(Optional.of(transition));
         when(statusRepository.findById(doneStatusId)).thenReturn(Optional.of(doneStatus));
         when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
-        when(statusRepository.findByCategory(StatusCategory.DONE)).thenReturn(List.of(doneStatus));
         when(workItemRepository.save(any(WorkItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UUID subtaskId = UUID.randomUUID();
@@ -478,7 +477,6 @@ class WorkflowEngineServiceTest {
         when(workflowTransitionRepository.findById(transitionId)).thenReturn(Optional.of(transition));
         when(statusRepository.findById(doneStatusId)).thenReturn(Optional.of(doneStatus));
         when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
-        when(statusRepository.findByCategory(StatusCategory.DONE)).thenReturn(List.of(doneStatus));
         when(workItemRepository.save(any(WorkItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UUID storyId = UUID.randomUUID();

@@ -48,20 +48,20 @@ export function validateProjectForm(data = {}) {
   const errors = {};
 
   if (!data.name || !data.name.trim()) {
-    errors.name = 'Project name is required';
+    errors.name = 'Tên dự án là bắt buộc';
   } else if (data.name.trim().length > 255) {
-    errors.name = 'Project name cannot exceed 255 characters';
+    errors.name = 'Tên dự án không được vượt quá 255 ký tự';
   }
 
   if (!data.key || !data.key.trim()) {
-    errors.key = 'Project key is required';
+    errors.key = 'Mã dự án là bắt buộc';
   } else {
     const trimmedKey = data.key.trim().toUpperCase();
     if (trimmedKey.length < 2 || trimmedKey.length > 10) {
-      errors.key = 'Project key must be between 2 and 10 characters';
+      errors.key = 'Mã dự án phải từ 2 đến 10 ký tự';
     } else if (!PROJECT_KEY_REGEX.test(trimmedKey)) {
       errors.key =
-        'Project key must start with an uppercase letter and contain only uppercase letters, numbers, and underscores';
+        'Mã dự án phải bắt đầu bằng chữ cái viết hoa và chỉ chứa chữ cái viết hoa, chữ số và dấu gạch dưới';
     }
   }
 
@@ -69,12 +69,12 @@ export function validateProjectForm(data = {}) {
     const start = new Date(data.startDate);
     const end = new Date(data.endDate);
     if (!isNaN(start) && !isNaN(end) && start > end) {
-      errors.endDate = 'End date cannot be earlier than start date';
+      errors.endDate = 'Ngày kết thúc không thể trước ngày bắt đầu';
     }
   }
 
   if (data.iconUrl && data.iconUrl.length > 500) {
-    errors.iconUrl = 'Icon URL cannot exceed 500 characters';
+    errors.iconUrl = 'Đường dẫn biểu tượng không được vượt quá 500 ký tự';
   }
 
   return {
@@ -92,25 +92,25 @@ export function validateCloneProjectForm(data = {}) {
   const errors = {};
 
   if (!data.name || !data.name.trim()) {
-    errors.name = 'New project name is required';
+    errors.name = 'Tên dự án mới là bắt buộc';
   } else if (data.name.trim().length > 255) {
-    errors.name = 'Project name cannot exceed 255 characters';
+    errors.name = 'Tên dự án mới không được vượt quá 255 ký tự';
   }
 
   if (!data.key || !data.key.trim()) {
-    errors.key = 'New project key is required';
+    errors.key = 'Mã dự án mới là bắt buộc';
   } else {
     const trimmedKey = data.key.trim().toUpperCase();
     if (trimmedKey.length < 2 || trimmedKey.length > 10) {
-      errors.key = 'Project key must be between 2 and 10 characters';
+      errors.key = 'Mã dự án phải từ 2 đến 10 ký tự';
     } else if (!PROJECT_KEY_REGEX.test(trimmedKey)) {
       errors.key =
-        'Project key must start with an uppercase letter and contain only uppercase letters, numbers, and underscores';
+        'Mã dự án phải bắt đầu bằng chữ cái viết hoa và chỉ chứa chữ cái viết hoa, chữ số và dấu gạch dưới';
     }
   }
 
   if (!data.startDate) {
-    errors.startDate = 'Start date is required for timeline shifting';
+    errors.startDate = 'Ngày bắt đầu là bắt buộc để tịnh tiến mốc thời gian';
   }
 
   return {
@@ -128,9 +128,9 @@ export function validateTeamForm(data = {}) {
   const errors = {};
 
   if (!data.name || !data.name.trim()) {
-    errors.name = 'Team name is required';
+    errors.name = 'Tên nhóm là bắt buộc';
   } else if (data.name.trim().length > 255) {
-    errors.name = 'Team name cannot exceed 255 characters';
+    errors.name = 'Tên nhóm không được vượt quá 255 ký tự';
   }
 
   return {
@@ -148,28 +148,28 @@ export function validateWorkItemTypeForm(data = {}) {
   const errors = {};
 
   if (!data.name || !data.name.trim()) {
-    errors.name = 'Work item type name is required';
+    errors.name = 'Tên loại công việc là bắt buộc';
   } else if (data.name.trim().length > 100) {
-    errors.name = 'Work item type name cannot exceed 100 characters';
+    errors.name = 'Tên loại công việc không được vượt quá 100 ký tự';
   }
 
   if (!data.code || !data.code.trim()) {
-    errors.code = 'Work item type code is required';
+    errors.code = 'Mã loại công việc là bắt buộc';
   } else if (data.code.trim().length > 50) {
-    errors.code = 'Work item type code cannot exceed 50 characters';
+    errors.code = 'Mã loại công việc không được vượt quá 50 ký tự';
   }
 
   if (data.hierarchyLevel === undefined || data.hierarchyLevel === null) {
-    errors.hierarchyLevel = 'Hierarchy level is required';
+    errors.hierarchyLevel = 'Cấp bậc phân cấp là bắt buộc';
   } else {
     const level = Number(data.hierarchyLevel);
     if (![-1, 0, 1].includes(level)) {
-      errors.hierarchyLevel = 'Hierarchy level must be -1 (Subtask), 0 (Standard), or 1 (Epic)';
+      errors.hierarchyLevel = 'Cấp bậc phân cấp phải là -1 (Nhiệm vụ con), 0 (Tiêu chuẩn), hoặc 1 (Hạng mục lớn)';
     }
   }
 
   if (data.colorHex && !HEX_COLOR_REGEX.test(data.colorHex.trim())) {
-    errors.colorHex = 'Color must be a valid HEX color code (e.g. #3B82F6 or #FFF)';
+    errors.colorHex = 'Mã màu phải đúng định dạng HEX (ví dụ: #3B82F6 hoặc #FFF)';
   }
 
   return {

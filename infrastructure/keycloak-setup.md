@@ -1,6 +1,6 @@
 # Hướng dẫn Cài đặt & Cấu hình Keycloak (datn-realm)
 
-Tài liệu này hướng dẫn cách cấu hình Keycloak bằng file export có sẵn: [`realm-export_08082026.json`](file:///d:/DATN-2026/backend/environment/keycloak/realm-export_08082026.json).
+Tài liệu này hướng dẫn cách cấu hình Keycloak bằng file export có sẵn: [`realm-export_08082026.json`](file:///d:/DATN-2026/infrastructure/keycloak/realm-export_08082026.json).
 
 ---
 
@@ -11,7 +11,7 @@ Tài liệu này hướng dẫn cách cấu hình Keycloak bằng file export c�
   - **Username**: `admin`
   - **Password**: `admin`
 - **Tên Realm dự án**: `datn-realm`
-- **File cấu hình Realm**: `backend/environment/keycloak/realm-export_08082026.json`
+- **File cấu hình Realm**: `infrastructure/keycloak/realm-export_08082026.json`
 
 ---
 

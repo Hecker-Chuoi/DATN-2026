@@ -13,28 +13,50 @@ import {
   Layers,
   User,
   Hash,
-  FileText
+  FileText,
+  Zap,
+  GitCommit,
+  FileCheck,
+  Sliders,
+  AlertTriangle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workItemApi, projectApi } from '../../api.js';
 import MemberSelect from '../common/MemberSelect.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import { PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
+import { getTypeDisplayName } from '../../constants/workConstants.js';
 
 const TYPE_CONFIGS = {
-  EPIC: { label: 'Epic', icon: Bookmark, color: '#6554C0', bgColor: '#F3F0FF', level: 1 },
-  STORY: { label: 'Story', icon: Bookmark, color: '#36B37E', bgColor: '#E3FCEF', level: 0 },
-  TASK: { label: 'Task', icon: CheckSquare, color: '#0052CC', bgColor: '#DEEBFF', level: 0 },
-  BUG: { label: 'Bug', icon: CircleDot, color: '#E5493A', bgColor: '#FFEBE6', level: 0 },
-  SUBTASK: { label: 'Sub-task', icon: GitCommitHorizontal, color: '#4C9AFF', bgColor: '#E6FCFF', level: -1 },
+  EPIC: { label: 'Hạng mục lớn', icon: Zap, color: '#9333EA', bgColor: '#F5F3FF', level: 1 },
+  STORY: { label: 'Câu chuyện người dùng', icon: Bookmark, color: '#10B981', bgColor: '#ECFDF5', level: 0 },
+  TASK: { label: 'Nhiệm vụ', icon: CheckSquare, color: '#3B82F6', bgColor: '#EFF6FF', level: 0 },
+  BUG: { label: 'Lỗi phần mềm', icon: AlertCircle, color: '#EF4444', bgColor: '#FEF2F2', level: 0 },
+  SUBTASK: { label: 'Nhiệm vụ con', icon: GitCommit, color: '#06B6D4', bgColor: '#ECFEFF', level: -1 },
+};
+
+const renderTypeIcon = (iconName, color = '#2563EB', size = 14) => {
+  switch (iconName) {
+    case 'Zap': return <Zap size={size} color={color} />;
+    case 'Bookmark': return <Bookmark size={size} color={color} />;
+    case 'CheckSquare': return <CheckSquare size={size} color={color} />;
+    case 'Bug': return <AlertCircle size={size} color={color} />;
+    case 'GitCommit': return <GitCommit size={size} color={color} />;
+    case 'Layers': return <Layers size={size} color={color} />;
+    case 'Sparkles': return <Sparkles size={size} color={color} />;
+    case 'FileCheck': return <FileCheck size={size} color={color} />;
+    case 'Sliders': return <Sliders size={size} color={color} />;
+    case 'AlertTriangle': return <AlertTriangle size={size} color={color} />;
+    default: return <CheckSquare size={size} color={color} />;
+  }
 };
 
 const PRIORITIES = [
-  { value: 'HIGHEST', label: 'Highest', icon: ArrowUp, color: '#DE350B' },
-  { value: 'HIGH', label: 'High', icon: ArrowUp, color: '#FF5630' },
-  { value: 'MEDIUM', label: 'Medium', icon: Equal, color: '#FFAB00' },
-  { value: 'LOW', label: 'Low', icon: ArrowDown, color: '#36B37E' },
-  { value: 'LOWEST', label: 'Lowest', icon: ArrowDown, color: '#6B778C' },
+  { value: 'HIGHEST', label: 'Khẩn cấp', icon: ArrowUp, color: '#DE350B' },
+  { value: 'HIGH', label: 'Cao', icon: ArrowUp, color: '#FF5630' },
+  { value: 'MEDIUM', label: 'Trung bình', icon: Equal, color: '#FFAB00' },
+  { value: 'LOW', label: 'Thấp', icon: ArrowDown, color: '#36B37E' },
+  { value: 'LOWEST', label: 'Rất thấp', icon: ArrowDown, color: '#6B778C' },
 ];
 
 export default function CreateWorkItemModal({
@@ -110,18 +132,88 @@ export default function CreateWorkItemModal({
   if (!isOpen) return null;
 
   const currentLevel = selectedType?.hierarchyLevel ?? 0;
-  const isEpic = currentLevel === 1 || selectedType?.code === 'EPIC';
-  const isSubtask = currentLevel === -1 || selectedType?.code === 'SUBTASK' || selectedType?.isSubtask;
+  const isEpic = currentLevel === 1;
+  const isSubtask = currentLevel === -1 || Boolean(selectedType?.isSubtask);
+
+  // Phân loại types theo 3 cấp bậc
+  const epicTypes = types.filter((t) => t.hierarchyLevel === 1 || t.code === 'EPIC');
+  const subtaskTypes = types.filter((t) => t.hierarchyLevel === -1 || t.code === 'SUBTASK' || Boolean(t.isSubtask));
+  const standardTypes = types.filter(
+    (t) => !epicTypes.some((ep) => ep.id === t.id) && !subtaskTypes.some((sub) => sub.id === t.id)
+  );
+
+  const renderTypeButton = (t) => {
+    const isSelected = selectedType?.id === t.id;
+    const conf = TYPE_CONFIGS[t.code];
+    const color = t.colorHex || conf?.color || '#2563EB';
+    const bgColor = isSelected ? (conf?.bgColor || `${color}1A`) : '#FFFFFF';
+    const iconName = t.iconName || (t.hierarchyLevel === 1 || t.code === 'EPIC' ? 'Zap' : t.hierarchyLevel === -1 || t.code === 'SUBTASK' || t.isSubtask ? 'GitCommit' : t.code === 'BUG' ? 'Bug' : 'CheckSquare');
+
+    const isEp = t.hierarchyLevel === 1 || t.code === 'EPIC';
+    const isSub = t.hierarchyLevel === -1 || t.code === 'SUBTASK' || Boolean(t.isSubtask);
+    const levelBadgeText = isEp ? 'Cấp 1' : isSub ? 'Cấp -1' : 'Cấp 0';
+
+    return (
+      <button
+        key={t.id}
+        type="button"
+        onClick={() => {
+          setSelectedType(t);
+          if (isEp) {
+            setParentId('');
+          } else if (isSub) {
+            const currParent = existingItems.find((it) => it.id === parentId);
+            if (currParent && currParent.hierarchyLevel === 1) {
+              setParentId('');
+            }
+          }
+          if (errors.typeId) setErrors((prev) => ({ ...prev, typeId: undefined }));
+        }}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '6px 12px',
+          borderRadius: 8,
+          border: `1.5px solid ${isSelected ? color : '#E2E8F0'}`,
+          backgroundColor: bgColor,
+          color: isSelected ? color : '#334155',
+          fontSize: 13,
+          fontWeight: isSelected ? 700 : 500,
+          cursor: 'pointer',
+          transition: 'all 0.15s ease',
+          boxShadow: isSelected ? `0 1px 3px ${color}33` : 'none',
+        }}
+      >
+        {renderTypeIcon(iconName, isSelected ? color : '#64748B', 14)}
+        <span>{getTypeDisplayName(t.name || conf?.label || t.code)}</span>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            padding: '1px 5px',
+            borderRadius: 4,
+            backgroundColor: isSelected ? `${color}20` : '#F1F5F9',
+            color: isSelected ? color : '#64748B',
+            border: `1px solid ${isSelected ? `${color}40` : '#E2E8F0'}`,
+            letterSpacing: '0.02em',
+          }}
+        >
+          {levelBadgeText}
+        </span>
+      </button>
+    );
+  };
 
   // Lọc danh sách cha hợp lệ theo 3-level hierarchy
   const availableParents = existingItems.filter((it) => {
     if (isSubtask) {
-      // Subtask cần cha là Story/Task/Bug (Level 0)
-      return it.hierarchyLevel === 0 || (!it.isSubtask && it.typeCode !== 'EPIC');
+      // Subtask cần cha là Standard Issue (Level 0)
+      return it.hierarchyLevel === 0;
     }
     if (!isEpic) {
-      // Story/Task/Bug có thể gắn vào Epic (Level 1)
-      return it.hierarchyLevel === 1 || it.typeCode === 'EPIC';
+      // Standard Issue (Level 0) có thể gắn vào Epic (Level 1)
+      return it.hierarchyLevel === 1;
     }
     return false;
   });
@@ -139,17 +231,17 @@ export default function CreateWorkItemModal({
       errs.typeId = 'Vui lòng chọn loại công việc';
     }
     if (isSubtask && !parentId) {
-      errs.parentId = 'Sub-task bắt buộc phải có công việc cha (Story/Task/Bug)';
+      errs.parentId = 'Nhiệm vụ con bắt buộc phải có công việc cha';
     }
     if (isEpic && parentId) {
-      errs.parentId = 'Epic không thể có công việc cha';
+      errs.parentId = 'Hạng mục lớn không thể có công việc cha';
     }
     if (storyPoints && !isSubtask && !isEpic) {
       const spNum = parseFloat(storyPoints);
       if (isNaN(spNum) || spNum < 0) {
-        errs.storyPoints = 'Điểm Story Points không thể âm';
+        errs.storyPoints = 'Điểm ước lượng không thể âm';
       } else if (spNum > 999.99) {
-        errs.storyPoints = 'Điểm Story Points tối đa 999.99';
+        errs.storyPoints = 'Điểm ước lượng tối đa 999.99';
       }
     }
 
@@ -287,52 +379,160 @@ export default function CreateWorkItemModal({
         >
           {/* Issue Type Selector */}
           <div>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-              Loại công việc (Issue Type) <span style={{ color: '#EF4444' }}>*</span>
-            </label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {types.map((t) => {
-                const isSelected = selectedType?.id === t.id;
-                const conf = TYPE_CONFIGS[t.code] || {
-                  label: t.name,
-                  icon: Bookmark,
-                  color: t.colorHex || '#2563EB',
-                  bgColor: '#EFF6FF',
-                };
-                const IconComponent = conf.icon;
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: '#334155', margin: 0 }}>
+                Loại công việc <span style={{ color: '#EF4444' }}>*</span>
+              </label>
+              <span style={{ fontSize: 11, color: '#64748B' }}>
+                Phân cấp 3 tầng (Cấp 1, Cấp 0, Cấp -1)
+              </span>
+            </div>
 
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedType(t);
-                      if (t.hierarchyLevel === 1 || t.code === 'EPIC') {
-                        setParentId('');
-                      }
-                      if (errors.typeId) setErrors((prev) => ({ ...prev, typeId: undefined }));
-                    }}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+                backgroundColor: '#F8FAFC',
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: '1px solid #E2E8F0',
+              }}
+            >
+              {/* Group Cấp 1: Epic */}
+              {epicTypes.length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        color: '#7C3AED',
+                        backgroundColor: '#F5F3FF',
+                        padding: '1px 7px',
+                        borderRadius: 4,
+                        border: '1px solid #DDD6FE',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <Zap size={10} /> Cấp 1 • Hạng mục lớn
+                    </span>
+                    <span style={{ fontSize: 11, color: '#94A3B8' }}>Cấp cao nhất, không có cha</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {epicTypes.map(renderTypeButton)}
+                  </div>
+                </div>
+              )}
+
+              {/* Group Cấp 0: Standard */}
+              {standardTypes.length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        color: '#2563EB',
+                        backgroundColor: '#EFF6FF',
+                        padding: '1px 7px',
+                        borderRadius: 4,
+                        border: '1px solid #BFDBFE',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <CheckSquare size={10} /> Cấp 0 • Tiêu chuẩn
+                    </span>
+                    <span style={{ fontSize: 11, color: '#94A3B8' }}>Công việc chính, có thể gắn vào Hạng mục lớn</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {standardTypes.map(renderTypeButton)}
+                  </div>
+                </div>
+              )}
+
+              {/* Group Cấp -1: Subtask */}
+              {subtaskTypes.length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        color: '#0891B2',
+                        backgroundColor: '#ECFEFF',
+                        padding: '1px 7px',
+                        borderRadius: 4,
+                        border: '1px solid #A5F3FC',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <GitCommit size={10} /> Cấp -1 • Nhiệm vụ con
+                    </span>
+                    <span style={{ fontSize: 11, color: '#94A3B8' }}>Phụ thuộc, bắt buộc có cha Cấp 0</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {subtaskTypes.map(renderTypeButton)}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Selected Type Context Notice */}
+            {selectedType && (
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: '7px 12px',
+                  borderRadius: 6,
+                  backgroundColor: isEpic ? '#FAF5FF' : isSubtask ? '#F0FDFA' : '#F0F9FF',
+                  border: `1px solid ${isEpic ? '#E9D5FF' : isSubtask ? '#CCFBF1' : '#BAE6FD'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: 12,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: '#64748B' }}>Đang chọn:</span>
+                  <strong style={{ color: isEpic ? '#7C3AED' : isSubtask ? '#0D9488' : '#0284C7' }}>
+                    {getTypeDisplayName(selectedType.name || selectedType.code)}
+                  </strong>
+                  <span
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '6px 12px',
-                      borderRadius: 8,
-                      border: `1.5px solid ${isSelected ? conf.color : '#E2E8F0'}`,
-                      backgroundColor: isSelected ? conf.bgColor : '#FFFFFF',
-                      color: isSelected ? conf.color : '#475569',
-                      fontSize: 13,
-                      fontWeight: isSelected ? 700 : 500,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: '1px 6px',
+                      borderRadius: 4,
+                      backgroundColor: isEpic ? '#7C3AED' : isSubtask ? '#0D9488' : '#0284C7',
+                      color: '#FFFFFF',
                     }}
                   >
-                    <IconComponent size={14} color={conf.color} />
-                    <span>{t.name || conf.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+                    {isEpic ? 'Cấp 1 (Hạng mục lớn)' : isSubtask ? 'Cấp -1 (Nhiệm vụ con)' : 'Cấp 0 (Tiêu chuẩn)'}
+                  </span>
+                </div>
+                <span style={{ color: '#64748B', fontSize: 11, fontStyle: 'italic' }}>
+                  {isEpic
+                    ? 'Không có công việc cha'
+                    : isSubtask
+                    ? 'Bắt buộc chọn công việc cha (Cấp 0)'
+                    : 'Tùy chọn gắn vào Hạng mục lớn cha'}
+                </span>
+              </div>
+            )}
+
             {errors.typeId && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#EF4444', fontSize: 12, marginTop: 4 }}>
                 <AlertCircle size={13} />
@@ -377,7 +577,7 @@ export default function CreateWorkItemModal({
           {/* Parent Issue Selector (Controlled by 3-Level Hierarchy) */}
           <div>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-              Công việc cha (Parent Issue) {isSubtask && <span style={{ color: '#EF4444' }}>*</span>}
+              Công việc cha {isSubtask && <span style={{ color: '#EF4444' }}>*</span>}
             </label>
             {isEpic ? (
               <div
@@ -391,7 +591,7 @@ export default function CreateWorkItemModal({
                   border: '1px dashed #CBD5E1',
                 }}
               >
-                ℹ️ Epic là cấp cao nhất (Level 1) và không thể trực thuộc công việc khác.
+                ℹ️ Hạng mục lớn là cấp cao nhất (Cấp 1) và không thể trực thuộc công việc khác.
               </div>
             ) : (
               <select
@@ -413,11 +613,11 @@ export default function CreateWorkItemModal({
                 }}
               >
                 <option value="">
-                  {isSubtask ? '-- Bắt buộc chọn Story/Task/Bug cha --' : '-- Không có (Độc lập / Thuộc Backlog) --'}
+                  {isSubtask ? '-- Bắt buộc chọn công việc cha --' : '-- Không có (Độc lập / Danh sách tồn đọng) --'}
                 </option>
                 {availableParents.map((p) => (
                   <option key={p.id} value={p.id}>
-                    [{p.code}] {p.summary} ({p.typeName || p.typeCode})
+                    [{p.code}] {p.summary} ({getTypeDisplayName(p.typeName || p.typeCode)})
                   </option>
                 ))}
               </select>
@@ -433,7 +633,7 @@ export default function CreateWorkItemModal({
           {/* Priority Selection Pills */}
           <div>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
-              Mức độ ưu tiên (Priority)
+              Mức độ ưu tiên
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {Object.keys(PRIORITY_CONFIG).map((pKey) => {
@@ -475,7 +675,7 @@ export default function CreateWorkItemModal({
             {/* Due Date */}
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                Hạn chót (Due Date)
+                Hạn chót
               </label>
               <input
                 type="date"
@@ -498,7 +698,7 @@ export default function CreateWorkItemModal({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', margin: 0 }}>
-                  Story Points
+                  Điểm ước lượng
                 </label>
                 <StoryPointsHelpTooltip align="center" />
               </div>
@@ -507,7 +707,7 @@ export default function CreateWorkItemModal({
                   <input
                     type="text"
                     disabled
-                    value="N/A"
+                    value="Không áp dụng"
                     style={{
                       width: '100%',
                       padding: '7px 10px',
@@ -519,10 +719,10 @@ export default function CreateWorkItemModal({
                       cursor: 'not-allowed',
                       boxSizing: 'border-box',
                     }}
-                    title={isEpic ? "Epic tính Story Points cuộn từ các Story con (Roll-up)" : "Sub-task không tính Story Points trực tiếp (ước lượng bằng Thời gian)"}
+                    title={isEpic ? "Hạng mục lớn tự động tính điểm từ các công việc con" : "Nhiệm vụ con không tính điểm trực tiếp"}
                   />
                   <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                    {isEpic ? 'Epic tự động tính điểm từ các Story con' : 'Sub-task không tính Story Points trực tiếp'}
+                    {isEpic ? 'Hạng mục lớn tự động tính điểm từ các công việc con' : 'Nhiệm vụ con không tính điểm trực tiếp'}
                   </div>
                 </div>
               ) : (
@@ -568,7 +768,7 @@ export default function CreateWorkItemModal({
                 members={members}
                 value={assigneeId}
                 onChange={(newId) => setAssigneeId(newId)}
-                placeholder="Chưa gán (Unassigned)"
+                placeholder="Chưa phân công"
               />
             </div>
 
@@ -613,11 +813,11 @@ export default function CreateWorkItemModal({
           {/* Description */}
           <div>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-              Mô tả chi tiết (Markdown)
+              Mô tả chi tiết
             </label>
             <textarea
               rows={3}
-              placeholder="Mô tả tiêu chí nghiệm thu (Acceptance Criteria), các bước tái hiện..."
+              placeholder="Mô tả tiêu chí nghiệm thu, các bước thực hiện..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               style={{

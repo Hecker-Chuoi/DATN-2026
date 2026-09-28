@@ -4,6 +4,8 @@ import com.datn.common.dto.ApiResponse;
 import com.datn.workservice.dto.request.CreateWorkItemCommentRequest;
 import com.datn.workservice.dto.request.UpdateWorkItemCommentRequest;
 import com.datn.workservice.dto.response.WorkItemCommentResponse;
+import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.security.RequireTaskPermission;
 import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.service.WorkItemCommentService;
 import jakarta.validation.Valid;
@@ -11,8 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,9 +24,19 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkItemCommentController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET    /api/v1/work/items/{itemId}/comments | /work-items/{itemId}/comments                 : Lấy danh sách bình luận (dạng cây)
+     * POST   /api/v1/work/items/{itemId}/comments | /work-items/{itemId}/comments                 : Thêm bình luận mới
+     * PUT    /api/v1/work/items/{itemId}/comments/{commentId} | /work-items/{itemId}/comments/{commentId} : Cập nhật bình luận
+     * DELETE /api/v1/work/items/{itemId}/comments/{commentId} | /work-items/{itemId}/comments/{commentId} : Xóa bình luận
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final WorkItemCommentService commentService;
 
     @GetMapping({"/items/{itemId}/comments", "/work-items/{itemId}/comments"})
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<List<WorkItemCommentResponse>>> getComments(
             @PathVariable("itemId") UUID workItemId
     ) {
@@ -35,50 +45,43 @@ public class WorkItemCommentController {
     }
 
     @PostMapping({"/items/{itemId}/comments", "/work-items/{itemId}/comments"})
+    @RequireTaskPermission(PermissionKey.COMMENT_CREATE)
     public ResponseEntity<ApiResponse<WorkItemCommentResponse>> addComment(
             @PathVariable("itemId") UUID workItemId,
-            @Valid @RequestBody CreateWorkItemCommentRequest request,
-            @AuthenticationPrincipal Jwt jwt
+            @Valid @RequestBody CreateWorkItemCommentRequest request
     ) {
-        UUID userId = resolveUserId(jwt);
+        UUID userId = SecurityUtils.getCurrentUserId();
         WorkItemCommentResponse response = commentService.addComment(workItemId, request, userId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Bình luận đã được đăng thành công"));
     }
 
+    /**
+     * Sửa bình luận: chỉ tác giả với quyền COMMENT_EDIT_OWN (kiểm tra trong service).
+     */
     @PutMapping({"/items/{itemId}/comments/{commentId}", "/work-items/{itemId}/comments/{commentId}"})
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<WorkItemCommentResponse>> updateComment(
             @PathVariable("itemId") UUID workItemId,
             @PathVariable("commentId") UUID commentId,
-            @Valid @RequestBody UpdateWorkItemCommentRequest request,
-            @AuthenticationPrincipal Jwt jwt
+            @Valid @RequestBody UpdateWorkItemCommentRequest request
     ) {
-        UUID userId = resolveUserId(jwt);
+        UUID userId = SecurityUtils.getCurrentUserId();
         WorkItemCommentResponse response = commentService.updateComment(workItemId, commentId, request, userId);
         return ResponseEntity.ok(ApiResponse.success(response, "Đã cập nhật bình luận"));
     }
 
+    /**
+     * Xóa bình luận: tác giả với COMMENT_DELETE_OWN hoặc bất kỳ ai có COMMENT_DELETE_ALL (kiểm tra trong service).
+     */
     @DeleteMapping({"/items/{itemId}/comments/{commentId}", "/work-items/{itemId}/comments/{commentId}"})
+    @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<Void>> deleteComment(
             @PathVariable("itemId") UUID workItemId,
-            @PathVariable("commentId") UUID commentId,
-            @AuthenticationPrincipal Jwt jwt
+            @PathVariable("commentId") UUID commentId
     ) {
-        UUID userId = resolveUserId(jwt);
+        UUID userId = SecurityUtils.getCurrentUserId();
         commentService.deleteComment(workItemId, commentId, userId);
         return ResponseEntity.ok(ApiResponse.success(null, "Đã xóa bình luận"));
-    }
-
-    private UUID resolveUserId(Jwt jwt) {
-        return SecurityUtils.getCurrentUserIdOptional().orElseGet(() -> {
-            if (jwt != null) {
-                String sub = jwt.getSubject();
-                try {
-                    return UUID.fromString(sub);
-                } catch (Exception ignored) {
-                }
-            }
-            return UUID.fromString("00000000-0000-0000-0000-000000000001");
-        });
     }
 }

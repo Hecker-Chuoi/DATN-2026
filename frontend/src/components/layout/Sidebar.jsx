@@ -15,7 +15,8 @@ import {
   Building2,
   Compass,
   LogOut,
-  Settings
+  Settings,
+  Mail
 } from 'lucide-react';
 import WorkspaceSwitcher from '../workspace/WorkspaceSwitcher.jsx';
 import { useWorkspaceRole } from '../../hooks/useWorkspaceRole.js';
@@ -31,7 +32,7 @@ const TEAM_COLORS = [
   '#6366F1'  // Indigo
 ];
 
-export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreateProject, currentUser, onLogout }) {
+export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreateProject, invitationCount = 0, currentUser, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { workspaceId } = useParams();
@@ -115,14 +116,21 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         <NavItem
           to={ws('/projects')}
           icon={<FolderKanban size={17} color="#2563EB" />}
-          label="Projects & Board"
+          label="Dự án & Bảng làm việc"
           active={location.pathname.startsWith(ws('/projects'))}
         />
         <NavItem
           to={ws('/my-issues')}
           icon={<CheckCircle2 size={17} color="#10B981" />}
-          label="My tasks"
+          label="Nhiệm vụ của tôi"
           active={location.pathname === ws('/my-issues')}
+        />
+        <NavItem
+          to={ws('/invitations')}
+          icon={<Mail size={17} color="#F59E0B" />}
+          label="Lời mời"
+          badge={invitationCount}
+          active={location.pathname === ws('/invitations')}
         />
         <NavItem
           to={ws('/members')}
@@ -157,7 +165,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
             letterSpacing: '0.05em',
           }}
         >
-          <span>Your teams</span>
+          <span>Nhóm của bạn</span>
           {canCreateTeam && (
           <button
             onClick={onOpenCreateTeam}
@@ -252,13 +260,13 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
                       <SubNavItem
                         to={ws(`/teams/${team.id}`)}
                         icon={<Home size={14} />}
-                        label="Home & Members"
+                        label="Trang chủ & Thành viên"
                         active={location.pathname === ws(`/teams/${team.id}`)}
                       />
                       <SubNavItem
                         to={ws(`/projects?teamId=${team.id}`)}
                         icon={<Layers size={14} />}
-                        label="Projects"
+                        label="Danh sách dự án"
                         active={location.search.includes(`teamId=${team.id}`)}
                       />
                     </div>
@@ -384,7 +392,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
   );
 }
 
-function NavItem({ to, icon, label, active }) {
+function NavItem({ to, icon, label, active, badge = 0 }) {
   return (
     <NavLink
       to={to}
@@ -415,7 +423,12 @@ function NavItem({ to, icon, label, active }) {
       }}
     >
       {icon}
-      <span>{label}</span>
+      <span style={{ flex: 1 }}>{label}</span>
+      {badge > 0 && (
+        <span style={{ fontSize: 11, fontWeight: 700, backgroundColor: '#F59E0B', color: '#FFFFFF', padding: '1px 7px', borderRadius: 10 }}>
+          {badge}
+        </span>
+      )}
     </NavLink>
   );
 }

@@ -13,6 +13,7 @@ import com.datn.workservice.security.WorkspaceAccessChecker;
 import com.datn.workservice.service.ProjectService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -23,10 +24,24 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/work/projects")
 @RequiredArgsConstructor
 public class ProjectController {
+
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * POST   /api/v1/work/projects                  : Tạo dự án mới (khởi tạo hệ sinh thái)
+     * GET    /api/v1/work/projects                  : Lấy danh sách dự án (lọc theo workspace/team + tìm kiếm + phân trang)
+     * GET    /api/v1/work/projects/templates        : Lấy danh sách dự án mẫu (templates)
+     * GET    /api/v1/work/projects/{projectId}      : Lấy chi tiết dự án theo ID
+     * GET    /api/v1/work/projects/key/{key}        : Lấy chi tiết dự án theo key
+     * PUT    /api/v1/work/projects/{projectId}      : Cập nhật thông tin dự án
+     * DELETE /api/v1/work/projects/{projectId}      : Xóa dự án (lưu trữ / chuyển vào thùng rác)
+     * POST   /api/v1/work/projects/{projectId}/restore : Khôi phục dự án đã lưu trữ
+     * ────────────────────────────────────────────────────────────────────────
+     */
 
     private final ProjectService projectService;
     private final WorkspaceAccessChecker workspaceAccessChecker;
@@ -43,6 +58,9 @@ public class ProjectController {
                 .body(ApiResponse.success(response, "Dự án đã được tạo và khởi tạo hệ sinh thái thành công"));
     }
 
+    /**
+     * Danh sách dự án mà người dùng hiện tại được truy cập (Global ADMIN thấy tất cả).
+     */
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ProjectResponse>>> getAllProjects(
             @RequestParam(required = false) UUID workspaceId,
@@ -51,8 +69,10 @@ public class ProjectController {
             @RequestParam(required = false) Boolean isTemplate,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        boolean includeAll = SecurityUtils.isGlobalAdmin();
         PageResponse<ProjectResponse> response = projectService.getAllProjects(
-                resolveWorkspaceScope(workspaceId), teamId, search, isTemplate, pageable
+                resolveWorkspaceScope(workspaceId), teamId, search, isTemplate, pageable, currentUserId, includeAll
         );
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -62,8 +82,10 @@ public class ProjectController {
             @RequestParam(required = false) UUID workspaceId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        boolean includeAll = SecurityUtils.isGlobalAdmin();
         PageResponse<ProjectResponse> response =
-                projectService.getTemplates(resolveWorkspaceScope(workspaceId), pageable);
+                projectService.getTemplates(resolveWorkspaceScope(workspaceId), pageable, currentUserId, includeAll);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -96,6 +118,9 @@ public class ProjectController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    /**
+     * Tra cứu theo Key: quyền PROJECT_VIEW được kiểm tra trong service sau khi resolve project.
+     */
     @GetMapping("/key/{key}")
     public ResponseEntity<ApiResponse<ProjectDetailResponse>> getProjectByKey(
             @PathVariable("key") String key

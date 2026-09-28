@@ -35,7 +35,7 @@ export default function RegisterPage() {
       setSuccess(true);
       setTimeout(() => {
         navigate('/login');
-      }, 1500);
+      }, 5000);
     } catch (err) {
       setError(err.message || 'Đăng ký thất bại. Vui lòng thử lại!');
     } finally {
@@ -81,7 +81,7 @@ export default function RegisterPage() {
               marginBottom: 20,
               border: '1px solid #bbf7d0'
             }}>
-              🎉 Đăng ký thành công! Đang chuyển hướng sang Đăng nhập...
+              🎉 Đăng ký thành công! Chúng tôi đã gửi email xác thực tới <b>{form.email}</b>. Hãy mở email và bấm "Xác thực email" trước khi đăng nhập. Đang chuyển hướng sang Đăng nhập...
             </div>
           )}
 

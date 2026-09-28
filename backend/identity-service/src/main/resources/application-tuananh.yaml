@@ -1,0 +1,14 @@
+# Profile cá nhân (tránh trùng cổng 808x trên máy): chạy với -Dspring.profiles.active=tuananh
+server:
+  port: 9992
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:9998/realms/datn-realm/protocol/openid-connect/certs
+          issuer-uri: http://localhost:9998/realms/datn-realm
+
+keycloak:
+  server-url: http://localhost:9998

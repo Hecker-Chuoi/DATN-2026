@@ -1,7 +1,8 @@
 package com.datn.workservice.security;
 
-import com.datn.common.exception.ResourceNotFoundException;
+import com.datn.workservice.entity.WorkItem;
 import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.repository.WorkItemRepository;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,63 +18,95 @@ import org.springframework.web.bind.annotation.PathVariable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
+/**
+ * AOP guard cho @RequireProjectPermission / @RequireTaskPermission.
+ *
+ * Nguyên tắc FAIL-CLOSED: nếu không xác định được projectId/taskId từ tham số
+ * thì từ chối (403) thay vì bỏ qua kiểm tra.
+ *
+ * <p>Vì fail-closed, các endpoint KHÔNG mang projectId trên đường dẫn (Board, Sprint,
+ * Báo cáo của Giai đoạn 6) bắt buộc phải khai báo {@code source}/{@code param} trên
+ * annotation để guard truy ngược ra projectId — xem bước 0 trong {@link #resolveProjectId}.
+ * Thiếu bước đó thì toàn bộ các endpoint này bị từ chối vô điều kiện.
+ *
+ * <p>Cố ý KHÔNG bọc try/catch quanh thân method: ResourceNotFoundException do
+ * {@link ProjectScopeResolver} ném khi board/sprint không tồn tại phải đi thẳng tới
+ * GlobalExceptionHandler để thành 404, không bị biến thành 403 hay 500.
+ */
 @Slf4j
 @Aspect
 @Component
 @RequiredArgsConstructor
 public class ProjectPermissionGuard {
 
+    private static final Set<String> TASK_ID_PARAM_NAMES = Set.of("id", "itemid", "workitemid", "taskid");
+
     private final ProjectMemberService projectMemberService;
     private final ProjectScopeResolver projectScopeResolver;
+    private final WorkItemRepository workItemRepository;
 
-    @Before("@annotation(com.datn.workservice.security.RequireProjectPermission) || @within(com.datn.workservice.security.RequireProjectPermission)")
+    @Before("@annotation(com.datn.workservice.security.RequireProjectPermission) || @within(com.datn.workservice.security.RequireProjectPermission) || @annotation(com.datn.workservice.security.RequireTaskPermission) || @within(com.datn.workservice.security.RequireTaskPermission)")
     public void checkPermission(JoinPoint joinPoint) {
-        try {
-            MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-            Method method = signature.getMethod();
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Method method = signature.getMethod();
 
-            RequireProjectPermission requirePerm = AnnotationUtils.findAnnotation(method, RequireProjectPermission.class);
-            if (requirePerm == null) {
-                requirePerm = AnnotationUtils.findAnnotation(joinPoint.getTarget().getClass(), RequireProjectPermission.class);
-            }
-            if (requirePerm == null) {
-                return;
-            }
+        RequireProjectPermission requireProjectPerm = AnnotationUtils.findAnnotation(method, RequireProjectPermission.class);
+        if (requireProjectPerm == null && joinPoint.getTarget() != null) {
+            requireProjectPerm = AnnotationUtils.findAnnotation(joinPoint.getTarget().getClass(), RequireProjectPermission.class);
+        }
 
-            Optional<UUID> currentUserIdOpt = SecurityUtils.getCurrentUserIdOptional();
-            if (currentUserIdOpt.isEmpty()) {
-                log.warn("Access denied: Unauthenticated user accessing method {}", signature.toShortString());
-                throw new AccessDeniedException("Yêu cầu xác thực để thực hiện thao tác này");
-            }
+        RequireTaskPermission requireTaskPerm = AnnotationUtils.findAnnotation(method, RequireTaskPermission.class);
+        if (requireTaskPerm == null && joinPoint.getTarget() != null) {
+            requireTaskPerm = AnnotationUtils.findAnnotation(joinPoint.getTarget().getClass(), RequireTaskPermission.class);
+        }
 
-            UUID currentUserId = currentUserIdOpt.get();
-            UUID projectId = resolveProjectId(joinPoint, method, requirePerm);
+        if (requireProjectPerm == null && requireTaskPerm == null) {
+            return;
+        }
 
+        Optional<UUID> currentUserIdOpt = SecurityUtils.getCurrentUserIdOptional();
+        if (currentUserIdOpt.isEmpty()) {
+            log.warn("Access denied: Unauthenticated user accessing method {}", signature.toShortString());
+            throw new AccessDeniedException("Yêu cầu xác thực để thực hiện thao tác này");
+        }
+
+        UUID currentUserId = currentUserIdOpt.get();
+        if (SecurityUtils.isGlobalAdmin()) {
+            log.debug("Access granted for Global ADMIN user {} on method {}", currentUserId, signature.toShortString());
+            return;
+        }
+
+        if (requireProjectPerm != null) {
+            UUID projectId = resolveProjectId(joinPoint, method, requireProjectPerm);
             if (projectId == null) {
-                log.debug("Cannot extract projectId for permission check on method: {}", signature.toShortString());
-                return;
+                log.warn("Access denied: cannot resolve projectId for method {}", signature.toShortString());
+                throw new AccessDeniedException("Không xác định được dự án để kiểm tra quyền");
             }
+            check(projectId, currentUserId, requireProjectPerm.value(), "trên dự án");
+        }
 
-            PermissionKey requiredPermission = requirePerm.value();
-            log.debug("Checking permission {} for user {} on project {}", requiredPermission, currentUserId, projectId);
-            boolean hasPermission = projectMemberService.hasPermission(projectId, currentUserId, requiredPermission);
-
-            if (!hasPermission) {
-                log.warn("Access denied for user {} requesting permission {} on project {}",
-                        currentUserId, requiredPermission, projectId);
-                throw new AccessDeniedException(
-                        "Bạn không có quyền thực hiện thao tác này (" + requiredPermission.name() + ") trong dự án"
-                );
+        if (requireTaskPerm != null) {
+            UUID taskId = resolveTaskId(joinPoint, method);
+            if (taskId == null) {
+                log.warn("Access denied: cannot resolve work item id for method {}", signature.toShortString());
+                throw new AccessDeniedException("Không xác định được công việc để kiểm tra quyền");
             }
-        } catch (AccessDeniedException | ResourceNotFoundException e) {
-            // ResourceNotFoundException tới từ ProjectScopeResolver khi board/sprint không tồn tại:
-            // phải trả 404 thay vì bị bọc thành lỗi hệ thống 500.
-            throw e;
-        } catch (Exception e) {
-            log.error("Unexpected error in ProjectPermissionGuard: {}", e.getMessage(), e);
-            throw new RuntimeException("Lỗi hệ thống khi kiểm tra quyền", e);
+            UUID projectId = workItemRepository.findById(taskId)
+                    .map(WorkItem::getProjectId)
+                    .orElseThrow(() -> new AccessDeniedException("Không tìm thấy công việc hoặc bạn không có quyền truy cập"));
+            check(projectId, currentUserId, requireTaskPerm.value(), "trên công việc");
+        }
+    }
+
+    private void check(UUID projectId, UUID userId, PermissionKey required, String scopeLabel) {
+        boolean hasPermission = projectMemberService.hasPermission(projectId, userId, required);
+        if (!hasPermission) {
+            log.warn("Access denied for user {} requesting permission {} on project {}", userId, required, projectId);
+            throw new AccessDeniedException(
+                    "Bạn không có quyền thực hiện thao tác này (" + required.name() + ") " + scopeLabel);
         }
     }
 
@@ -94,7 +127,7 @@ public class ProjectPermissionGuard {
             return rawId == null ? null : projectScopeResolver.resolveProjectId(requirePerm.source(), rawId);
         }
 
-        // 1. Inspect @PathVariable annotations
+        // 1. @PathVariable("projectId")
         for (int i = 0; i < args.length; i++) {
             if (i < paramAnnotations.length && args[i] instanceof UUID uuid) {
                 for (Annotation ann : paramAnnotations[i]) {
@@ -108,23 +141,20 @@ public class ProjectPermissionGuard {
             }
         }
 
-        // 2. Check parameter name
+        // 2. Tên tham số chứa "project"
         if (parameterNames != null) {
-            for (int i = 0; i < parameterNames.length; i++) {
-                String paramName = parameterNames[i];
-                if (i < args.length && args[i] instanceof UUID uuid) {
-                    if ("projectId".equalsIgnoreCase(paramName) || paramName.toLowerCase().contains("project")) {
-                        return uuid;
-                    }
+            for (int i = 0; i < parameterNames.length && i < args.length; i++) {
+                if (args[i] instanceof UUID uuid && parameterNames[i].toLowerCase().contains("project")) {
+                    return uuid;
                 }
             }
         }
 
-        // 3. Inspect DTO argument with getProjectId()
-        //    Đã bỏ fallback "UUID đầu tiên": với /sprints/{sprintId} nó coi sprintId là
-        //    projectId, khiến mọi endpoint sprint/board bị từ chối 403 vô điều kiện.
+        // 3. DTO có getProjectId()
+        //    Cả hai nhánh đều đã bỏ fallback "UUID đầu tiên": với /sprints/{sprintId}
+        //    nó coi sprintId là projectId và từ chối mọi endpoint sprint/board.
         for (Object arg : args) {
-            if (arg != null) {
+            if (arg != null && !(arg instanceof UUID)) {
                 try {
                     Method getProjectIdMethod = arg.getClass().getMethod("getProjectId");
                     Object result = getProjectIdMethod.invoke(arg);
@@ -176,5 +206,41 @@ public class ProjectPermissionGuard {
             }
         }
         return count == 1 ? sole : null;
+    }
+
+    private UUID resolveTaskId(JoinPoint joinPoint, Method method) {
+        Object[] args = joinPoint.getArgs();
+        Annotation[][] paramAnnotations = method.getParameterAnnotations();
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        String[] parameterNames = signature.getParameterNames();
+
+        if (args == null || args.length == 0) {
+            return null;
+        }
+
+        // 1. @PathVariable id/itemId/workItemId/taskId
+        for (int i = 0; i < args.length; i++) {
+            if (i < paramAnnotations.length && args[i] instanceof UUID uuid) {
+                for (Annotation ann : paramAnnotations[i]) {
+                    if (ann instanceof PathVariable pv) {
+                        String pvName = pv.value().isEmpty() ? pv.name() : pv.value();
+                        if (TASK_ID_PARAM_NAMES.contains(pvName.toLowerCase())) {
+                            return uuid;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Tên tham số
+        if (parameterNames != null) {
+            for (int i = 0; i < parameterNames.length && i < args.length; i++) {
+                if (args[i] instanceof UUID uuid && TASK_ID_PARAM_NAMES.contains(parameterNames[i].toLowerCase())) {
+                    return uuid;
+                }
+            }
+        }
+
+        return null;
     }
 }

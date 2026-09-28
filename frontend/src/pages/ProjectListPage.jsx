@@ -18,14 +18,16 @@ import {
   Users,
   Calendar,
   ChevronRight,
-  Folder
+  Folder,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi } from '../api.js';
 import CreateProjectModal from '../components/project/CreateProjectModal.jsx';
+import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
 
 export default function ProjectListPage() {
-  const { teams } = useOutletContext() || {};
+  const { teams, currentUser, leaderTeams = teams, canCreateProject = true, isSystemAdmin = false } = useOutletContext() || {};
   const { workspaceId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -37,6 +39,22 @@ export default function ProjectListPage() {
   const [activeTab, setActiveTab] = useState('ALL'); // ALL, SCRUM, KANBAN, TEMPLATES
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isStarred, setIsStarred] = useState(false);
+
+  // Delete project state
+  const [projectToDelete, setProjectToDelete] = useState(null);
+  const [activeMenuProjectId, setActiveMenuProjectId] = useState(null);
+
+  useEffect(() => {
+    const handleDocumentClick = () => {
+      setActiveMenuProjectId(null);
+    };
+    if (activeMenuProjectId) {
+      document.addEventListener('click', handleDocumentClick);
+    }
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+    };
+  }, [activeMenuProjectId]);
 
   const fetchProjects = async () => {
     try {
@@ -207,10 +225,10 @@ export default function ProjectListPage() {
         {/* Navigation Pills */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {[
-            { id: 'ALL', label: 'All projects' },
-            { id: 'SCRUM', label: 'Scrum' },
-            { id: 'KANBAN', label: 'Kanban' },
-            { id: 'TEMPLATES', label: 'Templates' },
+            { id: 'ALL', label: 'Tất cả dự án' },
+            { id: 'SCRUM', label: 'Dự án Scrum' },
+            { id: 'KANBAN', label: 'Dự án Kanban' },
+            { id: 'TEMPLATES', label: 'Dự án mẫu' },
           ].map((tab) => {
             const active = activeTab === tab.id;
             return (
@@ -246,7 +264,7 @@ export default function ProjectListPage() {
             />
             <input
               type="text"
-              placeholder="Search projects..."
+              placeholder="Tìm kiếm dự án..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -262,6 +280,7 @@ export default function ProjectListPage() {
             />
           </div>
 
+          {canCreateProject && (
           <button
             onClick={() => setIsCreateModalOpen(true)}
             style={{
@@ -280,8 +299,9 @@ export default function ProjectListPage() {
             }}
           >
             <Plus size={14} />
-            <span>Create project</span>
+            <span>Tạo dự án mới</span>
           </button>
+          )}
 
           <button
             onClick={fetchProjects}
@@ -341,6 +361,7 @@ export default function ProjectListPage() {
             <p style={{ fontSize: 13, color: '#64748B', maxWidth: 420, margin: '0 auto 20px auto', lineHeight: 1.5 }}>
               Bắt đầu tạo dự án Scrum hoặc Kanban đầu tiên để tự động khởi tạo Workflow, Board và quản lý công việc.
             </p>
+            {canCreateProject ? (
             <button
               onClick={() => setIsCreateModalOpen(true)}
               style={{
@@ -361,6 +382,9 @@ export default function ProjectListPage() {
               <Plus size={15} />
               <span>Tạo dự án mới ngay</span>
             </button>
+            ) : (
+              <p style={{ fontSize: 12, color: '#94A3B8' }}>Chỉ trưởng nhóm mới có thể tạo dự án. Hãy nhờ trưởng nhóm thêm bạn vào dự án.</p>
+            )}
           </div>
         ) : (
           <div
@@ -373,6 +397,8 @@ export default function ProjectListPage() {
           >
             {filteredProjects.map((project) => {
               const isScrum = project.projectType === 'SOFTWARE_SCRUM';
+              const isSystemAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN');
+              const canDeleteProject = isSystemAdmin || (currentUser && (project.leadUserId === currentUser.id || project.createdBy === currentUser.id));
 
               return (
                 <div
@@ -400,7 +426,7 @@ export default function ProjectListPage() {
                   }}
                 >
                   <div>
-                    {/* Top Row: Key & Type Badge */}
+                    {/* Top Row: Key & Type Badge & Action Menu */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                       <span
                         style={{
@@ -414,22 +440,114 @@ export default function ProjectListPage() {
                       >
                         {project.key}
                       </span>
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          color: isScrum ? '#7C3AED' : '#059669',
-                          backgroundColor: isScrum ? '#F5F3FF' : '#ECFDF5',
-                          padding: '2px 8px',
-                          borderRadius: 12,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4,
-                        }}
-                      >
-                        {isScrum ? <Zap size={11} /> : <Kanban size={11} />}
-                        <span>{isScrum ? 'Scrum' : 'Kanban'}</span>
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: isScrum ? '#7C3AED' : '#059669',
+                            backgroundColor: isScrum ? '#F5F3FF' : '#ECFDF5',
+                            padding: '2px 8px',
+                            borderRadius: 12,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          {isScrum ? <Zap size={11} /> : <Kanban size={11} />}
+                          <span>{isScrum ? 'Quy trình Scrum' : 'Bảng Kanban'}</span>
+                        </span>
+
+                        {canDeleteProject && (
+                          <div style={{ position: 'relative' }}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuProjectId(activeMenuProjectId === project.id ? null : project.id);
+                              }}
+                              style={{
+                                border: 'none',
+                                background: activeMenuProjectId === project.id ? '#F1F5F9' : 'transparent',
+                                cursor: 'pointer',
+                                padding: 3,
+                                borderRadius: 4,
+                                color: activeMenuProjectId === project.id ? '#0F172A' : '#94A3B8',
+                                display: 'flex',
+                                alignItems: 'center',
+                                transition: 'all 0.15s ease',
+                              }}
+                              title="Tùy chọn dự án"
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = '#0F172A';
+                                e.currentTarget.style.backgroundColor = '#F1F5F9';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (activeMenuProjectId !== project.id) {
+                                  e.currentTarget.style.color = '#94A3B8';
+                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                }
+                              }}
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+
+                            {activeMenuProjectId === project.id && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                  position: 'absolute',
+                                  top: '100%',
+                                  right: 0,
+                                  marginTop: 4,
+                                  backgroundColor: '#FFFFFF',
+                                  borderRadius: 8,
+                                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
+                                  border: '1px solid #E2E8F0',
+                                  minWidth: 180,
+                                  zIndex: 30,
+                                  overflow: 'hidden',
+                                  padding: '4px',
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveMenuProjectId(null);
+                                    setProjectToDelete(project);
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    backgroundColor: 'transparent',
+                                    color: '#EF4444',
+                                    fontSize: 12,
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    textAlign: 'left',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#FEF2F2';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                  }}
+                                >
+                                  <Trash2 size={13} color="#EF4444" />
+                                  <span>Xóa dự án (Thùng rác)</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Project Name */}
@@ -467,7 +585,7 @@ export default function ProjectListPage() {
                       color: '#94A3B8',
                     }}
                   >
-                    <span>ID: {project.id?.substring(0, 8)}...</span>
+                    <span>Mã: {project.id?.substring(0, 8)}...</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#2563EB', fontWeight: 600 }}>
                       <span>Mở bảng</span>
                       <ChevronRight size={12} />
@@ -484,9 +602,20 @@ export default function ProjectListPage() {
       <CreateProjectModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        teams={teams}
+        teams={leaderTeams}
+        allowPersonal={isSystemAdmin}
         defaultTeamId={teamIdFilter || undefined}
         onProjectCreated={handleProjectCreated}
+      />
+
+      {/* Delete Project Modal */}
+      <DeleteProjectModal
+        isOpen={!!projectToDelete}
+        onClose={() => setProjectToDelete(null)}
+        project={projectToDelete}
+        onDeleted={() => {
+          fetchProjects();
+        }}
       />
     </div>
   );

@@ -66,6 +66,8 @@ class WorkItemCollaborationTest {
     private IdentityClient identityClient;
     @Mock
     private io.minio.MinioClient minioClient;
+    @Mock
+    private ProjectAccessService projectAccessService;
 
     private WorkItemAuditServiceImpl auditService;
     private WorkItemCommentServiceImpl commentService;
@@ -125,7 +127,8 @@ class WorkItemCollaborationTest {
         commentService = new WorkItemCommentServiceImpl(
                 commentRepository,
                 workItemRepository,
-                identityClient
+                identityClient,
+                projectAccessService
         );
 
         cycleDetector = new DependencyCycleDetector(linkRepository, workItemRepository);
@@ -135,7 +138,8 @@ class WorkItemCollaborationTest {
                 workItemRepository,
                 auditService,
                 identityClient,
-                minioClient
+                minioClient,
+                projectAccessService
         );
 
         linkService = new WorkItemLinkServiceImpl(
@@ -328,6 +332,73 @@ class WorkItemCollaborationTest {
         assertThat(response.getLinkType()).isEqualTo(LinkType.BLOCKS);
         assertThat(response.getRelationshipDescription()).contains("Chặn");
         verify(linkRepository).save(any(WorkItemLink.class));
+    }
+
+    // ─── Authorization: comments & attachments OWN vs ALL ─────────────────────
+
+    @Test
+    @DisplayName("Comments: Member without COMMENT_DELETE_ALL cannot delete another user's comment")
+    void testDeleteOthersCommentDenied() {
+        UUID otherAuthor = UUID.randomUUID();
+        UUID commentId = UUID.randomUUID();
+        WorkItemComment comment = WorkItemComment.builder()
+                .id(commentId)
+                .workItemId(workItemId1)
+                .authorId(otherAuthor)
+                .body("Someone else's comment")
+                .build();
+
+        when(commentRepository.findById(commentId)).thenReturn(Optional.of(comment));
+        when(workItemRepository.findById(workItemId1)).thenReturn(Optional.of(item1));
+        when(projectAccessService.hasProjectPermission(projectId, com.datn.workservice.enums.PermissionKey.COMMENT_DELETE_ALL)).thenReturn(false);
+
+        assertThatThrownBy(() -> commentService.deleteComment(workItemId1, commentId, userId))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(commentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Comments: Administrator with COMMENT_DELETE_ALL can delete another user's comment")
+    void testDeleteOthersCommentAllowedForAdmin() {
+        UUID otherAuthor = UUID.randomUUID();
+        UUID commentId = UUID.randomUUID();
+        WorkItemComment comment = WorkItemComment.builder()
+                .id(commentId)
+                .workItemId(workItemId1)
+                .authorId(otherAuthor)
+                .body("Someone else's comment")
+                .build();
+
+        when(commentRepository.findById(commentId)).thenReturn(Optional.of(comment));
+        when(workItemRepository.findById(workItemId1)).thenReturn(Optional.of(item1));
+        when(projectAccessService.hasProjectPermission(projectId, com.datn.workservice.enums.PermissionKey.COMMENT_DELETE_ALL)).thenReturn(true);
+
+        commentService.deleteComment(workItemId1, commentId, userId);
+
+        assertThat(comment.getDeletedAt()).isNotNull();
+        verify(commentRepository).save(comment);
+    }
+
+    @Test
+    @DisplayName("Attachments: Uploader with ATTACHMENT_DELETE_OWN can delete own file")
+    void testDeleteOwnAttachmentAllowed() throws Exception {
+        UUID attachmentId = UUID.randomUUID();
+        WorkItemAttachment attachment = WorkItemAttachment.builder()
+                .id(attachmentId)
+                .workItemId(workItemId1)
+                .fileName("spec.pdf")
+                .fileUrl("attachments/x/spec.pdf")
+                .fileSize(10L)
+                .uploadedBy(userId)
+                .build();
+
+        when(attachmentRepository.findById(attachmentId)).thenReturn(Optional.of(attachment));
+        when(workItemRepository.findById(workItemId1)).thenReturn(Optional.of(item1));
+        when(projectAccessService.hasProjectPermission(projectId, com.datn.workservice.enums.PermissionKey.ATTACHMENT_DELETE_OWN)).thenReturn(true);
+
+        attachmentService.deleteAttachment(workItemId1, attachmentId, userId);
+
+        verify(attachmentRepository).delete(attachment);
     }
 
     @Test

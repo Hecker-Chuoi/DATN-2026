@@ -83,7 +83,7 @@ export default function BacklogIssueRow({
           title="Đang bị công việc khác cản trở"
           style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3, color: '#DE350B', fontSize: 11, fontWeight: 600 }}
         >
-          <Lock size={12} /> BLOCKED
+          <Lock size={12} /> Bị chặn
         </span>
       )}
       {item.isOverdue && (

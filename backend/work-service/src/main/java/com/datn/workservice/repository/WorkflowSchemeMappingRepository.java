@@ -12,5 +12,7 @@ import java.util.UUID;
 public interface WorkflowSchemeMappingRepository extends JpaRepository<WorkflowSchemeMapping, UUID> {
     List<WorkflowSchemeMapping> findBySchemeId(UUID schemeId);
     Optional<WorkflowSchemeMapping> findBySchemeIdAndWorkItemTypeId(UUID schemeId, UUID workItemTypeId);
+    List<WorkflowSchemeMapping> findByWorkItemTypeId(UUID workItemTypeId);
+    void deleteByWorkItemTypeId(UUID workItemTypeId);
     void deleteBySchemeId(UUID schemeId);
 }

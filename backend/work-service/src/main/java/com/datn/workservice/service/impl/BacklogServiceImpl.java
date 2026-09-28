@@ -119,7 +119,7 @@ public class BacklogServiceImpl implements BacklogService {
                 .sprints(sprintGroups)
                 .backlog(backlogGroup)
                 .epics(buildEpics(cards))
-                .statuses(buildStatuses())
+                .statuses(buildStatuses(projectId))
                 .totalBacklogItems(backlogRows.size())
                 .generatedAt(LocalDateTime.now())
                 .build();
@@ -227,8 +227,9 @@ public class BacklogServiceImpl implements BacklogService {
         return new ArrayList<>(epics.values());
     }
 
-    private List<StatusResponse> buildStatuses() {
-        return statusRepository.findAll().stream()
+    private List<StatusResponse> buildStatuses(UUID projectId) {
+        // Chi tra status cua du an dang xem (xem ghi chu o BoardServiceImpl.seedDefaultColumns).
+        return statusRepository.findByProjectIdOrProjectIdIsNull(projectId).stream()
                 .sorted(Comparator.comparing(s -> s.getCategory() == null ? 99 : s.getCategory().ordinal()))
                 .map(s -> StatusResponse.builder()
                         .id(s.getId())

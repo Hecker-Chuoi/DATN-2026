@@ -8,6 +8,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -16,7 +18,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class CreateWorkflowTransitionRequest {
 
-    @NotNull(message = "ID quy trình (workflowId) là bắt buộc")
+    /**
+     * Workflow ID (optional in body as it is provided via path variable /workflows/{workflowId}/transitions)
+     */
     private UUID workflowId;
 
     /**
@@ -32,17 +36,17 @@ public class CreateWorkflowTransitionRequest {
     private String name;
 
     /**
-     * Conditions config JSONB (e.g. List of WorkflowConditionConfig or raw object)
+     * Conditions config JSONB array (e.g. [{type: "ASSIGNEE_ONLY", params: {}}])
      */
-    private Object conditionsConfig;
+    private List<Map<String, Object>> conditionsConfig;
 
     /**
-     * Validators config JSONB (e.g. List of WorkflowValidatorConfig or raw object)
+     * Validators config JSONB array (e.g. [{type: "ALL_SUBTASKS_DONE", params: {}}])
      */
-    private Object validatorsConfig;
+    private List<Map<String, Object>> validatorsConfig;
 
     /**
-     * Post-functions config JSONB (e.g. List of WorkflowPostFunctionConfig or raw object)
+     * Post-functions config JSONB array (e.g. [{type: "EMIT_AUDIT_LOG", params: {}}])
      */
-    private Object postFunctionsConfig;
+    private List<Map<String, Object>> postFunctionsConfig;
 }

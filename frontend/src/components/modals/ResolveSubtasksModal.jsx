@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, GitCommitHorizontal, X } from 'lucide-react';
+import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
 
 export default function ResolveSubtasksModal({
   isOpen,
@@ -77,11 +78,11 @@ export default function ResolveSubtasksModal({
             </div>
             <div>
               <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                {isEpic ? 'Công việc trực thuộc Epic chưa hoàn thành' : 'Nhiệm vụ con chưa hoàn thành'}
+                {isEpic ? 'Công việc trực thuộc Hạng mục lớn chưa hoàn thành' : 'Nhiệm vụ con chưa hoàn thành'}
               </h2>
               <div style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>
                 Công việc <strong style={{ color: '#0284C7' }}>[{parentCode}]</strong> còn{' '}
-                <strong style={{ color: '#D97706' }}>{incompleteSubtasks.length}</strong> {isEpic ? 'công việc (Story & Sub-task)' : 'nhiệm vụ con'} chưa xong.
+                <strong style={{ color: '#D97706' }}>{incompleteSubtasks.length}</strong> {isEpic ? 'công việc trực thuộc' : 'nhiệm vụ con'} chưa xong.
               </div>
             </div>
           </div>
@@ -126,7 +127,7 @@ export default function ResolveSubtasksModal({
             }}
           >
             {isEpic
-              ? 'Theo quy tắc phân tầng dự án, Epic chỉ có thể hoàn thành khi tất cả các User Story và Sub-task trực thuộc đã xong. Bạn có thể chọn đóng đồng loạt toàn bộ các công việc trực thuộc bên dưới:'
+              ? 'Theo quy tắc phân tầng dự án, Hạng mục lớn chỉ có thể hoàn thành khi tất cả các công việc trực thuộc đã xong. Bạn có thể chọn đóng đồng loạt toàn bộ các công việc trực thuộc bên dưới:'
               : 'Theo quy tắc phân tầng dự án, công việc cha chỉ có thể hoàn thành khi tất cả các nhiệm vụ con đã xong. Bạn có thể chọn đóng đồng loạt toàn bộ nhiệm vụ con bên dưới:'}
           </div>
 
@@ -142,7 +143,7 @@ export default function ResolveSubtasksModal({
           >
             {incompleteSubtasks.map((st) => {
               const isSub = st.isSubtask || st.hierarchyLevel === -1;
-              const typeLabel = st.typeName || (isSub ? 'Sub-task' : 'Story');
+              const typeLabel = getTypeDisplayName(st.typeName || (isSub ? 'SUBTASK' : 'STORY'));
               const typeColor = st.typeColor || (isSub ? '#0284C7' : '#059669');
 
               return (
@@ -206,7 +207,7 @@ export default function ResolveSubtasksModal({
                       flexShrink: 0,
                     }}
                   >
-                    {st.statusName || 'Đang làm'}
+                    {getStatusDisplayName(st.statusName || 'Đang làm')}
                   </span>
                 </div>
               );
@@ -266,7 +267,7 @@ export default function ResolveSubtasksModal({
               {loading
                 ? 'Đang cập nhật...'
                 : isEpic
-                ? 'Hoàn thành tất cả Story & Sub-task trực thuộc'
+                ? 'Hoàn thành tất cả công việc trực thuộc'
                 : 'Hoàn thành tất cả nhiệm vụ con'}
             </span>
           </button>

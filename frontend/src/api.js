@@ -53,6 +53,41 @@ export const adminTokenStore = {
 
 export const tokenStore = userTokenStore;
 
+// ─── JWT helpers (đọc realm roles của Keycloak từ access token, không cần thư viện) ───
+export function decodeJwtPayload(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+/** Realm roles (VD: ["ADMIN", "USER"]) của token người dùng hiện tại. */
+export function getUserRealmRoles() {
+  const payload = decodeJwtPayload(userTokenStore.get());
+  const roles = payload?.realm_access?.roles;
+  return Array.isArray(roles) ? roles : [];
+}
+
+/** Keycloak user id (claim `sub`) – work-service dùng id này làm user_id ở mọi bảng. */
+export function getUserKeycloakId() {
+  const payload = decodeJwtPayload(userTokenStore.get());
+  return payload?.sub || null;
+}
+
+/** Admin portal (/admin/**) dùng admin token cho mọi request, kể cả work-service. */
+function isAdminPortalPage() {
+  return typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
+}
+
 // ─── Recursive Normalizer for Spring Boot / Jackson DefaultTyping ────────────
 function normalizeResponseData(data) {
   if (data === null || data === undefined) return data;
@@ -99,6 +134,7 @@ apiClient.interceptors.request.use(
     }
 
     const isAdminRoute =
+      isAdminPortalPage() ||
       url.includes('/identity/api/v1/admin/') ||
       url.includes('/api/v1/admin/');
 
@@ -116,6 +152,13 @@ apiClient.interceptors.request.use(
 // ─── Response Interceptor: Data Unwrap, Silent Refresh & Central Error Toast ───
 let isRefreshing = false;
 let failedQueue = [];
+
+// Hết phiên (không có / không refresh được token): đưa về trang 401 (user) hoặc trang đăng nhập admin.
+const AUTH_PAGE_RE = /^\/(login|register|401|auth\/callback|admin\/login|admin\/auth\/callback)/;
+const redirectToSessionExpired = (isAdminRoute) => {
+  if (typeof window === 'undefined' || AUTH_PAGE_RE.test(window.location.pathname)) return;
+  window.location.replace(isAdminRoute ? '/admin/login' : '/401');
+};
 
 const processQueue = (error, token = null) => {
   failedQueue.forEach((prom) => {
@@ -153,6 +196,7 @@ apiClient.interceptors.response.use(
       }
 
       const isAdminRoute =
+        isAdminPortalPage() ||
         url.includes('/identity/api/v1/admin/') ||
         url.includes('/api/v1/admin/');
       const store = isAdminRoute ? adminTokenStore : userTokenStore;
@@ -160,6 +204,7 @@ apiClient.interceptors.response.use(
 
       if (!refreshToken) {
         store.clear();
+        redirectToSessionExpired(isAdminRoute);
         return Promise.reject(error);
       }
 
@@ -201,6 +246,7 @@ apiClient.interceptors.response.use(
       } catch (refreshErr) {
         processQueue(refreshErr, null);
         store.clear();
+        redirectToSessionExpired(isAdminRoute);
         return Promise.reject(refreshErr);
       } finally {
         isRefreshing = false;
@@ -210,15 +256,17 @@ apiClient.interceptors.response.use(
     const body = error.response?.data;
     const msg = body?.message || error.message || 'Lỗi kết nối máy chủ';
 
-    // skipErrorToast: cho phep call site tu quan ly thong bao (vi du keo tha tren Board
-    // can thong diep rieng cho 409). Khong truyen co thi hanh vi giu nguyen nhu cu.
-    if ((error.response?.status !== 401 || !originalRequest?._retry) && !originalRequest?.skipErrorToast) {
+    // Call site tự xử lý lỗi bằng cách gửi { skipErrorToast: true }:
+    // trang 403/404 hiển thị màn "Không có quyền", kéo thả trên Board cần thông điệp riêng cho 409.
+    const skipToast = Boolean(originalRequest?.skipErrorToast);
+    if (!skipToast && (error.response?.status !== 401 || !originalRequest?._retry)) {
       toast.error(msg, { id: msg });
     }
 
     const customErr = new Error(msg);
     customErr.status = error.response?.status;
     customErr.body = body;
+    customErr.response = error.response;
     return Promise.reject(customErr);
   }
 );
@@ -237,6 +285,11 @@ export const authApi = {
     }),
   googleCallback: (code, redirectUri) =>
     apiClient.post(`${AUTH_BASE}/google/callback`, { code, redirectUri }),
+  // Xác thực email & quên mật khẩu (link trong email trỏ tới /verify-email và /reset-password của frontend)
+  verifyEmail: (token) => apiClient.get(`${AUTH_BASE}/verify-email`, { params: { token }, skipErrorToast: true }),
+  resendVerification: (identifier) => apiClient.post(`${AUTH_BASE}/resend-verification`, { identifier }),
+  forgotPassword: (email) => apiClient.post(`${AUTH_BASE}/forgot-password`, { email }),
+  resetPassword: (token, newPassword) => apiClient.post(`${AUTH_BASE}/reset-password`, { token, newPassword }),
 };
 
 // ─── User API ─────────────────────────────────────────────────────────────────
@@ -275,23 +328,42 @@ export const teamApi = {
 };
 
 // ─── 2. Projects API ──────────────────────────────────────────────────────────
+export const invitationApi = {
+  my: () => apiClient.get(`${WORK_BASE}/invitations/my`, { skipErrorToast: true }),
+  forTeam: (teamId) => apiClient.get(`${WORK_BASE}/invitations`, { params: { teamId }, skipErrorToast: true }),
+  forProject: (projectId) => apiClient.get(`${WORK_BASE}/invitations`, { params: { projectId }, skipErrorToast: true }),
+  accept: (id) => apiClient.post(`${WORK_BASE}/invitations/${id}/accept`),
+  decline: (id) => apiClient.post(`${WORK_BASE}/invitations/${id}/decline`),
+  cancel: (id) => apiClient.delete(`${WORK_BASE}/invitations/${id}`),
+};
+
 export const projectApi = {
   listAll: (params) => apiClient.get(`${WORK_BASE}/projects`, { params }),
   listTemplates: () => apiClient.get(`${WORK_BASE}/projects/templates`),
-  getById: (id) => apiClient.get(`${WORK_BASE}/projects/${id}`),
+  getById: (id, config = {}) => apiClient.get(`${WORK_BASE}/projects/${id}`, config),
   create: (data) => apiClient.post(`${WORK_BASE}/projects`, data),
   update: (id, data) => apiClient.put(`${WORK_BASE}/projects/${id}`, data),
   delete: (id) => apiClient.delete(`${WORK_BASE}/projects/${id}`),
   clone: (sourceProjectId, data) =>
     apiClient.post(`${WORK_BASE}/projects/${sourceProjectId}/clone`, data),
-  getMembers: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/members`),
-  getMyPermissions: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/permissions/my`),
+  getMembers: (projectId, config = {}) => apiClient.get(`${WORK_BASE}/projects/${projectId}/members`, config),
+  /** Trả về { roleName, isLead, isGlobalAdmin, permissions[] }; 403 nếu không phải thành viên (không toast). */
+  getMyPermissions: (projectId) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/permissions/my`, { skipErrorToast: true }),
   addMember: (projectId, data) => apiClient.post(`${WORK_BASE}/projects/${projectId}/members`, data),
   updateMemberRole: (projectId, userId, roleId) =>
     apiClient.put(`${WORK_BASE}/projects/${projectId}/members/${userId}/role`, { roleId }),
   removeMember: (projectId, userId) =>
     apiClient.delete(`${WORK_BASE}/projects/${projectId}/members/${userId}`),
   getRoles: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/roles`),
+};
+
+// ─── 2.1. Project Work Item Types API (Custom Types per Project) ───────────────
+export const workItemTypeApi = {
+  listByProject: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/types`),
+  create: (projectId, data) => apiClient.post(`${WORK_BASE}/projects/${projectId}/types`, data),
+  update: (projectId, typeId, data) => apiClient.put(`${WORK_BASE}/projects/${projectId}/types/${typeId}`, data),
+  delete: (projectId, typeId) => apiClient.delete(`${WORK_BASE}/projects/${projectId}/types/${typeId}`),
 };
 
 // ─── 3. Work Items API (Jira-grade) ───────────────────────────────────────────
@@ -360,9 +432,17 @@ export const workflowApi = {
   getProjectWorkflowScheme: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/workflow/scheme`),
   updateProjectWorkflowScheme: (projectId, data) => apiClient.put(`${WORK_BASE}/projects/${projectId}/workflow/scheme`, data),
   getProjectStatuses: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/statuses`),
-  createStatus: (data) => apiClient.post(`${WORK_BASE}/statuses`, data),
+  createStatus: (data, projectId) => {
+    const pid = projectId || data?.projectId;
+    return pid ? apiClient.post(`${WORK_BASE}/projects/${pid}/statuses`, data) : apiClient.post(`${WORK_BASE}/statuses`, data);
+  },
+  updateStatus: (statusId, data) => apiClient.put(`${WORK_BASE}/statuses/${statusId}`, data),
+  deleteStatus: (statusId) => apiClient.delete(`${WORK_BASE}/statuses/${statusId}`),
   getWorkflowById: (workflowId) => apiClient.get(`${WORK_BASE}/workflows/${workflowId}`),
+  createWorkflow: (data) => apiClient.post(`${WORK_BASE}/workflows`, data),
+  updateWorkflow: (workflowId, data) => apiClient.put(`${WORK_BASE}/workflows/${workflowId}`, data),
   createTransition: (workflowId, data) => apiClient.post(`${WORK_BASE}/workflows/${workflowId}/transitions`, data),
+  updateTransition: (workflowId, transitionId, data) => apiClient.put(`${WORK_BASE}/workflows/${workflowId}/transitions/${transitionId}`, data),
   deleteTransition: (workflowId, transitionId) => apiClient.delete(`${WORK_BASE}/workflows/${workflowId}/transitions/${transitionId}`),
   getTransitions: (workItemId) => apiClient.get(`${WORK_BASE}/work-items/${workItemId}/transitions`),
   executeTransition: (workItemId, transitionId, data) => apiClient.post(`${WORK_BASE}/work-items/${workItemId}/transitions/${transitionId}`, data),

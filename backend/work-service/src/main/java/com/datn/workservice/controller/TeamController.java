@@ -9,36 +9,76 @@ import com.datn.workservice.client.WorkspaceClient;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.request.CreateTeamRequest;
 import com.datn.workservice.dto.response.TeamMemberResponse;
+import com.datn.workservice.dto.response.InvitationResponse;
+import com.datn.workservice.dto.response.TeamResponse;
 import com.datn.workservice.entity.Project;
+import com.datn.workservice.entity.ProjectRole;
+import com.datn.workservice.entity.RoleAssignment;
 import com.datn.workservice.entity.Team;
 import com.datn.workservice.entity.TeamMember;
 import com.datn.workservice.enums.TeamRole;
 import com.datn.workservice.repository.ProjectRepository;
+import com.datn.workservice.repository.ProjectRoleRepository;
+import com.datn.workservice.repository.RoleAssignmentRepository;
 import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.repository.TeamRepository;
 import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.security.WorkspaceAccessChecker;
+import com.datn.workservice.service.InvitationService;
+import com.datn.workservice.service.ProjectMemberService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.parameters.P;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
+/**
+ * Quản lý Team. Phân quyền bằng {@code @PreAuthorize} + bean {@code teamSecurity}:
+ * <ul>
+ *   <li>Xem team / thành viên: thành viên hoặc owner của team (hoặc Global ADMIN)</li>
+ *   <li>Sửa team, thêm/xóa/đổi vai trò thành viên: LEADER hoặc owner</li>
+ *   <li>Xóa team: owner</li>
+ *   <li>Liệt kê toàn bộ team: Global ADMIN</li>
+ * </ul>
+ * Định danh user luôn là Keycloak id (JWT sub); id nhận từ client được chuẩn hóa qua identity-service.
+ */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/work/teams")
 @RequiredArgsConstructor
 public class TeamController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET    /api/v1/work/teams                            : Lấy danh sách tất cả Team (Admin)
+     * GET    /api/v1/work/teams/my | /me                   : Lấy danh sách Team người dùng hiện tại tham gia
+     * GET    /api/v1/work/teams/{teamId}                   : Lấy chi tiết Team theo ID
+     * POST   /api/v1/work/teams                            : Tạo Team mới (người tạo là Leader)
+     * PUT    /api/v1/work/teams/{teamId}                   : Cập nhật thông tin Team (Leader/Owner)
+     * DELETE /api/v1/work/teams/{teamId}                   : Xóa Team (chỉ Owner)
+     * POST   /api/v1/work/teams/{teamId}/leave             : Rời khỏi Team (thành viên tự rời)
+     * GET    /api/v1/work/teams/{teamId}/members           : Lấy danh sách thành viên của Team
+     * POST   /api/v1/work/teams/{teamId}/members           : Thêm thành viên vào Team (Leader/Owner)
+     * PUT    /api/v1/work/teams/{teamId}/members/{userId}/role : Cập nhật vai trò thành viên (Leader)
+     * DELETE /api/v1/work/teams/{teamId}/members/{userId}  : Xóa thành viên khỏi Team (Leader/Owner)
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final ProjectRepository projectRepository;
+    private final ProjectRoleRepository projectRoleRepository;
+    private final RoleAssignmentRepository roleAssignmentRepository;
     private final IdentityClient identityClient;
     private final WorkspaceAccessChecker workspaceAccessChecker;
+    private final InvitationService invitationService;
+    private final ProjectMemberService projectMemberService;
 
     /**
      * Danh sách Team TRONG MỘT workspace.
@@ -56,44 +96,57 @@ public class TeamController {
     }
 
     /**
-     * Lấy danh sách các Team mà người dùng hiện tại đang tham gia (là Owner hoặc Member).
-     * Dùng hiển thị trên Sidebar và danh sách nhóm của người dùng.
+     * Danh sách tất cả Team trong hệ thống, bỏ qua ranh giới workspace.
+     * Chỉ Global ADMIN mới gọi được - dùng cho màn hình quản trị.
+     */
+    @GetMapping("/all")
+    @PreAuthorize("@teamSecurity.isGlobalAdmin()")
+    public ResponseEntity<ApiResponse<List<Team>>> listAllTeams() {
+        return ResponseEntity.ok(ApiResponse.success(teamRepository.findAll()));
+    }
+
+    /**
+     * Danh sách Team mà người dùng hiện tại tham gia (Owner hoặc Member).
      */
     @GetMapping({"/my", "/me"})
-    public ResponseEntity<ApiResponse<List<Team>>> listMyTeams(
+    public ResponseEntity<ApiResponse<List<TeamResponse>>> listMyTeams(
             @RequestParam(value = "workspaceId", required = false) UUID workspaceId) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
-        Set<UUID> userIds = getUserAliasIds(currentUserId);
-        Set<UUID> teamIds = new HashSet<>();
+        Map<UUID, TeamRole> roleByTeam = new HashMap<>();
+        teamMemberRepository.findByUserId(currentUserId).forEach(m -> roleByTeam.put(m.getTeamId(), m.getRole()));
+        teamRepository.findByOwnerId(currentUserId).forEach(t -> roleByTeam.put(t.getId(), TeamRole.LEADER));
 
-        for (UUID uid : userIds) {
-            teamMemberRepository.findByUserId(uid).forEach(m -> teamIds.add(m.getTeamId()));
-            teamRepository.findByOwnerId(uid).forEach(t -> teamIds.add(t.getId()));
-        }
-
-        if (teamIds.isEmpty()) {
+        if (roleByTeam.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success(Collections.emptyList()));
         }
-
-        List<Team> teams = teamRepository.findByIdIn(teamIds);
-
         // Lọc theo workspace đang xem. Không có bước này thì đổi workspace trên
         // UI vẫn thấy y nguyên danh sách team cũ, và tính năng multi-workspace
         // chỉ là trang trí.
         if (workspaceId != null) {
             workspaceAccessChecker.requireMember(workspaceId, currentUserId);
-            teams = teams.stream()
-                    .filter(t -> workspaceId.equals(t.getWorkspaceId()))
-                    .toList();
         }
 
-        return ResponseEntity.ok(ApiResponse.success(teams));
+        // Kèm myRole để frontend biết user có phải trưởng nhóm không (chỉ trưởng nhóm được tạo dự án)
+        List<TeamResponse> result = teamRepository.findByIdIn(roleByTeam.keySet()).stream()
+                .filter(t -> workspaceId == null || workspaceId.equals(t.getWorkspaceId()))
+                .map(t -> TeamResponse.builder()
+                        .id(t.getId())
+                        .workspaceId(t.getWorkspaceId())
+                        .name(t.getName())
+                        .description(t.getDescription())
+                        .ownerId(t.getOwnerId())
+                        .createdAt(t.getCreatedAt())
+                        .updatedAt(t.getUpdatedAt())
+                        .myRole(currentUserId.equals(t.getOwnerId()) ? TeamRole.LEADER : roleByTeam.get(t.getId()))
+                        .build())
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 
     @GetMapping("/{teamId}")
-    public ResponseEntity<ApiResponse<Team>> getTeam(@PathVariable("teamId") UUID teamId) {
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
+    @PreAuthorize("@teamSecurity.isMember(#teamId)")
+    public ResponseEntity<ApiResponse<Team>> getTeam(@PathVariable("teamId") @P("teamId") UUID teamId) {
+        Team team = requireTeam(teamId);
         return ResponseEntity.ok(ApiResponse.success(team));
     }
 
@@ -137,20 +190,12 @@ public class TeamController {
 
     @Transactional
     @PutMapping("/{teamId}")
+    @PreAuthorize("@teamSecurity.isLeader(#teamId)")
     public ResponseEntity<ApiResponse<Team>> updateTeam(
-            @PathVariable("teamId") UUID teamId,
+            @PathVariable("teamId") @P("teamId") UUID teamId,
             @RequestBody Map<String, String> body
     ) {
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
-
-        UUID currentUserId = SecurityUtils.getCurrentUserId();
-        boolean isOwner = isTeamOwner(team, currentUserId);
-        boolean isLeader = isOwner || isTeamLeader(teamId, currentUserId);
-
-        if (!isOwner && !isLeader) {
-            throw new ForbiddenException("Chỉ Trưởng nhóm (Leader) hoặc Chủ sở hữu mới có quyền chỉnh sửa thông tin nhóm");
-        }
+        Team team = requireTeam(teamId);
 
         if (body.containsKey("name") && body.get("name") != null && !body.get("name").isBlank()) {
             team.setName(body.get("name").trim());
@@ -164,18 +209,14 @@ public class TeamController {
     }
 
     /**
-     * Xóa nhóm (Chỉ Chủ sở hữu / Owner mới có quyền xóa)
+     * Xóa nhóm: trưởng nhóm (người tạo hoặc thành viên role LEADER) hoặc Global ADMIN.
+     * Người tạo team luôn là LEADER (createTeam tự gán) nên "owner" và "leader" là một.
      */
     @Transactional
     @DeleteMapping("/{teamId}")
-    public ResponseEntity<ApiResponse<Void>> deleteTeam(@PathVariable("teamId") UUID teamId) {
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
-
-        UUID currentUserId = SecurityUtils.getCurrentUserId();
-        if (!isTeamOwner(team, currentUserId)) {
-            throw new ForbiddenException("Chỉ Chủ sở hữu nhóm (Owner) mới có quyền xóa nhóm này");
-        }
+    @PreAuthorize("@teamSecurity.isLeader(#teamId)")
+    public ResponseEntity<ApiResponse<Void>> deleteTeam(@PathVariable("teamId") @P("teamId") UUID teamId) {
+        Team team = requireTeam(teamId);
 
         // 1. Gỡ liên kết teamId khỏi các dự án thuộc nhóm
         List<Project> projects = projectRepository.findByTeamId(teamId);
@@ -196,79 +237,48 @@ public class TeamController {
     }
 
     /**
-     * Rời khỏi nhóm (Thành viên tự rời, không áp dụng cho Chủ sở hữu)
+     * Rời khỏi nhóm (Thành viên tự rời, không áp dụng cho Chủ sở hữu).
      */
     @Transactional
     @PostMapping("/{teamId}/leave")
     public ResponseEntity<ApiResponse<Void>> leaveTeam(@PathVariable("teamId") UUID teamId) {
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
-
+        Team team = requireTeam(teamId);
         UUID currentUserId = SecurityUtils.getCurrentUserId();
 
-        if (isTeamOwner(team, currentUserId)) {
+        if (currentUserId.equals(team.getOwnerId())) {
             throw new BadRequestException("Chủ sở hữu nhóm không thể rời nhóm. Bạn có thể xóa nhóm hoặc chuyển quyền sở hữu.");
         }
 
-        Set<UUID> aliasIds = getUserAliasIds(currentUserId);
-        TeamMember member = null;
-        for (UUID uid : aliasIds) {
-            Optional<TeamMember> opt = teamMemberRepository.findByTeamIdAndUserId(teamId, uid);
-            if (opt.isPresent()) {
-                member = opt.get();
-                break;
-            }
-        }
-
-        if (member == null) {
-            throw new ResourceNotFoundException("Bạn không phải là thành viên của nhóm này");
-        }
+        TeamMember member = teamMemberRepository.findByTeamIdAndUserId(teamId, currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bạn không phải là thành viên của nhóm này"));
 
         teamMemberRepository.delete(member);
+        removeMemberFromTeamProjects(teamId, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(null, "Bạn đã rời khỏi nhóm thành công"));
     }
 
     @GetMapping("/{teamId}/members")
-    public ResponseEntity<ApiResponse<List<TeamMemberResponse>>> getTeamMembers(@PathVariable("teamId") UUID teamId) {
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
+    @PreAuthorize("@teamSecurity.isMember(#teamId)")
+    public ResponseEntity<ApiResponse<List<TeamMemberResponse>>> getTeamMembers(
+            @PathVariable("teamId") @P("teamId") UUID teamId
+    ) {
+        Team team = requireTeam(teamId);
+        List<TeamMember> members = new ArrayList<>(teamMemberRepository.findByTeamId(teamId));
 
-        List<TeamMember> members = teamMemberRepository.findByTeamId(teamId);
-
-        // If no members registered yet, ensure owner is added as LEADER
-        if (members.isEmpty() && team.getOwnerId() != null) {
-            TeamMember ownerMember = TeamMember.builder()
+        // Owner luôn được hiển thị là LEADER (không ghi DB trong GET)
+        if (team.getOwnerId() != null && members.stream().noneMatch(m -> team.getOwnerId().equals(m.getUserId()))) {
+            members.add(0, TeamMember.builder()
                     .teamId(teamId)
                     .userId(team.getOwnerId())
                     .role(TeamRole.LEADER)
-                    .build();
-            ownerMember = teamMemberRepository.save(ownerMember);
-            members = List.of(ownerMember);
+                    .joinedAt(team.getCreatedAt())
+                    .build());
         }
 
         List<UUID> userIds = members.stream().map(TeamMember::getUserId).toList();
-        Map<UUID, UserResponse> userMap = new HashMap<>();
+        Map<UUID, UserResponse> userMap = fetchUsers(userIds);
 
-        try {
-            ApiResponse<List<UserResponse>> usersResp = identityClient.getUsersByIds(userIds);
-            if (usersResp != null && usersResp.getData() != null) {
-                for (UserResponse u : usersResp.getData()) {
-                    if (u.getId() != null) {
-                        userMap.put(u.getId(), u);
-                    }
-                    if (u.getKeycloakId() != null) {
-                        try {
-                            userMap.put(UUID.fromString(u.getKeycloakId()), u);
-                        } catch (Exception ignored) {
-                        }
-                    }
-                }
-            }
-        } catch (Exception ex) {
-            log.warn("Could not fetch user details from identityClient: {}", ex.getMessage());
-        }
-
-        // Group by user to prevent duplicate rows if legacy data had both KeycloakId and DbId
+        // Gộp theo người dùng để tránh trùng lặp khi dữ liệu cũ tồn tại cả KeycloakId và DbId
         Map<String, TeamMemberResponse> dedupMap = new LinkedHashMap<>();
         for (TeamMember m : members) {
             UserResponse u = userMap.get(m.getUserId());
@@ -288,7 +298,7 @@ public class TeamController {
 
             String dedupKey = (email != null && !email.isBlank()) ? email.toLowerCase() : m.getUserId().toString();
             if (dedupMap.containsKey(dedupKey)) {
-                // Keep LEADER role if either record was LEADER
+                // Giữ vai trò LEADER nếu một trong hai bản ghi là LEADER
                 if (m.getRole() == TeamRole.LEADER) {
                     dedupMap.get(dedupKey).setRole(TeamRole.LEADER);
                 }
@@ -314,128 +324,44 @@ public class TeamController {
 
     @Transactional
     @PostMapping("/{teamId}/members")
-    public ResponseEntity<ApiResponse<TeamMemberResponse>> addMember(
-            @PathVariable("teamId") UUID teamId,
+    @PreAuthorize("@teamSecurity.isLeader(#teamId)")
+    public ResponseEntity<ApiResponse<InvitationResponse>> addMember(
+            @PathVariable("teamId") @P("teamId") UUID teamId,
             @RequestBody Map<String, String> body
     ) {
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
+        requireTeam(teamId);
 
-        UUID currentUserId = SecurityUtils.getCurrentUserId();
-        boolean isOwner = isTeamOwner(team, currentUserId);
-        boolean isLeader = isOwner || isTeamLeader(teamId, currentUserId);
-
-        if (!isOwner && !isLeader) {
-            throw new ForbiddenException("Chỉ Trưởng nhóm (Leader) mới có quyền thêm thành viên vào nhóm");
-        }
-
-        String emailOrUser = body.get("email");
-        if (emailOrUser == null || emailOrUser.isBlank()) {
-            emailOrUser = body.get("username");
-        }
-        if (emailOrUser == null || emailOrUser.isBlank()) {
-            emailOrUser = body.get("userId");
-        }
-
-        if (emailOrUser == null || emailOrUser.isBlank()) {
+        String identifier = firstNonBlank(body.get("email"), body.get("username"), body.get("userId"));
+        if (identifier == null) {
             throw new BadRequestException("Vui lòng nhập Email, Username hoặc User ID của thành viên");
         }
 
-        UUID targetUserId = null;
-        UUID dbId = null;
-        UUID keycloakId = null;
-
-        try {
-            ApiResponse<UserResponse> uResp = identityClient.getUserByIdentifier(emailOrUser);
-            if (uResp != null && uResp.getData() != null) {
-                UserResponse u = uResp.getData();
-                dbId = u.getId();
-                if (u.getKeycloakId() != null) {
-                    try {
-                        keycloakId = UUID.fromString(u.getKeycloakId());
-                    } catch (Exception ignored) {}
-                }
-            }
-        } catch (Exception ex) {
-            try {
-                targetUserId = UUID.fromString(emailOrUser);
-            } catch (Exception notUuid) {
-                throw new ResourceNotFoundException("Không tìm thấy người dùng với thông tin: " + emailOrUser);
-            }
-        }
-
-        // Canonical ID: prioritize Keycloak ID because Spring Security JWT sub uses Keycloak UUID
-        if (keycloakId != null) {
-            targetUserId = keycloakId;
-        } else if (dbId != null) {
-            targetUserId = dbId;
-        }
-
+        UUID targetUserId = resolveUserId(identifier);
         if (targetUserId == null) {
-            throw new ResourceNotFoundException("Không tìm thấy người dùng với thông tin: " + emailOrUser);
+            throw new ResourceNotFoundException("Không tìm thấy người dùng với thông tin: " + identifier);
         }
 
-        TeamRole role = TeamRole.MEMBER;
-        String roleStr = body.get("role");
-        if (roleStr != null) {
-            try {
-                role = TeamRole.valueOf(roleStr.toUpperCase());
-            } catch (Exception ignored) {}
-        }
+        TeamRole role = parseRole(body.get("role"), TeamRole.MEMBER);
 
-        // Check if member already exists under targetUserId OR dbId OR keycloakId
-        Optional<TeamMember> existing = teamMemberRepository.findByTeamIdAndUserId(teamId, targetUserId);
-        if (existing.isEmpty() && dbId != null) {
-            existing = teamMemberRepository.findByTeamIdAndUserId(teamId, dbId);
-        }
-        if (existing.isEmpty() && keycloakId != null) {
-            existing = teamMemberRepository.findByTeamIdAndUserId(teamId, keycloakId);
-        }
-
-        TeamMember savedMember;
-        if (existing.isPresent()) {
-            savedMember = existing.get();
-            savedMember.setUserId(targetUserId);
-            savedMember.setRole(role);
-            savedMember = teamMemberRepository.save(savedMember);
-        } else {
-            TeamMember newMember = TeamMember.builder()
-                    .teamId(teamId)
-                    .userId(targetUserId)
-                    .role(role)
-                    .build();
-            savedMember = teamMemberRepository.save(newMember);
-        }
-
-        return ResponseEntity.ok(ApiResponse.success(
-                TeamMemberResponse.builder()
-                        .id(savedMember.getId())
-                        .teamId(savedMember.getTeamId())
-                        .userId(savedMember.getUserId())
-                        .role(savedMember.getRole())
-                        .joinedAt(savedMember.getJoinedAt())
-                        .build(),
-                "Thêm thành viên thành công"
-        ));
+        // Không thêm trực tiếp: gửi lời mời, người được mời chấp nhận mới thành thành viên (InvitationService.accept)
+        InvitationResponse invitation = invitationService.inviteToTeam(teamId, targetUserId, role, SecurityUtils.getCurrentUserId());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(invitation, "Đã gửi lời mời tham gia nhóm"));
     }
 
     @Transactional
     @PutMapping("/{teamId}/members/{userId}/role")
+    @PreAuthorize("@teamSecurity.isLeader(#teamId)")
     public ResponseEntity<ApiResponse<TeamMemberResponse>> updateMemberRole(
-            @PathVariable("teamId") UUID teamId,
+            @PathVariable("teamId") @P("teamId") UUID teamId,
             @PathVariable("userId") UUID userId,
             @RequestBody Map<String, String> body
     ) {
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
+        requireTeam(teamId);
         UUID currentUserId = SecurityUtils.getCurrentUserId();
-        boolean isLeader = isTeamLeader(teamId, currentUserId);
+        UUID targetUserId = canonicalUserId(userId);
 
-        if (!isLeader) {
-            throw new ForbiddenException("Chỉ Trưởng nhóm (Leader) mới có quyền thay đổi vai trò thành viên");
-        }
-
-        if (isSameUser(currentUserId, userId)) {
+        if (currentUserId.equals(targetUserId)) {
             throw new BadRequestException("Bạn không thể tự thay đổi vai trò của chính mình");
         }
 
@@ -443,7 +369,6 @@ public class TeamController {
         if (roleStr == null || roleStr.isBlank()) {
             throw new BadRequestException("Vai trò không được để trống");
         }
-
         TeamRole newRole;
         try {
             newRole = TeamRole.valueOf(roleStr.toUpperCase());
@@ -451,128 +376,163 @@ public class TeamController {
             throw new BadRequestException("Vai trò không hợp lệ: " + roleStr);
         }
 
-        // Look up member with alias support
-        Set<UUID> aliasIds = getUserAliasIds(userId);
-        TeamMember member = null;
-        for (UUID uid : aliasIds) {
-            Optional<TeamMember> opt = teamMemberRepository.findByTeamIdAndUserId(teamId, uid);
-            if (opt.isPresent()) {
-                member = opt.get();
-                break;
-            }
-        }
-
-        if (member == null) {
-            throw new ResourceNotFoundException("Không tìm thấy thành viên này trong nhóm");
-        }
+        TeamMember member = findMember(teamId, userId, targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thành viên này trong nhóm"));
 
         member.setRole(newRole);
         member = teamMemberRepository.save(member);
 
-        return ResponseEntity.ok(ApiResponse.success(
-                TeamMemberResponse.builder()
-                        .id(member.getId())
-                        .teamId(member.getTeamId())
-                        .userId(member.getUserId())
-                        .role(member.getRole())
-                        .joinedAt(member.getJoinedAt())
-                        .build(),
-                "Cập nhật vai trò thành công"
-        ));
+        syncMemberToTeamProjects(teamId, member.getUserId(), member.getRole());
+
+        return ResponseEntity.ok(ApiResponse.success(toResponse(member), "Cập nhật vai trò thành công"));
     }
 
     @Transactional
     @DeleteMapping("/{teamId}/members/{userId}")
+    @PreAuthorize("@teamSecurity.isLeader(#teamId)")
     public ResponseEntity<ApiResponse<Void>> removeMember(
-            @PathVariable("teamId") UUID teamId,
+            @PathVariable("teamId") @P("teamId") UUID teamId,
             @PathVariable("userId") UUID userId
     ) {
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
-
+        Team team = requireTeam(teamId);
         UUID currentUserId = SecurityUtils.getCurrentUserId();
+        UUID targetUserId = canonicalUserId(userId);
 
-        // 1. Không cho phép tự xóa chính mình khỏi nhóm qua API xóa thành viên (dùng API rời nhóm)
-        if (isSameUser(currentUserId, userId)) {
+        if (currentUserId.equals(targetUserId)) {
             throw new BadRequestException("Bạn không thể tự xóa chính mình khỏi nhóm (vui lòng sử dụng tính năng Rời nhóm)");
         }
-
-        // 2. Chỉ Leader hoặc Owner của nhóm mới có quyền xóa thành viên
-        boolean isOwner = isTeamOwner(team, currentUserId);
-        boolean isLeader = isOwner || isTeamLeader(teamId, currentUserId);
-
-        if (!isOwner && !isLeader) {
-            throw new ForbiddenException("Chỉ Trưởng nhóm (Leader) mới có quyền xóa thành viên khỏi nhóm");
-        }
-
-        // 3. Không cho phép xóa Chủ sở hữu nhóm
-        if (isTeamOwner(team, userId)) {
+        if (targetUserId.equals(team.getOwnerId())) {
             throw new BadRequestException("Không thể xóa Trưởng nhóm / Chủ sở hữu nhóm");
         }
 
-        // 4. Tìm kiếm thành viên với alias ID
-        Set<UUID> aliasIds = getUserAliasIds(userId);
-        TeamMember targetMember = null;
-        for (UUID uid : aliasIds) {
-            Optional<TeamMember> opt = teamMemberRepository.findByTeamIdAndUserId(teamId, uid);
-            if (opt.isPresent()) {
-                targetMember = opt.get();
-                break;
-            }
-        }
-
-        if (targetMember == null) {
-            throw new ResourceNotFoundException("Không tìm thấy thành viên này trong nhóm");
-        }
+        TeamMember targetMember = findMember(teamId, userId, targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thành viên này trong nhóm"));
 
         teamMemberRepository.delete(targetMember);
+        removeMemberFromTeamProjects(teamId, targetMember.getUserId());
+
         return ResponseEntity.ok(ApiResponse.success(null, "Đã xóa thành viên khỏi nhóm"));
     }
 
     // ─── Helper Methods ──────────────────────────────────────────────────────────
 
-    private Set<UUID> getUserAliasIds(UUID userId) {
-        Set<UUID> ids = new HashSet<>();
-        if (userId != null) {
-            ids.add(userId);
+    private Team requireTeam(UUID teamId) {
+        return teamRepository.findById(teamId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
+    }
+
+    private Optional<TeamMember> findMember(UUID teamId, UUID rawUserId, UUID canonicalUserId) {
+        Optional<TeamMember> member = teamMemberRepository.findByTeamIdAndUserId(teamId, canonicalUserId);
+        if (member.isEmpty() && rawUserId != null && !rawUserId.equals(canonicalUserId)) {
+            member = teamMemberRepository.findByTeamIdAndUserId(teamId, rawUserId);
+        }
+        return member;
+    }
+
+    private void syncMemberToTeamProjects(UUID teamId, UUID userId, TeamRole teamRole) {
+        projectMemberService.syncTeamMemberToProjects(teamId, userId, teamRole);
+    }
+
+    private void removeMemberFromTeamProjects(UUID teamId, UUID userId) {
+        if (teamId == null || userId == null) return;
+        for (Project project : projectRepository.findByTeamId(teamId)) {
+            // Project Lead giữ quyền quản trị ngầm định, không cần xóa assignment
+            if (userId.equals(project.getLeadUserId())) continue;
+            roleAssignmentRepository.deleteByProjectIdAndUserId(project.getId(), userId);
+        }
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String v : values) {
+            if (v != null && !v.isBlank()) return v.trim();
+        }
+        return null;
+    }
+
+    private static TeamRole parseRole(String roleStr, TeamRole fallback) {
+        if (roleStr == null || roleStr.isBlank()) return fallback;
+        try {
+            return TeamRole.valueOf(roleStr.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return fallback;
+        }
+    }
+
+    /**
+     * Resolve email / username / (DB id | Keycloak id) -> Keycloak id.
+     */
+    private UUID resolveUserId(String identifier) {
+        try {
+            ApiResponse<UserResponse> resp = identityClient.getUserByIdentifier(identifier);
+            UUID fromIdentity = toKeycloakId(resp != null ? resp.getData() : null);
+            if (fromIdentity != null) return fromIdentity;
+        } catch (Exception ignored) {
+            // Có thể identifier là UUID -> thử tra theo id
+        }
+        try {
+            UUID id = UUID.fromString(identifier);
+            return canonicalUserId(id);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    /**
+     * Chuẩn hóa bất kỳ id nào (DB id hoặc Keycloak id) về Keycloak id; nếu identity không trả lời thì giữ nguyên.
+     */
+    private UUID canonicalUserId(UUID anyId) {
+        if (anyId == null) return null;
+        try {
+            ApiResponse<UserResponse> resp = identityClient.getUserById(anyId);
+            UUID kc = toKeycloakId(resp != null ? resp.getData() : null);
+            if (kc != null) return kc;
+        } catch (Exception ignored) {
+        }
+        return anyId;
+    }
+
+    private static UUID toKeycloakId(UserResponse user) {
+        if (user == null) return null;
+        if (user.getKeycloakId() != null) {
             try {
-                ApiResponse<UserResponse> resp = identityClient.getUserById(userId);
-                if (resp != null && resp.getData() != null) {
-                    UserResponse u = resp.getData();
-                    if (u.getId() != null) ids.add(u.getId());
+                return UUID.fromString(user.getKeycloakId());
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        return user.getId();
+    }
+
+    private Map<UUID, UserResponse> fetchUsers(List<UUID> userIds) {
+        Map<UUID, UserResponse> userMap = new HashMap<>();
+        if (userIds == null || userIds.isEmpty()) return userMap;
+        try {
+            ApiResponse<List<UserResponse>> usersResp = identityClient.getUsersByIds(userIds);
+            if (usersResp != null && usersResp.getData() != null) {
+                for (UserResponse u : usersResp.getData()) {
+                    if (u.getId() != null) {
+                        userMap.put(u.getId(), u);
+                    }
                     if (u.getKeycloakId() != null) {
                         try {
-                            ids.add(UUID.fromString(u.getKeycloakId()));
-                        } catch (Exception ignored) {}
+                            userMap.put(UUID.fromString(u.getKeycloakId()), u);
+                        } catch (Exception ignored) {
+                        }
                     }
                 }
-            } catch (Exception ignored) {
             }
+        } catch (Exception ex) {
+            log.warn("Could not fetch user details from identityClient: {}", ex.getMessage());
         }
-        return ids;
+        return userMap;
     }
 
-    private boolean isSameUser(UUID userA, UUID userB) {
-        if (userA == null || userB == null) return false;
-        if (userA.equals(userB)) return true;
-        Set<UUID> aliasA = getUserAliasIds(userA);
-        return aliasA.contains(userB);
-    }
-
-    private boolean isTeamOwner(Team team, UUID userId) {
-        if (team == null || team.getOwnerId() == null || userId == null) return false;
-        return isSameUser(team.getOwnerId(), userId);
-    }
-
-    private boolean isTeamLeader(UUID teamId, UUID userId) {
-        if (teamId == null || userId == null) return false;
-        Set<UUID> aliases = getUserAliasIds(userId);
-        for (UUID uid : aliases) {
-            Optional<TeamMember> member = teamMemberRepository.findByTeamIdAndUserId(teamId, uid);
-            if (member.isPresent() && member.get().getRole() == TeamRole.LEADER) {
-                return true;
-            }
-        }
-        return false;
+    private static TeamMemberResponse toResponse(TeamMember m) {
+        return TeamMemberResponse.builder()
+                .id(m.getId())
+                .teamId(m.getTeamId())
+                .userId(m.getUserId())
+                .role(m.getRole())
+                .joinedAt(m.getJoinedAt())
+                .build();
     }
 }

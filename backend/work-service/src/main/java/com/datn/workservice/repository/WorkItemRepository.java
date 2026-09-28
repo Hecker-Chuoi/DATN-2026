@@ -31,6 +31,9 @@ public interface WorkItemRepository extends JpaRepository<WorkItem, UUID>, JpaSp
     long countByProjectId(UUID projectId);
     long countBySprintId(UUID sprintId);
     long countBySprintIdAndStatusId(UUID sprintId, UUID statusId);
+    boolean existsByTypeId(UUID typeId);
+    long countByTypeId(UUID typeId);
+    long countByStatusId(UUID statusId);
 
     // --- Giai doan 6: bien the loc soft-delete + truy van theo lo cho Board/Backlog/Report ---
     List<WorkItem> findBySprintIdAndDeletedAtIsNullOrderByRankAsc(UUID sprintId);

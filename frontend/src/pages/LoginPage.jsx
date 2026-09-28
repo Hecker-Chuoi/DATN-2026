@@ -142,8 +142,8 @@ export default function LoginPage({ onLoginSuccess }) {
 
             <div className="form-options">
               <span style={{ color: '#94a3b8' }}>Ghi nhớ tài khoản</span>
-              <a href="#forgot" onClick={(e) => { e.preventDefault(); alert('Vui lòng liên hệ Admin để khôi phục mật khẩu!'); }} className="forgot-link">
-                Forgot Your Password
+              <a href="/forgot-password" className="forgot-link">
+                Quên mật khẩu?
               </a>
             </div>
 

@@ -1,8 +1,11 @@
 package com.datn.workservice.specification;
 
 import com.datn.workservice.entity.Project;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -45,5 +48,21 @@ public class ProjectSpecification extends BaseSpecification {
         }
 
         return spec;
+    }
+
+    /**
+     * Chỉ các dự án mà user có quyền truy cập: là thành viên (role_assignments),
+     * là Project Lead hoặc là người tạo.
+     */
+    public static Specification<Project> accessibleBy(UUID userId, Collection<UUID> memberProjectIds) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("leadUserId"), userId));
+            predicates.add(cb.equal(root.get("createdBy"), userId));
+            if (memberProjectIds != null && !memberProjectIds.isEmpty()) {
+                predicates.add(root.get("id").in(memberProjectIds));
+            }
+            return cb.or(predicates.toArray(new Predicate[0]));
+        };
     }
 }

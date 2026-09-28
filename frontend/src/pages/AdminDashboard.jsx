@@ -125,7 +125,7 @@ export default function AdminDashboard({ onLogout }) {
   const handleSaveRoles = async () => {
     if (!selectedUser) return;
     if (selectedRoles.length === 0) {
-      setModalError('Vui lòng chọn ít nhất 1 role cho người dùng.');
+      setModalError('Vui lòng chọn ít nhất 1 vai trò cho người dùng.');
       return;
     }
 
@@ -135,7 +135,7 @@ export default function AdminDashboard({ onLogout }) {
 
     try {
       await userApi.updateRoles(selectedUser.id, selectedRoles);
-      setModalSuccess(`Cập nhật role cho ${selectedUser.username} thành công!`);
+      setModalSuccess(`Cập nhật vai trò cho ${selectedUser.username} thành công!`);
 
       // Refresh list
       await fetchUsers();
@@ -144,7 +144,7 @@ export default function AdminDashboard({ onLogout }) {
         setSelectedUser(null);
       }, 1200);
     } catch (err) {
-      setModalError(err.message || 'Cập nhật role thất bại.');
+      setModalError(err.message || 'Cập nhật vai trò thất bại.');
     } finally {
       setUpdatingRole(false);
     }
@@ -176,7 +176,7 @@ export default function AdminDashboard({ onLogout }) {
   // Admin create user
   const handleCreateUser = async () => {
     if (!createUsername.trim()) {
-      toast.error('Vui lòng nhập Username.');
+      toast.error('Vui lòng nhập tên đăng nhập.');
       return;
     }
     if (!createPassword || createPassword.length < 6) {
@@ -290,7 +290,7 @@ export default function AdminDashboard({ onLogout }) {
       <aside className="sidebar">
         <div className="sidebar-header">
           <ShieldCheck size={26} />
-          <span>DATN Admin</span>
+          <span>Quản trị DATN</span>
         </div>
 
         <nav className="sidebar-nav">
@@ -311,16 +311,16 @@ export default function AdminDashboard({ onLogout }) {
             style={{ width: '100%', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
           >
             <Users size={18} />
-            <span>Quản Lý User</span>
+            <span>Quản Lý Người Dùng</span>
           </button>
 
           <a href="#keycloak" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang cấu hình Keycloak IAM'); }}>
             <KeyRound size={18} />
-            <span>Keycloak IAM</span>
+            <span>Xác thực Keycloak</span>
           </a>
           <a href="#gateway" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang thông số API Gateway'); }}>
             <Server size={18} />
-            <span>API Gateway Logs</span>
+            <span>Nhật ký Cổng kết nối</span>
           </a>
         </nav>
 
@@ -356,7 +356,7 @@ export default function AdminDashboard({ onLogout }) {
           <div>
             <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>Bảng Quản Trị Hệ Thống</span>
             <h1 style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-heading)' }}>
-              {activeTab === 'projects' ? 'Project Management & Templates' : 'User Management & Roles'}
+              {activeTab === 'projects' ? 'Quản lý Dự án & Mẫu quy trình' : 'Quản lý Người dùng & Phân quyền'}
             </h1>
           </div>
 
@@ -444,7 +444,7 @@ export default function AdminDashboard({ onLogout }) {
                     <Search size={16} className="search-icon" />
                     <input
                       type="text"
-                      placeholder="Tìm theo Username, Email hoặc Tên..."
+                      placeholder="Tìm theo tên đăng nhập, thư điện tử hoặc họ tên..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -457,7 +457,7 @@ export default function AdminDashboard({ onLogout }) {
                       onClick={() => setShowCreateModal(true)}
                     >
                       <UserPlus size={15} />
-                      <span>Thêm User</span>
+                      <span>Thêm người dùng</span>
                     </button>
                     <button className="action-btn" onClick={fetchUsers} disabled={loading}>
                       <RefreshCw size={15} className={loading ? 'spin' : ''} />
@@ -503,12 +503,12 @@ export default function AdminDashboard({ onLogout }) {
                                   </div>
                                   <div>
                                     <div style={{ fontWeight: 600 }}>{user.username}</div>
-                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>ID: {user.id}</div>
+                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Mã: {user.id}</div>
                                   </div>
                                 </div>
                               </td>
 
-                              <td>{user.email || 'N/A'}</td>
+                              <td>{user.email || '—'}</td>
 
                               <td>
                                 {user.firstName || user.lastName
@@ -521,11 +521,11 @@ export default function AdminDashboard({ onLogout }) {
                                   {user.roles && user.roles.length > 0 ? (
                                     user.roles.map((role) => (
                                       <span key={role} className={`role-tag ${role.toLowerCase()}`}>
-                                        {role}
+                                        {role === 'ADMIN' ? 'QUẢN TRỊ VIÊN' : role === 'MANAGER' ? 'QUẢN LÝ' : 'THÀNH VIÊN'}
                                       </span>
                                     ))
                                   ) : (
-                                    <span className="role-tag user">USER</span>
+                                    <span className="role-tag user">THÀNH VIÊN</span>
                                   )}
                                 </div>
                               </td>
@@ -547,7 +547,7 @@ export default function AdminDashboard({ onLogout }) {
                                   minWidth: '65px',
                                   textAlign: 'center'
                                 }}>
-                                  {user.status === 'ACTIVE' ? 'Active' : 'Deactive'}
+                                  {user.status === 'ACTIVE' ? 'Hoạt động' : 'Tạm khóa'}
                                 </span>
                               </td>
 
@@ -556,13 +556,13 @@ export default function AdminDashboard({ onLogout }) {
                                   day: '2-digit',
                                   month: '2-digit',
                                   year: 'numeric'
-                                }) : 'N/A'}
+                                }) : '—'}
                               </td>
 
                               <td style={{ textAlign: 'right', whiteSpace: 'nowrap', width: '130px', minWidth: '130px' }}>
                                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
                                   <button
-                                    title="Cập nhật Role"
+                                    title="Cập nhật vai trò"
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -790,7 +790,9 @@ export default function AdminDashboard({ onLogout }) {
                       style={{ cursor: 'pointer', width: 18, height: 18 }}
                     />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>ROLE_{role}</div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>
+                        {role === 'ADMIN' ? 'Quản trị viên' : role === 'MANAGER' ? 'Quản lý' : 'Thành viên'}
+                      </div>
                       <div style={{ fontSize: 12, color: '#64748b' }}>
                         {role === 'ADMIN' && 'Quyền quản trị cao nhất hệ thống'}
                         {role === 'USER' && 'Quyền người dùng tiêu chuẩn'}
@@ -840,7 +842,7 @@ export default function AdminDashboard({ onLogout }) {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Username</label>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 6 }}>Tên đăng nhập</label>
                 <input
                   type="text"
                   placeholder="Nhập tên tài khoản..."

@@ -3,8 +3,8 @@ import { Flame, ArrowUp, Equal, ArrowDown, ChevronsDown } from 'lucide-react';
 export const PRIORITY_CONFIG = {
   HIGHEST: {
     key: 'HIGHEST',
-    label: 'Cao nhất',
-    subLabel: 'Highest / Blocker',
+    label: 'Khẩn cấp',
+    subLabel: 'Chặn tiến độ',
     color: '#DC2626',      // Red-600
     bgColor: '#FEF2F2',    // Red-50
     borderColor: '#FECACA',// Red-200
@@ -13,7 +13,7 @@ export const PRIORITY_CONFIG = {
   HIGH: {
     key: 'HIGH',
     label: 'Cao',
-    subLabel: 'High',
+    subLabel: 'Ưu tiên cao',
     color: '#EA580C',      // Orange-600
     bgColor: '#FFF7ED',    // Orange-50
     borderColor: '#FED7AA',// Orange-200
@@ -22,7 +22,7 @@ export const PRIORITY_CONFIG = {
   MEDIUM: {
     key: 'MEDIUM',
     label: 'Trung bình',
-    subLabel: 'Medium',
+    subLabel: 'Bình thường',
     color: '#D97706',      // Amber-600
     bgColor: '#FEFCE8',    // Amber-50
     borderColor: '#FEF08A',// Amber-200
@@ -31,7 +31,7 @@ export const PRIORITY_CONFIG = {
   LOW: {
     key: 'LOW',
     label: 'Thấp',
-    subLabel: 'Low',
+    subLabel: 'Ưu tiên thấp',
     color: '#16A34A',      // Green-600
     bgColor: '#F0FDF4',    // Green-50
     borderColor: '#BBF7D0',// Green-200
@@ -40,7 +40,7 @@ export const PRIORITY_CONFIG = {
   LOWEST: {
     key: 'LOWEST',
     label: 'Rất thấp',
-    subLabel: 'Lowest',
+    subLabel: 'Không khẩn',
     color: '#64748B',      // Slate-500
     bgColor: '#F8FAFC',    // Slate-50
     borderColor: '#E2E8F0',// Slate-200

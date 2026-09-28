@@ -2,11 +2,14 @@ package com.datn.workservice.controller;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.workservice.dto.request.AssignProjectRoleRequest;
+import com.datn.workservice.dto.response.MyProjectPermissionsResponse;
 import com.datn.workservice.dto.response.ProjectRoleResponse;
+import com.datn.workservice.dto.response.InvitationResponse;
 import com.datn.workservice.dto.response.RoleAssignmentResponse;
 import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.security.RequireProjectPermission;
 import com.datn.workservice.security.SecurityUtils;
+import com.datn.workservice.service.InvitationService;
 import com.datn.workservice.service.ProjectMemberService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,22 +26,37 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProjectMemberController {
 
+    /**
+     * ──────────────────────────── DANH SÁCH API ────────────────────────────
+     * GET    /api/v1/work/projects/{projectId}/permissions/my         : Lấy quyền của người dùng hiện tại trong dự án
+     * GET    /api/v1/work/projects/{projectId}/members                : Lấy danh sách thành viên & vai trò trong dự án
+     * POST   /api/v1/work/projects/{projectId}/members                : Thêm thành viên vào dự án (Project Admin)
+     * PUT    /api/v1/work/projects/{projectId}/members/{userId}/role  : Cập nhật vai trò thành viên (Project Admin)
+     * DELETE /api/v1/work/projects/{projectId}/members/{userId}       : Xóa thành viên khỏi dự án (Project Admin)
+     * GET    /api/v1/work/projects/{projectId}/roles                  : Lấy danh sách vai trò của dự án
+     * ────────────────────────────────────────────────────────────────────────
+     */
+
     private final ProjectMemberService projectMemberService;
+    private final InvitationService invitationService;
 
     /**
-     * Retrieves permissions of current user in this project.
+     * Retrieves role & permissions of current user in this project.
+     * Returns 403 when the user is not a member of the project (frontend uses this as access check).
      */
     @GetMapping("/permissions/my")
-    public ResponseEntity<ApiResponse<List<String>>> getMyPermissions(@PathVariable("projectId") UUID projectId) {
+    public ResponseEntity<ApiResponse<MyProjectPermissionsResponse>> getMyPermissions(@PathVariable("projectId") UUID projectId) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
-        List<String> permissions = projectMemberService.getMyPermissions(projectId, currentUserId);
+        MyProjectPermissionsResponse permissions = projectMemberService.getMyPermissions(
+                projectId, currentUserId, SecurityUtils.isGlobalAdmin());
         return ResponseEntity.ok(ApiResponse.success(permissions));
     }
 
     /**
-     * Retrieves all members and roles in this project.
+     * Lấy danh sách tất cả thành viên và vai trò trong dự án.
      */
     @GetMapping("/members")
+    @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<List<RoleAssignmentResponse>>> getProjectMembers(
             @PathVariable("projectId") UUID projectId
     ) {
@@ -47,22 +65,23 @@ public class ProjectMemberController {
     }
 
     /**
-     * Adds a member with role to this project.
+     * Thêm thành viên mới (kèm vai trò) vào dự án.
      */
     @PostMapping("/members")
     @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
-    public ResponseEntity<ApiResponse<RoleAssignmentResponse>> addMemberToProject(
+    public ResponseEntity<ApiResponse<InvitationResponse>> addMemberToProject(
             @PathVariable("projectId") UUID projectId,
             @Valid @RequestBody AssignProjectRoleRequest request
     ) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
-        RoleAssignmentResponse response = projectMemberService.addMemberToProject(projectId, request, currentUserId);
+        // Không thêm trực tiếp: gửi lời mời, người được mời chấp nhận mới có role_assignment (InvitationService.accept)
+        InvitationResponse response = invitationService.inviteToProject(projectId, request.getUserId(), request.getRoleId(), currentUserId);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(response, "Thêm thành viên vào dự án thành công"));
+                .body(ApiResponse.success(response, "Đã gửi lời mời tham gia dự án"));
     }
 
     /**
-     * Updates an existing member's role in this project.
+     * Cập nhật vai trò của thành viên đã tồn tại trong dự án.
      */
     @PutMapping("/members/{userId}/role")
     @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
@@ -78,7 +97,7 @@ public class ProjectMemberController {
     }
 
     /**
-     * Removes a member from this project.
+     * Xóa thành viên khỏi dự án.
      */
     @DeleteMapping("/members/{userId}")
     @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
@@ -92,9 +111,10 @@ public class ProjectMemberController {
     }
 
     /**
-     * Retrieves all project roles.
+     * Lấy danh sách tất cả vai trò của dự án.
      */
     @GetMapping("/roles")
+    @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<List<ProjectRoleResponse>>> getProjectRoles(
             @PathVariable("projectId") UUID projectId
     ) {

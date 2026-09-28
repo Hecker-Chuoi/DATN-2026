@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { userTokenStore, adminTokenStore, authApi, userApi } from './api.js';
+import { PermissionProvider } from './context/PermissionContext.jsx';
 
 import WorkspaceLayout from './components/layout/WorkspaceLayout.jsx';
 import ProjectListPage from './pages/ProjectListPage.jsx';
@@ -24,6 +25,14 @@ import WorkspaceRedirect from './components/workspace/WorkspaceRedirect.jsx';
 import WorkspaceListPage from './pages/WorkspaceListPage.jsx';
 import WorkspaceMembersPage from './pages/WorkspaceMembersPage.jsx';
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage.jsx';
+import AccessDenied from './components/common/AccessDenied.jsx';
+import InvitationsPage from './pages/InvitationsPage.jsx';
+import VerifyEmailPage from './pages/VerifyEmailPage.jsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
+
+// Keycloak public URL (đổi qua .env.local: VITE_KEYCLOAK_URL) – mặc định cổng 8088 dùng chung của nhóm
+const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8088';
 
 /**
  * Vỏ cho toàn bộ phần đã đăng nhập.
@@ -90,7 +99,7 @@ function App() {
     setIsUserAuth(false);
     setCurrentUser(null);
 
-    const keycloakLogoutUrl = `http://localhost:8088/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/login')}`;
+    const keycloakLogoutUrl = `${KEYCLOAK_URL}/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/login')}`;
     window.location.href = keycloakLogoutUrl;
   };
 
@@ -113,12 +122,13 @@ function App() {
       console.warn('Backend logout error:', err);
     }
 
-    const keycloakLogoutUrl = `http://localhost:8088/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/admin/login')}`;
+    const keycloakLogoutUrl = `${KEYCLOAK_URL}/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/admin/login')}`;
     window.location.href = keycloakLogoutUrl;
   };
 
   return (
     <BrowserRouter>
+     <PermissionProvider currentUser={currentUser}>
       {/* ─── Global Toast Notifications Container ─── */}
       <Toaster
         position="bottom-right"
@@ -179,6 +189,10 @@ function App() {
           path="/auth/callback"
           element={<GoogleCallback onLoginSuccess={handleUserLoginSuccess} />}
         />
+        {/* Public: link từ email xác thực / đặt lại mật khẩu (identity-service gửi qua notification-service) */}
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* ─── 2. User Work Management Portal (`/w/:workspaceId/**`) ─── */}
         <Route element={isUserAuth ? <AuthedShell /> : <Navigate to="/login" replace />}>
@@ -212,6 +226,9 @@ function App() {
             <Route path="members" element={<WorkspaceMembersPage />} />
             <Route path="settings" element={<WorkspaceSettingsPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="invitations" element={<InvitationsPage />} />
+            <Route path="403" element={<AccessDenied status={403} title="Bạn không có quyền truy cập" message="Bạn không có quyền xem nội dung này. Hãy liên hệ người quản trị để được cấp quyền." />} />
+            <Route path="404" element={<AccessDenied status={404} />} />
           <Route
             path="my-issues"
             element={
@@ -272,10 +289,14 @@ function App() {
           element={<Navigate to="/register" replace />}
         />
 
+        {/* 401: phiên hết hạn (interceptor chuyển hướng tới đây khi refresh token thất bại) */}
+        <Route path="/401" element={<AccessDenied status={401} />} />
+
         {/* Catch-all: về workspace phù hợp thay vì đường dẫn phẳng /projects
             (vốn không còn tồn tại sau khi workspace vào URL). */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+     </PermissionProvider>
     </BrowserRouter>
   );
 }

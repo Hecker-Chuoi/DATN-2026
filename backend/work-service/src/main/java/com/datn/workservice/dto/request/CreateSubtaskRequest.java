@@ -31,4 +31,6 @@ public class CreateSubtaskRequest {
     private Long originalEstimateSeconds;
 
     private LocalDate dueDate;
+
+    private UUID typeId;
 }

@@ -2,8 +2,8 @@
 
 Thư mục này chứa cấu hình Docker cho toàn bộ hạ tầng (Databases, Keycloak, Redis, Kafka, pgAdmin) và ứng dụng:
 
-- **[`docker-compose.infra.yml`](file:///d:/DATN-2026/backend/environment/docker-compose.infra.yml)**: Chứa các service hạ tầng gồm PostgreSQL (cho App `datn_main_db` & Keycloak), Keycloak Server 24, pgAdmin 4, Redis 7, Apache Kafka 3.8.
-- **[`docker-compose.app.yml`](file:///d:/DATN-2026/backend/environment/docker-compose.app.yml)**: Đóng gói toàn bộ backend và frontend nếu muốn chạy containerized.
+- **[`docker-compose.infra.yml`](file:///d:/DATN-2026/infrastructure/docker-compose.infra.yml)**: Chứa các service hạ tầng gồm PostgreSQL (cho App `datn_main_db` & Keycloak), Keycloak Server 24, pgAdmin 4, Redis 7, Apache Kafka 3.8.
+- **[`docker-compose.app.yml`](file:///d:/DATN-2026/infrastructure/docker-compose.app.yml)**: Đóng gói toàn bộ backend và frontend nếu muốn chạy containerized.
 
 ---
 
@@ -66,7 +66,7 @@ docker system prune -a --volumes -f
 ## 🚀 II. Hướng dẫn Cài đặt & Khởi chạy Môi trường Hạ tầng (Docker Infra)
 
 ### Bước 1: Khởi động các Service Hạ tầng
-Mở PowerShell tại thư mục `backend/environment`:
+Mở PowerShell tại thư mục `infrastructure`:
 ```powershell
 cd d:\DATN-2026\backend\environment
 docker compose -f docker-compose.infra.yml up -d
@@ -90,7 +90,7 @@ Các dịch vụ sẽ mở tại các cổng:
 
 ### Bước 3: Cấu hình / Import Realm cho Keycloak
 
-Sau khi Keycloak chạy, import file [`realm-export_08082026.json`](file:///d:/DATN-2026/backend/environment/keycloak/realm-export_08082026.json) (đã cấu hình sẵn Client ID `datn-backend` và Google Identity Provider):
+Sau khi Keycloak chạy, import file [`realm-export_08082026.json`](file:///d:/DATN-2026/infrastructure/keycloak/realm-export_08082026.json) (đã cấu hình sẵn Client ID `datn-backend` và Google Identity Provider):
 
 1. Truy cập [http://localhost:8088](http://localhost:8088) ➔ Đăng nhập với `admin` / `admin`.
 2. Menu góc trái bấm chọn dropdown Realm (mặc định là `master`) ➔ Bấm **Create Realm**.
@@ -100,7 +100,7 @@ Sau khi Keycloak chạy, import file [`realm-export_08082026.json`](file:///d:/D
    ```
 4. Bấm nút **Create**. Toàn bộ Roles, Client `datn-backend`, và Google Provider sẽ được nạp hoàn chỉnh.
 
-*(Chi tiết xem thêm tại [`keycloak-setup.md`](file:///d:/DATN-2026/backend/environment/keycloak-setup.md))*
+*(Chi tiết xem thêm tại [`keycloak-setup.md`](file:///d:/DATN-2026/infrastructure/keycloak-setup.md))*
 
 ---
 

@@ -62,6 +62,16 @@ public interface WorkflowService {
     StatusResponse createStatus(CreateStatusRequest request);
 
     /**
+     * Updates an existing status in the system.
+     */
+    StatusResponse updateStatus(UUID statusId, UpdateStatusRequest request);
+
+    /**
+     * Deletes a status from the system if not used by any work item.
+     */
+    void deleteStatus(UUID statusId);
+
+    /**
      * Retrieves the active workflow scheme and its issue type mappings for a project.
      */
     WorkflowSchemeResponse getProjectWorkflowScheme(UUID projectId);
