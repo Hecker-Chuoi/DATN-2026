@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
+import { wsPath } from '../utils/workspacePath.js';
 import {
   Users,
   UserPlus,
@@ -27,7 +28,7 @@ import { teamApi, userApi } from '../api.js';
 import PendingInvitations from '../components/common/PendingInvitations.jsx';
 
 export default function TeamDetailPage() {
-  const { teamId } = useParams();
+  const { teamId, workspaceId } = useParams();
   const navigate = useNavigate();
   const outletContext = useOutletContext();
   const refreshTeams = outletContext?.refreshTeams;
@@ -112,7 +113,7 @@ export default function TeamDetailPage() {
       await teamApi.leaveTeam(teamId);
       toast.success('Bạn đã rời khỏi nhóm thành công');
       if (refreshTeams) refreshTeams();
-      navigate('/projects');
+      navigate(wsPath(workspaceId, '/projects'));
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Lỗi khi rời nhóm';
       toast.error(msg);
@@ -134,7 +135,7 @@ export default function TeamDetailPage() {
       await teamApi.delete(teamId);
       toast.success('Đã xóa nhóm thành công');
       if (refreshTeams) refreshTeams();
-      navigate('/projects');
+      navigate(wsPath(workspaceId, '/projects'));
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Lỗi khi xóa nhóm';
       toast.error(msg);

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `backend/` — Maven multi-module (Java 21, Spring Boot 3.5.4, Spring Cloud 2025.0.0): `common`, `api-gateway` (:8081), `identity-service` (:8082), `work-service` (:8083), `notification-service` (:9994, chỉ gửi email qua SMTP, không đi qua gateway).
 - `frontend/` — React 19 + Vite 8, JS/JSX thuần (không TypeScript, không Tailwind, không thư viện UI/state). Dev server :5173.
-- `backend/environment/` — toàn bộ docker-compose, Keycloak realm export, hướng dẫn setup. Thư mục `infrastructure/` ở root chỉ có `.gitkeep`.
+- `infrastructure/` (ở root) — toàn bộ docker-compose, Keycloak realm export, hướng dẫn setup. Các file này từng nằm ở `backend/environment/`; sau khi chuyển ra root, `context:` trong compose trỏ tới `../backend` và `../frontend`.
 - `docs/` — đặc tả kiến trúc, DB, luồng đăng nhập, kịch bản test (`docs/services/work_service/*`). `community-service`, `integration-notification-service`, `ai-service` chỉ tồn tại trong docs, chưa có code.
 
 ## Lệnh thường dùng
@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Máy hiện tại **không có Maven và chỉ có JDK 17** (`JAVA_HOME=D:\jdk-17`), trong khi dự án cần JDK 21. `backend/mvnw` cũng hỏng vì `.mvn/` bị gitignore ở root. Vì vậy build/test backend chỉ chắc chắn chạy được qua Docker:
 
 ```bash
-cd backend/environment
+cd infrastructure
 docker compose -f docker-compose.tuananh.yml up -d --build   # file CÁ NHÂN: cổng 999x, MinIO bitnamilegacy, Mailpit, notification-service, redis, kafka
 ```
 Ba file `docker-compose.yml` / `.app.yml` / `.infra.yml` là bản gốc của nhóm (cổng 808x, image `minio/minio` đã bị gỡ khỏi Docker Hub, chưa có notification-service) — **không sửa**.
@@ -81,7 +81,7 @@ Frontend → API Gateway (:8081) → service. Gateway (`api-gateway/src/main/res
 - Chỉ trưởng nhóm (owner/LEADER của team) hoặc Global ADMIN tạo được dự án; dự án không gắn team chỉ ADMIN tạo được. Xóa team cần `teamSecurity.isLeader` (không còn `isOwner`).
 - `work-service` **chưa có trong bất kỳ docker-compose nào**, và compose chỉ set env `SPRING_CLOUD_GATEWAY_ROUTES_0_*` (identity) nên gateway trong container mất route `/work/**`. `frontend/nginx.conf` cũng chỉ proxy `/identity/`, thiếu `/work/`.
 - `frontend/src/api/workServiceApi.js` là bản trùng lặp của `src/api.js`, không ai import; dùng `src/api.js`.
-- Client secret `datn-backend` phải khớp giữa `identity-service/application.yaml`, compose và realm export (`backend/environment/keycloak/realm-export_08082026.json`). Import realm: `POST http://localhost:8088/admin/realms` với token admin-cli của realm master.
+- Client secret `datn-backend` phải khớp giữa `identity-service/application.yaml`, compose và realm export (`infrastructure/keycloak/realm-export_08082026.json`). Import realm: `POST http://localhost:8088/admin/realms` với token admin-cli của realm master.
 
 ## Quy tắc làm việc với Claude Code
 - **Không tự chạy lệnh can thiệp sâu vào hệ thống.** Với các lệnh cài đặt hoặc thay đổi máy (winget/choco/msi, cài hay gỡ Node/JDK/Maven, sửa PATH hoặc biến môi trường, sửa registry, xóa volume/image Docker, `docker system prune`, `git push --force`, `git reset --hard`, xóa DB), chỉ đưa lệnh và hướng dẫn để người dùng tự chạy. Được phép tự chạy các thao tác trong phạm vi repo và container dev: sửa file, `npm install`, `docker compose up/down`, chạy test, đọc log.

@@ -20,6 +20,23 @@ public abstract class BaseSpecification {
                 : cb.equal(root.get(field), value);
     }
 
+    /**
+     * field IN (:values). Danh sách RỖNG trả về disjunction (không hàng nào), CHỦ
+     * ĐÍCH không phải conjunction: dùng để scope theo workspace, nên "không có
+     * workspace nào" phải ra trang trống, chứ không phải trang không filter.
+     */
+    public static <T> Specification<T> hasFieldIn(String field, java.util.Collection<?> values) {
+        return (root, query, cb) -> {
+            if (values == null) {
+                return cb.conjunction();
+            }
+            if (values.isEmpty()) {
+                return cb.disjunction();
+            }
+            return root.get(field).in(values);
+        };
+    }
+
     public static <T> Specification<T> hasNestedFieldEqual(String parentField, String childField, Object value) {
         return (root, query, cb) -> (value == null)
                 ? cb.conjunction()

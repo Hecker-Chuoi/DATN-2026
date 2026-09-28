@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { X, Users, Sparkles, Check, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { teamApi } from '../../api.js';
+import { useWorkspace } from '../../context/WorkspaceContext.jsx';
 
 export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
+  const { currentWorkspaceId, currentWorkspace } = useWorkspace();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -17,11 +19,18 @@ export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
       setError('Vui lòng nhập tên nhóm làm việc');
       return;
     }
+    // Backend đã đổi POST /teams sang CreateTeamRequest có @NotNull workspaceId
+    // (trước đây nó nhận Map và tự nhét user id của người tạo vào workspaceId).
+    if (!currentWorkspaceId) {
+      setError('Chưa xác định được workspace. Vui lòng tải lại trang.');
+      return;
+    }
 
     try {
       setSubmitting(true);
       setError('');
       const res = await teamApi.create({
+        workspaceId: currentWorkspaceId,
         name: name.trim(),
         description: description.trim(),
       });
@@ -34,10 +43,10 @@ export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
         onTeamCreated(res.data);
       }
     } catch (err) {
-      console.error('Failed to create team:', err);
-      const msg = err.response?.data?.message || 'Không thể tạo nhóm làm việc. Vui lòng thử lại.';
-      setError(msg);
-      toast.error(msg);
+      // err.response là undefined ở codebase này: response interceptor của api.js
+      // throw một Error mới chỉ mang .status và .body, và đã toast lỗi rồi - nên
+      // ở đây chỉ set inline error, không toast lần hai.
+      setError(err.body?.message || err.message || 'Không thể tạo nhóm làm việc. Vui lòng thử lại.');
     } finally {
       setSubmitting(false);
     }
@@ -102,7 +111,9 @@ export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
                 Tạo Nhóm làm việc mới
               </h3>
               <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>
-                Tổ chức các dự án và thành viên theo nhóm
+                {currentWorkspace?.name
+                  ? `Trong workspace ${currentWorkspace.name}`
+                  : 'Tổ chức các dự án và thành viên theo nhóm'}
               </p>
             </div>
           </div>

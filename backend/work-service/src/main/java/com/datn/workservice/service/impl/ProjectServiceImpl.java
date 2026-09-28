@@ -122,7 +122,7 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ProjectResponse> getAllProjects(
-            UUID workspaceId,
+            List<UUID> workspaceIds,
             UUID teamId,
             String search,
             Boolean isTemplate,
@@ -130,7 +130,9 @@ public class ProjectServiceImpl implements ProjectService {
             UUID currentUserId,
             boolean includeAll
     ) {
-        Specification<Project> spec = ProjectSpecification.withFilters(workspaceId, teamId, search, isTemplate, false);
+        // Hai tang loc bo sung cho nhau: workspaceIds gioi han WORKSPACE nao duoc thay,
+        // accessibleBy gioi han DU AN nao trong do duoc thay.
+        Specification<Project> spec = ProjectSpecification.withFilters(workspaceIds, teamId, search, isTemplate, false);
 
         Map<UUID, String> myRoles = currentUserId != null ? resolveMyRoles(currentUserId) : Collections.emptyMap();
         if (!includeAll) {
@@ -163,8 +165,13 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<ProjectResponse> getTemplates(UUID workspaceId, Pageable pageable, UUID currentUserId, boolean includeAll) {
-        return getAllProjects(workspaceId, null, null, true, pageable, currentUserId, includeAll);
+    public PageResponse<ProjectResponse> getTemplates(
+            List<UUID> workspaceIds,
+            Pageable pageable,
+            UUID currentUserId,
+            boolean includeAll
+    ) {
+        return getAllProjects(workspaceIds, null, null, true, pageable, currentUserId, includeAll);
     }
 
     @Override

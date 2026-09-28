@@ -22,6 +22,15 @@ spring:
           filters:
             - StripPrefix=1
 
+        # Predicate CO Y khong cover /workspace/internal/**: nhom internal cua
+        # workspace-service khong xac thuc, chi danh cho service-to-service.
+        - id: workspace-service
+          uri: http://localhost:8087
+          predicates:
+            - Path=/workspace/api/**, /workspace/actuator/**
+          filters:
+            - StripPrefix=1
+
       globalcors:
         cors-configurations:
           '[/**]':

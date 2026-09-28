@@ -12,10 +12,12 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       port: 5173,
-      // Proxy /identity/** và /work/** tới API Gateway khi dev (tránh CORS, giống reverse-proxy production).
+      // Proxy /identity/**, /work/** và /workspace/** tới API Gateway khi dev
+      // (tránh CORS, giống reverse-proxy production).
       proxy: {
         '/identity': { target: gateway, changeOrigin: true },
         '/work': { target: gateway, changeOrigin: true },
+        '/workspace': { target: gateway, changeOrigin: true },
       },
     },
   }

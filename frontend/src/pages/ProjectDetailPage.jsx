@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext, NavLink, Outlet } from 'react-router-dom';
 import {
   FolderKanban,
   Kanban,
@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Settings,
   GitBranch,
+  BarChart3,
   Star,
   MoreHorizontal,
   Link2,
@@ -18,34 +19,29 @@ import {
   Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { projectApi } from '../api.js';
+import { projectApi, sprintApi } from '../api.js';
 import { useProjectPermission } from '../hooks/useProjectPermission.js';
-import ProjectMembersTab from '../components/project/ProjectMembersTab.jsx';
-import ProjectWorkflowTab from '../components/project/ProjectWorkflowTab.jsx';
-import ProjectBoardView from '../components/boards/ProjectBoardView.jsx';
+import { ProjectProvider } from '../context/ProjectContext.jsx';
+import { isScrumProject } from '../utils/projectType.js';
+import { wsPath } from '../utils/workspacePath.js';
 import CreateWorkItemModal from '../components/items/CreateWorkItemModal.jsx';
 import WorkItemDetailModal from '../components/items/WorkItemDetailModal.jsx';
 import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
 import AccessDenied from '../components/common/AccessDenied.jsx';
 
 export default function ProjectDetailPage() {
-  const { projectId } = useParams();
+  const { projectId, workspaceId } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorStatus, setErrorStatus] = useState(null); // 403 / 404 từ GET /projects/{id}
-  const [activeTab, setActiveTab] = useState(() => {
-    try {
-      return sessionStorage.getItem(`project_${projectId}_active_tab`) || 'board';
-    } catch {
-      return 'board';
-    }
-  });
   const [isStarred, setIsStarred] = useState(false);
   const [members, setMembers] = useState([]);
+  const [sprints, setSprints] = useState([]);
 
   // Work Item Modals State
   const [isCreateItemModalOpen, setIsCreateItemModalOpen] = useState(false);
+  const [createPrefill, setCreatePrefill] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
@@ -82,15 +78,19 @@ export default function ProjectDetailPage() {
   const fetchProject = async (isBackground = false) => {
     try {
       if (!isBackground) setLoading(true);
-      const [projRes, membersRes] = await Promise.all([
+      const [projRes, membersRes, sprintRes] = await Promise.all([
         projectApi.getById(projectId, { skipErrorToast: true }),
         projectApi.getMembers(projectId, { skipErrorToast: true }).catch(() => null),
+        sprintApi.listByProject(projectId, undefined, { skipErrorToast: true }).catch(() => null),
       ]);
       if (projRes && projRes.data) {
         setProject(projRes.data);
       }
       if (membersRes && membersRes.data) {
         setMembers(membersRes.data);
+      }
+      if (sprintRes && sprintRes.data) {
+        setSprints(sprintRes.data);
       }
     } catch (err) {
       if (err?.status === 403 || err?.status === 404) {
@@ -114,12 +114,34 @@ export default function ProjectDetailPage() {
     setIsDetailModalOpen(true);
   };
 
+  const handleOpenCreateItem = (prefill) => {
+    setCreatePrefill(prefill || null);
+    setIsCreateItemModalOpen(true);
+  };
+
   const handleItemCreated = (newItem) => {
     setBoardRefreshKey((prev) => prev + 1);
   };
 
   const handleItemUpdated = (updatedItem) => {
     setBoardRefreshKey((prev) => prev + 1);
+  };
+
+  // State dung chung cap cho moi tab con qua ProjectContext.
+  const projectContextValue = {
+    projectId,
+    project,
+    members,
+    sprints,
+    reloadProject: fetchProject,
+    permissions,
+    isAdmin,
+    canCreateIssue,
+    canManageSprint,
+    refreshKey: boardRefreshKey,
+    bumpRefresh: () => setBoardRefreshKey((prev) => prev + 1),
+    openItemDetail: handleOpenDetailModal,
+    openCreateItem: handleOpenCreateItem,
   };
 
   // Người ngoài dự án / dự án không tồn tại: thay toàn bộ nội dung bằng trang lỗi (không render khung trang + toast)
@@ -277,7 +299,7 @@ export default function ProjectDetailPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Nút Tạo Issue nổi bật trên Header */}
           <button
-            onClick={() => setIsCreateItemModalOpen(true)}
+            onClick={() => handleOpenCreateItem()}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -333,117 +355,75 @@ export default function ProjectDetailPage() {
           gap: 12,
         }}
       >
-        {/* Navigation Pills */}
+        {/* Navigation Pills - dieu huong bang nested route de deep-link va nut Back hoat dong */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {[
-            { id: 'board', label: 'Bảng làm việc', icon: Kanban },
-            { id: 'backlog', label: 'Danh sách tồn đọng', icon: ListTodo },
-            { id: 'members', label: 'Thành viên & Vai trò', icon: Users },
-            { id: 'workflow', label: 'Cấu hình Dự án', icon: Settings },
-          ].map((tab) => {
-            const active = activeTab === tab.id;
-            const TabIcon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  try {
-                    sessionStorage.setItem(`project_${projectId}_active_tab`, tab.id);
-                  } catch (e) {}
-                }}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: 20,
-                  fontSize: 13,
-                  fontWeight: active ? 600 : 500,
-                  border: 'none',
-                  cursor: 'pointer',
-                  backgroundColor: active ? '#F1F5F9' : 'transparent',
-                  color: active ? '#0F172A' : '#64748B',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <TabIcon size={14} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+            { to: 'board', label: 'Bảng làm việc', icon: Kanban, visible: true },
+            { to: 'backlog', label: 'Danh sách tồn đọng', icon: ListTodo, visible: isScrumProject(project) },
+            { to: 'reports', label: 'Báo cáo', icon: BarChart3, visible: true },
+            { to: 'members', label: 'Thành viên & Vai trò', icon: Users, visible: true },
+            { to: 'workflow', label: 'Cấu hình Dự án', icon: Settings, visible: true },
+          ]
+            .filter((tab) => tab.visible)
+            .map((tab) => {
+              const TabIcon = tab.icon;
+              return (
+                <NavLink
+                  key={tab.to}
+                  to={tab.to}
+                  style={({ isActive }) => ({
+                    padding: '6px 14px',
+                    borderRadius: 20,
+                    fontSize: 13,
+                    fontWeight: isActive ? 600 : 500,
+                    border: 'none',
+                    cursor: 'pointer',
+                    textDecoration: 'none',
+                    backgroundColor: isActive ? '#F1F5F9' : 'transparent',
+                    color: isActive ? '#0F172A' : '#64748B',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease',
+                  })}
+                >
+                  <TabIcon size={14} />
+                  <span>{tab.label}</span>
+                </NavLink>
+              );
+            })}
         </div>
       </div>
 
-      {/* ─── Body Content ─── */}
+      {/* ─── Body Content: cac tab con render qua <Outlet/> ─── */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {(loading && !project) ? (
           <div style={{ padding: 48, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
             Đang tải thông tin dự án...
           </div>
         ) : (
-          <>
-            {activeTab === 'board' && (
-              <ProjectBoardView
-                projectId={projectId}
-                projectKey={project?.key}
-                projectTypes={project?.workItemTypes || []}
-                canCreate={canCreateIssue || isAdmin}
-                onOpenCreateModal={() => setIsCreateItemModalOpen(true)}
-                onSelectWorkItem={handleOpenDetailModal}
-                refreshKey={boardRefreshKey}
-              />
-            )}
-
-            {activeTab === 'backlog' && (
-              <div style={{ padding: '32px 24px', textAlign: 'center', color: '#64748B' }}>
-                <div
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 12,
-                    backgroundColor: '#EFF6FF',
-                    color: '#2563EB',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 16px auto',
-                  }}
-                >
-                  <ListTodo size={24} />
-                </div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>
-                  Danh sách tồn đọng & Kế hoạch Chu kỳ
-                </h3>
-                <p style={{ fontSize: 13, color: '#64748B' }}>
-                  Quản lý danh sách công việc tồn đọng và phân bổ theo từng chu kỳ làm việc.
-                </p>
-              </div>
-            )}
-
-            {activeTab === 'members' && (
-              <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-                <ProjectMembersTab projectId={projectId} isAdmin={isAdmin} />
-              </div>
-            )}
-
-            {activeTab === 'workflow' && (
-              <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-                <ProjectWorkflowTab projectId={projectId} isAdmin={isAdmin} onTypesUpdated={() => fetchProject(true)} />
-              </div>
-            )}
-          </>
+          <ProjectProvider value={projectContextValue}>
+            <Outlet />
+          </ProjectProvider>
         )}
       </div>
+
 
       {/* ─── Create Work Item Modal ─── */}
       <CreateWorkItemModal
         isOpen={isCreateItemModalOpen}
-        onClose={() => setIsCreateItemModalOpen(false)}
+        onClose={() => {
+          setIsCreateItemModalOpen(false);
+          setCreatePrefill(null);
+        }}
+        defaultSprintId={createPrefill?.sprintId ?? null}
+        defaultTypeId={createPrefill?.typeId ?? null}
+        defaultParentId={createPrefill?.parentId ?? null}
         projectId={projectId}
         projectKey={project?.key}
         projectTypes={project?.workItemTypes || []}
         members={members}
+        sprints={sprints}
         onItemCreated={handleItemCreated}
       />
 
@@ -457,6 +437,8 @@ export default function ProjectDetailPage() {
         }}
         onItemUpdated={handleItemUpdated}
         members={members}
+        sprints={sprints}
+        canManageSprint={canManageSprint || isAdmin}
       />
 
       {/* ─── Delete Project Modal ─── */}
@@ -465,7 +447,7 @@ export default function ProjectDetailPage() {
         onClose={() => setIsDeleteModalOpen(false)}
         project={project}
         onDeleted={() => {
-          navigate('/projects');
+          navigate(wsPath(workspaceId, '/projects'));
         }}
       />
     </div>

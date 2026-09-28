@@ -139,7 +139,6 @@ export const STATUS_CATEGORY_CONFIG = {
     color: '#64748b', // Slate
     bgColor: '#f1f5f9',
     borderColor: '#cbd5e1',
-    badgeClass: 'bg-slate-100 text-slate-700 border-slate-300',
   },
   IN_PROGRESS: {
     code: 'IN_PROGRESS',
@@ -147,7 +146,6 @@ export const STATUS_CATEGORY_CONFIG = {
     color: '#0284c7', // Sky blue
     bgColor: '#e0f2fe',
     borderColor: '#7dd3fc',
-    badgeClass: 'bg-sky-100 text-sky-700 border-sky-300',
   },
   DONE: {
     code: 'DONE',
@@ -155,7 +153,6 @@ export const STATUS_CATEGORY_CONFIG = {
     color: '#16a34a', // Emerald
     bgColor: '#dcfce7',
     borderColor: '#86efac',
-    badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-300',
   },
 };
 
@@ -231,20 +228,23 @@ export const SPRINT_STATE_CONFIG = {
   FUTURE: {
     code: 'FUTURE',
     label: 'Dự kiến',
-    color: '#64748b',
-    badgeClass: 'bg-slate-100 text-slate-600',
+    color: '#64748B',
+    bgColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
   },
   ACTIVE: {
     code: 'ACTIVE',
     label: 'Đang chạy',
-    color: '#2563eb',
-    badgeClass: 'bg-blue-100 text-blue-700 animate-pulse',
+    color: '#0052CC',
+    bgColor: '#DEEBFF',
+    borderColor: '#B3D4FF',
   },
   CLOSED: {
     code: 'CLOSED',
     label: 'Đã hoàn tất',
-    color: '#16a34a',
-    badgeClass: 'bg-emerald-100 text-emerald-700',
+    color: '#00875A',
+    bgColor: '#E3FCEF',
+    borderColor: '#ABF5D1',
   },
 };
 
@@ -271,8 +271,9 @@ export const LINK_TYPE_CONFIG = {
 
 // ─── Project Types ──────────────────────────────────────────────────────────
 export const PROJECT_TYPES = {
-  SCRUM: 'SCRUM',
-  KANBAN: 'KANBAN',
+  SOFTWARE_SCRUM: 'SOFTWARE_SCRUM',
+  SOFTWARE_KANBAN: 'SOFTWARE_KANBAN',
+  BUSINESS: 'BUSINESS',
 };
 
 export const PROJECT_TYPE_CONFIG = {

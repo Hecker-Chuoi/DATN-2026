@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams, useOutletContext, useNavigate } from 'react-router-dom';
+import { useSearchParams, useOutletContext, useNavigate, useParams } from 'react-router-dom';
+import { wsPath } from '../utils/workspacePath.js';
 import {
   FolderKanban,
   Plus,
@@ -27,6 +28,7 @@ import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
 
 export default function ProjectListPage() {
   const { teams, currentUser, leaderTeams = teams, canCreateProject = true, isSystemAdmin = false } = useOutletContext() || {};
+  const { workspaceId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const teamIdFilter = searchParams.get('teamId') || '';
@@ -58,6 +60,9 @@ export default function ProjectListPage() {
     try {
       setLoading(true);
       const res = await projectApi.listAll({
+        // Scope theo workspace đang xem. Không truyền thì backend sẽ trả về
+        // project của TẤT CẢ workspace mà người dùng thuộc.
+        workspaceId,
         teamId: teamIdFilter || undefined,
         search: searchTerm || undefined,
       });
@@ -75,7 +80,7 @@ export default function ProjectListPage() {
 
   useEffect(() => {
     fetchProjects();
-  }, [teamIdFilter]);
+  }, [teamIdFilter, workspaceId]);
 
   const handleProjectCreated = (newProject) => {
     fetchProjects();
@@ -398,7 +403,7 @@ export default function ProjectListPage() {
               return (
                 <div
                   key={project.id}
-                  onClick={() => navigate(`/projects/${project.id}`)}
+                  onClick={() => navigate(wsPath(workspaceId, `/projects/${project.id}`))}
                   style={{
                     backgroundColor: '#FFFFFF',
                     border: '1px solid #E2E8F0',

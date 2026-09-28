@@ -68,9 +68,12 @@ export default function CreateWorkItemModal({
   members = [],
   defaultParentId = null,
   defaultTypeId = null,
+  defaultSprintId = null,
+  sprints = [],
   onItemCreated
 }) {
   const [types, setTypes] = useState([]);
+  const [sprintId, setSprintId] = useState(defaultSprintId);
   const [selectedType, setSelectedType] = useState(null);
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
@@ -104,6 +107,7 @@ export default function CreateWorkItemModal({
       setStoryPoints('');
       setDueDate('');
       setParentId(defaultParentId || '');
+      setSprintId(defaultSprintId || '');
       setAssigneeId('');
       setErrors({});
 
@@ -258,6 +262,8 @@ export default function CreateWorkItemModal({
         assigneeId: assigneeId || null,
         storyPoints: isSubtask || isEpic ? null : (storyPoints ? parseFloat(storyPoints) : null),
         dueDate: dueDate || null,
+        // Sub-task di theo Sprint cua cong viec cha, khong gan rieng.
+        sprintId: isSubtask ? null : (sprintId || null),
       };
 
       const res = await workItemApi.create(projectId, payload);
@@ -765,6 +771,43 @@ export default function CreateWorkItemModal({
                 placeholder="Chưa phân công"
               />
             </div>
+
+            {/* Sprint - Sub-task luon di theo Sprint cua cong viec cha */}
+            {sprints.length > 0 && (
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                  Sprint
+                </label>
+                {isSubtask ? (
+                  <div
+                    title="Sub-task đi theo Sprint của công việc cha"
+                    style={{
+                      padding: '7px 10px', borderRadius: 8, border: '1px solid #CBD5E1',
+                      fontSize: 13, color: '#94A3B8', backgroundColor: '#F8FAFC',
+                    }}
+                  >
+                    Theo công việc cha
+                  </div>
+                ) : (
+                  <select
+                    value={sprintId || ''}
+                    onChange={(e) => setSprintId(e.target.value)}
+                    style={{
+                      width: '100%', padding: '7px 10px', borderRadius: 8,
+                      border: '1px solid #CBD5E1', fontSize: 13, backgroundColor: '#FFFFFF',
+                      color: '#0F172A', cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">Backlog</option>
+                    {sprints
+                      .filter((sp) => sp.state !== 'CLOSED')
+                      .map((sp) => (
+                        <option key={sp.id} value={sp.id}>{sp.name}</option>
+                      ))}
+                  </select>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Description */}
