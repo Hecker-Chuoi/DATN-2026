@@ -65,6 +65,7 @@ export default function ProjectListPage() {
         workspaceId,
         teamId: teamIdFilter || undefined,
         search: searchTerm || undefined,
+        isTemplate: false,
       });
 
       if (res && res.data) {
@@ -88,10 +89,12 @@ export default function ProjectListPage() {
 
   const filteredProjects = useMemo(() => {
     return projects.filter((proj) => {
+      // Màn hình này chỉ hiển thị các dự án thực tế đang triển khai, loại trừ toàn bộ dự án mẫu (Template)
+      if (proj.isTemplate) return false;
+
       // Type Tab Filter
       if (activeTab === 'SCRUM' && proj.projectType !== 'SOFTWARE_SCRUM') return false;
       if (activeTab === 'KANBAN' && proj.projectType !== 'SOFTWARE_KANBAN') return false;
-      if (activeTab === 'TEMPLATES' && !proj.isTemplate) return false;
 
       // Keyword Search Filter
       if (searchTerm.trim()) {
@@ -228,7 +231,6 @@ export default function ProjectListPage() {
             { id: 'ALL', label: 'Tất cả dự án' },
             { id: 'SCRUM', label: 'Dự án Scrum' },
             { id: 'KANBAN', label: 'Dự án Kanban' },
-            { id: 'TEMPLATES', label: 'Dự án mẫu' },
           ].map((tab) => {
             const active = activeTab === tab.id;
             return (

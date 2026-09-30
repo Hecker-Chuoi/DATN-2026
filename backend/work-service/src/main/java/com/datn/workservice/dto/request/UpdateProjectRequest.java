@@ -2,6 +2,7 @@ package com.datn.workservice.dto.request;
 
 import com.datn.workservice.enums.DefaultAssigneeType;
 import com.datn.workservice.enums.ProjectType;
+import com.datn.workservice.enums.TemplateCategory;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -36,6 +37,8 @@ public class UpdateProjectRequest {
     private ProjectType projectType;
 
     private Boolean isTemplate;
+
+    private TemplateCategory templateCategory;
 
     private LocalDate startDate;
 

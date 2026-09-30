@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Outlet, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import { teamApi, invitationApi } from '../../api.js';
@@ -63,7 +63,9 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
 
   // Chỉ trưởng nhóm (myRole LEADER, owner cũng là LEADER) hoặc Global ADMIN mới được tạo dự án; backend chặn lại lần nữa.
   const isSystemAdmin = Boolean(currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN'));
-  const leaderTeams = isSystemAdmin ? teams : teams.filter((t) => t.myRole === 'LEADER');
+  const leaderTeams = useMemo(() => {
+    return isSystemAdmin ? teams : teams.filter((t) => t.myRole === 'LEADER');
+  }, [isSystemAdmin, teams]);
   const canCreateProject = isSystemAdmin || leaderTeams.length > 0;
 
   // Deep-link vào workspace mình không thuộc: hiện trạng thái rõ ràng, thay vì

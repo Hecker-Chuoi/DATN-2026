@@ -26,7 +26,7 @@ Ba file `docker-compose.yml` / `.app.yml` / `.infra.yml` là bản gốc của n
 - Backend: profile `tuananh` (`application-tuananh.y*ml` trong 3 service) → gateway 9991, identity 9992, work 9993, Keycloak 9998. Chạy từ IDE với `-Dspring.profiles.active=tuananh`; `docker-compose.tuananh.yml` đã set `SPRING_PROFILES_ACTIVE`.
 - Frontend: `frontend/.env.local` (gitignored) đặt `VITE_GATEWAY_URL` và `VITE_KEYCLOAK_URL`; `vite.config.js` và `App.jsx` đọc hai biến này, mặc định 8081/8088.
 - Keycloak Admin Console cá nhân: http://localhost:9998 (nhóm: 8088). Google Console cần có cả hai redirect URI.
-Dockerfile mỗi service dùng build context là `backend/` (compose khai báo `context: ..`) và phải COPY đủ **5 pom** (common, identity, gateway, work, notification) + `common/src` vì parent pom liệt kê mọi module. Thêm module mới = sửa cả 4 Dockerfile còn lại.
+Dockerfile mỗi service dùng build context là `backend/` (compose khai báo `context: ..`) và phải COPY đủ **6 pom** (common, identity, gateway, work, workspace, notification) + `common/src` vì parent pom liệt kê mọi module. Thêm module mới = sửa cả 4 Dockerfile.
 
 Email dev: compose infra có **Mailpit** (SMTP :1025, xem mail tại http://localhost:8025). SMTP thật cấu hình qua env `MAIL_HOST/PORT/USERNAME/PASSWORD/SMTP_AUTH/STARTTLS/FROM` của notification-service.
 
@@ -77,7 +77,8 @@ Frontend → API Gateway (:8081) → service. Gateway (`api-gateway/src/main/res
 - work-service dùng JPA Specification (`specification/*`) cho filter động, Redis :6380, MinIO :9000 (bucket `work-attachments`).
 
 ## Trạng thái hiện tại cần biết trước khi sửa
-- Migration hiện có V1, V2 (`authz_hardening`), V3 (`add_project_id_to_statuses`), V4 (`invitations`); thêm mới dùng V5 trở đi. identity-service không dùng Flyway (`ddl-auto: update` tự tạo `verification_tokens`).
+- Migration hiện có V1, V2 (`authz_hardening`), V3 (`add_project_id_to_statuses`), V4 (`invitations`), V5 (`phase6_sprint_board_agile`), V6 (`project_templates`); thêm mới dùng V7 trở đi.
+- **Dự án mẫu** = `Project` có `is_template=true`; tạo dự án từ mẫu / lưu thành mẫu / nhân bản đều đi qua `service/template/ProjectCloneEngine` (deep-clone + ánh xạ ID + dời ngày) và `TemplateIntegrityValidator`. Thêm bảng con mới của project thì phải bổ sung vào `ProjectBlueprint`, loader và engine, nếu không mẫu sẽ bỏ sót bảng đó. Chi tiết: `docs/services/work_service/template/`. identity-service không dùng Flyway (`ddl-auto: update` tự tạo `verification_tokens`).
 - Chỉ trưởng nhóm (owner/LEADER của team) hoặc Global ADMIN tạo được dự án; dự án không gắn team chỉ ADMIN tạo được. Xóa team cần `teamSecurity.isLeader` (không còn `isOwner`).
 - `work-service` **chưa có trong bất kỳ docker-compose nào**, và compose chỉ set env `SPRING_CLOUD_GATEWAY_ROUTES_0_*` (identity) nên gateway trong container mất route `/work/**`. `frontend/nginx.conf` cũng chỉ proxy `/identity/`, thiếu `/work/`.
 - `frontend/src/api/workServiceApi.js` là bản trùng lặp của `src/api.js`, không ai import; dùng `src/api.js`.

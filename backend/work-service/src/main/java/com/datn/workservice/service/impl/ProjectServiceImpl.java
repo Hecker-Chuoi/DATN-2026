@@ -23,6 +23,9 @@ import com.datn.workservice.service.AtomicKeySequenceGenerator;
 import com.datn.workservice.service.ProjectAccessService;
 import com.datn.workservice.service.ProjectMemberService;
 import com.datn.workservice.service.ProjectService;
+import com.datn.workservice.dto.response.TemplateIntegrityReport;
+import com.datn.workservice.service.template.ProjectBlueprintLoader;
+import com.datn.workservice.service.template.TemplateIntegrityValidator;
 import com.datn.workservice.specification.ProjectSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +66,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final IdentityClient identityClient;
     private final ProjectAccessService projectAccessService;
     private final ProjectMemberService projectMemberService;
+    private final ProjectBlueprintLoader projectBlueprintLoader;
 
     @Override
     @Transactional
@@ -88,6 +92,7 @@ public class ProjectServiceImpl implements ProjectService {
                 .defaultAssigneeType(request.getDefaultAssigneeType() != null ? request.getDefaultAssigneeType() : DefaultAssigneeType.PROJECT_LEADER)
                 .projectType(request.getProjectType() != null ? request.getProjectType() : ProjectType.SOFTWARE_SCRUM)
                 .isTemplate(Boolean.TRUE.equals(request.getIsTemplate()))
+                .templateCategory(Boolean.TRUE.equals(request.getIsTemplate()) ? request.getTemplateCategory() : null)
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
                 .createdBy(currentUserId)
@@ -220,7 +225,13 @@ public class ProjectServiceImpl implements ProjectService {
             project.setProjectType(request.getProjectType());
         }
         if (request.getIsTemplate() != null) {
+            if (request.getIsTemplate() && !Boolean.TRUE.equals(project.getIsTemplate())) {
+                assertTemplateReady(project);
+            }
             project.setIsTemplate(request.getIsTemplate());
+        }
+        if (request.getTemplateCategory() != null) {
+            project.setTemplateCategory(request.getTemplateCategory());
         }
         if (request.getStartDate() != null) {
             project.setStartDate(request.getStartDate());
@@ -240,6 +251,29 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         return mapToProjectResponse(updatedProject);
+    }
+
+    @Override
+    public void assertCanCreateProject(UUID teamId, UUID currentUserId, UUID leadUserId) {
+        validateTeamMembership(teamId, currentUserId, leadUserId);
+    }
+
+    @Override
+    public ProjectResponse toProjectResponse(Project project) {
+        return mapToProjectResponse(project);
+    }
+
+    /**
+     * Chỉ đánh dấu dự án là mẫu khi bản thiết kế của nó không vi phạm ràng buộc toàn vẹn
+     * (đủ trạng thái TODO/DONE, workflow, vai trò, sprint & công việc đúng khung thời gian...).
+     */
+    private void assertTemplateReady(Project project) {
+        TemplateIntegrityReport report = TemplateIntegrityValidator.validate(projectBlueprintLoader.load(project));
+        if (!report.isValid()) {
+            throw new BadRequestException("Dự án chưa đủ điều kiện làm mẫu: " + report.getErrors().stream()
+                    .map(TemplateIntegrityReport.Issue::getMessage)
+                    .collect(Collectors.joining("; ")));
+        }
     }
 
     // ─── ACCESS VALIDATION HELPERS ─────────────────────────────────────────────
@@ -623,6 +657,7 @@ public class ProjectServiceImpl implements ProjectService {
                 .defaultAssigneeType(p.getDefaultAssigneeType())
                 .projectType(p.getProjectType())
                 .isTemplate(p.getIsTemplate())
+                .templateCategory(p.getTemplateCategory())
                 .startDate(p.getStartDate())
                 .endDate(p.getEndDate())
                 .createdBy(p.getCreatedBy())
@@ -705,6 +740,7 @@ public class ProjectServiceImpl implements ProjectService {
                 .defaultAssigneeType(p.getDefaultAssigneeType())
                 .projectType(p.getProjectType())
                 .isTemplate(p.getIsTemplate())
+                .templateCategory(p.getTemplateCategory())
                 .startDate(p.getStartDate())
                 .endDate(p.getEndDate())
                 .createdBy(p.getCreatedBy())

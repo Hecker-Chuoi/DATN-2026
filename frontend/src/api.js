@@ -358,6 +358,19 @@ export const projectApi = {
   getRoles: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/roles`),
 };
 
+// ─── 2.0. Project Templates API (Dự án mẫu) ───────────────────────────────────
+export const templateApi = {
+  /** Thư viện mẫu: params { workspaceId, category, search } → TemplateSummaryResponse[] */
+  list: (params) => apiClient.get(`${WORK_BASE}/templates`, { params }),
+  /** Bản thiết kế đầy đủ của mẫu (trạng thái, workflow, board, sprint, cây công việc, kiểm tra toàn vẹn). */
+  preview: (templateId) => apiClient.get(`${WORK_BASE}/templates/${templateId}/preview`),
+  /** Tạo dự án thật từ mẫu → { project, stats, dateOffsetDays, integrity } */
+  createProject: (templateId, data) => apiClient.post(`${WORK_BASE}/templates/${templateId}/projects`, data),
+  saveAsTemplate: (projectId, data) => apiClient.post(`${WORK_BASE}/projects/${projectId}/save-as-template`, data),
+  checkIntegrity: (projectId) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/template-check`, { skipErrorToast: true }),
+};
+
 // ─── 2.1. Project Work Item Types API (Custom Types per Project) ───────────────
 export const workItemTypeApi = {
   listByProject: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/types`),

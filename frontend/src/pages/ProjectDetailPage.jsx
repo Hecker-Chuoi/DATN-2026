@@ -17,6 +17,7 @@ import {
   SlidersHorizontal,
   Plus,
   Trash2,
+  BookmarkPlus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi, sprintApi } from '../api.js';
@@ -27,6 +28,7 @@ import { wsPath } from '../utils/workspacePath.js';
 import CreateWorkItemModal from '../components/items/CreateWorkItemModal.jsx';
 import WorkItemDetailModal from '../components/items/WorkItemDetailModal.jsx';
 import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
+import SaveAsTemplateModal from '../components/template/SaveAsTemplateModal.jsx';
 import AccessDenied from '../components/common/AccessDenied.jsx';
 
 export default function ProjectDetailPage() {
@@ -52,6 +54,7 @@ export default function ProjectDetailPage() {
   // Project Action Menu & Delete Modal State
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const actionMenuRef = useRef(null);
 
   const { isAdmin, canCreateIssue, canManageSprint, permissions, forbidden, notFound } = useProjectPermission(projectId);
@@ -204,6 +207,22 @@ export default function ProjectDetailPage() {
                 {project.key}
               </span>
             )}
+            {project?.isTemplate && (
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  color: '#B45309',
+                  backgroundColor: '#FFFBEB',
+                  border: '1px solid #FDE68A',
+                  padding: '1px 6px',
+                  borderRadius: 4,
+                }}
+                title="Dự án mẫu: dùng làm bản thiết kế, không bắt đầu được Sprint"
+              >
+                MẪU
+              </span>
+            )}
           </div>
           <button
             onClick={() => setIsStarred(!isStarred)}
@@ -258,6 +277,39 @@ export default function ProjectDetailPage() {
                     padding: '4px',
                   }}
                 >
+                  {(isAdmin || isSystemAdmin) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsActionMenuOpen(false);
+                        setIsSaveTemplateOpen(true);
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: 'none',
+                        backgroundColor: 'transparent',
+                        color: '#0F172A',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        textAlign: 'left',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#F1F5F9';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                    >
+                      <BookmarkPlus size={14} color="#D97706" />
+                      <span>Lưu thành dự án mẫu</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -448,6 +500,15 @@ export default function ProjectDetailPage() {
         project={project}
         onDeleted={() => {
           navigate(wsPath(workspaceId, '/projects'));
+        }}
+      />
+
+      <SaveAsTemplateModal
+        isOpen={isSaveTemplateOpen}
+        onClose={() => setIsSaveTemplateOpen(false)}
+        project={project}
+        onSaved={(tpl) => {
+          if (tpl?.id) navigate(wsPath(workspaceId, `/projects/${tpl.id}`));
         }}
       />
     </div>

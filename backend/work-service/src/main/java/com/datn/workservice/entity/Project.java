@@ -2,6 +2,7 @@ package com.datn.workservice.entity;
 
 import com.datn.workservice.enums.DefaultAssigneeType;
 import com.datn.workservice.enums.ProjectType;
+import com.datn.workservice.enums.TemplateCategory;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -59,6 +60,11 @@ public class Project {
     @Column(name = "is_template", nullable = false)
     @Builder.Default
     private Boolean isTemplate = false;
+
+    /** Phân loại mẫu; chỉ có nghĩa khi isTemplate = true. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "template_category", length = 50)
+    private TemplateCategory templateCategory;
 
     @Column(name = "start_date")
     private LocalDate startDate;

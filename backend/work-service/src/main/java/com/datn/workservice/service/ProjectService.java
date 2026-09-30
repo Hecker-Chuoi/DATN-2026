@@ -5,6 +5,7 @@ import com.datn.workservice.dto.request.CreateProjectRequest;
 import com.datn.workservice.dto.request.UpdateProjectRequest;
 import com.datn.workservice.dto.response.ProjectDetailResponse;
 import com.datn.workservice.dto.response.ProjectResponse;
+import com.datn.workservice.entity.Project;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -63,6 +64,14 @@ public interface ProjectService {
      * Updates an existing project.
      */
     ProjectResponse updateProject(UUID projectId, UpdateProjectRequest request, UUID currentUserId);
+
+    /**
+     * Quy tắc tạo dự án dùng chung (tạo mới, tạo từ mẫu, lưu thành mẫu, nhân bản):
+     * chỉ trưởng nhóm của {@code teamId} hoặc Global ADMIN; dự án không gắn nhóm chỉ ADMIN.
+     */
+    void assertCanCreateProject(UUID teamId, UUID currentUserId, UUID leadUserId);
+
+    ProjectResponse toProjectResponse(Project project);
 
     /**
      * Soft-deletes a project by setting deletedAt.
