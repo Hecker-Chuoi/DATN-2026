@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { workspaceApi } from '../../api/workspaceServiceApi';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { wsPath } from '../../utils/workspacePath';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop';
 
 const overlay = {
   position: 'fixed',
@@ -63,6 +64,8 @@ export default function CreateWorkspaceModal() {
     closeCreateWorkspace();
   };
 
+  const backdropProps = useModalBackdrop(close);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -94,7 +97,7 @@ export default function CreateWorkspaceModal() {
   const disabled = submitting || !name.trim();
 
   return (
-    <div style={overlay} onClick={close}>
+    <div style={overlay} {...backdropProps}>
       <div
         style={{
           backgroundColor: '#FFFFFF',

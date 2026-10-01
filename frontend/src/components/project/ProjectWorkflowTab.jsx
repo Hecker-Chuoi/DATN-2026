@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workflowApi, workItemTypeApi } from '../../api.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 import {
   STATUS_CATEGORY_CONFIG,
   WORK_ITEM_TYPE_CONFIG,
@@ -78,6 +79,7 @@ const ICON_PRESETS = [
 ];
 
 export default function ProjectWorkflowTab({ projectId, project, isAdmin, onTypesUpdated }) {
+  const { handleBackdropClick } = useModalBackdrop();
   const SUBTAB_STORAGE_KEY = `project_${projectId}_workflow_subtab`;
   const [activeSubTab, setActiveSubTab] = useState(() => {
     try {
@@ -2692,7 +2694,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
             zIndex: 1000,
             padding: '16px',
           }}
-          onClick={() => setIsExplanationModalOpen(false)}
+          {...handleBackdropClick(() => setIsExplanationModalOpen(false))}
         >
           <div
             style={{

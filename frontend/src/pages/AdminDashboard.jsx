@@ -9,8 +9,10 @@ import {
 } from 'lucide-react';
 import AdminProjectManagement from '../components/admin/AdminProjectManagement.jsx';
 import ConfirmModal from '../components/modals/ConfirmModal.jsx';
+import { useModalBackdrop } from '../hooks/useModalBackdrop.js';
 
 export default function AdminDashboard({ onLogout }) {
+  const { handleBackdropClick } = useModalBackdrop();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('projects'); // 'projects' | 'users'
   const [currentUser, setCurrentUser] = useState(null);
@@ -746,7 +748,7 @@ export default function AdminDashboard({ onLogout }) {
 
       {/* UPDATE ROLE MODAL */}
       {selectedUser && (
-        <div className="modal-overlay" onClick={() => setSelectedUser(null)}>
+        <div className="modal-overlay" {...handleBackdropClick(() => setSelectedUser(null))}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -828,7 +830,7 @@ export default function AdminDashboard({ onLogout }) {
 
       {/* ADD USER MODAL */}
       {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="modal-overlay" {...handleBackdropClick(() => setShowCreateModal(false))}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -890,7 +892,7 @@ export default function AdminDashboard({ onLogout }) {
 
       {/* RESET PASSWORD MODAL */}
       {resetUser && (
-        <div className="modal-overlay" onClick={() => setResetUser(null)}>
+        <div className="modal-overlay" {...handleBackdropClick(() => setResetUser(null))}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

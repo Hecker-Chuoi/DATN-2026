@@ -46,6 +46,7 @@ import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import ResolveSubtasksModal from '../modals/ResolveSubtasksModal.jsx';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 const TYPE_ICONS = {
   EPIC: { icon: Bookmark, color: '#6554C0', label: 'Hạng mục lớn' },
@@ -56,6 +57,7 @@ const TYPE_ICONS = {
 };
 
 export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [], sprints = [], canManageSprint = true }) {
+  const { handleBackdropClick } = useModalBackdrop();
   const [currentId, setCurrentId] = useState(initialItemId);
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -597,7 +599,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
         justifyContent: 'center',
         padding: 24,
       }}
-      onClick={onClose}
+      {...handleBackdropClick(onClose)}
     >
       <div
         style={{
@@ -2419,7 +2421,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               alignItems: 'center',
               justifyContent: 'center',
             }}
-            onClick={() => setShowLinkModal(false)}
+            {...handleBackdropClick(() => setShowLinkModal(false))}
           >
             <div
               style={{

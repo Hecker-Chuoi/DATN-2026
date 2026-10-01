@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Info, AlertCircle, X } from 'lucide-react';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
  
 export default function ConfirmModal({
   isOpen,
@@ -12,6 +13,8 @@ export default function ConfirmModal({
   onCancel,
   loading = false
 }) {
+  const backdropProps = useModalBackdrop(onCancel);
+
   if (!isOpen) return null;
  
   // Determine color theme based on modal type
@@ -55,7 +58,7 @@ export default function ConfirmModal({
         padding: 20,
         animation: 'fadeIn 0.15s ease-out'
       }}
-      onClick={onCancel}
+      {...backdropProps}
     >
       <style>{`
         @keyframes fadeIn {

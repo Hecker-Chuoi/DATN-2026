@@ -28,8 +28,10 @@ import {
   ListFilter
 } from 'lucide-react';
 import { projectApi, teamApi } from '../../api.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 export default function AdminProjectManagement() {
+  const { handleBackdropClick } = useModalBackdrop();
   const navigate = useNavigate();
 
   // ─── States: Projects & Pagination ───
@@ -1187,7 +1189,7 @@ export default function AdminProjectManagement() {
       {editingProject && (
         <div
           className="modal-overlay"
-          onClick={() => setEditingProject(null)}
+          {...handleBackdropClick(() => setEditingProject(null))}
           style={{
             position: 'fixed',
             inset: 0,
@@ -1473,7 +1475,7 @@ export default function AdminProjectManagement() {
       {deletingProject && (
         <div
           className="modal-overlay"
-          onClick={() => setDeletingProject(null)}
+          {...handleBackdropClick(() => setDeletingProject(null))}
           style={{
             position: 'fixed',
             inset: 0,

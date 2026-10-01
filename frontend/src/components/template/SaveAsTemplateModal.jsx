@@ -4,12 +4,14 @@ import toast from 'react-hot-toast';
 import { templateApi } from '../../api.js';
 import { generateProjectKey, sanitizeProjectKey, validateProjectForm } from '../../utils/projectValidation.js';
 import { TEMPLATE_CATEGORIES } from '../../constants/templateConstants.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 /**
  * Lưu dự án hiện tại thành một dự án mẫu mới (dự án nguồn giữ nguyên).
  * Mẫu giữ nguyên mốc thời gian của nguồn; sprint về FUTURE, công việc về trạng thái khởi tạo.
  */
 export default function SaveAsTemplateModal({ isOpen, onClose, project, onSaved }) {
+  const backdropProps = useModalBackdrop(onClose);
   const [form, setForm] = useState({ name: '', key: '', description: '', templateCategory: 'SOFTWARE' });
   const [options, setOptions] = useState({ includeSprints: true, includeWorkItems: true, includeVersions: true });
   const [warnings, setWarnings] = useState([]);
@@ -74,7 +76,7 @@ export default function SaveAsTemplateModal({ isOpen, onClose, project, onSaved 
         zIndex: 9999,
         padding: 16,
       }}
-      onClick={onClose}
+      {...backdropProps}
     >
       <form
         onSubmit={handleSubmit}

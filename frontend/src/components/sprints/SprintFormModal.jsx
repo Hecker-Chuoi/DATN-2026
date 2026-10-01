@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Calendar } from 'lucide-react';
 import { SURFACE, FONT_STACK } from '../../constants/jiraTokens.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 const DURATIONS = [
   { label: '1 tuần', days: 7 },
@@ -29,6 +30,7 @@ export default function SprintFormModal({
   onSubmit,
   onClose,
 }) {
+  const backdropProps = useModalBackdrop(onClose);
   const isStart = mode === 'start';
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('');
@@ -74,7 +76,7 @@ export default function SprintFormModal({
   };
 
   return (
-    <div style={overlay} onClick={onClose}>
+    <div style={overlay} {...backdropProps}>
       <div style={panel} onClick={(e) => e.stopPropagation()}>
         <div style={header}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: SURFACE.text }}>

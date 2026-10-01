@@ -15,6 +15,7 @@ import {
 import { templateApi } from '../../api.js';
 import { STATUS_TOKENS, PRIORITY_TOKENS } from '../../constants/jiraTokens.js';
 import { categoryToken, PROJECT_TYPE_LABELS, formatOffset } from '../../constants/templateConstants.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 const TABS = [
   { id: 'OVERVIEW', label: 'Tổng quan' },
@@ -29,6 +30,7 @@ const TABS = [
  * cho form tạo dự án (bị khóa khi mẫu có lỗi toàn vẹn).
  */
 export default function TemplatePreviewModal({ templateId, isOpen, onClose, onUse }) {
+  const backdropProps = useModalBackdrop(onClose);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState('OVERVIEW');
@@ -73,7 +75,7 @@ export default function TemplatePreviewModal({ templateId, isOpen, onClose, onUs
         zIndex: 10000,
         padding: 16,
       }}
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
         style={{

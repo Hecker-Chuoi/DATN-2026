@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, CheckCircle2, CircleDashed } from 'lucide-react';
 import { SURFACE, FONT_STACK } from '../../constants/jiraTokens.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 /**
  * Modal hoan tat Sprint.
@@ -24,11 +25,12 @@ export default function CompleteSprintModal({
 
   if (!isOpen || !sprint) return null;
 
+  const backdropProps = useModalBackdrop(onClose);
   const done = sprint.doneCount ?? 0;
   const incomplete = (sprint.itemCount ?? 0) - done;
 
   return (
-    <div style={overlay} onClick={onClose}>
+    <div style={overlay} {...backdropProps}>
       <div style={panel} onClick={(e) => e.stopPropagation()}>
         <div style={header}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: SURFACE.text }}>

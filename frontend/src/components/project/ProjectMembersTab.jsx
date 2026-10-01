@@ -16,6 +16,7 @@ import {
 import toast from 'react-hot-toast';
 import { projectApi, userApi } from '../../api.js';
 import PendingInvitations from '../common/PendingInvitations.jsx';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 const ROLE_COLORS = {
   ADMINISTRATOR: { bg: '#FAF5FF', text: '#7E22CE', border: '#E9D5FF' },
@@ -102,6 +103,7 @@ const PERMISSION_DEFINITIONS = [
 ];
 
 export default function ProjectMembersTab({ projectId, project, isAdmin, onMembersUpdated }) {
+  const addModalBackdrop = useModalBackdrop(() => setIsAddModalOpen(false));
   const [members, setMembers] = useState([]);
   const [inviteTick, setInviteTick] = useState(0); // đổi để PendingInvitations tải lại sau khi gửi lời mời
   const [roles, setRoles] = useState([]);
@@ -680,7 +682,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
             zIndex: 9999,
             padding: 16,
           }}
-          onClick={() => setIsAddModalOpen(false)}
+          {...addModalBackdrop}
         >
           <div
             style={{

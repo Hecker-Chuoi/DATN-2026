@@ -26,8 +26,10 @@ import {
 import toast from 'react-hot-toast';
 import { teamApi, userApi } from '../api.js';
 import PendingInvitations from '../components/common/PendingInvitations.jsx';
+import { useModalBackdrop } from '../hooks/useModalBackdrop.js';
 
 export default function TeamDetailPage() {
+  const addModalBackdrop = useModalBackdrop(() => setIsAddModalOpen(false));
   const { teamId, workspaceId } = useParams();
   const navigate = useNavigate();
   const outletContext = useOutletContext();
@@ -885,7 +887,7 @@ export default function TeamDetailPage() {
             justifyContent: 'center',
             padding: 16,
           }}
-          onClick={() => setIsAddModalOpen(false)}
+          {...addModalBackdrop}
         >
           <div
             style={{

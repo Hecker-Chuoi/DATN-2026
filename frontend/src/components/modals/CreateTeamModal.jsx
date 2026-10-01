@@ -3,8 +3,10 @@ import { X, Users, Sparkles, Check, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { teamApi } from '../../api.js';
 import { useWorkspace } from '../../context/WorkspaceContext.jsx';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
+  const backdropProps = useModalBackdrop(onClose);
   const { currentWorkspaceId, currentWorkspace } = useWorkspace();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -65,7 +67,7 @@ export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
         justifyContent: 'center',
         padding: 16,
       }}
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
         style={{

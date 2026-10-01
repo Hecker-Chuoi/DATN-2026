@@ -30,11 +30,13 @@ import {
 } from '../../utils/projectValidation.js';
 import { useWorkspace } from '../../context/WorkspaceContext.jsx';
 import { wsPath } from '../../utils/workspacePath.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 // teams: chỉ những nhóm mà user là trưởng nhóm (hoặc mọi nhóm với Global ADMIN); allowPersonal: cho phép dự án không gắn nhóm (chỉ ADMIN)
 export default function CreateProjectModal({ isOpen, onClose, teams = [], defaultTeamId = null, allowPersonal = false, onProjectCreated }) {
   const navigate = useNavigate();
   const { currentWorkspaceId, currentWorkspace } = useWorkspace();
+  const backdropProps = useModalBackdrop(onClose);
 
   // workspaceId KHÔNG nằm trong formData: form không bao giờ cho sửa nó, nên nó
   // không phải state của form. Trước đây nó là hằng số hardcode
@@ -269,7 +271,7 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
         zIndex: 9999,
         padding: 16,
       }}
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
         style={{
