@@ -126,7 +126,11 @@ Mở 3 terminal riêng biệt tại thư mục `backend/`:
   cd d:\DATN-2026\backend
   ./mvnw spring-boot:run -pl work-service
   ```
-
+- **Terminal 4 - Workspace Service (Cổng 8087)**:
+  ```powershell
+  cd d:\DATN-2026\backend
+  ./mvnw spring-boot:run -pl workspace-service
+  ```
 ### 2. Khởi chạy Frontend:
 Mở terminal tại thư mục `frontend/`:
 ```powershell
