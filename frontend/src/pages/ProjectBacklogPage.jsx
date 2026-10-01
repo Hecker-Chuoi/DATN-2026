@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -37,11 +37,16 @@ const EMPTY_FILTERS = { q: '', epicId: null, assigneeIds: [], onlyMine: false, r
 const keyOf = (g) => (g.sprintId == null ? 'backlog' : `sprint:${g.sprintId}`);
 
 export default function ProjectBacklogPage() {
-  const { projectId, project, members, canManageSprint, isAdmin, openItemDetail, bumpRefresh } =
+  const { projectId, project, members, canManageSprint, isAdmin, openItemDetail, bumpRefresh, refreshKey } =
     useProjectContext();
 
   const backlog = useProjectBacklog(projectId);
   const { data, loading, error, busy, setData, reload } = backlog;
+
+  // Dong bo lai khi cong viec duoc tao/sua o noi khac (modal chi tiet, doi sprint, tao nhanh...).
+  useEffect(() => {
+    if (refreshKey) reload({ silent: true });
+  }, [refreshKey, reload]);
 
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [activeItem, setActiveItem] = useState(null);

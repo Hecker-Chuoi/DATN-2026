@@ -400,7 +400,11 @@ export const workItemApi = {
     return apiClient.post(`${WORK_BASE}/projects/${projectId}/items`, projectIdOrData);
   },
   update: (id, data) => apiClient.put(`${WORK_BASE}/items/${id}`, data),
-  updateRank: (id, data) => apiClient.patch(`${WORK_BASE}/items/${id}/rank`, data),
+  updateRank: (id, data) =>
+    apiClient.patch(
+      `${WORK_BASE}/items/${id}/rank`,
+      typeof data === 'string' ? { rank: data } : data
+    ),
   delete: (id) => apiClient.delete(`${WORK_BASE}/items/${id}`),
   getSubtasks: (id) => apiClient.get(`${WORK_BASE}/items/${id}/subtasks`),
   createSubtask: (parentId, data) =>

@@ -39,7 +39,7 @@ import {
   Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { workItemApi, getUserKeycloakId } from '../../api.js';
+import { workItemApi, sprintApi, getUserKeycloakId } from '../../api.js';
 import { useProjectPermission } from '../../hooks/useProjectPermission.js';
 import MemberSelect from '../common/MemberSelect.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
@@ -306,16 +306,37 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
   };
 
   const handleUpdateSprint = async (newSprintId) => {
+    const targetSprint = newSprintId || null;
+    const currentSprint = item?.sprintId || null;
+    if (targetSprint === currentSprint) return;
+
     try {
-      const res = await workItemApi.update(currentId, { sprintId: newSprintId || null });
+      if (targetSprint) {
+        await sprintApi.addItems(targetSprint, [currentId]);
+      } else if (currentSprint) {
+        await sprintApi.removeItems(currentSprint, [currentId]);
+      }
+      const res = await workItemApi.getById(currentId);
       if (res && res.data) {
         setItem(res.data);
-        toast.success(newSprintId ? 'Đã chuyển Sprint' : 'Đã đưa về Backlog');
+        toast.success(targetSprint ? 'Đã chuyển Sprint' : 'Đã đưa về Backlog');
         fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
-      console.warn('Không đổi được Sprint:', err);
+      console.warn('Không đổi được Sprint qua sprintApi, thử fallback workItemApi:', err);
+      try {
+        const res = await workItemApi.update(currentId, { sprintId: targetSprint });
+        if (res && res.data) {
+          setItem(res.data);
+          toast.success(targetSprint ? 'Đã chuyển Sprint' : 'Đã đưa về Backlog');
+          fetchChangelogs(currentId);
+          if (onItemUpdated) onItemUpdated(res.data);
+        }
+      } catch (fallbackErr) {
+        console.error('Lỗi khi đổi Sprint:', fallbackErr);
+        toast.error('Lỗi khi chuyển Sprint');
+      }
     }
   };
 
