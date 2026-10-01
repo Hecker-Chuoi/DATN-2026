@@ -17,6 +17,7 @@ export default function CompleteSprintModal({
   onConfirm,
   onClose,
 }) {
+  const backdropProps = useModalBackdrop(onClose);
   const [target, setTarget] = useState('BACKLOG');
 
   useEffect(() => {
@@ -24,8 +25,6 @@ export default function CompleteSprintModal({
   }, [isOpen]);
 
   if (!isOpen || !sprint) return null;
-
-  const backdropProps = useModalBackdrop(onClose);
   const done = sprint.doneCount ?? 0;
   const incomplete = (sprint.itemCount ?? 0) - done;
 
