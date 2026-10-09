@@ -8,11 +8,17 @@ import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workspaceservice.client.IdentityClient;
 import com.datn.workspaceservice.client.dto.UserResponse;
 import com.datn.workspaceservice.dto.request.AddWorkspaceMemberRequest;
+import com.datn.workspaceservice.dto.response.WorkspaceInvitationResponse;
 import com.datn.workspaceservice.dto.response.WorkspaceMemberResponse;
+import com.datn.workspaceservice.entity.Workspace;
+import com.datn.workspaceservice.entity.WorkspaceInvitation;
 import com.datn.workspaceservice.entity.WorkspaceMember;
+import com.datn.workspaceservice.enums.InvitationStatus;
 import com.datn.workspaceservice.enums.WorkspaceRole;
+import com.datn.workspaceservice.repository.WorkspaceInvitationRepository;
 import com.datn.workspaceservice.repository.WorkspaceMemberRepository;
 import com.datn.workspaceservice.repository.WorkspaceRepository;
+import com.datn.workspaceservice.service.InvitationMailer;
 import com.datn.workspaceservice.service.WorkspaceMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +26,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -38,7 +45,9 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
 
     private final WorkspaceMemberRepository memberRepository;
     private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceInvitationRepository invitationRepository;
     private final IdentityClient identityClient;
+    private final InvitationMailer mailer;
 
     @Override
     @Transactional(readOnly = true)
@@ -107,9 +116,9 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
 
     @Override
     @Transactional
-    public WorkspaceMemberResponse addMember(UUID workspaceId,
-                                             AddWorkspaceMemberRequest request,
-                                             UUID currentUserId) {
+    public WorkspaceInvitationResponse invite(UUID workspaceId,
+                                              AddWorkspaceMemberRequest request,
+                                              UUID currentUserId) {
         WorkspaceRole callerRole = requireAtLeast(workspaceId, currentUserId, WorkspaceRole.ADMIN);
 
         // Chỉ OWNER được cấp vai trò OWNER cho người khác.
@@ -119,21 +128,84 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
 
         UUID targetUserId = resolveUserIdByIdentifier(request.getIdentifier());
 
-        // Trùng thì báo lỗi, KHÔNG âm thầm sửa vai trò của hàng cũ như
-        // TeamController.addMember đang làm (nó mutate hàng sẵn có).
         if (memberRepository.existsByWorkspaceIdAndUserId(workspaceId, targetUserId)) {
             throw new BadRequestException("Người dùng đã là thành viên của workspace này");
         }
+        if (invitationRepository.existsByWorkspaceIdAndInviteeUserIdAndStatus(
+                workspaceId, targetUserId, InvitationStatus.PENDING)) {
+            throw new BadRequestException("Đã có lời mời đang chờ người dùng này trả lời");
+        }
 
-        WorkspaceMember saved = memberRepository.save(WorkspaceMember.builder()
+        WorkspaceInvitation saved = invitationRepository.save(WorkspaceInvitation.builder()
                 .workspaceId(workspaceId)
-                .userId(targetUserId)
-                .role(request.getRole())
+                .inviteeUserId(targetUserId)
                 .invitedBy(currentUserId)
+                .role(request.getRole())
                 .build());
 
-        log.info("Đã thêm user {} vào workspace {} với vai trò {}", targetUserId, workspaceId, request.getRole());
-        return toResponse(saved, hydrateUsers(List.of(saved)).get(targetUserId));
+        log.info("Workspace invitation created: workspace={}, invitee={}, by={}, role={}",
+                workspaceId, targetUserId, currentUserId, request.getRole());
+        WorkspaceInvitationResponse res = toInvitationResponse(saved);
+        mailer.send(res);
+        return res;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<WorkspaceInvitationResponse> listMyInvitations(UUID userId) {
+        return invitationRepository.findByInviteeUserIdAndStatusOrderByCreatedAtDesc(userId, InvitationStatus.PENDING)
+                .stream().map(this::toInvitationResponse).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<WorkspaceInvitationResponse> listInvitations(UUID workspaceId) {
+        return invitationRepository.findByWorkspaceIdAndStatusOrderByCreatedAtDesc(workspaceId, InvitationStatus.PENDING)
+                .stream().map(this::toInvitationResponse).toList();
+    }
+
+    @Override
+    @Transactional
+    public WorkspaceInvitationResponse acceptInvitation(UUID invitationId, UUID userId) {
+        WorkspaceInvitation inv = requirePendingForInvitee(invitationId, userId);
+        if (!workspaceRepository.existsByIdAndDeletedAtIsNull(inv.getWorkspaceId())) {
+            throw new BadRequestException("Workspace không còn tồn tại");
+        }
+        if (!memberRepository.existsByWorkspaceIdAndUserId(inv.getWorkspaceId(), userId)) {
+            memberRepository.save(WorkspaceMember.builder()
+                    .workspaceId(inv.getWorkspaceId())
+                    .userId(userId)
+                    .role(inv.getRole())
+                    .invitedBy(inv.getInvitedBy())
+                    .build());
+        }
+        inv.setStatus(InvitationStatus.ACCEPTED);
+        inv.setRespondedAt(LocalDateTime.now());
+        log.info("Workspace invitation {} accepted by {}", invitationId, userId);
+        return toInvitationResponse(invitationRepository.save(inv));
+    }
+
+    @Override
+    @Transactional
+    public WorkspaceInvitationResponse declineInvitation(UUID invitationId, UUID userId) {
+        WorkspaceInvitation inv = requirePendingForInvitee(invitationId, userId);
+        inv.setStatus(InvitationStatus.DECLINED);
+        inv.setRespondedAt(LocalDateTime.now());
+        return toInvitationResponse(invitationRepository.save(inv));
+    }
+
+    @Override
+    @Transactional
+    public WorkspaceInvitationResponse cancelInvitation(UUID invitationId, UUID userId) {
+        WorkspaceInvitation inv = requirePending(invitationId);
+        boolean allowed = userId.equals(inv.getInvitedBy())
+                || findRole(inv.getWorkspaceId(), userId).map(r -> r.atLeast(WorkspaceRole.ADMIN)).orElse(false);
+        if (!allowed) {
+            throw new ForbiddenException("Bạn không có quyền hủy lời mời này");
+        }
+        inv.setStatus(InvitationStatus.CANCELLED);
+        inv.setRespondedAt(LocalDateTime.now());
+        return toInvitationResponse(invitationRepository.save(inv));
     }
 
     @Override
@@ -291,10 +363,14 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
      * là null, thay vì để cả request 500. Danh sách thành viên vẫn dùng được.
      */
     private Map<UUID, UserResponse> hydrateUsers(List<WorkspaceMember> members) {
-        if (members.isEmpty()) {
+        return hydrateUserIds(members.stream().map(WorkspaceMember::getUserId).toList());
+    }
+
+    private Map<UUID, UserResponse> hydrateUserIds(List<UUID> userIds) {
+        List<UUID> ids = userIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
             return Collections.emptyMap();
         }
-        List<UUID> ids = members.stream().map(WorkspaceMember::getUserId).distinct().toList();
         try {
             ApiResponse<List<UserResponse>> response = identityClient.getUsersByIds(ids);
             if (response == null || response.getData() == null) {
@@ -322,6 +398,52 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
 
     private boolean containsIgnoreCase(String value, String needle) {
         return value != null && value.toLowerCase(Locale.ROOT).contains(needle);
+    }
+
+    // ─── Lời mời ─────────────────────────────────────────────────────────────
+
+    private WorkspaceInvitation requirePending(UUID invitationId) {
+        WorkspaceInvitation inv = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời: " + invitationId));
+        if (inv.getStatus() != InvitationStatus.PENDING) {
+            throw new BadRequestException("Lời mời đã được xử lý trước đó");
+        }
+        return inv;
+    }
+
+    private WorkspaceInvitation requirePendingForInvitee(UUID invitationId, UUID userId) {
+        WorkspaceInvitation inv = requirePending(invitationId);
+        if (!userId.equals(inv.getInviteeUserId())) {
+            throw new ForbiddenException("Lời mời này không dành cho bạn");
+        }
+        return inv;
+    }
+
+    /** ponytail: 1 query workspace + 1 batch identity cho mỗi lời mời; gom batch khi danh sách dài. */
+    private WorkspaceInvitationResponse toInvitationResponse(WorkspaceInvitation inv) {
+        Map<UUID, UserResponse> users = hydrateUserIds(List.of(inv.getInvitedBy(), inv.getInviteeUserId()));
+        UserResponse inviter = users.get(inv.getInvitedBy());
+        UserResponse invitee = users.get(inv.getInviteeUserId());
+        return WorkspaceInvitationResponse.builder()
+                .id(inv.getId())
+                .workspaceId(inv.getWorkspaceId())
+                .workspaceName(workspaceRepository.findById(inv.getWorkspaceId()).map(Workspace::getName).orElse(null))
+                .role(inv.getRole())
+                .invitedBy(inv.getInvitedBy())
+                .inviterName(displayName(inviter))
+                .inviteeUserId(inv.getInviteeUserId())
+                .inviteeName(displayName(invitee))
+                .inviteeEmail(invitee == null ? null : invitee.getEmail())
+                .status(inv.getStatus())
+                .createdAt(inv.getCreatedAt())
+                .build();
+    }
+
+    private static String displayName(UserResponse u) {
+        if (u == null) return null;
+        String full = u.getFullName();
+        if (full != null && !full.isBlank()) return full;
+        return u.getUsername() != null ? u.getUsername() : u.getEmail();
     }
 
     private WorkspaceMemberResponse toResponse(WorkspaceMember member, UserResponse user) {

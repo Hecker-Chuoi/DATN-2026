@@ -17,6 +17,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -63,15 +64,19 @@ public class AccountVerificationService {
         VerificationToken vt = requireUsable(token, VerificationToken.Type.EMAIL_VERIFY);
         User user = userRepository.findById(vt.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng của token này"));
-        if (user.getStatus() == User.UserStatus.INACTIVE) {
-            keycloakService.activateVerifiedUser(user.getKeycloakId());
-            user.setStatus(User.UserStatus.ACTIVE);
-            userRepository.save(user);
-        }
+        activateIfPending(user);
         vt.setUsedAt(LocalDateTime.now());
         tokenRepository.save(vt);
         log.info("Email verified for user {}", user.getUsername());
         return user;
+    }
+
+    /** Bật Keycloak user + users.status=ACTIVE nếu đang chờ xác thực; không làm gì nếu đã ACTIVE/SUSPENDED. */
+    private void activateIfPending(User user) {
+        if (user.getStatus() != User.UserStatus.INACTIVE) return;
+        keycloakService.activateVerifiedUser(user.getKeycloakId());
+        user.setStatus(User.UserStatus.ACTIVE);
+        userRepository.save(user);
     }
 
     /** identifier = email hoặc username. Chỉ gửi khi tài khoản đang chờ xác thực. */
@@ -100,12 +105,11 @@ public class AccountVerificationService {
             if (user.getStatus() == User.UserStatus.SUSPENDED) return;
             String token = issueToken(user, VerificationToken.Type.PASSWORD_RESET, Duration.ofMinutes(resetTtlMinutes));
             String link = frontendUrl + "/reset-password?token=" + token;
-            String html = layout("Đặt lại mật khẩu",
-                    "Chào " + displayName(user) + ",<br/><br/>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản <b>" + user.getUsername() + "</b>. "
-                            + "Nhấn nút bên dưới để đặt mật khẩu mới. Liên kết có hiệu lực trong " + resetTtlMinutes + " phút. "
-                            + "Nếu bạn không yêu cầu, hãy bỏ qua email này.",
-                    link, "Đặt lại mật khẩu");
-            notificationClient.sendEmail(user.getEmail(), "[DATN-2026] Đặt lại mật khẩu", html);
+            // Template notification-service/resources/templates/forgot-password.html
+            notificationClient.sendTemplate(user.getEmail(), "[DATN-2026] Đặt lại mật khẩu", "forgot-password", Map.of(
+                    "recipient_name", displayName(user),
+                    "link", link,
+                    "ttl_minutes", String.valueOf(resetTtlMinutes)));
         });
     }
 
@@ -115,6 +119,8 @@ public class AccountVerificationService {
         User user = userRepository.findById(vt.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng của token này"));
         keycloakService.resetUserPassword(user.getKeycloakId(), newPassword);
+        // Link reset chỉ đến được qua email → đã chứng minh sở hữu email, kích hoạt luôn nếu chưa verify
+        activateIfPending(user);
         vt.setUsedAt(LocalDateTime.now());
         tokenRepository.save(vt);
         log.info("Password reset via email for user {}", user.getUsername());

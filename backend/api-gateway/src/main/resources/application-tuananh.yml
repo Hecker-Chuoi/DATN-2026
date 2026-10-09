@@ -18,6 +18,12 @@ spring:
             - Path=/work/api/**,/work/actuator/**,/work/ws-work/**
           filters:
             - StripPrefix=1
+        - id: workspace-service
+          uri: http://localhost:9997
+          predicates:
+            - Path=/workspace/api/**,/workspace/actuator/**
+          filters:
+            - StripPrefix=1
   security:
     oauth2:
       resourceserver:

@@ -9,6 +9,7 @@ COPY identity-service/pom.xml ./identity-service/
 COPY api-gateway/pom.xml ./api-gateway/
 COPY work-service/pom.xml ./work-service/
 COPY notification-service/pom.xml ./notification-service/
+COPY workspace-service/pom.xml ./workspace-service/
 
 # Copy source code of common & notification-service
 COPY common/src ./common/src

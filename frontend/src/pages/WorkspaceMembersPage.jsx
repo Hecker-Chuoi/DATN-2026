@@ -8,6 +8,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { useWorkspaceRole } from '../hooks/useWorkspaceRole';
 import { ALL_ROLES, roleLabel } from '../utils/workspaceRole';
 import RoleBadge from '../components/workspace/RoleBadge';
+import PendingInvitations from '../components/common/PendingInvitations';
 
 const inputStyle = {
   padding: '8px 12px',
@@ -74,6 +75,7 @@ export default function WorkspaceMembersPage() {
   const [newRole, setNewRole] = useState('MEMBER');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
+  const [inviteTick, setInviteTick] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -123,18 +125,18 @@ export default function WorkspaceMembersPage() {
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!identifier.trim()) {
-      setAddError('Nhập email hoặc username của người cần thêm');
+      setAddError('Nhập email hoặc username của người cần mời');
       return;
     }
     try {
       setAdding(true);
       setAddError('');
+      // Backend tạo lời mời, chưa thêm vào bảng thành viên: chỉ cần reload block lời mời chờ.
       await workspaceApi.addMember(workspaceId, { identifier: identifier.trim(), role: newRole });
-      toast.success('Đã thêm thành viên');
+      toast.success('Đã gửi lời mời. Người được mời cần chấp nhận để trở thành thành viên.');
       setIdentifier('');
       setNewRole('MEMBER');
-      await load();
-      await refreshWorkspaces();
+      setInviteTick((t) => t + 1);
     } catch (err) {
       // Interceptor của api.js đã toast lỗi; ở đây chỉ hiển thị inline để không
       // bị hai toast trùng nhau.
@@ -206,7 +208,7 @@ export default function WorkspaceMembersPage() {
           }}
         >
           <div style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 10 }}>
-            Thêm thành viên
+            Mời thành viên
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             <input
@@ -249,7 +251,7 @@ export default function WorkspaceMembersPage() {
               }}
             >
               <UserPlus size={14} />
-              <span>{adding ? 'Đang thêm...' : 'Thêm'}</span>
+              <span>{adding ? 'Đang gửi...' : 'Mời'}</span>
             </button>
           </div>
           {addError && (
@@ -260,6 +262,8 @@ export default function WorkspaceMembersPage() {
           )}
         </form>
       )}
+
+      <PendingInvitations workspaceId={workspaceId} canManage={canManageMembers} refreshKey={inviteTick} />
 
       <div
         style={{

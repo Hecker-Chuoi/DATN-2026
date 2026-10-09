@@ -2,10 +2,12 @@ package com.datn.workspaceservice.service;
 
 import com.datn.common.dto.PageResponse;
 import com.datn.workspaceservice.dto.request.AddWorkspaceMemberRequest;
+import com.datn.workspaceservice.dto.response.WorkspaceInvitationResponse;
 import com.datn.workspaceservice.dto.response.WorkspaceMemberResponse;
 import com.datn.workspaceservice.enums.WorkspaceRole;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,9 +38,24 @@ public interface WorkspaceMemberService {
 
     WorkspaceMemberResponse getMyMembership(UUID workspaceId, UUID currentUserId);
 
-    WorkspaceMemberResponse addMember(UUID workspaceId,
-                                      AddWorkspaceMemberRequest request,
-                                      UUID currentUserId);
+    /**
+     * Tạo lời mời (không thêm thẳng). Người được mời chấp nhận qua acceptInvitation
+     * mới có hàng workspace_members. Gửi email thông báo, fail-safe.
+     */
+    WorkspaceInvitationResponse invite(UUID workspaceId,
+                                       AddWorkspaceMemberRequest request,
+                                       UUID currentUserId);
+
+    List<WorkspaceInvitationResponse> listMyInvitations(UUID userId);
+
+    List<WorkspaceInvitationResponse> listInvitations(UUID workspaceId);
+
+    WorkspaceInvitationResponse acceptInvitation(UUID invitationId, UUID userId);
+
+    WorkspaceInvitationResponse declineInvitation(UUID invitationId, UUID userId);
+
+    /** Hủy bởi người mời hoặc ADMIN+ của workspace. */
+    WorkspaceInvitationResponse cancelInvitation(UUID invitationId, UUID userId);
 
     WorkspaceMemberResponse updateMemberRole(UUID workspaceId,
                                              UUID targetUserId,

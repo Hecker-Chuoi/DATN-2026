@@ -1,25 +1,44 @@
-import React, { useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Mail, Users, FolderKanban, Check, X } from 'lucide-react';
+import { useState } from 'react';
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { Mail, Users, FolderKanban, Building2, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { invitationApi } from '../api.js';
+import { workspaceInvitationApi } from '../api/workspaceServiceApi';
+import { useWorkspace } from '../context/WorkspaceContext';
+import { wsPath } from '../utils/workspacePath';
+
+const KIND = {
+  TEAM: { label: 'Nhóm', Icon: Users, bg: '#EFF6FF', color: '#2563EB' },
+  PROJECT: { label: 'Dự án', Icon: FolderKanban, bg: '#F0FDF4', color: '#16A34A' },
+  WORKSPACE: { label: 'Workspace', Icon: Building2, bg: '#FEF3C7', color: '#D97706' },
+};
 
 /**
- * Lời mời tham gia nhóm / dự án đang chờ người dùng hiện tại trả lời.
+ * Lời mời tham gia workspace / nhóm / dự án đang chờ người dùng hiện tại trả lời.
  * Danh sách lấy từ WorkspaceLayout (context) để badge trên sidebar và trang này dùng chung một nguồn.
  */
 export default function InvitationsPage() {
   const navigate = useNavigate();
+  const { workspaceId } = useParams();
+  const { refreshWorkspaces } = useWorkspace();
   const { invitations = [], refreshInvitations, refreshTeams } = useOutletContext() || {};
   const [busyId, setBusyId] = useState(null);
 
   const respond = async (inv, accept) => {
+    const api = inv.type === 'WORKSPACE' ? workspaceInvitationApi : invitationApi;
     try {
       setBusyId(inv.id);
-      const res = accept ? await invitationApi.accept(inv.id) : await invitationApi.decline(inv.id);
+      const res = accept ? await api.accept(inv.id) : await api.decline(inv.id);
       toast.success(res?.message || (accept ? 'Đã tham gia' : 'Đã từ chối'));
-      await Promise.all([refreshInvitations?.(), accept ? refreshTeams?.() : null]);
-      if (accept) navigate(inv.type === 'TEAM' ? `/teams/${inv.targetId}` : `/projects/${inv.targetId}`);
+      await refreshInvitations?.();
+      if (!accept) return;
+      if (inv.type === 'WORKSPACE') {
+        await refreshWorkspaces();
+        navigate(wsPath(inv.targetId, '/projects'));
+      } else {
+        await refreshTeams?.();
+        navigate(wsPath(workspaceId, inv.type === 'TEAM' ? `/teams/${inv.targetId}` : `/projects/${inv.targetId}`));
+      }
     } catch {
       // interceptor đã hiện toast lỗi
     } finally {
@@ -40,21 +59,21 @@ export default function InvitationsPage() {
       <div style={{ padding: 24, maxWidth: 760, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {invitations.length === 0 ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#64748B', fontSize: 13 }}>
-            Bạn không có lời mời nào đang chờ. Khi trưởng nhóm hoặc quản trị dự án mời bạn, lời mời sẽ hiện ở đây.
+            Bạn không có lời mời nào đang chờ. Khi được mời vào workspace, nhóm hoặc dự án, lời mời sẽ hiện ở đây.
           </div>
         ) : (
           invitations.map((inv) => {
-            const isTeam = inv.type === 'TEAM';
-            const Icon = isTeam ? Users : FolderKanban;
+            const kind = KIND[inv.type] || KIND.TEAM;
+            const Icon = kind.Icon;
             const busy = busyId === inv.id;
             return (
               <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', border: '1px solid #E2E8F0', borderRadius: 10, backgroundColor: '#F8FAFC' }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: isTeam ? '#EFF6FF' : '#F0FDF4', color: isTeam ? '#2563EB' : '#16A34A', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: kind.bg, color: kind.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <Icon size={20} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
-                    {isTeam ? 'Nhóm' : 'Dự án'} <span style={{ color: '#2563EB' }}>{inv.targetName || '(không rõ tên)'}</span>
+                    {kind.label} <span style={{ color: '#2563EB' }}>{inv.targetName || '(không rõ tên)'}</span>
                   </div>
                   <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
                     {inv.inviterName || 'Ai đó'} mời bạn với vai trò <b>{inv.roleName || 'MEMBER'}</b>

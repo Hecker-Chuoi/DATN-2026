@@ -19,6 +19,13 @@ public class EmailService {
     @Value("${app.mail.from}")
     private String from;
 
+    @Value("${spring.mail.host}")
+    private String smtpHost;
+
+    @Value("${spring.mail.port}")
+    private int smtpPort;
+
+
     public void sendHtml(String to, String subject, String html) throws MessagingException {
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");

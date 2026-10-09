@@ -85,6 +85,7 @@ Các dịch vụ sẽ mở tại các cổng:
 - **Redis**: `localhost:6380`
 - **Apache Kafka**: `localhost:9092`
 - **MinIO S3 Storage**: `localhost:9000` (API) & [http://localhost:9001](http://localhost:9001) (Console UI - User: `minioadmin` / `minioadminpassword`)
+- **Mailpit (SMTP dev)**: SMTP `localhost:1025`, xem mail tại [http://localhost:8025](http://localhost:8025). notification-service (:9994, chỉ bind 127.0.0.1) gửi mail qua đây.
 
 ---
 

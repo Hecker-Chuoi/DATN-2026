@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Plus, Users, ArrowRight } from 'lucide-react';
+import { Building2, Plus, Users, ArrowRight, Mail, Check, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { workspaceInvitationApi } from '../api/workspaceServiceApi';
 import { wsPath } from '../utils/workspacePath';
 import RoleBadge from '../components/workspace/RoleBadge';
 
@@ -39,8 +42,36 @@ const cardStyle = {
  * vì sidebar cần workspaceId để render switcher và danh sách team.
  */
 export default function WorkspaceListPage() {
-  const { workspaces, loading, error, openCreateWorkspace } = useWorkspace();
+  const { workspaces, loading, error, openCreateWorkspace, refreshWorkspaces } = useWorkspace();
   const navigate = useNavigate();
+
+  // Lời mời workspace đang chờ: trang này là nơi duy nhất người CHƯA có workspace nào nhìn thấy được
+  // (WorkspaceRedirect đẩy họ về đây, không vào được /w/:id/invitations của workspace chưa thuộc).
+  const [invites, setInvites] = useState([]);
+  const [busyId, setBusyId] = useState(null);
+  useEffect(() => {
+    workspaceInvitationApi
+      .my()
+      .then((res) => setInvites(Array.isArray(res?.data) ? res.data : []))
+      .catch(() => setInvites([]));
+  }, []);
+
+  const respond = async (inv, accept) => {
+    try {
+      setBusyId(inv.id);
+      const res = accept ? await workspaceInvitationApi.accept(inv.id) : await workspaceInvitationApi.decline(inv.id);
+      toast.success(res?.message || (accept ? 'Đã tham gia' : 'Đã từ chối'));
+      setInvites((list) => list.filter((i) => i.id !== inv.id));
+      if (accept) {
+        await refreshWorkspaces();
+        navigate(wsPath(inv.workspaceId, '/projects'));
+      }
+    } catch {
+      // interceptor đã hiện toast lỗi
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: '#F8FAFC', padding: '48px 24px' }}>
@@ -84,6 +115,30 @@ export default function WorkspaceListPage() {
             }}
           >
             {error}
+          </div>
+        )}
+
+        {invites.length > 0 && (
+          <div style={{ marginBottom: 24, padding: '14px 16px', border: '1px dashed #FCD34D', background: '#FFFBEB', borderRadius: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#92400E', marginBottom: 10 }}>
+              <Mail size={14} /> Lời mời workspace đang chờ ({invites.length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {invites.map((inv) => (
+                <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#1F2937' }}>
+                  <span style={{ flex: 1 }}>
+                    <b>{inv.workspaceName || '(không rõ tên)'}</b>
+                    {' · '}{inv.inviterName || 'Ai đó'} mời bạn với vai trò <b>{inv.role || 'MEMBER'}</b>
+                  </span>
+                  <button type="button" onClick={() => respond(inv, true)} disabled={busyId === inv.id} style={{ ...primaryBtn, padding: '6px 12px' }}>
+                    <Check size={13} /> Chấp nhận
+                  </button>
+                  <button type="button" onClick={() => respond(inv, false)} disabled={busyId === inv.id} style={{ ...primaryBtn, padding: '6px 12px', background: '#FFF', color: '#475569', border: '1px solid #CBD5E1' }}>
+                    <X size={13} /> Từ chối
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

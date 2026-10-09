@@ -18,15 +18,16 @@ Máy hiện tại **không có Maven và chỉ có JDK 17** (`JAVA_HOME=D:\jdk-1
 
 ```bash
 cd infrastructure
-docker compose -f docker-compose.tuananh.yml up -d --build   # file CÁ NHÂN: cổng 999x, MinIO bitnamilegacy, Mailpit, notification-service, redis, kafka
+docker compose -f docker-compose.tuananh.yml up -d                       # file CÁ NHÂN: CHỈ hạ tầng (DB, Keycloak 9998, Mailpit, Redis, Kafka, MinIO, pgAdmin); `name: environment` để tái dùng volume cũ
+docker compose -f docker-compose.tuananh.yml --profile app up -d --build # thêm identity/gateway/notification trong Docker (mặc định chạy từ IntelliJ)
 ```
-Ba file `docker-compose.yml` / `.app.yml` / `.infra.yml` là bản gốc của nhóm (cổng 808x, image `minio/minio` đã bị gỡ khỏi Docker Hub, chưa có notification-service) — **không sửa**.
+Ba file `docker-compose.yml` / `.app.yml` / `.infra.yml` là bản gốc của nhóm (cổng 808x, image `minio/minio` đã bị gỡ khỏi Docker Hub) — **không đổi cổng/minio**; đã có notification-service + Mailpit (chỉ thêm, không sửa phần cũ).
 
 **Cổng dùng chung (808x) vs cá nhân (999x):** mọi `application.yml`, `vite.config.js`, `nginx.conf`, realm export dùng cổng 808x của nhóm. Máy này bị trùng cổng 808x nên dùng lớp phủ cá nhân, không sửa file chung:
-- Backend: profile `tuananh` (`application-tuananh.y*ml` trong 3 service) → gateway 9991, identity 9992, work 9993, Keycloak 9998. Chạy từ IDE với `-Dspring.profiles.active=tuananh`; `docker-compose.tuananh.yml` đã set `SPRING_PROFILES_ACTIVE`.
+- Backend: profile `tuananh` (`application-tuananh.y*ml` trong 4 service) → gateway 9991, identity 9992, work 9993, workspace 9997, notification 9994 (không cần profile), Keycloak 9998. Profile này ghi đè TOÀN BỘ `routes` của gateway: thêm service mới phải thêm route vào cả hai file. Chạy từ IDE với `-Dspring.profiles.active=tuananh`; `docker-compose.tuananh.yml` đã set `SPRING_PROFILES_ACTIVE`.
 - Frontend: `frontend/.env.local` (gitignored) đặt `VITE_GATEWAY_URL` và `VITE_KEYCLOAK_URL`; `vite.config.js` và `App.jsx` đọc hai biến này, mặc định 8081/8088.
 - Keycloak Admin Console cá nhân: http://localhost:9998 (nhóm: 8088). Google Console cần có cả hai redirect URI.
-Dockerfile mỗi service dùng build context là `backend/` (compose khai báo `context: ..`) và phải COPY đủ **5 pom** (common, identity, gateway, work, notification) + `common/src` vì parent pom liệt kê mọi module. Thêm module mới = sửa cả 4 Dockerfile còn lại.
+Dockerfile mỗi service dùng build context là `backend/` (compose khai báo `context: ..`) và phải COPY đủ **6 pom** (common, identity, gateway, work, workspace, notification) + `common/src` vì parent pom liệt kê mọi module. Thêm module mới = sửa cả 4 Dockerfile còn lại (quên là `mvn` trong image fail ngay: `Child module ... does not exist`).
 
 Email dev: compose infra có **Mailpit** (SMTP :1025, xem mail tại http://localhost:8025). SMTP thật cấu hình qua env `MAIL_HOST/PORT/USERNAME/PASSWORD/SMTP_AUTH/STARTTLS/FROM` của notification-service.
 
@@ -61,7 +62,7 @@ Frontend → API Gateway (:8081) → service. Gateway (`api-gateway/src/main/res
 - Frontend (`src/api.js`) giữ hai bộ token trong `localStorage` (`user_*` và `admin_*`), chọn theo path `/admin`; interceptor tự refresh khi 401, bóc wrapper `["java.util.ArrayList", [...]]` của Jackson, và tự decode JWT (không dùng `keycloak-js`).
 - `identity-service` mở `/internal/**` không cần token để `work-service` gọi qua Feign (`work-service/.../client/IdentityClient.java`). `identity-service` gọi `notification-service` bằng RestTemplate (`client/NotificationClient.java`, fail-safe: lỗi mail chỉ log). Kafka/outbox/WebSocket mới có bean/entity, chưa có code publish.
 - **Xác thực email**: đăng ký tạo Keycloak user `enabled=false` + `users.status=INACTIVE`, gửi link `{app.frontend-url}/verify-email?token=` (bảng `verification_tokens`, `AccountVerificationService`). Login bị chặn 403 khi INACTIVE (`UserService.assertEmailVerified`). Quên mật khẩu: `/auth/forgot-password` → link `/reset-password?token=` (30 phút) → `/auth/reset-password`. User Google không qua bước này.
-- **Lời mời**: `POST /teams/{id}/members` và `POST /projects/{id}/members` không thêm trực tiếp mà tạo `invitations` (V4); người được mời chấp nhận qua `/invitations/{id}/accept` mới có `team_members`/`role_assignments`.
+- **Lời mời**: `POST /teams/{id}/members`, `POST /projects/{id}/members` (work-service, bảng `invitations` V4, accept tại `/invitations/{id}/accept`) và `POST /workspaces/{id}/members` (workspace-service, bảng `workspace_invitations` V4, accept tại `/api/v1/workspace-invitations/{id}/accept`, ADMIN xem lời mời chờ tại `/workspaces/{id}/members/invitations`) đều KHÔNG thêm trực tiếp mà tạo lời mời; chấp nhận mới có `team_members`/`role_assignments`/`workspace_members`. Cả hai service gửi email lời mời qua Feign `client/NotificationClient` + `service/InvitationMailer` (`@Async`, fail-safe), link `{app.frontend-url}/invitations` → route phẳng `/invitations` redirect vào `/w/:id/invitations`. Frontend gộp 3 loại (WORKSPACE/TEAM/PROJECT) ở `WorkspaceLayout.fetchInvitations`; `WorkspaceListPage` hiện lời mời workspace cho user chưa có workspace nào.
 
 ### Hai loại userId — bẫy lớn nhất
 `identity-service` có bảng `users` với `id` riêng, còn **mọi bảng của `work-service` dùng Keycloak `sub`** làm `user_id` (`SecurityUtils.getCurrentUserId()`). Khi nhận id từ identity phải quy đổi qua `ProjectMemberServiceImpl.canonicalUserId()` trước khi ghi. Migration `V2__authz_hardening.sql` đã rewrite dữ liệu cũ sang chuẩn này. Khi debug quyền/membership không khớp, kiểm tra điểm này trước.
@@ -77,7 +78,7 @@ Frontend → API Gateway (:8081) → service. Gateway (`api-gateway/src/main/res
 - work-service dùng JPA Specification (`specification/*`) cho filter động, Redis :6380, MinIO :9000 (bucket `work-attachments`).
 
 ## Trạng thái hiện tại cần biết trước khi sửa
-- Migration hiện có V1, V2 (`authz_hardening`), V3 (`add_project_id_to_statuses`), V4 (`invitations`); thêm mới dùng V5 trở đi. identity-service không dùng Flyway (`ddl-auto: update` tự tạo `verification_tokens`).
+- Migration work-service: V1, V2 (`authz_hardening`), V3 (`add_project_id_to_statuses`), V4 (`invitations`); thêm mới dùng V5 trở đi. workspace-service (Flyway riêng `flyway_workspace_schema_history`, `ddl-auto: validate`): V1–V4 (`workspace_invitations`); thêm mới dùng V5. identity-service không dùng Flyway (`ddl-auto: update` tự tạo `verification_tokens`).
 - Chỉ trưởng nhóm (owner/LEADER của team) hoặc Global ADMIN tạo được dự án; dự án không gắn team chỉ ADMIN tạo được. Xóa team cần `teamSecurity.isLeader` (không còn `isOwner`).
 - `work-service` **chưa có trong bất kỳ docker-compose nào**, và compose chỉ set env `SPRING_CLOUD_GATEWAY_ROUTES_0_*` (identity) nên gateway trong container mất route `/work/**`. `frontend/nginx.conf` cũng chỉ proxy `/identity/`, thiếu `/work/`.
 - `frontend/src/api/workServiceApi.js` là bản trùng lặp của `src/api.js`, không ai import; dùng `src/api.js`.
