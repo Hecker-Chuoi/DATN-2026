@@ -22,6 +22,7 @@ import ProfilePage from './pages/ProfilePage.jsx';
 import { WorkspaceProvider } from './context/WorkspaceContext.jsx';
 import CreateWorkspaceModal from './components/workspace/CreateWorkspaceModal.jsx';
 import WorkspaceRedirect from './components/workspace/WorkspaceRedirect.jsx';
+import GithubCallbackPage from './pages/GithubCallbackPage.jsx';
 import WorkspaceListPage from './pages/WorkspaceListPage.jsx';
 import WorkspaceMembersPage from './pages/WorkspaceMembersPage.jsx';
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage.jsx';
@@ -198,6 +199,7 @@ function App() {
         <Route element={isUserAuth ? <AuthedShell /> : <Navigate to="/login" replace />}>
           {/* Chưa chọn workspace -> không có sidebar */}
           <Route path="/workspaces" element={<WorkspaceListPage />} />
+          <Route path="/github/callback" element={<GithubCallbackPage />} />
 
           {/* Root và các đường dẫn phẳng cũ: điều hướng về workspace phù hợp,
               để link đã bookmark không bị 404. */}

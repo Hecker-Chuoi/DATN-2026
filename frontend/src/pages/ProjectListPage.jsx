@@ -11,6 +11,7 @@ import {
   Link2,
   SlidersHorizontal,
   Kanban,
+  Briefcase,
   Zap,
   Layers,
   Sparkles,
@@ -91,6 +92,7 @@ export default function ProjectListPage() {
       // Type Tab Filter
       if (activeTab === 'SCRUM' && proj.projectType !== 'SOFTWARE_SCRUM') return false;
       if (activeTab === 'KANBAN' && proj.projectType !== 'SOFTWARE_KANBAN') return false;
+      if (activeTab === 'BUSINESS' && proj.projectType !== 'BUSINESS') return false;
       if (activeTab === 'TEMPLATES' && !proj.isTemplate) return false;
 
       // Keyword Search Filter
@@ -228,6 +230,7 @@ export default function ProjectListPage() {
             { id: 'ALL', label: 'Tất cả dự án' },
             { id: 'SCRUM', label: 'Dự án Scrum' },
             { id: 'KANBAN', label: 'Dự án Kanban' },
+            { id: 'BUSINESS', label: 'Dự án Kinh doanh' },
             { id: 'TEMPLATES', label: 'Dự án mẫu' },
           ].map((tab) => {
             const active = activeTab === tab.id;
@@ -396,7 +399,11 @@ export default function ProjectListPage() {
             }}
           >
             {filteredProjects.map((project) => {
-              const isScrum = project.projectType === 'SOFTWARE_SCRUM';
+              const typeBadge = {
+                SOFTWARE_SCRUM: { color: '#7C3AED', bg: '#F5F3FF', Icon: Zap, label: 'Quy trình Scrum' },
+                SOFTWARE_KANBAN: { color: '#059669', bg: '#ECFDF5', Icon: Kanban, label: 'Bảng Kanban' },
+                BUSINESS: { color: '#B45309', bg: '#FFFBEB', Icon: Briefcase, label: 'Dự án Kinh doanh' },
+              }[project.projectType] || { color: '#059669', bg: '#ECFDF5', Icon: Kanban, label: project.projectType };
               const isSystemAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN');
               const canDeleteProject = isSystemAdmin || (currentUser && (project.leadUserId === currentUser.id || project.createdBy === currentUser.id));
 
@@ -445,8 +452,8 @@ export default function ProjectListPage() {
                           style={{
                             fontSize: 11,
                             fontWeight: 600,
-                            color: isScrum ? '#7C3AED' : '#059669',
-                            backgroundColor: isScrum ? '#F5F3FF' : '#ECFDF5',
+                            color: typeBadge.color,
+                            backgroundColor: typeBadge.bg,
                             padding: '2px 8px',
                             borderRadius: 12,
                             display: 'flex',
@@ -454,8 +461,8 @@ export default function ProjectListPage() {
                             gap: 4,
                           }}
                         >
-                          {isScrum ? <Zap size={11} /> : <Kanban size={11} />}
-                          <span>{isScrum ? 'Quy trình Scrum' : 'Bảng Kanban'}</span>
+                          <typeBadge.Icon size={11} />
+                          <span>{typeBadge.label}</span>
                         </span>
 
                         {canDeleteProject && (

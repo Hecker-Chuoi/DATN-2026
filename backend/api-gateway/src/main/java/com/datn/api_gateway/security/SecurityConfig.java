@@ -12,6 +12,7 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/identity/api/v1/auth/**",
+            "/work/api/v1/work/github/webhook",   // GitHub gọi vào, work-service tự xác thực HMAC
             "/actuator/health",
             "/actuator/info"
     };

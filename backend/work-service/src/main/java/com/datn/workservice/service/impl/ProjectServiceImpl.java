@@ -471,7 +471,7 @@ public class ProjectServiceImpl implements ProjectService {
         workflowSchemeMappingRepository.saveAll(mappings);
 
         // 6. Default Board & Board Columns
-        BoardType boardType = project.getProjectType() == ProjectType.SOFTWARE_KANBAN ? BoardType.KANBAN : BoardType.SCRUM;
+        BoardType boardType = project.getProjectType() == ProjectType.SOFTWARE_SCRUM ? BoardType.SCRUM : BoardType.KANBAN;
         Board board = Board.builder()
                 .projectId(project.getId())
                 .name(project.getName() + " Board")

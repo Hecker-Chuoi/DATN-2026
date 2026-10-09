@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { userApi } from '../api.js';
+import GithubConnectCard from '../components/profile/GithubConnectCard.jsx';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -506,6 +507,9 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+
+        {/* ─── Card 2b: Tài khoản liên kết (GitHub) ─── */}
+        <GithubConnectCard />
 
         {/* ─── Card 3: Workspace Quick Links / Context ─── */}
         <div

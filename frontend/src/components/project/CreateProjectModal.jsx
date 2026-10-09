@@ -4,6 +4,7 @@ import {
   X,
   FolderKanban,
   Kanban,
+  Briefcase,
   Zap,
   Sparkles,
   Calendar,
@@ -346,7 +347,7 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
               Mô hình quản lý công việc
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               {/* Scrum Card */}
               <div
                 onClick={() => setFormData({ ...formData, projectType: 'SOFTWARE_SCRUM' })}
@@ -426,6 +427,47 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
                 </div>
                 <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.4 }}>
                   Luồng công việc liên tục, trực quan hóa trạng thái và giới hạn số lượng công việc đang làm.
+                </p>
+              </div>
+
+              {/* Business Card: dự án không phải phần mềm, không có tích hợp GitHub */}
+              <div
+                onClick={() => setFormData({ ...formData, projectType: 'BUSINESS' })}
+                style={{
+                  padding: '14px 16px',
+                  borderRadius: 8,
+                  border: `2px solid ${formData.projectType === 'BUSINESS' ? '#2563EB' : '#E2E8F0'}`,
+                  backgroundColor: formData.projectType === 'BUSINESS' ? '#EFF6FF' : '#FFFFFF',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  position: 'relative',
+                }}
+              >
+                {formData.projectType === 'BUSINESS' && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 10,
+                      right: 10,
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      backgroundColor: '#2563EB',
+                      color: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Check size={12} strokeWidth={3} />
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1D4ED8', fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                  <Briefcase size={16} />
+                  <span>Dự án Kinh doanh</span>
+                </div>
+                <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.4 }}>
+                  Quản lý công việc tổng quát (marketing, sự kiện, vận hành...), không gắn kho mã nguồn.
                 </p>
               </div>
             </div>

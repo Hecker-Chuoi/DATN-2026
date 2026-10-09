@@ -517,4 +517,16 @@ export const jqlApi = {
   search: (jqlQuery) => apiClient.post(`${WORK_BASE}/jql/search`, { jql: jqlQuery }),
 };
 
+/** Tích hợp GitHub (work-service): kết nối tài khoản cá nhân + liên kết repo với dự án phần mềm. */
+export const githubApi = {
+  getAuthorizeUrl: (redirectUri) => apiClient.get(`${WORK_BASE}/github/oauth/authorize-url`, { params: { redirectUri } }),
+  oauthCallback: (data) => apiClient.post(`${WORK_BASE}/github/oauth/callback`, data),
+  me: () => apiClient.get(`${WORK_BASE}/github/me`, { skipErrorToast: true }),
+  disconnect: () => apiClient.delete(`${WORK_BASE}/github/me`),
+  listRepos: () => apiClient.get(`${WORK_BASE}/github/repos`),
+  getRepoLink: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/github/repo`, { skipErrorToast: true }),
+  linkRepo: (projectId, data) => apiClient.put(`${WORK_BASE}/projects/${projectId}/github/repo`, data),
+  unlinkRepo: (projectId) => apiClient.delete(`${WORK_BASE}/projects/${projectId}/github/repo`),
+};
+
 export default apiClient;

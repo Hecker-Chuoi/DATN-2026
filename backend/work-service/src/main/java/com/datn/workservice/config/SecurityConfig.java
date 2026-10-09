@@ -34,7 +34,8 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/**", "/public/**").permitAll()
+                        // Webhook GitHub không có JWT, xác thực bằng HMAC trong GithubServiceImpl
+                        .requestMatchers("/actuator/**", "/public/**", "/api/v1/work/github/webhook").permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt

@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: work-service
+  # Đọc secret GitHub từ .env (gitignored) khi chạy IntelliJ ở bất kỳ working dir nào
+  config:
+    import:
+      - optional:file:./.env[.properties]
+      - optional:file:./work-service/.env[.properties]
+      - optional:file:./backend/work-service/.env[.properties]
 
   # ─── PostgreSQL (datn_main_db) ───────────────────────────
   datasource:
@@ -63,6 +69,12 @@ minio:
 # ─── Microservices Internal Endpoints ───
 app:
   frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
+  public-url: ${APP_PUBLIC_URL:http://localhost:8081}        # URL gateway nhìn từ internet (ngrok khi dev) để GitHub gọi webhook
+  github:                                                   # OAuth App: GitHub > Settings > Developer settings > OAuth Apps
+    client-id: ${GITHUB_CLIENT_ID:}
+    client-secret: ${GITHUB_CLIENT_SECRET:}
+    webhook-secret: ${GITHUB_WEBHOOK_SECRET:change-me}
+    token-enc-key: ${GITHUB_TOKEN_ENC_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}   # 32 byte 0, chỉ dev; openssl rand -base64 32
   services:
     identity:
       url: http://localhost:8082

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   GitBranch,
+  Github,
   ArrowRight,
   Plus,
   Trash2,
@@ -30,6 +31,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workflowApi, workItemTypeApi } from '../../api.js';
+import GithubIntegrationTab from './GithubIntegrationTab.jsx';
+import { isSoftwareProject } from '../../utils/projectType.js';
 import {
   STATUS_CATEGORY_CONFIG,
   WORK_ITEM_TYPE_CONFIG,
@@ -611,7 +614,36 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
           <Layers size={15} />
           <span>Phân bổ Loại Công việc ({projectTypes.length})</span>
         </button>
+
+        {/* Chỉ dự án phần mềm và admin dự án mới thấy tích hợp GitHub */}
+        {isSoftwareProject(project) && isAdmin && (
+          <button
+            type="button"
+            onClick={() => handleSelectSubTab('github')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 6,
+              border: 'none',
+              backgroundColor: activeSubTab === 'github' ? '#EFF6FF' : 'transparent',
+              color: activeSubTab === 'github' ? '#2563EB' : '#64748B',
+              fontWeight: activeSubTab === 'github' ? 700 : 500,
+              fontSize: 13,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Github size={15} />
+            <span>Tích hợp GitHub</span>
+          </button>
+        )}
       </div>
+
+      {/* ─── TAB 3: Tích hợp GitHub ─── */}
+      {activeSubTab === 'github' && isSoftwareProject(project) && isAdmin && (
+        <GithubIntegrationTab projectId={projectId} />
+      )}
 
       {/* ─── TAB 1: Visual FSM Diagram & Transitions Table ─── */}
       {activeSubTab === 'diagram' && (

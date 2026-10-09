@@ -26,6 +26,12 @@ export function isKanbanProject(project) {
   return t === PROJECT_TYPE.SOFTWARE_KANBAN || t === 'KANBAN';
 }
 
+/** Du an phan mem (Scrum/Kanban) moi co tich hop GitHub; project null -> false de an UI an toan. */
+export function isSoftwareProject(project) {
+  const t = project?.projectType;
+  return !!t && t !== PROJECT_TYPE.BUSINESS;
+}
+
 /** Kieu bang uu tien lay tu chinh Board; neu thieu thi suy ra tu loai du an. */
 export function boardTypeOf(project, board) {
   if (board?.type) return board.type;
