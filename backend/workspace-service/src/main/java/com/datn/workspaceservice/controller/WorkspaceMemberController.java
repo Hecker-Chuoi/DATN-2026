@@ -4,6 +4,7 @@ import com.datn.common.dto.ApiResponse;
 import com.datn.common.dto.PageResponse;
 import com.datn.workspaceservice.dto.request.AddWorkspaceMemberRequest;
 import com.datn.workspaceservice.dto.request.UpdateMemberRoleRequest;
+import com.datn.workspaceservice.dto.response.WorkspaceInvitationResponse;
 import com.datn.workspaceservice.dto.response.WorkspaceMemberResponse;
 import com.datn.workspaceservice.enums.WorkspaceRole;
 import com.datn.workspaceservice.security.CurrentUserResolver;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -57,15 +59,23 @@ public class WorkspaceMemberController {
                 memberService.getMyMembership(workspaceId, currentUserId)));
     }
 
+    /** Không thêm thẳng: tạo lời mời, người được mời chấp nhận mới thành thành viên. */
     @PostMapping
     @RequireWorkspaceRole(WorkspaceRole.ADMIN)
-    public ResponseEntity<ApiResponse<WorkspaceMemberResponse>> add(
+    public ResponseEntity<ApiResponse<WorkspaceInvitationResponse>> add(
             @PathVariable UUID workspaceId,
             @Valid @RequestBody AddWorkspaceMemberRequest request) {
         UUID currentUserId = currentUserResolver.currentUserId();
-        WorkspaceMemberResponse added = memberService.addMember(workspaceId, request, currentUserId);
+        WorkspaceInvitationResponse invitation = memberService.invite(workspaceId, request, currentUserId);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(added, "Đã thêm thành viên vào workspace"));
+                .body(ApiResponse.success(invitation, "Đã gửi lời mời. Người được mời cần chấp nhận để trở thành thành viên."));
+    }
+
+    /** Lời mời đang chờ của workspace (phía người quản trị). Đặt dưới /members để aspect resolve được workspaceId. */
+    @GetMapping("/invitations")
+    @RequireWorkspaceRole(WorkspaceRole.ADMIN)
+    public ResponseEntity<ApiResponse<List<WorkspaceInvitationResponse>>> invitations(@PathVariable UUID workspaceId) {
+        return ResponseEntity.ok(ApiResponse.success(memberService.listInvitations(workspaceId)));
     }
 
     @PutMapping("/{userId}/role")

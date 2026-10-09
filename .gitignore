@@ -30,3 +30,4 @@ data/
 docs/deployment 
 
 .antigravity
+!.env.example

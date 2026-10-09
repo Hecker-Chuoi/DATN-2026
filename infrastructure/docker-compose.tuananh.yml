@@ -1,8 +1,13 @@
 # ============================================================================
 # docker-compose.tuananh.yml – cấu hình CÁ NHÂN (cổng 999x, MinIO bitnamilegacy, Mailpit, notification-service)
-# Dùng: docker compose -f docker-compose.tuananh.yml up -d
+# Dùng: docker compose -f docker-compose.tuananh.yml up -d                 # chỉ hạ tầng (DB, Keycloak, Mailpit, Redis, Kafka, MinIO, pgAdmin)
+#       docker compose -f docker-compose.tuananh.yml --profile app up -d --build   # thêm identity/gateway/notification trong Docker
+# Mặc định các service backend chạy từ IntelliJ với -Dspring.profiles.active=tuananh (notification không cần profile).
 # Các file docker-compose.yml / .app.yml / .infra.yml giữ nguyên bản gốc của nhóm (cổng 808x).
 # ============================================================================
+# Giữ project name cũ (stack từng chạy từ backend/environment) để tái dùng container + volume dữ liệu environment_*
+name: environment
+
 services:
 
   # ─────────────────────────────────────────────
@@ -94,6 +99,7 @@ services:
       context: ../backend
       dockerfile: identity-service/Dockerfile
     container_name: identity-service
+    profiles: ["app"]   # chỉ chạy khi: docker compose --profile app ...; mặc định chạy từ IntelliJ
     restart: unless-stopped
     ports:
       - "9992:9992"
@@ -134,9 +140,10 @@ services:
       context: ../backend
       dockerfile: notification-service/Dockerfile
     container_name: notification-service
+    profiles: ["app"]   # chỉ chạy khi: docker compose --profile app ...; mặc định chạy từ IntelliJ
     restart: unless-stopped
     ports:
-      - "9994:9994"
+      - "127.0.0.1:9994:9994"
     environment:
       MAIL_HOST: ${MAIL_HOST:-mailpit}
       MAIL_PORT: ${MAIL_PORT:-1025}
@@ -145,6 +152,8 @@ services:
       MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
       MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-false}
       MAIL_FROM: ${MAIL_FROM:-no-reply@datn.local}
+    depends_on:
+      - mailpit
     networks:
       - app-net
 
@@ -155,6 +164,7 @@ services:
       context: ../backend
       dockerfile: api-gateway/Dockerfile
     container_name: api-gateway
+    profiles: ["app"]   # chỉ chạy khi: docker compose --profile app ...; mặc định chạy từ IntelliJ
     restart: unless-stopped
     ports:
       - "9991:9991"

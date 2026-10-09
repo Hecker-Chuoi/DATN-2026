@@ -1,20 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Mail, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { invitationApi } from '../../api.js';
+import { workspaceInvitationApi } from '../../api/workspaceServiceApi';
 
 /**
- * Danh sách lời mời đang chờ của một nhóm (teamId) hoặc dự án (projectId), kèm nút hủy.
- * Chỉ trưởng nhóm / quản trị dự án gọi được API này, nên chỉ render khi canManage.
+ * Danh sách lời mời đang chờ của một workspace (workspaceId), nhóm (teamId) hoặc dự án (projectId), kèm nút hủy.
+ * Chỉ người quản trị gọi được API này, nên chỉ render khi canManage.
  * refreshKey: đổi giá trị để tải lại (vd. sau khi gửi lời mời mới).
  */
-export default function PendingInvitations({ teamId, projectId, canManage = false, refreshKey = 0 }) {
+export default function PendingInvitations({ workspaceId, teamId, projectId, canManage = false, refreshKey = 0 }) {
   const [items, setItems] = useState([]);
   const [busyId, setBusyId] = useState(null);
+  const api = workspaceId ? workspaceInvitationApi : invitationApi;
 
   const load = async () => {
     try {
-      const res = teamId ? await invitationApi.forTeam(teamId) : await invitationApi.forProject(projectId);
+      const res = workspaceId
+        ? await workspaceInvitationApi.forWorkspace(workspaceId)
+        : teamId ? await invitationApi.forTeam(teamId) : await invitationApi.forProject(projectId);
       setItems(Array.isArray(res?.data) ? res.data : []);
     } catch {
       setItems([]);
@@ -22,14 +26,14 @@ export default function PendingInvitations({ teamId, projectId, canManage = fals
   };
 
   useEffect(() => {
-    if (canManage && (teamId || projectId)) load();
+    if (canManage && (workspaceId || teamId || projectId)) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId, projectId, canManage, refreshKey]);
+  }, [workspaceId, teamId, projectId, canManage, refreshKey]);
 
   const cancel = async (inv) => {
     try {
       setBusyId(inv.id);
-      await invitationApi.cancel(inv.id);
+      await api.cancel(inv.id);
       toast.success('Đã hủy lời mời');
       load();
     } catch {
@@ -52,7 +56,7 @@ export default function PendingInvitations({ teamId, projectId, canManage = fals
             <span style={{ flex: 1 }}>
               <b>{inv.inviteeName || inv.inviteeEmail || inv.inviteeUserId}</b>
               {inv.inviteeEmail && inv.inviteeName ? ` (${inv.inviteeEmail})` : ''}
-              {' · '}vai trò <b>{inv.roleName || 'MEMBER'}</b>
+              {' · '}vai trò <b>{inv.roleName || inv.role || 'MEMBER'}</b>
               {inv.inviterName ? ` · mời bởi ${inv.inviterName}` : ''}
             </span>
             <button

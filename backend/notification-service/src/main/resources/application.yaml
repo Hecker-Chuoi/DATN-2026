@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: notification-service
+  # Đọc biến MAIL_* từ file .env cạnh module (gitignored) khi chạy từ IntelliJ; Docker dùng infrastructure/.env
+  config:
+    import:
+      - optional:file:./.env[.properties]                               # cwd = backend/notification-service
+      - optional:file:./notification-service/.env[.properties]          # cwd = backend
+      - optional:file:./backend/notification-service/.env[.properties]  # cwd = root repo (IntelliJ mặc định)
   # Mặc định trỏ tới Mailpit (docker-compose): SMTP localhost:1025, xem mail tại http://localhost:8025
   # Với SMTP thật (Gmail...): MAIL_HOST=smtp.gmail.com MAIL_PORT=587 MAIL_USERNAME=... MAIL_PASSWORD=<app password> MAIL_SMTP_AUTH=true MAIL_SMTP_STARTTLS=true
   mail:

@@ -35,4 +35,19 @@ export const workspaceApi = {
   removeMember: (id, userId) => apiClient.delete(`${WORKSPACE_BASE}/${id}/members/${userId}`),
 };
 
+/**
+ * Lời mời workspace. addMember ở trên KHÔNG thêm thẳng nữa mà tạo lời mời;
+ * người được mời chấp nhận qua accept mới thành thành viên.
+ * Path riêng (/workspace-invitations) để "my" không bị bắt bởi GET /workspaces/{id}.
+ */
+const INV_BASE = '/workspace/api/v1/workspace-invitations';
+
+export const workspaceInvitationApi = {
+  my: () => apiClient.get(`${INV_BASE}/my`, { skipErrorToast: true }),
+  forWorkspace: (id) => apiClient.get(`${WORKSPACE_BASE}/${id}/members/invitations`, { skipErrorToast: true }),
+  accept: (id) => apiClient.post(`${INV_BASE}/${id}/accept`),
+  decline: (id) => apiClient.post(`${INV_BASE}/${id}/decline`),
+  cancel: (id) => apiClient.delete(`${INV_BASE}/${id}`),
+};
+
 export default workspaceApi;

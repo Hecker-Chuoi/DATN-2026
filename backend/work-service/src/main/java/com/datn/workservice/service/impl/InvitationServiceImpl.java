@@ -22,6 +22,7 @@ import com.datn.workservice.repository.RoleAssignmentRepository;
 import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.repository.TeamRepository;
 import com.datn.workservice.security.TeamSecurity;
+import com.datn.workservice.service.InvitationMailer;
 import com.datn.workservice.service.InvitationService;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class InvitationServiceImpl implements InvitationService {
     private final ProjectMemberService projectMemberService;
     private final TeamSecurity teamSecurity;
     private final IdentityClient identityClient;
+    private final InvitationMailer mailer;
 
     @Override
     @Transactional
@@ -67,7 +69,9 @@ public class InvitationServiceImpl implements InvitationService {
                 .teamRole(role == null ? TeamRole.MEMBER : role)
                 .build());
         log.info("Team invitation created: team={}, invitee={}, by={}", teamId, invitee, invitedBy);
-        return toResponse(saved);
+        InvitationResponse res = toResponse(saved);
+        mailer.send(res);
+        return res;
     }
 
     @Override
@@ -93,7 +97,9 @@ public class InvitationServiceImpl implements InvitationService {
                 .projectRoleId(roleId)
                 .build());
         log.info("Project invitation created: project={}, invitee={}, by={}", projectId, invitee, invitedBy);
-        return toResponse(saved);
+        InvitationResponse res = toResponse(saved);
+        mailer.send(res);
+        return res;
     }
 
     @Override

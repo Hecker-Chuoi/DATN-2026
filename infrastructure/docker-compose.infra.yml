@@ -188,6 +188,19 @@ services:
     networks:
       - app-net
 
+  # ─────────────────────────────────────────────
+  # Mailpit (SMTP giả lập cho dev): SMTP localhost:1025, xem mail tại http://localhost:8025
+  # ─────────────────────────────────────────────
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - app-net
+
 volumes:
   keycloak_data:
   app_db_data:

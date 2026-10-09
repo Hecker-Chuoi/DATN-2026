@@ -24,9 +24,18 @@ public class NotificationClient {
     private String baseUrl;
 
     public boolean sendEmail(String to, String subject, String html) {
+        return post("/internal/notifications/email", Map.of("to", to, "subject", subject, "html", html), to);
+    }
+
+    /** Gửi theo template ở notification-service/resources/templates/{template}.html, vars thay {{key}}. */
+    public boolean sendTemplate(String to, String subject, String template, Map<String, String> vars) {
+        return post("/internal/notifications/email/template",
+                Map.of("to", to, "subject", subject, "template", template, "vars", vars), to);
+    }
+
+    private boolean post(String path, Map<String, Object> body, String to) {
         try {
-            restTemplate.postForEntity(baseUrl + "/internal/notifications/email",
-                    Map.of("to", to, "subject", subject, "html", html), Void.class);
+            restTemplate.postForEntity(baseUrl + path, body, Void.class);
             return true;
         } catch (Exception e) {
             log.error("Không gửi được email tới {} qua notification-service ({}): {}", to, baseUrl, e.getMessage());

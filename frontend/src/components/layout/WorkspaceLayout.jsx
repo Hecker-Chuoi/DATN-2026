@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import { teamApi, invitationApi } from '../../api.js';
+import { workspaceInvitationApi } from '../../api/workspaceServiceApi';
 import CreateProjectModal from '../project/CreateProjectModal.jsx';
 import CreateTeamModal from '../modals/CreateTeamModal.jsx';
 import { useWorkspace } from '../../context/WorkspaceContext.jsx';
@@ -42,13 +43,14 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
 
   // Lời mời đang chờ: nguồn chung cho badge sidebar và trang /invitations. Poll 30s là đủ, không cần WebSocket.
   const [invitations, setInvitations] = useState([]);
+  // Gộp 2 nguồn: work-service (TEAM/PROJECT) + workspace-service (WORKSPACE, map về cùng shape).
   const fetchInvitations = async () => {
-    try {
-      const res = await invitationApi.my();
-      setInvitations(Array.isArray(res?.data) ? res.data : []);
-    } catch {
-      setInvitations([]);
-    }
+    const [work, ws] = await Promise.allSettled([invitationApi.my(), workspaceInvitationApi.my()]);
+    const workList = work.status === 'fulfilled' && Array.isArray(work.value?.data) ? work.value.data : [];
+    const wsList = ws.status === 'fulfilled' && Array.isArray(ws.value?.data)
+      ? ws.value.data.map((inv) => ({ ...inv, type: 'WORKSPACE', targetId: inv.workspaceId, targetName: inv.workspaceName, roleName: inv.role }))
+      : [];
+    setInvitations([...wsList, ...workList]);
   };
   useEffect(() => {
     fetchInvitations();

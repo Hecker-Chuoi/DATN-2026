@@ -205,6 +205,7 @@ function App() {
           <Route path="/projects" element={<WorkspaceRedirect sub="/projects" />} />
           <Route path="/my-issues" element={<WorkspaceRedirect sub="/my-issues" />} />
           <Route path="/profile" element={<WorkspaceRedirect sub="/profile" />} />
+          <Route path="/invitations" element={<WorkspaceRedirect sub="/invitations" />} />
 
           <Route
             path="/w/:workspaceId"
