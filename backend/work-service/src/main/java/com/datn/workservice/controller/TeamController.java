@@ -22,8 +22,10 @@ import com.datn.workservice.repository.ProjectRoleRepository;
 import com.datn.workservice.repository.RoleAssignmentRepository;
 import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.repository.TeamRepository;
+import com.datn.workservice.security.RequireGlobalAdmin;
+import com.datn.workservice.security.RequireTeamRole;
+import com.datn.workservice.security.RequireWorkspaceAccess;
 import com.datn.workservice.security.SecurityUtils;
-import com.datn.workservice.security.WorkspaceAccessChecker;
 import com.datn.workservice.service.InvitationService;
 import com.datn.workservice.service.ProjectMemberService;
 import jakarta.validation.Valid;
@@ -31,19 +33,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.parameters.P;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
 /**
- * Quản lý Team. Phân quyền bằng {@code @PreAuthorize} + bean {@code teamSecurity}:
+ * Quản lý Team. Phân quyền thống nhất bằng AOP (@RequireTeamRole, @RequireWorkspaceAccess, @RequireGlobalAdmin):
  * <ul>
  *   <li>Xem team / thành viên: thành viên hoặc owner của team (hoặc Global ADMIN)</li>
  *   <li>Sửa team, thêm/xóa/đổi vai trò thành viên: LEADER hoặc owner</li>
- *   <li>Xóa team: owner</li>
+ *   <li>Xóa team: LEADER hoặc owner</li>
  *   <li>Liệt kê toàn bộ team: Global ADMIN</li>
  * </ul>
  * Định danh user luôn là Keycloak id (JWT sub); id nhận từ client được chuẩn hóa qua identity-service.
@@ -61,7 +61,7 @@ public class TeamController {
      * GET    /api/v1/work/teams/{teamId}                   : Lấy chi tiết Team theo ID
      * POST   /api/v1/work/teams                            : Tạo Team mới (người tạo là Leader)
      * PUT    /api/v1/work/teams/{teamId}                   : Cập nhật thông tin Team (Leader/Owner)
-     * DELETE /api/v1/work/teams/{teamId}                   : Xóa Team (chỉ Owner)
+     * DELETE /api/v1/work/teams/{teamId}                   : Xóa Team (chỉ Owner/Leader)
      * POST   /api/v1/work/teams/{teamId}/leave             : Rời khỏi Team (thành viên tự rời)
      * GET    /api/v1/work/teams/{teamId}/members           : Lấy danh sách thành viên của Team
      * POST   /api/v1/work/teams/{teamId}/members           : Thêm thành viên vào Team (Leader/Owner)
@@ -76,22 +76,18 @@ public class TeamController {
     private final ProjectRoleRepository projectRoleRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final IdentityClient identityClient;
-    private final WorkspaceAccessChecker workspaceAccessChecker;
     private final InvitationService invitationService;
     private final ProjectMemberService projectMemberService;
 
     /**
      * Danh sách Team TRONG MỘT workspace.
      * <p>
-     * workspaceId là BẮT BUỘC. Trước đây method này trả về teamRepository.findAll()
-     * - tức mọi team trong toàn hệ thống, cho bất kỳ ai đã đăng nhập, không có
-     * ranh giới tenant nào.
+     * Phân quyền AOP: người gọi phải là thành viên của workspace (GUEST trở lên).
      */
     @GetMapping
+    @RequireWorkspaceAccess("GUEST")
     public ResponseEntity<ApiResponse<List<Team>>> listTeamsInWorkspace(
             @RequestParam("workspaceId") UUID workspaceId) {
-        UUID currentUserId = SecurityUtils.getCurrentUserId();
-        workspaceAccessChecker.requireMember(workspaceId, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(teamRepository.findByWorkspaceId(workspaceId)));
     }
 
@@ -100,7 +96,7 @@ public class TeamController {
      * Chỉ Global ADMIN mới gọi được - dùng cho màn hình quản trị.
      */
     @GetMapping("/all")
-    @PreAuthorize("@teamSecurity.isGlobalAdmin()")
+    @RequireGlobalAdmin
     public ResponseEntity<ApiResponse<List<Team>>> listAllTeams() {
         return ResponseEntity.ok(ApiResponse.success(teamRepository.findAll()));
     }
@@ -109,6 +105,7 @@ public class TeamController {
      * Danh sách Team mà người dùng hiện tại tham gia (Owner hoặc Member).
      */
     @GetMapping({"/my", "/me"})
+    @RequireWorkspaceAccess(value = "GUEST", required = false)
     public ResponseEntity<ApiResponse<List<TeamResponse>>> listMyTeams(
             @RequestParam(value = "workspaceId", required = false) UUID workspaceId) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
@@ -118,12 +115,6 @@ public class TeamController {
 
         if (roleByTeam.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success(Collections.emptyList()));
-        }
-        // Lọc theo workspace đang xem. Không có bước này thì đổi workspace trên
-        // UI vẫn thấy y nguyên danh sách team cũ, và tính năng multi-workspace
-        // chỉ là trang trí.
-        if (workspaceId != null) {
-            workspaceAccessChecker.requireMember(workspaceId, currentUserId);
         }
 
         // Kèm myRole để frontend biết user có phải trưởng nhóm không (chỉ trưởng nhóm được tạo dự án)
@@ -144,28 +135,21 @@ public class TeamController {
     }
 
     @GetMapping("/{teamId}")
-    @PreAuthorize("@teamSecurity.isMember(#teamId)")
-    public ResponseEntity<ApiResponse<Team>> getTeam(@PathVariable("teamId") @P("teamId") UUID teamId) {
+    @RequireTeamRole(TeamRole.MEMBER)
+    public ResponseEntity<ApiResponse<Team>> getTeam(@PathVariable("teamId") UUID teamId) {
         Team team = requireTeam(teamId);
         return ResponseEntity.ok(ApiResponse.success(team));
     }
 
     /**
      * Tạo Team trong một workspace.
-     * <p>
-     * Đổi từ Map sang CreateTeamRequest có kiểu: DTO này đã tồn tại sẵn với
-     * NotNull workspaceId nhưng trước đây là dead code, nên Valid không bao giờ
-     * chạy và workspaceId bị nhét bằng chính user id của người tạo
-     * (comment cũ: "Placeholder workspace"). ĐÂY LÀ BREAKING CHANGE với frontend:
-     * body bắt buộc phải có workspaceId.
+     * Phân quyền AOP: người gọi phải có vai trò MEMBER trở lên trong workspace.
      */
     @Transactional
     @PostMapping
+    @RequireWorkspaceAccess("MEMBER")
     public ResponseEntity<ApiResponse<Team>> createTeam(@Valid @RequestBody CreateTeamRequest request) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
-
-        // GUEST và người ngoài không được tạo team trong workspace.
-        workspaceAccessChecker.requireAtLeast(request.getWorkspaceId(), currentUserId, "MEMBER");
 
         Team team = Team.builder()
                 .name(request.getName())
@@ -175,9 +159,7 @@ public class TeamController {
                 .build();
         Team saved = teamRepository.save(team);
 
-        // Người tạo là LEADER. KHÔNG bọc try/catch như trước: một team không có
-        // leader nào chính là trạng thái brick mà không ai còn quyền sửa vai trò,
-        // nên nếu bước này lỗi thì phải rollback cả việc tạo team.
+        // Người tạo là LEADER.
         teamMemberRepository.save(TeamMember.builder()
                 .teamId(saved.getId())
                 .userId(currentUserId)
@@ -190,9 +172,9 @@ public class TeamController {
 
     @Transactional
     @PutMapping("/{teamId}")
-    @PreAuthorize("@teamSecurity.isLeader(#teamId)")
+    @RequireTeamRole(TeamRole.LEADER)
     public ResponseEntity<ApiResponse<Team>> updateTeam(
-            @PathVariable("teamId") @P("teamId") UUID teamId,
+            @PathVariable("teamId") UUID teamId,
             @RequestBody Map<String, String> body
     ) {
         Team team = requireTeam(teamId);
@@ -214,8 +196,8 @@ public class TeamController {
      */
     @Transactional
     @DeleteMapping("/{teamId}")
-    @PreAuthorize("@teamSecurity.isLeader(#teamId)")
-    public ResponseEntity<ApiResponse<Void>> deleteTeam(@PathVariable("teamId") @P("teamId") UUID teamId) {
+    @RequireTeamRole(TeamRole.LEADER)
+    public ResponseEntity<ApiResponse<Void>> deleteTeam(@PathVariable("teamId") UUID teamId) {
         Team team = requireTeam(teamId);
 
         // 1. Gỡ liên kết teamId khỏi các dự án thuộc nhóm
@@ -258,9 +240,9 @@ public class TeamController {
     }
 
     @GetMapping("/{teamId}/members")
-    @PreAuthorize("@teamSecurity.isMember(#teamId)")
+    @RequireTeamRole(TeamRole.MEMBER)
     public ResponseEntity<ApiResponse<List<TeamMemberResponse>>> getTeamMembers(
-            @PathVariable("teamId") @P("teamId") UUID teamId
+            @PathVariable("teamId") UUID teamId
     ) {
         Team team = requireTeam(teamId);
         List<TeamMember> members = new ArrayList<>(teamMemberRepository.findByTeamId(teamId));
@@ -324,9 +306,9 @@ public class TeamController {
 
     @Transactional
     @PostMapping("/{teamId}/members")
-    @PreAuthorize("@teamSecurity.isLeader(#teamId)")
+    @RequireTeamRole(TeamRole.LEADER)
     public ResponseEntity<ApiResponse<InvitationResponse>> addMember(
-            @PathVariable("teamId") @P("teamId") UUID teamId,
+            @PathVariable("teamId") UUID teamId,
             @RequestBody Map<String, String> body
     ) {
         requireTeam(teamId);
@@ -351,9 +333,9 @@ public class TeamController {
 
     @Transactional
     @PutMapping("/{teamId}/members/{userId}/role")
-    @PreAuthorize("@teamSecurity.isLeader(#teamId)")
+    @RequireTeamRole(TeamRole.LEADER)
     public ResponseEntity<ApiResponse<TeamMemberResponse>> updateMemberRole(
-            @PathVariable("teamId") @P("teamId") UUID teamId,
+            @PathVariable("teamId") UUID teamId,
             @PathVariable("userId") UUID userId,
             @RequestBody Map<String, String> body
     ) {
@@ -389,9 +371,9 @@ public class TeamController {
 
     @Transactional
     @DeleteMapping("/{teamId}/members/{userId}")
-    @PreAuthorize("@teamSecurity.isLeader(#teamId)")
+    @RequireTeamRole(TeamRole.LEADER)
     public ResponseEntity<ApiResponse<Void>> removeMember(
-            @PathVariable("teamId") @P("teamId") UUID teamId,
+            @PathVariable("teamId") UUID teamId,
             @PathVariable("userId") UUID userId
     ) {
         Team team = requireTeam(teamId);

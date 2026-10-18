@@ -362,16 +362,31 @@ public class KeycloakService {
         }
     }
 
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
     /**
-     * Fetches user claims from Keycloak’s UserInfo endpoint using an access token.
-     * Returns a map of standard OIDC claims: sub, email, given_name, family_name,
-     * preferred_username.
+     * Fetches user claims from Keycloak.
+     * Decodes claims directly from the JWT access token payload first,
+     * and falls back to Keycloak's UserInfo HTTP endpoint if needed.
      *
      * @param accessToken a valid Keycloak JWT access token
      * @return map of user claims
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> getUserInfoFromKeycloak(String accessToken) {
+        // 1. Try decoding claims directly from JWT payload
+        try {
+            Map<String, Object> claims = parseJwtClaims(accessToken);
+            if (claims != null && claims.containsKey("sub")) {
+                log.info("Successfully extracted user claims directly from JWT payload: sub='{}', email='{}'",
+                        claims.get("sub"), claims.get("email"));
+                return claims;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse JWT payload directly, falling back to HTTP UserInfo: {}", e.getMessage());
+        }
+
+        // 2. Fallback to Keycloak UserInfo HTTP endpoint
         String userInfoEndpoint = serverUrl + "/realms/" + realm + "/protocol/openid-connect/userinfo";
 
         HttpHeaders headers = new HttpHeaders();
@@ -390,6 +405,24 @@ public class KeycloakService {
         } catch (HttpClientErrorException e) {
             log.warn("UserInfo request failed: {}", e.getStatusCode());
             throw new KeycloakException("Failed to fetch user info from Keycloak");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJwtClaims(String jwtToken) {
+        if (jwtToken == null || !jwtToken.contains(".")) {
+            return null;
+        }
+        String[] parts = jwtToken.split("\\.");
+        if (parts.length < 2) {
+            return null;
+        }
+        String payloadJson = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
+        try {
+            return objectMapper.readValue(payloadJson, Map.class);
+        } catch (Exception e) {
+            log.warn("Failed to deserialize JWT payload JSON: {}", e.getMessage());
+            return null;
         }
     }
  

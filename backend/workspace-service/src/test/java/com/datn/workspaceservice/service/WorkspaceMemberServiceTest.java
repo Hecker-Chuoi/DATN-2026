@@ -8,11 +8,15 @@ import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workspaceservice.client.IdentityClient;
 import com.datn.workspaceservice.client.dto.UserResponse;
 import com.datn.workspaceservice.dto.request.AddWorkspaceMemberRequest;
+import com.datn.workspaceservice.dto.response.WorkspaceInvitationResponse;
 import com.datn.workspaceservice.dto.response.WorkspaceMemberResponse;
+import com.datn.workspaceservice.entity.WorkspaceInvitation;
 import com.datn.workspaceservice.entity.WorkspaceMember;
 import com.datn.workspaceservice.enums.WorkspaceRole;
+import com.datn.workspaceservice.repository.WorkspaceInvitationRepository;
 import com.datn.workspaceservice.repository.WorkspaceMemberRepository;
 import com.datn.workspaceservice.repository.WorkspaceRepository;
+import com.datn.workspaceservice.service.InvitationMailer;
 import com.datn.workspaceservice.service.impl.WorkspaceMemberServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,6 +52,10 @@ class WorkspaceMemberServiceTest {
     private WorkspaceMemberRepository memberRepository;
     @Mock
     private WorkspaceRepository workspaceRepository;
+    @Mock
+    private WorkspaceInvitationRepository invitationRepository;
+    @Mock
+    private InvitationMailer mailer;
     @Mock
     private IdentityClient identityClient;
 
@@ -94,7 +102,7 @@ class WorkspaceMemberServiceTest {
         givenIdentityResolves(target);
         when(memberRepository.existsByWorkspaceIdAndUserId(workspaceId, target)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.addMember(workspaceId, addRequest("a@b.c", WorkspaceRole.MEMBER), ownerId))
+        assertThatThrownBy(() -> service.invite(workspaceId, addRequest("a@b.c", WorkspaceRole.MEMBER), ownerId))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("đã là thành viên");
 
@@ -106,7 +114,7 @@ class WorkspaceMemberServiceTest {
     void addMember_adminGrantingOwner_isRejected() {
         givenMember(adminId, WorkspaceRole.ADMIN);
 
-        assertThatThrownBy(() -> service.addMember(workspaceId, addRequest("a@b.c", WorkspaceRole.OWNER), adminId))
+        assertThatThrownBy(() -> service.invite(workspaceId, addRequest("a@b.c", WorkspaceRole.OWNER), adminId))
                 .isInstanceOf(ForbiddenException.class)
                 .hasMessageContaining("Chỉ OWNER");
 
@@ -121,14 +129,14 @@ class WorkspaceMemberServiceTest {
             UUID caller = UUID.randomUUID();
             givenMember(caller, role);
 
-            assertThatThrownBy(() -> service.addMember(workspaceId, addRequest("a@b.c", WorkspaceRole.MEMBER), caller))
+            assertThatThrownBy(() -> service.invite(workspaceId, addRequest("a@b.c", WorkspaceRole.MEMBER), caller))
                     .isInstanceOf(ForbiddenException.class);
         }
     }
 
     @Test
-    @DisplayName("Thêm thành viên lưu users.id do identity-service trả về, không lưu keycloakId")
-    void addMember_storesCanonicalUserId() {
+    @DisplayName("Mời thành viên lưu users.id do identity-service trả về, không lưu keycloakId")
+    void invite_storesCanonicalUserId() {
         givenMember(ownerId, WorkspaceRole.OWNER);
         UUID canonicalId = UUID.randomUUID();
         when(identityClient.getUserByIdentifier(anyString())).thenReturn(
@@ -137,12 +145,16 @@ class WorkspaceMemberServiceTest {
                         .keycloakId(UUID.randomUUID().toString())
                         .username("newbie")
                         .build()));
-        when(memberRepository.save(any(WorkspaceMember.class))).thenAnswer(i -> i.getArgument(0));
+        when(invitationRepository.save(any(WorkspaceInvitation.class))).thenAnswer(i -> {
+            WorkspaceInvitation inv = i.getArgument(0);
+            inv.setId(UUID.randomUUID());
+            return inv;
+        });
 
-        WorkspaceMemberResponse result =
-                service.addMember(workspaceId, addRequest("newbie", WorkspaceRole.MEMBER), ownerId);
+        WorkspaceInvitationResponse result =
+                service.invite(workspaceId, addRequest("newbie", WorkspaceRole.MEMBER), ownerId);
 
-        assertThat(result.getUserId()).isEqualTo(canonicalId);
+        assertThat(result.getInviteeUserId()).isEqualTo(canonicalId);
     }
 
     @Test
@@ -151,7 +163,7 @@ class WorkspaceMemberServiceTest {
         givenMember(ownerId, WorkspaceRole.OWNER);
         when(identityClient.getUserByIdentifier(anyString())).thenReturn(ApiResponse.success(null));
 
-        assertThatThrownBy(() -> service.addMember(workspaceId, addRequest("ghost", WorkspaceRole.MEMBER), ownerId))
+        assertThatThrownBy(() -> service.invite(workspaceId, addRequest("ghost", WorkspaceRole.MEMBER), ownerId))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Không tìm thấy người dùng");
     }

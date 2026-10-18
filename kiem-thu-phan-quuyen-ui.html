@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bảng Kiểm Thử Phân Quyền UI (AOP Security Checklist) - DATN-2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #141c2e;
+      --card-subtle: #1c273f;
+      --card-hover: #22304e;
+      --border: #263553;
+      --border-subtle: #1c2842;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-soft: #64748b;
+
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.12);
+      --accent-hover: #7dd3fc;
+
+      --success: #22c55e;
+      --success-soft: rgba(34, 197, 94, 0.14);
+
+      --danger: #f43f5e;
+      --danger-soft: rgba(244, 63, 94, 0.14);
+
+      --warning: #f59e0b;
+      --warning-soft: rgba(245, 158, 11, 0.14);
+
+      --purple: #a855f7;
+      --purple-soft: rgba(168, 85, 247, 0.14);
+
+      --font-sans: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'Fira Code', Consolas, Monaco, monospace;
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+      --shadow-md: 0 10px 25px rgba(0, 0, 0, 0.35);
+    }
+
+    [data-theme="light"] {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --card-subtle: #f1f5f9;
+      --card-hover: #e2e8f0;
+      --border: #cbd5e1;
+      --border-subtle: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-soft: #64748b;
+
+      --accent: #0284c7;
+      --accent-soft: rgba(2, 132, 199, 0.08);
+      --accent-hover: #0369a1;
+
+      --success: #15803d;
+      --success-soft: rgba(21, 128, 61, 0.1);
+
+      --danger: #e11d48;
+      --danger-soft: rgba(225, 29, 72, 0.1);
+
+      --warning: #b45309;
+      --warning-soft: rgba(180, 83, 9, 0.1);
+
+      --purple: #7e22ce;
+      --purple-soft: rgba(126, 34, 206, 0.08);
+
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 10px 25px rgba(0, 0, 0, 0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg);
+      color: var(--text-main);
+      line-height: 1.6;
+      font-size: 14.5px;
+      padding-bottom: 60px;
+      transition: background 0.25s, color 0.25s;
+    }
+
+    /* Top Sticky Header */
+    .sticky-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .header-content {
+      max-width: 1300px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .brand-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-badge {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 800;
+      font-size: 16px;
+    }
+
+    .brand-title h1 {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .brand-title p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Progress summary bar */
+    .progress-container {
+      flex: 1;
+      min-width: 280px;
+      max-width: 450px;
+    }
+
+    .progress-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12.5px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .progress-bar-bg {
+      height: 10px;
+      border-radius: 10px;
+      background: var(--card-subtle);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--success));
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      border: 1px solid var(--border);
+      background: var(--card-subtle);
+      color: var(--text-main);
+    }
+
+    .btn:hover {
+      background: var(--card-hover);
+      border-color: var(--accent);
+    }
+
+    .btn-danger {
+      color: var(--danger);
+      border-color: rgba(244, 63, 94, 0.3);
+    }
+    .btn-danger:hover {
+      background: var(--danger-soft);
+      border-color: var(--danger);
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 1300px;
+      margin: 28px auto 0;
+      padding: 0 24px;
+    }
+
+    /* Filters Bar */
+    .filter-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .search-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 250px;
+      background: var(--card-subtle);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      font-family: var(--font-sans);
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: var(--accent);
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--card-subtle);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover, .tab-btn.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .status-filter {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-left: auto;
+    }
+
+    /* Section & Cards */
+    .test-category {
+      margin-bottom: 32px;
+    }
+
+    .category-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border-subtle);
+    }
+
+    .category-title {
+      font-size: 17px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .test-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Test Item Card */
+    .test-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr);
+      gap: 16px;
+      align-items: flex-start;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .test-card:hover {
+      border-color: var(--accent);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .test-card.checked {
+      background: var(--card-subtle);
+      border-color: rgba(34, 197, 94, 0.4);
+      opacity: 0.85;
+    }
+
+    .test-card.checked .test-name {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+
+    /* Checkbox styling */
+    .checkbox-box {
+      margin-top: 3px;
+    }
+
+    .custom-checkbox {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      border: 2px solid var(--border);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--card-subtle);
+      transition: all 0.2s;
+    }
+
+    .custom-checkbox:hover {
+      border-color: var(--accent);
+    }
+
+    .test-card.checked .custom-checkbox {
+      background: var(--success);
+      border-color: var(--success);
+      color: #fff;
+    }
+
+    /* Test content */
+    .test-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+
+    .test-id {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 2px 7px;
+      border-radius: 5px;
+    }
+
+    .test-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-right: auto;
+    }
+
+    .badges-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 5px;
+      font-family: var(--font-mono);
+    }
+
+    .badge-role { background: rgba(56, 189, 248, 0.12); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.25); }
+    .badge-pos { background: var(--success-soft); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.25); }
+    .badge-neg { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(244, 63, 94, 0.25); }
+    .badge-aop { background: var(--purple-soft); color: var(--purple); border: 1px solid rgba(168, 85, 247, 0.25); }
+
+    .test-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-subtle);
+      font-size: 13px;
+    }
+
+    .detail-box {
+      background: var(--card-subtle);
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .detail-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-soft);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .detail-value {
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .detail-value code {
+      font-family: var(--font-mono);
+      color: var(--accent);
+      background: var(--card-bg);
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .expected-box {
+      border-left: 3px solid;
+    }
+    .expected-pos { border-left-color: var(--success); }
+    .expected-neg { border-left-color: var(--danger); }
+
+    @media (max-width: 768px) {
+      .sticky-header { padding: 14px 16px; }
+      .container { padding: 0 12px; }
+      .test-card { grid-template-columns: 28px 1fr; gap: 10px; padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ================= STICKY HEADER ================= -->
+<header class="sticky-header">
+  <div class="header-content">
+    
+    <div class="brand-title">
+      <div class="brand-badge">UI</div>
+      <div>
+        <h1>Checklist Kiểm Thử Phân Quyền UI</h1>
+        <p>DATN-2026 &bull; Thao tác trực tiếp trên giao diện Frontend (localhost:3000 / 5173)</p>
+      </div>
+    </div>
+
+    <!-- Progress summary -->
+    <div class="progress-container">
+      <div class="progress-labels">
+        <span>Tiến độ kiểm thử: <strong id="progressPercent">0%</strong></span>
+        <span><strong id="checkedCount" style="color: var(--success);">0</strong> / <span id="totalCount">0</span> Case Đã Thử</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressBar"></div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="header-actions">
+      <button class="btn" onclick="toggleTheme()"><span id="themeIcon">☀️</span> Giao diện</button>
+      <button class="btn btn-danger" onclick="resetAllProgress()">🔄 Reset</button>
+      <button class="btn" onclick="window.print()">🖨️ Xuất PDF</button>
+    </div>
+
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ================= FILTERS & SEARCH ================= -->
+  <div class="filter-panel">
+    <div class="search-row">
+      <input type="text" id="searchInput" class="search-input" placeholder="🔍 Tìm kiếm theo tên case, URL màn hình, vai trò, mã AOP..." onkeyup="filterCases()">
+      
+      <div class="status-filter">
+        <button class="tab-btn active" data-status="all" onclick="filterStatus('all')">Tất cả</button>
+        <button class="tab-btn" data-status="unchecked" onclick="filterStatus('unchecked')">Chưa thử ⏳</button>
+        <button class="tab-btn" data-status="checked" onclick="filterStatus('checked')">Đã xong ✅</button>
+      </div>
+    </div>
+
+    <div class="filter-tabs">
+      <button class="tab-btn active" data-cat="all" onclick="filterCategory('all')">Tất cả danh mục (<span id="catCountAll">0</span>)</button>
+      <button class="tab-btn" data-cat="workspace" onclick="filterCategory('workspace')">1. Không Gian (Workspace)</button>
+      <button class="tab-btn" data-cat="team" onclick="filterCategory('team')">2. Nhóm (Team)</button>
+      <button class="tab-btn" data-cat="project" onclick="filterCategory('project')">3. Dự Án (Project)</button>
+      <button class="tab-btn" data-cat="sprint" onclick="filterCategory('sprint')">4. Backlog & Sprint</button>
+      <button class="tab-btn" data-cat="task" onclick="filterCategory('task')">5. Kanban & Task</button>
+      <button class="tab-btn" data-cat="admin" onclick="filterCategory('admin')">6. Quản Trị & Biên (Security)</button>
+    </div>
+  </div>
+
+  <!-- ================= SECTION 1: WORKSPACE ================= -->
+  <section class="test-category" data-cat="workspace">
+    <div class="category-header">
+      <div class="category-title">
+        <span>🏢 1. Phân Quyền Không Gian Làm Việc (Workspace)</span>
+      </div>
+      <span class="badge badge-aop">@RequireWorkspaceRole & @RequireWorkspaceAccess</span>
+    </div>
+
+    <div class="test-list">
+
+      <!-- WS-01 -->
+      <div class="test-card" id="tc-ws-01" data-cat="workspace">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-ws-01')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-WS-01</span>
+            <span class="test-name">Tạo Workspace mới từ màn hình Danh sách Workspace</span>
+            <div class="badges-row">
+              <span class="badge badge-role">User Đã Đăng Nhập</span>
+              <span class="badge badge-pos">Positive (Hợp Lệ)</span>
+              <span class="badge badge-aop">Tự động thành OWNER</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Màn hình danh sách Workspace: <code>/workspaces</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Nhấn nút <strong>"+ Tạo Workspace"</strong> &rarr; Nhập tên (vd: <em>Workspace Demo KTPQ</em>) &rarr; Nhấn <strong>Lưu</strong>.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Hiện Toast thông báo xanh <em>"Tạo workspace thành công"</em>. Chuyển vào trang Workspace, người tạo có vai trò <strong>OWNER</strong>.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WS-02 -->
+      <div class="test-card" id="tc-ws-02" data-cat="workspace">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-ws-02')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-WS-02</span>
+            <span class="test-name">Đổi tên / Cập nhật cấu hình Workspace (Cần bậc ADMIN trở lên)</span>
+            <div class="badges-row">
+              <span class="badge badge-role">ADMIN / OWNER</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">@RequireWorkspaceRole(ADMIN)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Cài đặt Workspace: <code>/workspaces/{id}/settings</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Vào tab <strong>Cài đặt</strong> &rarr; Đổi tên Workspace &rarr; Nhấn nút <strong>"Lưu thay đổi"</strong>.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Tên Workspace cập nhật thành công, thanh Sidebar phản ánh tên mới ngay lập tức.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WS-03 -->
+      <div class="test-card" id="tc-ws-03" data-cat="workspace">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-ws-03')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-WS-03</span>
+            <span class="test-name">Thành viên thường (MEMBER) cố tình vào trang Cài đặt Workspace</span>
+            <div class="badges-row">
+              <span class="badge badge-role">MEMBER</span>
+              <span class="badge badge-neg">Negative (Chặn 403)</span>
+              <span class="badge badge-aop">@RequireWorkspaceRole(ADMIN)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Gõ trực tiếp trên thanh URL: <code>/workspaces/{id}/settings</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Đăng nhập tài khoản chỉ là <strong>MEMBER</strong>, gõ thẳng đường dẫn cài đặt của workspace.</div>
+            </div>
+            <div class="detail-box expected-box expected-neg">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Giao diện ẩn nút Cài đặt; nếu gõ URL trực tiếp, nhận thông báo Toast đỏ <em>"Bạn cần vai trò ADMIN trở lên"</em> hoặc bị redirect.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WS-04 -->
+      <div class="test-card" id="tc-ws-04" data-cat="workspace">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-ws-04')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-WS-04</span>
+            <span class="test-name">Xóa Workspace (Chỉ duy nhất OWNER có quyền)</span>
+            <div class="badges-row">
+              <span class="badge badge-role">OWNER</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">@RequireWorkspaceRole(OWNER)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Khu vực nguy hiểm: <code>/workspaces/{id}/settings</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Kéo xuống mục Danger Zone &rarr; Nhấn <strong>"Xóa Workspace"</strong> &rarr; Gõ tên xác nhận &rarr; Xác nhận xóa.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Workspace bị xóa thành công, hệ thống chuyển hướng về danh sách <code>/workspaces</code>. Nếu tài khoản là ADMIN nhấn thì bị báo lỗi 403.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= SECTION 2: TEAM ================= -->
+  <section class="test-category" data-cat="team">
+    <div class="category-header">
+      <div class="category-title">
+        <span>👥 2. Phân Quyền Nhóm Làm Việc (Team)</span>
+      </div>
+      <span class="badge badge-aop">@RequireTeamRole(LEADER / MEMBER)</span>
+    </div>
+
+    <div class="test-list">
+
+      <!-- TEAM-01 -->
+      <div class="test-card" id="tc-team-01" data-cat="team">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-team-01')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-TEAM-01</span>
+            <span class="test-name">Tạo Team mới trong Workspace</span>
+            <div class="badges-row">
+              <span class="badge badge-role">MEMBER Workspace</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">@RequireWorkspaceAccess("MEMBER")</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Trang Workspace Detail / Teams tab</div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Nhấn nút <strong>"+ Tạo Nhóm (New Team)"</strong> &rarr; Nhập tên nhóm (vd: <em>Frontend Core Team</em>) &rarr; Lưu.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Tạo nhóm thành công, người tạo được tự động gán vai trò <strong>LEADER / OWNER</strong> trong nhóm đó.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEAM-02 -->
+      <div class="test-card" id="tc-team-02" data-cat="team">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-team-02')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-TEAM-02</span>
+            <span class="test-name">Thêm thành viên vào Team (Chỉ Leader mới thấy nút và gọi API được)</span>
+            <div class="badges-row">
+              <span class="badge badge-role">LEADER</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">@RequireTeamRole(LEADER)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Chi tiết Team: <code>/teams/{teamId}</code> (Tab Thành viên)</div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Nhấn nút <strong>"Thêm thành viên"</strong> &rarr; Tìm theo email người dùng trong workspace &rarr; Phân vai trò &rarr; Lưu.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Thành viên mới xuất hiện trong bảng danh sách thành viên của Team.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEAM-03 -->
+      <div class="test-card" id="tc-team-03" data-cat="team">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-team-03')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-TEAM-03</span>
+            <span class="test-name">Thành viên thường (MEMBER) thử xóa nhóm hoặc gỡ thành viên khác</span>
+            <div class="badges-row">
+              <span class="badge badge-role">MEMBER</span>
+              <span class="badge badge-neg">Negative (Chặn 403)</span>
+              <span class="badge badge-aop">@RequireTeamRole(LEADER)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Chi tiết Team: <code>/teams/{teamId}</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Đăng nhập tài khoản Member thường: Kiểm tra nút <strong>"Xóa nhóm"</strong> và nút <strong>"Gỡ thành viên"</strong>.</div>
+            </div>
+            <div class="detail-box expected-box expected-neg">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Các nút xóa/gỡ bị ẩn hoàn toàn trên giao diện. Nếu cố tình bấm gọi API, nhận Toast đỏ: <em>"Bạn không có quyền Trưởng nhóm (Leader) trên nhóm này"</em>.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEAM-04 -->
+      <div class="test-card" id="tc-team-04" data-cat="team">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-team-04')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-TEAM-04</span>
+            <span class="test-name">Người ngoài (không thuộc Team) truy cập URL chi tiết Team</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Outsider</span>
+              <span class="badge badge-neg">Negative (Chặn 403)</span>
+              <span class="badge badge-aop">@RequireTeamRole(MEMBER)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Gõ URL trực tiếp: <code>/teams/{teamId-khác}</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Đăng nhập tài khoản không thuộc Team đó, paste đường link chi tiết Team vào trình duyệt.</div>
+            </div>
+            <div class="detail-box expected-box expected-neg">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Bị chặn ngay lập tức, hiển thị thông báo lỗi: <em>"Bạn không phải thành viên của nhóm này"</em> (HTTP 403).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= SECTION 3: PROJECT ================= -->
+  <section class="test-category" data-cat="project">
+    <div class="category-header">
+      <div class="category-title">
+        <span>📁 3. Phân Quyền Dự Án (Project & Member Roles)</span>
+      </div>
+      <span class="badge badge-aop">@RequireProjectPermission(PROJECT_ADMIN / PROJECT_VIEW)</span>
+    </div>
+
+    <div class="test-list">
+
+      <!-- PROJ-01 -->
+      <div class="test-card" id="tc-proj-01" data-cat="project">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-proj-01')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-PROJ-01</span>
+            <span class="test-name">Tạo Dự Án mới từ màn hình Danh sách Dự án</span>
+            <div class="badges-row">
+              <span class="badge badge-role">MEMBER Workspace</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">@RequireWorkspaceAccess("MEMBER")</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Danh sách Dự án: <code>/projects</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Nhấn <strong>"+ Tạo Dự án"</strong> &rarr; Nhập Tên dự án, Key dự án (vd: <em>DATN</em>), Project Lead &rarr; Lưu.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Dự án được tạo thành công, chuyển thẳng vào trang tổng quan dự án. Người tạo là Project Lead (có toàn quyền <code>PROJECT_ADMIN</code>).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROJ-02 -->
+      <div class="test-card" id="tc-proj-02" data-cat="project">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-proj-02')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-PROJ-02</span>
+            <span class="test-name">Quản lý Thành viên Dự án (Thêm member, Đổi vai trò Administrator/Member/Viewer)</span>
+            <div class="badges-row">
+              <span class="badge badge-role">PROJECT_ADMIN / Lead</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">@RequireProjectPermission(PROJECT_ADMIN)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Cài đặt Dự án &rarr; Thành viên: <code>/projects/{id}/members</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Nhấn <strong>"Thêm thành viên"</strong> &rarr; Chọn user &rarr; Gán vai trò <em>Member</em> hoặc <em>Viewer</em> &rarr; Lưu.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Bảng thành viên cập nhật thành công với role mới. Quyền của thành viên được áp dụng ngay lập tức qua AOP.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROJ-03 -->
+      <div class="test-card" id="tc-proj-03" data-cat="project">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-proj-03')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-PROJ-03</span>
+            <span class="test-name">Thành viên thường (Không có PROJECT_ADMIN) thử đổi cài đặt Dự án hoặc Xóa Dự án</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Member / Viewer</span>
+              <span class="badge badge-neg">Negative (Chặn 403)</span>
+              <span class="badge badge-aop">@RequireProjectPermission(PROJECT_ADMIN)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Trang Cài đặt Dự án: <code>/projects/{id}/settings</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Đăng nhập tài khoản chỉ có role Member, truy cập trang cài đặt hoặc nhấn nút xóa dự án.</div>
+            </div>
+            <div class="detail-box expected-box expected-neg">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Nút Xóa bị ẩn/disabled. Nếu gọi API xóa, nhận Toast đỏ: <em>"Bạn không có quyền thực hiện thao tác này (PROJECT_ADMIN) trên dự án"</em>.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= SECTION 4: SPRINT ================= -->
+  <section class="test-category" data-cat="sprint">
+    <div class="category-header">
+      <div class="category-title">
+        <span>🏃 4. Phân Quyền Backlog & Sprint (Truy Ngược Ngữ Cảnh)</span>
+      </div>
+      <span class="badge badge-aop">@RequireProjectPermission(SPRINT_MANAGE, source = SPRINT)</span>
+    </div>
+
+    <div class="test-list">
+
+      <!-- SPRINT-01 -->
+      <div class="test-card" id="tc-sprint-01" data-cat="sprint">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-sprint-01')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-SPRINT-01</span>
+            <span class="test-name">Tạo Sprint mới trong Backlog (Cần quyền SPRINT_MANAGE)</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Scrum Master / Admin</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">@RequireProjectPermission(SPRINT_MANAGE)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Màn hình Backlog: <code>/projects/{id}/backlog</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Nhấn nút <strong>"Tạo Sprint (Create Sprint)"</strong> ở góc phải trên Backlog.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Khung Sprint mới xuất hiện (vd: <em>DATN Sprint 1</em>) ở trạng thái Future, cho phép kéo thả task vào.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SPRINT-02 -->
+      <div class="test-card" id="tc-sprint-02" data-cat="sprint">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-sprint-02')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-SPRINT-02</span>
+            <span class="test-name">Bắt đầu Sprint (Start Sprint) - Test cơ chế AOP truy ngược từ sprintId &rarr; projectId</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Scrum Master / Admin</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">source = ProjectIdSource.SPRINT</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Màn hình Backlog: <code>/projects/{id}/backlog</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Nhấn <strong>"Bắt đầu Sprint (Start Sprint)"</strong> &rarr; Chọn thời gian bắt đầu và kết thúc &rarr; Nhấn Xác nhận.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Sprint chuyển sang trạng thái <strong>Active</strong>; các task trong Sprint này tự động hiển thị trên Kanban Board.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SPRINT-03 -->
+      <div class="test-card" id="tc-sprint-03" data-cat="sprint">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-sprint-03')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-SPRINT-03</span>
+            <span class="test-name">Thành viên chỉ có quyền xem (Viewer) thử Start/Complete Sprint</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Viewer</span>
+              <span class="badge badge-neg">Negative (Chặn 403)</span>
+              <span class="badge badge-aop">@RequireProjectPermission(SPRINT_MANAGE)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Màn hình Backlog: <code>/projects/{id}/backlog</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Đăng nhập tài khoản Viewer &rarr; Quan sát nút "Start Sprint" / "Complete Sprint".</div>
+            </div>
+            <div class="detail-box expected-box expected-neg">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Nút bị ẩn hoặc khi bấm gọi API sẽ báo lỗi: <em>"Bạn không có quyền thực hiện thao tác này (SPRINT_MANAGE)"</em> (403).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= SECTION 5: KANBAN & TASK ================= -->
+  <section class="test-category" data-cat="task">
+    <div class="category-header">
+      <div class="category-title">
+        <span>📋 5. Phân Quyền Kanban Board & Công Việc (Task / WorkItem)</span>
+      </div>
+      <span class="badge badge-aop">@RequireTaskPermission & @RequireProjectPermission</span>
+    </div>
+
+    <div class="test-list">
+
+      <!-- TASK-01 -->
+      <div class="test-card" id="tc-task-01" data-cat="task">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-task-01')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-TASK-01</span>
+            <span class="test-name">Tạo Task / WorkItem mới (Quyền ISSUE_CREATE)</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Contributor / Member</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">@RequireProjectPermission(ISSUE_CREATE)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Kanban Board: <code>/projects/{id}/board</code> hoặc Backlog</div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Nhấn nút <strong>"+ Tạo công việc (Create Issue)"</strong> &rarr; Nhập tiêu đề, Issue Type (Task/Bug/Story), Assignee &rarr; Nhấn Tạo.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Thẻ Task mới xuất hiện ngay trên cột trạng thái mặc định của Board với Key tương ứng (vd: <code>DATN-12</code>).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TASK-02 -->
+      <div class="test-card" id="tc-task-02" data-cat="task">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-task-02')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-TASK-02</span>
+            <span class="test-name">Kéo thả Task chuyển cột trạng thái (Quyền ISSUE_TRANSITION)</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Member</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">@RequireTaskPermission(ISSUE_TRANSITION)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Kanban Board: <code>/projects/{id}/board</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Dùng chuột kéo thẻ Task từ cột <strong>"To Do"</strong> sang cột <strong>"In Progress"</strong> hoặc <strong>"Done"</strong>.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Thẻ chuyển cột mượt mà, gọi API transition thành công, trạng thái task được lưu lại trên server.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TASK-03 -->
+      <div class="test-card" id="tc-task-03" data-cat="task">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-task-03')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-TASK-03</span>
+            <span class="test-name">Thêm bình luận vào Task (Quyền COMMENT_CREATE)</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Member</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">@RequireTaskPermission(COMMENT_CREATE)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Modal / Drawer chi tiết Task</div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Nhấn vào thẻ Task để mở modal chi tiết &rarr; Nhập nội dung vào khung comment &rarr; Nhấn <strong>"Bình luận"</strong>.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Bình luận mới xuất hiện ngay lập tức trong dòng thời gian hoạt động của Task.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TASK-04 -->
+      <div class="test-card" id="tc-task-04" data-cat="task">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-task-04')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-TASK-04</span>
+            <span class="test-name">Thành viên thường (chỉ có quyền Edit) thử xóa Task</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Member thường</span>
+              <span class="badge badge-neg">Negative (Chặn 403)</span>
+              <span class="badge badge-aop">@RequireTaskPermission(ISSUE_DELETE)</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Modal chi tiết Task (Menu 3 chấm &rarr; Xóa)</div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Nhấn menu tùy chọn trên Task &rarr; Chọn <strong>"Xóa công việc (Delete)"</strong> &rarr; Xác nhận.</div>
+            </div>
+            <div class="detail-box expected-box expected-neg">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Nếu role trong Permission Scheme không có quyền xóa, nút xóa bị ẩn hoặc nhận thông báo lỗi 403: <em>"Bạn không có quyền thực hiện thao tác này (ISSUE_DELETE)"</em>.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= SECTION 6: ADMIN & EDGE CASES ================= -->
+  <section class="test-category" data-cat="admin">
+    <div class="category-header">
+      <div class="category-title">
+        <span>🛡️ 6. Quản Trị Hệ Thống & Trường Hợp Biên (Security Edge Cases)</span>
+      </div>
+      <span class="badge badge-aop">@RequireGlobalAdmin & Fail-Closed</span>
+    </div>
+
+    <div class="test-list">
+
+      <!-- SEC-01 -->
+      <div class="test-card" id="tc-sec-01" data-cat="admin">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-sec-01')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-SEC-01</span>
+            <span class="test-name">Đăng nhập tài khoản Global Admin vào trang Admin Dashboard</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Global ADMIN</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">@RequireGlobalAdmin</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Trang quản trị toàn hệ thống: <code>/admin</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Đăng nhập bằng tài khoản có realm role <code>ROLE_ADMIN</code> từ Keycloak &rarr; Vào menu Admin Dashboard.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Truy cập thành công, xem được thống kê tổng số người dùng, dự án, workspace trên toàn hệ thống.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEC-02 -->
+      <div class="test-card" id="tc-sec-02" data-cat="admin">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-sec-02')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-SEC-02</span>
+            <span class="test-name">Tài khoản người dùng thông thường cố tình gõ URL /admin</span>
+            <div class="badges-row">
+              <span class="badge badge-role">User thường</span>
+              <span class="badge badge-neg">Negative (Chặn 403)</span>
+              <span class="badge badge-aop">@RequireGlobalAdmin</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Gõ trực tiếp trên URL: <code>/admin</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Đăng nhập bằng tài khoản thông thường, nhập <code>http://localhost:3000/admin</code>.</div>
+            </div>
+            <div class="detail-box expected-box expected-neg">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Frontend chặn điều hướng hoặc hiển thị trang thông báo 403 Forbidden: <em>"Bạn không có quyền truy cập trang quản trị"</em>.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEC-03 -->
+      <div class="test-card" id="tc-sec-03" data-cat="admin">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-sec-03')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-SEC-03</span>
+            <span class="test-name">Global Admin can thiệp vào Dự án / Team bất kỳ (Kiểm tra cơ chế Bypass)</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Global ADMIN</span>
+              <span class="badge badge-pos">Positive</span>
+              <span class="badge badge-aop">Global Admin Bypass</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Bất kỳ URL Dự án / Team nào mà Admin chưa tham gia</div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Dùng tài khoản Admin truy cập và thực hiện thao tác sửa task, đổi cấu hình trên một dự án của user khác.</div>
+            </div>
+            <div class="detail-box expected-box expected-pos">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Thao tác thành công! Tất cả AOP Guard nhận diện <code>SecurityUtils.isGlobalAdmin() == true</code> và cho phép can thiệp.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEC-04 -->
+      <div class="test-card" id="tc-sec-04" data-cat="admin">
+        <div class="checkbox-box">
+          <div class="custom-checkbox" onclick="toggleCase('tc-sec-04')">✓</div>
+        </div>
+        <div class="test-body">
+          <div class="test-header">
+            <span class="test-id">TC-UI-SEC-04</span>
+            <span class="test-name">Kiểm tra sau khi Đăng xuất (Chưa xác thực - Unauthenticated)</span>
+            <div class="badges-row">
+              <span class="badge badge-role">Anonymous</span>
+              <span class="badge badge-neg">Negative (Chặn 401/403)</span>
+              <span class="badge badge-aop">Fail-Closed</span>
+            </div>
+          </div>
+          <div class="test-details">
+            <div class="detail-box">
+              <div class="detail-label">📍 Màn hình & URL</div>
+              <div class="detail-value">Sau khi bấm Đăng xuất &rarr; Thử gõ URL <code>/projects</code> hoặc <code>/workspaces</code></div>
+            </div>
+            <div class="detail-box">
+              <div class="detail-label">👉 Thao tác trên màn hình</div>
+              <div class="detail-value">Bấm Đăng xuất, sau đó dùng nút Back trình duyệt hoặc gõ URL trực tiếp vào trang nội bộ.</div>
+            </div>
+            <div class="detail-box expected-box expected-neg">
+              <div class="detail-label">🎯 Kết quả kỳ vọng trên giao diện</div>
+              <div class="detail-value">Bị chặn ngay lập tức và tự động chuyển hướng về trang <code>/login</code>. AOP Guard không cho phép request nặc danh chạy qua.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+<!-- ================= JAVASCRIPT LOGIC ================= -->
+<script>
+  const STORAGE_KEY = 'datn_2026_aop_ui_checklist';
+
+  // Load state from localStorage
+  function loadState() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEY);
+      return data ? JSON.parse(data) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveState(state) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  // Toggle single test case
+  function toggleCase(id) {
+    const card = document.getElementById(id);
+    if (!card) return;
+
+    const state = loadState();
+    const isChecked = !card.classList.contains('checked');
+
+    if (isChecked) {
+      card.classList.add('checked');
+      state[id] = true;
+    } else {
+      card.classList.remove('checked');
+      delete state[id];
+    }
+
+    saveState(state);
+    updateProgress();
+  }
+
+  // Update progress bar & counters
+  function updateProgress() {
+    const allCards = document.querySelectorAll('.test-card');
+    const checkedCards = document.querySelectorAll('.test-card.checked');
+
+    const total = allCards.length;
+    const checked = checkedCards.length;
+    const percent = total > 0 ? Math.round((checked / total) * 100) : 0;
+
+    document.getElementById('totalCount').textContent = total;
+    document.getElementById('checkedCount').textContent = checked;
+    document.getElementById('progressPercent').textContent = percent + '%';
+    document.getElementById('progressBar').style.width = percent + '%';
+    document.getElementById('catCountAll').textContent = total;
+  }
+
+  // Filter category
+  let currentCat = 'all';
+  let currentStatus = 'all';
+
+  function filterCategory(cat) {
+    currentCat = cat;
+    document.querySelectorAll('.filter-tabs .tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-cat') === cat);
+    });
+    applyFilters();
+  }
+
+  function filterStatus(status) {
+    currentStatus = status;
+    document.querySelectorAll('.status-filter .tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-status') === status);
+    });
+    applyFilters();
+  }
+
+  function filterCases() {
+    applyFilters();
+  }
+
+  function applyFilters() {
+    const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
+    const cards = document.querySelectorAll('.test-card');
+    const categories = document.querySelectorAll('.test-category');
+
+    cards.forEach(card => {
+      const cardCat = card.getAttribute('data-cat');
+      const isChecked = card.classList.contains('checked');
+      const text = card.textContent.toLowerCase();
+
+      let matchCat = (currentCat === 'all' || cardCat === currentCat);
+      let matchStatus = (currentStatus === 'all' || (currentStatus === 'checked' && isChecked) || (currentStatus === 'unchecked' && !isChecked));
+      let matchKeyword = (!keyword || text.includes(keyword));
+
+      if (matchCat && matchStatus && matchKeyword) {
+        card.style.display = 'grid';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+
+    // Hide empty category headers if no visible cards
+    categories.forEach(sec => {
+      const visible = sec.querySelectorAll('.test-card:not([style*="display: none"])').length;
+      sec.style.display = visible > 0 ? 'block' : 'none';
+    });
+  }
+
+  // Reset all
+  function resetAllProgress() {
+    if (confirm('Bạn có chắc chắn muốn đặt lại toàn bộ tiến độ kiểm thử?')) {
+      localStorage.removeItem(STORAGE_KEY);
+      document.querySelectorAll('.test-card').forEach(c => c.classList.remove('checked'));
+      updateProgress();
+    }
+  }
+
+  // Theme toggle
+  function toggleTheme() {
+    const html = document.documentElement;
+    const current = html.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    html.setAttribute('data-theme', next);
+
+    const icon = document.getElementById('themeIcon');
+    icon.textContent = next === 'light' ? '🌙' : '☀️';
+  }
+
+  // Initial setup on DOM ready
+  document.addEventListener('DOMContentLoaded', () => {
+    const state = loadState();
+    Object.keys(state).forEach(id => {
+      const card = document.getElementById(id);
+      if (card && state[id]) {
+        card.classList.add('checked');
+      }
+    });
+    updateProgress();
+  });
+</script>
+
+</body>
+</html>

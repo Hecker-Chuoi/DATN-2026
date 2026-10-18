@@ -16,3 +16,5 @@ app:
       url: http://localhost:9992
     workspace:
       url: http://localhost:9997
+    notification:
+      url: http://localhost:9994
