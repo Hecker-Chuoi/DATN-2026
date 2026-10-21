@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.datn.workservice.security.WorkspaceAccessChecker;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
@@ -35,6 +37,8 @@ class ProjectPermissionGuardTest {
     private RoleAssignmentRepository roleAssignmentRepository;
     @Mock
     private PermissionSchemeEntryRepository permissionSchemeEntryRepository;
+    @Mock
+    private WorkspaceAccessChecker workspaceAccessChecker;
 
     @InjectMocks
     private ProjectMemberServiceImpl projectMemberService;

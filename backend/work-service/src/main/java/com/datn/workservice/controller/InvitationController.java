@@ -48,8 +48,8 @@ public class InvitationController {
             @RequestParam(value = "projectId", required = false) UUID projectId
     ) {
         if (teamId != null) {
-            if (!teamSecurity.isLeader(teamId)) {
-                throw new AccessDeniedException("Chỉ trưởng nhóm mới xem được lời mời của nhóm");
+            if (!teamSecurity.canManageTeam(teamId)) {
+                throw new AccessDeniedException("Chỉ quản trị viên hoặc trưởng nhóm mới xem được lời mời của nhóm");
             }
             return ResponseEntity.ok(ApiResponse.success(invitationService.listForTarget(InvitationType.TEAM, teamId)));
         }

@@ -23,6 +23,7 @@ import com.datn.workservice.service.AtomicKeySequenceGenerator;
 import com.datn.workservice.service.ProjectAccessService;
 import com.datn.workservice.service.ProjectMemberService;
 import com.datn.workservice.service.ProjectService;
+import com.datn.workservice.security.WorkspaceAccessChecker;
 import com.datn.workservice.specification.ProjectSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +64,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final IdentityClient identityClient;
     private final ProjectAccessService projectAccessService;
     private final ProjectMemberService projectMemberService;
+    private final WorkspaceAccessChecker workspaceAccessChecker;
 
     @Override
     @Transactional
@@ -265,12 +267,26 @@ public class ProjectServiceImpl implements ProjectService {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
 
-        if (!globalAdmin && !isTeamLeader(team, currentUserId)) {
-            throw new AccessDeniedException("Chỉ trưởng nhóm (LEADER) mới được tạo dự án cho nhóm này");
+        boolean canManage = globalAdmin
+                || isTeamLeader(team, currentUserId)
+                || isWorkspaceAdminOrOwner(team.getWorkspaceId(), currentUserId);
+
+        if (!canManage) {
+            throw new AccessDeniedException("Chỉ trưởng nhóm (LEADER) hoặc Quản trị viên Không gian làm việc mới được tạo dự án cho nhóm này");
         }
 
         if (leadUserId != null && !leadUserId.equals(currentUserId) && !isTeamMember(team, leadUserId)) {
             throw new BadRequestException("Trưởng dự án (Project Lead) phải là thành viên của nhóm");
+        }
+    }
+
+    private boolean isWorkspaceAdminOrOwner(UUID workspaceId, UUID userId) {
+        if (workspaceId == null || userId == null) return false;
+        try {
+            String wsRole = workspaceAccessChecker.getRole(workspaceId, userId);
+            return "OWNER".equalsIgnoreCase(wsRole) || "ADMIN".equalsIgnoreCase(wsRole);
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -339,7 +355,7 @@ public class ProjectServiceImpl implements ProjectService {
 
     private String resolveMyRoleLabel(Project project, UUID userId, Map<UUID, String> myRoles) {
         if (userId == null) return null;
-        if (userId.equals(project.getLeadUserId()) || userId.equals(project.getCreatedBy())) {
+        if (userId.equals(project.getLeadUserId()) || userId.equals(project.getCreatedBy()) || isWorkspaceAdminOrOwner(project.getWorkspaceId(), userId)) {
             return "ADMINISTRATOR";
         }
         return myRoles.get(project.getId());
@@ -560,7 +576,9 @@ public class ProjectServiceImpl implements ProjectService {
         // Assign Lead / Creator as ADMINISTRATOR
         Set<UUID> adminUserIds = new HashSet<>();
         if (leadUserId != null) adminUserIds.add(leadUserId);
-        if (currentUserId != null) adminUserIds.add(currentUserId);
+        if (currentUserId != null && (currentUserId.equals(leadUserId) || !isWorkspaceAdminOrOwner(project.getWorkspaceId(), currentUserId))) {
+            adminUserIds.add(currentUserId);
+        }
 
         for (UUID userId : adminUserIds) {
             roleAssignmentRepository.save(RoleAssignment.builder()

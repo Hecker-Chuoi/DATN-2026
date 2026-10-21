@@ -22,11 +22,15 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/internal/notifications")
-@RequiredArgsConstructor
 public class InternalEmailController {
 
     private final EmailService emailService;
     private final MailTemplateService templateService;
+
+    public InternalEmailController(EmailService emailService, MailTemplateService templateService) {
+        this.emailService = emailService;
+        this.templateService = templateService;
+    }
 
     public record EmailRequest(
             @NotBlank @Email String to,

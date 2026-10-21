@@ -22,6 +22,7 @@ import com.datn.workservice.repository.RoleAssignmentRepository;
 import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.repository.TeamRepository;
 import com.datn.workservice.security.TeamSecurity;
+import com.datn.workservice.security.WorkspaceAccessChecker;
 import com.datn.workservice.service.InvitationMailer;
 import com.datn.workservice.service.InvitationService;
 import com.datn.workservice.service.ProjectMemberService;
@@ -48,6 +49,7 @@ public class InvitationServiceImpl implements InvitationService {
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final ProjectMemberService projectMemberService;
     private final TeamSecurity teamSecurity;
+    private final WorkspaceAccessChecker workspaceAccessChecker;
     private final IdentityClient identityClient;
     private final InvitationMailer mailer;
 
@@ -57,6 +59,16 @@ public class InvitationServiceImpl implements InvitationService {
         Team team = teamRepository.findById(teamId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
         UUID invitee = projectMemberService.canonicalUserId(inviteeUserId);
+
+        // Ràng buộc Workspace: Chỉ có thể mời người dùng đang là thành viên của cùng Workspace
+        if (team.getWorkspaceId() != null) {
+            try {
+                workspaceAccessChecker.requireMember(team.getWorkspaceId(), invitee);
+            } catch (Exception e) {
+                throw new BadRequestException("Chỉ có thể mời người dùng đang là thành viên của Không gian làm việc (Workspace) này vào nhóm");
+            }
+        }
+
         if (invitee.equals(team.getOwnerId()) || teamMemberRepository.existsByTeamIdAndUserId(teamId, invitee)) {
             throw new BadRequestException("Người dùng đã là thành viên của nhóm");
         }
@@ -156,7 +168,7 @@ public class InvitationServiceImpl implements InvitationService {
         Invitation inv = requirePending(invitationId);
         boolean allowed = globalAdmin
                 || userId.equals(inv.getInvitedBy())
-                || (inv.getType() == InvitationType.TEAM && teamSecurity.isLeader(inv.getTargetId()))
+                || (inv.getType() == InvitationType.TEAM && teamSecurity.canManageTeam(inv.getTargetId()))
                 || (inv.getType() == InvitationType.PROJECT
                     && projectMemberService.hasPermission(inv.getTargetId(), userId, PermissionKey.PROJECT_ADMIN));
         if (!allowed) {
