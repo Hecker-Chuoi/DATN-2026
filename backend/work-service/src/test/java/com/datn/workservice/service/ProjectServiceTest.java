@@ -75,6 +75,8 @@ class ProjectServiceTest {
     private ProjectAccessService projectAccessService;
     @Mock
     private ProjectMemberService projectMemberService;
+    @Mock
+    private com.datn.workservice.security.WorkspaceAccessChecker workspaceAccessChecker;
 
     @InjectMocks
     private ProjectServiceImpl projectService;

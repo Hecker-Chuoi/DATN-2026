@@ -40,8 +40,10 @@ public class WorkspaceAccessChecker {
      */
     @Cacheable(value = "wsRole", key = "#workspaceId + ':' + #userId", unless = "#result == null")
     public String getRole(UUID workspaceId, UUID userId) {
+        if (workspaceId == null || userId == null) return null;
         try {
-            ApiResponse<String> response = workspaceClient.getMemberRole(workspaceId, userId);
+            UUID canonicalId = canonicalUserResolver.resolve(userId);
+            ApiResponse<String> response = workspaceClient.getMemberRole(workspaceId, canonicalId);
             return response == null ? null : response.getData();
         } catch (Exception e) {
             log.error("Không gọi được workspace-service để kiểm tra quyền trên workspace {}: {}",
@@ -53,15 +55,15 @@ public class WorkspaceAccessChecker {
     /**
      * Người gọi phải là thành viên workspace với bậc tối thiểu minRole.
      * <p>
-     * userId truyền vào là id lấy từ JWT, có thể là Keycloak sub. Phải đổi sang
-     * users.id trước khi tra membership, vì workspace_members khóa theo users.id.
+     * userId truyền vào có thể là id lấy từ JWT (Keycloak sub) hoặc users.id.
+     * getRole đã tự động chuẩn hóa sang users.id qua canonicalUserResolver.
      */
     public void requireAtLeast(UUID workspaceId, UUID userId, String minRole) {
         if (workspaceId == null) {
             throw new ForbiddenException("Thiếu workspaceId để kiểm tra quyền");
         }
 
-        String role = getRole(workspaceId, canonicalUserResolver.resolve(userId));
+        String role = getRole(workspaceId, userId);
         if (role == null) {
             throw new ForbiddenException("Bạn không phải thành viên của workspace này");
         }

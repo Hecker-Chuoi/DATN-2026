@@ -19,6 +19,7 @@ import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.ProjectRoleRepository;
 import com.datn.workservice.repository.RoleAssignmentRepository;
 import com.datn.workservice.repository.TeamMemberRepository;
+import com.datn.workservice.security.WorkspaceAccessChecker;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     private final PermissionSchemeEntryRepository permissionSchemeEntryRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final IdentityClient identityClient;
+    private final WorkspaceAccessChecker workspaceAccessChecker;
 
     // ─── Permission evaluation ───────────────────────────────────────────────
 
@@ -61,6 +63,18 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
         // 1. Project Lead & Creator have super-admin privileges over the project
         if (userId.equals(project.getLeadUserId()) || userId.equals(project.getCreatedBy())) {
             return true;
+        }
+
+        // 1b. Workspace Owner & Workspace Admin (Manager Workspace) have super-admin privileges over all projects in the workspace (Bóng ma Siêu Quản Trị)
+        if (project.getWorkspaceId() != null) {
+            try {
+                String wsRole = workspaceAccessChecker.getRole(project.getWorkspaceId(), userId);
+                if ("OWNER".equalsIgnoreCase(wsRole) || "ADMIN".equalsIgnoreCase(wsRole)) {
+                    return true;
+                }
+            } catch (Exception e) {
+                log.debug("Could not verify workspace admin/owner role for user {}: {}", userId, e.getMessage());
+            }
         }
 
         // 2. Membership is mandatory: no role assignment -> no permission at all (deny by default)
@@ -97,8 +111,17 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
 
         boolean isLead = currentUserId.equals(project.getLeadUserId()) || currentUserId.equals(project.getCreatedBy());
+        boolean isWsAdminOrOwner = false;
+        if (project.getWorkspaceId() != null) {
+            try {
+                String wsRole = workspaceAccessChecker.getRole(project.getWorkspaceId(), currentUserId);
+                isWsAdminOrOwner = "OWNER".equalsIgnoreCase(wsRole) || "ADMIN".equalsIgnoreCase(wsRole);
+            } catch (Exception e) {
+                log.debug("Could not verify workspace admin/owner role for current user {}: {}", currentUserId, e.getMessage());
+            }
+        }
 
-        if (isGlobalAdmin || isLead) {
+        if (isGlobalAdmin || isLead || isWsAdminOrOwner) {
             List<String> allPerms = Arrays.stream(PermissionKey.values())
                     .map(Enum::name)
                     .collect(Collectors.toList());
@@ -106,7 +129,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                     .projectId(projectId)
                     .roleName(ROLE_ADMINISTRATOR)
                     .isLead(isLead)
-                    .isGlobalAdmin(isGlobalAdmin)
+                    .isGlobalAdmin(isGlobalAdmin || isWsAdminOrOwner)
                     .permissions(allPerms)
                     .build();
         }

@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.datn.workservice.security.WorkspaceAccessChecker;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -55,6 +57,8 @@ class ProjectMemberServiceTest {
     private TeamMemberRepository teamMemberRepository;
     @Mock
     private IdentityClient identityClient;
+    @Mock
+    private WorkspaceAccessChecker workspaceAccessChecker;
 
     @InjectMocks
     private ProjectMemberServiceImpl projectMemberService;

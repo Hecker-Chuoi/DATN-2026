@@ -23,6 +23,7 @@ import com.datn.workspaceservice.service.WorkspaceMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +49,7 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
     private final WorkspaceInvitationRepository invitationRepository;
     private final IdentityClient identityClient;
     private final InvitationMailer mailer;
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     @Transactional(readOnly = true)
@@ -260,8 +262,10 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         }
 
         assertNotLastOwner(workspaceId, target);
+        assertNotLeadingAnyTeam(workspaceId, targetUserId);
 
         memberRepository.delete(target);
+        cleanupTeamMemberships(workspaceId, targetUserId);
         log.info("Đã xóa user {} khỏi workspace {}", targetUserId, workspaceId);
     }
 
@@ -272,9 +276,41 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
                 .orElseThrow(() -> new ResourceNotFoundException("Bạn không phải thành viên của workspace này"));
 
         assertNotLastOwner(workspaceId, member);
+        assertNotLeadingAnyTeam(workspaceId, currentUserId);
 
         memberRepository.delete(member);
+        cleanupTeamMemberships(workspaceId, currentUserId);
         log.info("User {} đã rời workspace {}", currentUserId, workspaceId);
+    }
+
+    private void assertNotLeadingAnyTeam(UUID workspaceId, UUID userId) {
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM teams WHERE workspace_id = ? AND owner_id = ?",
+                    Integer.class,
+                    workspaceId,
+                    userId
+            );
+            if (count != null && count > 0) {
+                throw new BadRequestException("Không thể xóa thành viên này (hoặc không thể rời Workspace) vì người dùng đang là Trưởng nhóm của nhóm làm việc trong Workspace này. Vui lòng bổ nhiệm Trưởng nhóm thay thế hoặc giải thể nhóm trước.");
+            }
+        } catch (BadRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            log.debug("Bảng teams có thể chưa tồn tại hoặc lỗi query: {}", e.getMessage());
+        }
+    }
+
+    private void cleanupTeamMemberships(UUID workspaceId, UUID userId) {
+        try {
+            jdbcTemplate.update(
+                    "DELETE FROM team_members WHERE user_id = ? AND team_id IN (SELECT id FROM teams WHERE workspace_id = ?)",
+                    userId,
+                    workspaceId
+            );
+        } catch (Exception e) {
+            log.debug("Không dọn dẹp được team_members: {}", e.getMessage());
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
