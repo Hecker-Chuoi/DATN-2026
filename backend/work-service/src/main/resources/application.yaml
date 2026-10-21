@@ -71,8 +71,17 @@ app:
     notification:
       url: ${APP_SERVICES_NOTIFICATION_URL:http://localhost:9994}
 
+# ─── GitHub OAuth & Integration Configuration ───
+github:
+  client-id: ${GITHUB_CLIENT_ID:Ov23ctW7dA1RgqhNY4Fo}
+  client-secret: ${GITHUB_CLIENT_SECRET:29810ae4e02f9bedaf9ae4fb53558c623034cfdc}
+  redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:5173/integrations/github/callback}
+  api-url: https://api.github.com
+  webhook-secret: ${GITHUB_WEBHOOK_SECRET:datn-github-webhook-secret-2026}
+
 logging:
   level:
     root: INFO
     com.datn.workservice: DEBUG
     org.hibernate.SQL: DEBUG
+
