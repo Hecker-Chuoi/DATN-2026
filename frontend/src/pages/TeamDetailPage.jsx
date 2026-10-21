@@ -21,11 +21,14 @@ import {
   Search,
   UserCheck,
   LogOut,
-  ShieldAlert
+  ShieldAlert,
+  Crown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { teamApi, userApi } from '../api.js';
+import { workspaceApi } from '../api/workspaceServiceApi.js';
 import PendingInvitations from '../components/common/PendingInvitations.jsx';
+import { useWorkspace } from '../context/WorkspaceContext.jsx';
 
 export default function TeamDetailPage() {
   const { teamId, workspaceId } = useParams();
@@ -66,6 +69,18 @@ export default function TeamDetailPage() {
     fetchMe();
   }, []);
 
+  const { myRole: workspaceRole } = useWorkspace();
+  const isWorkspaceOwner = workspaceRole === 'OWNER';
+  const isWorkspaceAdmin = workspaceRole === 'ADMIN';
+
+  // Modal đổi Trưởng nhóm (dành cho Workspace Owner / Admin)
+  const [isAssignLeaderModalOpen, setIsAssignLeaderModalOpen] = useState(false);
+  const [selectedLeaderUser, setSelectedLeaderUser] = useState(null);
+  const [leaderSearchQuery, setLeaderSearchQuery] = useState('');
+  const [leaderSuggestions, setLeaderSuggestions] = useState([]);
+  const [isSearchingLeader, setIsSearchingLeader] = useState(false);
+  const [isAssigningLeader, setIsAssigningLeader] = useState(false);
+
   const isCurrentUserOwner = Boolean(
     currentUser &&
       team?.ownerId &&
@@ -74,16 +89,19 @@ export default function TeamDetailPage() {
   );
 
   const isCurrentUserLeader = Boolean(
-    currentUser &&
+    isWorkspaceOwner ||
+    (currentUser &&
       members.some(
         (m) =>
           (m.userId === currentUser.id ||
             (currentUser.keycloakId && m.userId === currentUser.keycloakId)) &&
           m.role === 'LEADER'
-      )
+      ))
   );
 
   const isCurrentUserMember = Boolean(
+    isWorkspaceOwner ||
+    isWorkspaceAdmin ||
     isCurrentUserOwner ||
       (currentUser &&
         members.some(
@@ -93,7 +111,13 @@ export default function TeamDetailPage() {
         ))
   );
 
+  const canManageTeam = isCurrentUserLeader || isWorkspaceOwner || isWorkspaceAdmin;
+
   const handleUpdateRole = async (userId, newRole) => {
+    if (members.length <= 1) {
+      toast.error('Không thể thay đổi vai trò khi nhóm chỉ có 1 thành viên duy nhất');
+      return;
+    }
     try {
       await teamApi.updateMemberRole(teamId, userId, newRole);
       toast.success('Đã cập nhật vai trò thành công!');
@@ -166,44 +190,143 @@ export default function TeamDetailPage() {
     }
   }, [teamId]);
 
-  // Live user search effect – only search when user has typed something (debounce 400ms)
+  const [wsMembers, setWsMembers] = useState([]);
+  const [loadingWsMembers, setLoadingWsMembers] = useState(false);
+
+  // Tải danh sách thành viên của Workspace khi mở Add Member Modal hoặc Assign Leader Modal
+  useEffect(() => {
+    if ((!isAddModalOpen && !isAssignLeaderModalOpen) || !workspaceId) return;
+
+    let cancelled = false;
+    const fetchWsMembers = async () => {
+      try {
+        setLoadingWsMembers(true);
+        const res = await workspaceApi.getMembers(workspaceId, { size: 200 });
+        if (!cancelled) {
+          const list = res?.data?.content || [];
+          setWsMembers(list);
+        }
+      } catch (err) {
+        console.warn('Could not load workspace members:', err);
+      } finally {
+        if (!cancelled) setLoadingWsMembers(false);
+      }
+    };
+
+    fetchWsMembers();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAddModalOpen, isAssignLeaderModalOpen, workspaceId]);
+
+  // Lọc gợi ý người dùng CHỈ từ danh sách thành viên trong Workspace
   useEffect(() => {
     if (!isAddModalOpen) {
       setUserSuggestions([]);
       return;
     }
 
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
     if (selectedUser) return; // User already picked
 
-    const query = memberIdentifier.trim();
+    const query = memberIdentifier.trim().toLowerCase();
+    
+    // Định dạng danh sách thành viên workspace thành dạng thống nhất
+    const formattedWsUsers = wsMembers.map((m) => {
+      const first = m.firstName || '';
+      const last = m.lastName || '';
+      const computedName = (first + ' ' + last).trim();
+      return {
+        id: m.userId,
+        fullName: m.fullName || (computedName.length > 0 ? computedName : m.username) || 'Thành viên',
+        username: m.username,
+        email: m.email,
+      };
+    });
+
     if (!query) {
-      setUserSuggestions([]);
+      // Mặc định hiển thị danh sách thành viên trong Workspace
+      setUserSuggestions(formattedWsUsers);
       return;
     }
 
-    searchTimeoutRef.current = setTimeout(async () => {
-      try {
-        setIsSearchingUsers(true);
-        const res = await userApi.search(query);
-        if (res && res.data) {
-          const list = Array.isArray(res.data) ? res.data : (res.data.content || []);
-          setUserSuggestions(list);
-        }
-      } catch (err) {
-        setUserSuggestions([]);
-      } finally {
-        setIsSearchingUsers(false);
-      }
-    }, 400);
+    // Lọc theo query từ danh sách thành viên Workspace
+    const filtered = formattedWsUsers.filter((u) => {
+      const matchName = u.fullName && u.fullName.toLowerCase().includes(query);
+      const matchUsername = u.username && u.username.toLowerCase().includes(query);
+      const matchEmail = u.email && u.email.toLowerCase().includes(query);
+      return matchName || matchUsername || matchEmail;
+    });
 
-    return () => {
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    };
-  }, [memberIdentifier, isAddModalOpen, selectedUser]);
+    setUserSuggestions(filtered);
+  }, [memberIdentifier, isAddModalOpen, selectedUser, wsMembers]);
+
+  // Lọc danh sách bổ nhiệm Trưởng nhóm CHỈ từ danh sách thành viên trong Workspace
+  useEffect(() => {
+    if (!isAssignLeaderModalOpen) {
+      setLeaderSuggestions([]);
+      return;
+    }
+
+    if (selectedLeaderUser) return;
+
+    const query = leaderSearchQuery.trim().toLowerCase();
+
+    // Định dạng danh sách thành viên workspace thành dạng thống nhất
+    const formattedWsUsers = wsMembers.map((m) => {
+      const first = m.firstName || '';
+      const last = m.lastName || '';
+      const computedName = (first + ' ' + last).trim();
+      return {
+        id: m.userId,
+        fullName: m.fullName || (computedName.length > 0 ? computedName : m.username) || 'Thành viên',
+        username: m.username,
+        email: m.email,
+      };
+    });
+
+    if (!query) {
+      // Mặc định hiển thị các thành viên Workspace (trừ leader hiện tại nếu có)
+      const currentLeaderId = team?.ownerId;
+      const candidates = formattedWsUsers.filter((u) => u.id !== currentLeaderId);
+      setLeaderSuggestions(candidates);
+      return;
+    }
+
+    const filtered = formattedWsUsers.filter((u) => {
+      const matchName = u.fullName && u.fullName.toLowerCase().includes(query);
+      const matchUsername = u.username && u.username.toLowerCase().includes(query);
+      const matchEmail = u.email && u.email.toLowerCase().includes(query);
+      return matchName || matchUsername || matchEmail;
+    });
+
+    setLeaderSuggestions(filtered);
+  }, [leaderSearchQuery, isAssignLeaderModalOpen, selectedLeaderUser, wsMembers, team?.ownerId]);
+
+  const handleAssignLeader = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedLeaderUser) {
+      toast.error('Vui lòng chọn thành viên để bổ nhiệm làm Trưởng nhóm');
+      return;
+    }
+
+    const targetUserId = selectedLeaderUser.id || selectedLeaderUser.keycloakId;
+    try {
+      setIsAssigningLeader(true);
+      await teamApi.assignLeader(teamId, targetUserId);
+      const name = selectedLeaderUser.fullName || selectedLeaderUser.username || selectedLeaderUser.email;
+      toast.success(`Đã bổ nhiệm ${name} làm Trưởng nhóm mới thành công!`);
+      setIsAssignLeaderModalOpen(false);
+      setSelectedLeaderUser(null);
+      setLeaderSearchQuery('');
+      fetchTeamData();
+      if (refreshTeams) refreshTeams();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Lỗi khi bổ nhiệm Trưởng nhóm';
+      toast.error(msg);
+    } finally {
+      setIsAssigningLeader(false);
+    }
+  };
 
   const handleOpenAddModal = () => {
     setMemberIdentifier('');
@@ -229,9 +352,27 @@ export default function TeamDetailPage() {
 
   const handleAddMember = async (e) => {
     e.preventDefault();
-    const identifier = selectedUser ? (selectedUser.id || selectedUser.email) : memberIdentifier.trim();
-    if (!identifier) {
-      setAddError('Vui lòng chọn người dùng từ danh sách hoặc nhập Email/Username');
+    let targetUserId = selectedUser ? selectedUser.id : null;
+
+    if (!targetUserId && memberIdentifier.trim()) {
+      const query = memberIdentifier.trim().toLowerCase();
+      const matched = wsMembers.find(
+        (m) =>
+          (m.email && m.email.toLowerCase() === query) ||
+          (m.username && m.username.toLowerCase() === query) ||
+          (m.userId && m.userId.toLowerCase() === query)
+      );
+
+      if (!matched) {
+        setAddError('Người dùng này không thuộc Không gian làm việc (Workspace). Chỉ có thể mời thành viên đang thuộc Không gian làm việc này vào nhóm.');
+        toast.error('Chỉ có thể mời người dùng đang là thành viên của Không gian làm việc này vào nhóm');
+        return;
+      }
+      targetUserId = matched.userId;
+    }
+
+    if (!targetUserId) {
+      setAddError('Vui lòng chọn người dùng từ danh sách thành viên Workspace');
       return;
     }
 
@@ -239,8 +380,7 @@ export default function TeamDetailPage() {
       setSubmitting(true);
       setAddError('');
       await teamApi.addMember(teamId, {
-        userId: selectedUser ? selectedUser.id : undefined,
-        email: !selectedUser ? identifier : undefined,
+        userId: targetUserId,
         role: memberRole,
       });
 
@@ -258,8 +398,8 @@ export default function TeamDetailPage() {
   };
 
   const handleRemoveMember = async (userId, memberName) => {
-    if (!isCurrentUserLeader) {
-      toast.error('Chỉ Trưởng nhóm mới có quyền xóa thành viên');
+    if (!canManageTeam) {
+      toast.error('Bạn không có quyền xóa thành viên khỏi nhóm');
       return;
     }
     if (currentUser?.id && userId === currentUser.id) {
@@ -391,7 +531,42 @@ export default function TeamDetailPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {isCurrentUserLeader && (
+          {/* Nút Bổ nhiệm Trưởng nhóm: Chỉ Quản trị viên & Chủ sở hữu Workspace */}
+          {(isWorkspaceOwner || isWorkspaceAdmin) && (
+            <button
+              onClick={() => {
+                setSelectedLeaderUser(null);
+                setLeaderSearchQuery('');
+                setIsAssignLeaderModalOpen(true);
+              }}
+              style={{
+                backgroundColor: '#EFF6FF',
+                color: '#2563EB',
+                border: '1px solid #BFDBFE',
+                padding: '5px 12px',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#DBEAFE';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#EFF6FF';
+              }}
+              title="Chỉ định Trưởng nhóm mới (Dành cho Quản trị viên Workspace)"
+            >
+              <Crown size={14} color="#D97706" />
+              <span>Đổi Trưởng nhóm</span>
+            </button>
+          )}
+
+          {canManageTeam && (
             <button
               onClick={handleDeleteTeam}
               disabled={submitting}
@@ -417,7 +592,7 @@ export default function TeamDetailPage() {
                 e.currentTarget.style.backgroundColor = '#FEF2F2';
                 e.currentTarget.style.borderColor = '#FEE2E2';
               }}
-              title="Xóa nhóm (Chỉ dành cho Trưởng nhóm)"
+              title="Xóa nhóm (Dành cho Trưởng nhóm hoặc Quản trị viên)"
             >
               <Trash2 size={13} />
               <span>Xóa nhóm</span>
@@ -542,7 +717,7 @@ export default function TeamDetailPage() {
 
         {/* Action Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {isCurrentUserLeader && (
+          {canManageTeam && (
             <button
               onClick={handleOpenAddModal}
               style={{
@@ -586,8 +761,51 @@ export default function TeamDetailPage() {
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
         {activeTab === 'members' && (
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+            {/* Cảnh báo khi nhóm khuyết Trưởng nhóm (Leader cũ đã rời Workspace) */}
+            {!loading && !members.some((m) => m.role === 'LEADER') && (
+              <div
+                style={{
+                  margin: '12px 24px 0',
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  backgroundColor: '#FFFBEB',
+                  border: '1px solid #FDE68A',
+                  color: '#92400E',
+                  fontSize: 13,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <AlertCircle size={18} color="#D97706" style={{ flexShrink: 0 }} />
+                  <span>
+                    <strong>Nhóm hiện khuyết Trưởng nhóm:</strong> Trưởng nhóm trước đây không còn là thành viên của Không gian làm việc (Workspace) này.
+                  </span>
+                </div>
+                {canManageTeam && (
+                  <button
+                    onClick={() => setIsAssignLeaderModalOpen(true)}
+                    style={{
+                      backgroundColor: '#D97706',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      padding: '6px 12px',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Bổ nhiệm Trưởng nhóm mới
+                  </button>
+                )}
+              </div>
+            )}
             <div style={{ padding: '0 24px' }}>
-              <PendingInvitations teamId={teamId} canManage={isCurrentUserLeader} refreshKey={inviteTick} />
+              <PendingInvitations teamId={teamId} canManage={canManageTeam} refreshKey={inviteTick} />
             </div>
             {/* Table Header */}
             <div
@@ -688,28 +906,52 @@ export default function TeamDetailPage() {
 
                       {/* Role */}
                       <div>
-                        {isCurrentUserLeader && !isSelf ? (
-                          <select
-                            value={m.role || 'MEMBER'}
-                            onChange={(e) => handleUpdateRole(m.userId, e.target.value)}
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 600,
-                              color: m.role === 'LEADER' ? '#1D4ED8' : '#334155',
-                              backgroundColor: m.role === 'LEADER' ? '#EFF6FF' : '#F8FAFC',
-                              border: '1px solid #CBD5E1',
-                              padding: '4px 8px',
-                              borderRadius: 6,
-                              cursor: 'pointer',
-                              outline: 'none',
-                            }}
-                          >
-                            <option value="LEADER">Trưởng nhóm</option>
-                            <option value="MEMBER">Thành viên</option>
-                            <option value="VIEWER">Người xem</option>
-                          </select>
+                        {canManageTeam && !isSelf ? (
+                          members.length <= 1 ? (
+                            <select
+                              disabled
+                              title="Không thể thay đổi vai trò khi nhóm chỉ có 1 thành viên duy nhất"
+                              value={m.role || 'MEMBER'}
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 500,
+                                color: '#94A3B8',
+                                backgroundColor: '#F8FAFC',
+                                border: '1px solid #E2E8F0',
+                                padding: '4px 8px',
+                                borderRadius: 6,
+                                cursor: 'not-allowed',
+                                outline: 'none',
+                              }}
+                            >
+                              <option value="LEADER">Trưởng nhóm</option>
+                              <option value="MEMBER">Thành viên</option>
+                              <option value="VIEWER">Người xem</option>
+                            </select>
+                          ) : (
+                            <select
+                              value={m.role || 'MEMBER'}
+                              onChange={(e) => handleUpdateRole(m.userId, e.target.value)}
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: m.role === 'LEADER' ? '#1D4ED8' : '#334155',
+                                backgroundColor: m.role === 'LEADER' ? '#EFF6FF' : '#F8FAFC',
+                                border: '1px solid #CBD5E1',
+                                padding: '4px 8px',
+                                borderRadius: 6,
+                                cursor: 'pointer',
+                                outline: 'none',
+                              }}
+                            >
+                              <option value="LEADER">Trưởng nhóm</option>
+                              <option value="MEMBER">Thành viên</option>
+                              <option value="VIEWER">Người xem</option>
+                            </select>
+                          )
                         ) : (
                           <span
+                            title={members.length <= 1 ? 'Không thể thay đổi vai trò khi nhóm chỉ có 1 thành viên duy nhất' : undefined}
                             style={{
                               display: 'inline-block',
                               fontSize: 12,
@@ -727,7 +969,7 @@ export default function TeamDetailPage() {
 
                       {/* Action */}
                       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        {isCurrentUserLeader && !isSelf && !isOwner && (
+                        {canManageTeam && !isSelf && !isOwner && (
                           <button
                             onClick={() => handleRemoveMember(m.userId, displayName)}
                             title="Xóa khỏi nhóm"
@@ -951,9 +1193,14 @@ export default function TeamDetailPage() {
 
               {/* User Search / Selected User Preview */}
               <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Tìm kiếm người dùng (Tên đăng nhập hoặc Thư điện tử) <span style={{ color: '#EF4444' }}>*</span>
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155' }}>
+                    Tìm kiếm thành viên trong Workspace <span style={{ color: '#EF4444' }}>*</span>
+                  </label>
+                  <span style={{ fontSize: 11, color: '#2563EB', fontWeight: 500, backgroundColor: '#EFF6FF', padding: '2px 8px', borderRadius: 4 }}>
+                    Chỉ thành viên cùng Workspace
+                  </span>
+                </div>
 
                 {selectedUser ? (
                   <div
@@ -1026,7 +1273,7 @@ export default function TeamDetailPage() {
                           setMemberIdentifier(e.target.value);
                           if (addError) setAddError('');
                         }}
-                        placeholder="Nhập tên, username hoặc email để tìm kiếm..."
+                        placeholder="Nhập tên, username hoặc email của thành viên Workspace..."
                         autoFocus
                         style={{
                           width: '100%',
@@ -1041,7 +1288,26 @@ export default function TeamDetailPage() {
                     </div>
 
                     {/* Autocomplete Dropdown List */}
-                    {userSuggestions.length > 0 && (
+                    {loadingWsMembers ? (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          marginTop: 4,
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: 8,
+                          border: '1px solid #E2E8F0',
+                          padding: '12px 16px',
+                          fontSize: 12,
+                          color: '#64748B',
+                          zIndex: 80,
+                        }}
+                      >
+                        Đang tải danh sách thành viên Workspace...
+                      </div>
+                    ) : userSuggestions.length > 0 ? (
                       <div
                         style={{
                           position: 'absolute',
@@ -1059,7 +1325,7 @@ export default function TeamDetailPage() {
                         }}
                       >
                         {userSuggestions.map((u) => {
-                          const fullName = (u.firstName ? `${u.firstName} ${u.lastName || ''}` : u.username || 'User').trim();
+                          const fullName = (u.fullName || u.username || 'Thành viên').trim();
                           const isAlreadyInTeam = members.some(
                             (m) =>
                               m.userId === u.id ||
@@ -1129,7 +1395,7 @@ export default function TeamDetailPage() {
                           );
                         })}
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1206,6 +1472,299 @@ export default function TeamDetailPage() {
                 >
                   <UserCheck size={15} />
                   <span>{submitting ? 'Đang thêm...' : 'Thêm vào nhóm'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ─── Assign Leader Modal (Workspace Owner / Admin) ─── */}
+      {isAssignLeaderModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.5)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 80,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => setIsAssignLeaderModalOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
+              width: '100%',
+              maxWidth: 480,
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: '#FFFFFF',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    backgroundColor: '#FEF3C7',
+                    color: '#D97706',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Crown size={16} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                    Chỉ định Trưởng nhóm mới
+                  </h3>
+                  <p style={{ fontSize: 11, color: '#64748B', margin: 0 }}>
+                    Nhóm: <strong>{team?.name}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAssignLeaderModalOpen(false)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  color: '#64748B',
+                  padding: 4,
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleAssignLeader} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  backgroundColor: '#FEF3C7',
+                  border: '1px solid #FDE68A',
+                  color: '#92400E',
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                }}
+              >
+                💡 <strong>Lưu ý:</strong> Khi bổ nhiệm Trưởng nhóm mới, Trưởng nhóm hiện tại sẽ tự động chuyển thành thành viên bình thường (Member). Quyền quản trị các dự án thuộc nhóm sẽ được chuyển giao.
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                  Chọn Trưởng nhóm mới:
+                </label>
+
+                {selectedLeaderUser ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      backgroundColor: '#EFF6FF',
+                      border: '1px solid #BFDBFE',
+                      borderRadius: 8,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: '50%',
+                          backgroundColor: '#2563EB',
+                          color: '#FFFFFF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {getInitials(selectedLeaderUser.fullName || selectedLeaderUser.username || selectedLeaderUser.email)}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#1E3A8A' }}>
+                          {selectedLeaderUser.fullName || selectedLeaderUser.username}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#3B82F6' }}>
+                          {selectedLeaderUser.email}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLeaderUser(null)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#64748B',
+                        cursor: 'pointer',
+                        padding: 4,
+                      }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        placeholder="Tìm kiếm thành viên trong Workspace hoặc chọn bên dưới..."
+                        value={leaderSearchQuery}
+                        onChange={(e) => setLeaderSearchQuery(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px 8px 34px',
+                          borderRadius: 8,
+                          border: '1px solid #CBD5E1',
+                          fontSize: 13,
+                          outline: 'none',
+                        }}
+                      />
+                      <Search
+                        size={15}
+                        style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
+                      />
+                    </div>
+
+                    {/* Suggestions list */}
+                    <div
+                      style={{
+                        marginTop: 8,
+                        maxHeight: 180,
+                        overflowY: 'auto',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: 8,
+                        backgroundColor: '#FFFFFF',
+                      }}
+                    >
+                      {isSearchingLeader ? (
+                        <div style={{ padding: '12px', textAlign: 'center', fontSize: 12, color: '#64748B' }}>
+                          Đang tìm kiếm...
+                        </div>
+                      ) : leaderSuggestions.length === 0 ? (
+                        <div style={{ padding: '12px', textAlign: 'center', fontSize: 12, color: '#94A3B8' }}>
+                          {leaderSearchQuery ? 'Không tìm thấy người dùng phù hợp' : 'Không có gợi ý'}
+                        </div>
+                      ) : (
+                        leaderSuggestions.map((u) => {
+                          const name = u.fullName || u.username || u.email;
+                          return (
+                            <div
+                              key={u.id || u.keycloakId}
+                              onClick={() => setSelectedLeaderUser(u)}
+                              style={{
+                                padding: '8px 12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                cursor: 'pointer',
+                                borderBottom: '1px solid #F1F5F9',
+                                transition: 'background-color 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = '#F8FAFC';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div
+                                  style={{
+                                    width: 26,
+                                    height: 26,
+                                    borderRadius: '50%',
+                                    backgroundColor: '#E0E7FF',
+                                    color: '#4338CA',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {getInitials(name)}
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{name}</div>
+                                  <div style={{ fontSize: 11, color: '#64748B' }}>{u.email || `@${u.username}`}</div>
+                                </div>
+                              </div>
+                              <span style={{ fontSize: 11, color: '#2563EB', fontWeight: 600 }}>
+                                Chọn ➔
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setIsAssignLeaderModalOpen(false)}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    color: '#475569',
+                    border: '1px solid #E2E8F0',
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAssigningLeader || !selectedLeaderUser}
+                  style={{
+                    backgroundColor: isAssigningLeader || !selectedLeaderUser ? '#94A3B8' : '#2563EB',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    padding: '8px 20px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: isAssigningLeader || !selectedLeaderUser ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Crown size={15} />
+                  <span>{isAssigningLeader ? 'Đang bổ nhiệm...' : 'Xác nhận Bổ nhiệm'}</span>
                 </button>
               </div>
             </form>
