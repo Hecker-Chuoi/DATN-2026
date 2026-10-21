@@ -1,5 +1,6 @@
 package com.datn.workservice.service.template;
 
+import com.datn.workservice.dto.request.TemplateCustomizationsRequest;
 import com.datn.workservice.entity.*;
 import com.datn.workservice.enums.SprintState;
 import com.datn.workservice.enums.StatusCategory;
@@ -68,9 +69,13 @@ public class ProjectCloneEngine {
      * @param includeWorkItems sao chép công việc (kèm cây cha-con, nhãn, component, liên kết)
      * @param includeVersions  sao chép version (ngày phát hành được dời, is_released = false)
      * @param dateOffsetDays   số ngày cộng vào mọi mốc thời gian
+     * @param customizations   tùy chỉnh nhanh từ người dùng (đổi tên status/type/sprint/task, loại bỏ sprint/task)
      */
     public record Options(boolean includeSprints, boolean includeWorkItems, boolean includeVersions,
-                          long dateOffsetDays) {
+                          long dateOffsetDays, TemplateCustomizationsRequest customizations) {
+        public Options(boolean includeSprints, boolean includeWorkItems, boolean includeVersions, long dateOffsetDays) {
+            this(includeSprints, includeWorkItems, includeVersions, dateOffsetDays, null);
+        }
     }
 
     /**
@@ -110,10 +115,20 @@ public class ProjectCloneEngine {
     // ─── CẤU HÌNH ──────────────────────────────────────────────────────────────
 
     private void cloneStatuses(Context ctx) {
+        var cust = ctx.options.customizations();
+        var renamed = cust != null && cust.getRenamedStatuses() != null ? cust.getRenamedStatuses() : Map.<UUID, String>of();
+
         for (Status s : ctx.source.statuses()) {
+            String name = s.getName();
+            if (renamed.containsKey(s.getId())) {
+                String val = renamed.get(s.getId());
+                if (val != null && !val.isBlank()) {
+                    name = val.trim();
+                }
+            }
             Status copy = statusRepository.save(Status.builder()
                     .projectId(ctx.targetId())
-                    .name(s.getName())
+                    .name(name)
                     .category(s.getCategory())
                     .colorHex(s.getColorHex())
                     .description(s.getDescription())
@@ -125,10 +140,20 @@ public class ProjectCloneEngine {
     }
 
     private void cloneTypes(Context ctx) {
+        var cust = ctx.options.customizations();
+        var renamed = cust != null && cust.getRenamedTypes() != null ? cust.getRenamedTypes() : Map.<UUID, String>of();
+
         for (WorkItemType t : ctx.source.types()) {
+            String name = t.getName();
+            if (renamed.containsKey(t.getId())) {
+                String val = renamed.get(t.getId());
+                if (val != null && !val.isBlank()) {
+                    name = val.trim();
+                }
+            }
             WorkItemType copy = workItemTypeRepository.save(WorkItemType.builder()
                     .projectId(ctx.targetId())
-                    .name(t.getName())
+                    .name(name)
                     .code(t.getCode())
                     .description(t.getDescription())
                     .iconName(t.getIconName())
@@ -192,6 +217,18 @@ public class ProjectCloneEngine {
     }
 
     private void cloneBoards(Context ctx) {
+        var cust = ctx.options.customizations();
+        var renamedStatuses = cust != null && cust.getRenamedStatuses() != null
+                ? cust.getRenamedStatuses() : Map.<UUID, String>of();
+
+        Map<UUID, String> sourceStatusNameMap = ctx.source.statuses().stream()
+                .collect(java.util.stream.Collectors.toMap(Status::getId, Status::getName, (a, b) -> a));
+
+        Map<UUID, List<UUID>> columnToStatusIds = new HashMap<>();
+        for (BoardColumnStatus cs : ctx.source.columnStatuses()) {
+            columnToStatusIds.computeIfAbsent(cs.getColumnId(), k -> new ArrayList<>()).add(cs.getStatusId());
+        }
+
         for (Board b : ctx.source.boards()) {
             Board copy = boardRepository.save(Board.builder()
                     .projectId(ctx.targetId())
@@ -202,9 +239,12 @@ public class ProjectCloneEngine {
             ctx.map(b.getId(), copy.getId());
         }
         for (BoardColumn c : ctx.source.columns()) {
+            String colName = resolveColumnName(c, columnToStatusIds.getOrDefault(c.getId(), List.of()),
+                    renamedStatuses, sourceStatusNameMap);
+
             BoardColumn copy = boardColumnRepository.save(BoardColumn.builder()
                     .boardId(ctx.id(c.getBoardId()))
-                    .name(c.getName())
+                    .name(colName)
                     .columnOrder(c.getColumnOrder())
                     .minWipLimit(c.getMinWipLimit())
                     .maxWipLimit(c.getMaxWipLimit())
@@ -229,6 +269,56 @@ public class ProjectCloneEngine {
         ctx.count("boards", ctx.source.boards().size());
         ctx.count("boardColumns", ctx.source.columns().size());
         ctx.count("swimlanes", ctx.source.swimlanes().size());
+    }
+
+    private String resolveColumnName(BoardColumn c, List<UUID> mappedStatusIds,
+                                    Map<UUID, String> renamedStatuses,
+                                    Map<UUID, String> sourceStatusNameMap) {
+        String colName = c.getName();
+        if (mappedStatusIds.isEmpty() || renamedStatuses.isEmpty()) {
+            return colName;
+        }
+
+        if (mappedStatusIds.size() == 1) {
+            UUID stId = mappedStatusIds.get(0);
+            if (renamedStatuses.containsKey(stId)) {
+                String newName = renamedStatuses.get(stId);
+                if (newName != null && !newName.isBlank()) {
+                    String oldName = sourceStatusNameMap.get(stId);
+                    if (oldName != null && (colName.contains("&") || colName.contains("/"))
+                            && containsIgnoreCase(colName, oldName)) {
+                        return replaceIgnoreCase(colName, oldName, newName.trim());
+                    }
+                    return newName.trim();
+                }
+            }
+        }
+
+        for (UUID stId : mappedStatusIds) {
+            if (renamedStatuses.containsKey(stId)) {
+                String oldName = sourceStatusNameMap.get(stId);
+                String newName = renamedStatuses.get(stId);
+                if (oldName != null && newName != null && !newName.isBlank()) {
+                    if (colName.equalsIgnoreCase(oldName)) {
+                        colName = newName.trim();
+                    } else if (containsIgnoreCase(colName, oldName)) {
+                        colName = replaceIgnoreCase(colName, oldName, newName.trim());
+                    }
+                }
+            }
+        }
+        return colName;
+    }
+
+    private boolean containsIgnoreCase(String str, String search) {
+        if (str == null || search == null) return false;
+        return str.toLowerCase().contains(search.toLowerCase());
+    }
+
+    private String replaceIgnoreCase(String text, String search, String replacement) {
+        if (text == null || search == null || replacement == null) return text;
+        return text.replaceAll("(?i)" + java.util.regex.Pattern.quote(search),
+                java.util.regex.Matcher.quoteReplacement(replacement));
     }
 
     /** Sao chép vai trò và ma trận quyền; KHÔNG sao chép thành viên (role_assignments). */
@@ -331,10 +421,26 @@ public class ProjectCloneEngine {
 
     /** Mọi sprint về FUTURE, giữ nguyên độ dài và khoảng cách giữa các sprint. */
     private void cloneSprints(Context ctx) {
+        var cust = ctx.options.customizations();
+        var excluded = cust != null && cust.getExcludedSprintIds() != null
+                ? new HashSet<>(cust.getExcludedSprintIds()) : Set.<UUID>of();
+        var renamed = cust != null && cust.getRenamedSprints() != null ? cust.getRenamedSprints() : Map.<UUID, String>of();
+
+        int clonedCount = 0;
         for (Sprint s : ctx.source.sprints()) {
+            if (excluded.contains(s.getId())) {
+                continue;
+            }
+            String name = s.getName();
+            if (renamed.containsKey(s.getId())) {
+                String val = renamed.get(s.getId());
+                if (val != null && !val.isBlank()) {
+                    name = val.trim();
+                }
+            }
             Sprint copy = sprintRepository.save(Sprint.builder()
                     .projectId(ctx.targetId())
-                    .name(s.getName())
+                    .name(name)
                     .goal(s.getGoal())
                     .state(SprintState.FUTURE)
                     .startDate(ctx.shift(s.getStartDate()))
@@ -342,8 +448,9 @@ public class ProjectCloneEngine {
                     .completedDate(null)
                     .build());
             ctx.map(s.getId(), copy.getId());
+            clonedCount++;
         }
-        ctx.count("sprints", ctx.source.sprints().size());
+        ctx.count("sprints", clonedCount);
     }
 
     private void cloneWorkItems(Context ctx) {
@@ -352,20 +459,59 @@ public class ProjectCloneEngine {
             ctx.count("workItems", 0);
             return;
         }
+
+        var cust = ctx.options.customizations();
+        Set<UUID> excludedItemIds = new HashSet<>();
+        if (cust != null && cust.getExcludedWorkItemIds() != null) {
+            excludedItemIds.addAll(cust.getExcludedWorkItemIds());
+        }
+
+        // Lan truyền loại trừ: Nếu task cha bị loại trừ thì các task con (subtask) cũng tự động bị loại trừ
+        boolean cascadeFound = true;
+        while (cascadeFound) {
+            cascadeFound = false;
+            for (WorkItem src : sourceItems) {
+                if (src.getParentId() != null && excludedItemIds.contains(src.getParentId()) && !excludedItemIds.contains(src.getId())) {
+                    excludedItemIds.add(src.getId());
+                    cascadeFound = true;
+                }
+            }
+        }
+
+        List<WorkItem> filteredSourceItems = sourceItems.stream()
+                .filter(src -> !excludedItemIds.contains(src.getId()))
+                .toList();
+
+        if (filteredSourceItems.isEmpty()) {
+            ctx.count("workItems", 0);
+            ctx.count("links", 0);
+            ctx.count("labelMaps", 0);
+            ctx.count("componentMaps", 0);
+            return;
+        }
+
+        var renamedItems = cust != null && cust.getRenamedWorkItems() != null ? cust.getRenamedWorkItems() : Map.<UUID, String>of();
         UUID fallbackStatus = fallbackInitialStatus(ctx);
 
         // Lượt 1: tạo công việc (chưa nối cha) theo đúng thứ tự mã của nguồn
-        List<WorkItem> copies = new ArrayList<>(sourceItems.size());
-        for (WorkItem src : sourceItems) {
+        List<WorkItem> copies = new ArrayList<>(filteredSourceItems.size());
+        for (WorkItem src : filteredSourceItems) {
             UUID typeId = ctx.id(src.getTypeId());
             Long original = src.getOriginalEstimateSeconds() == null ? 0L : src.getOriginalEstimateSeconds();
+            String summary = src.getSummary();
+            if (renamedItems.containsKey(src.getId())) {
+                String val = renamedItems.get(src.getId());
+                if (val != null && !val.isBlank()) {
+                    summary = val.trim();
+                }
+            }
             copies.add(WorkItem.builder()
                     .projectId(ctx.targetId())
                     .typeId(typeId)
                     .statusId(initialStatusFor(ctx, typeId, fallbackStatus))
                     .sprintId(ctx.options.includeSprints() ? ctx.idOrNull(src.getSprintId()) : null)
                     .code(atomicKeySequenceGenerator.generateNextCode(ctx.target.getKey()))
-                    .summary(src.getSummary())
+                    .summary(summary)
                     .description(src.getDescription())
                     .priority(src.getPriority())
                     .resolution(null)
@@ -386,14 +532,14 @@ public class ProjectCloneEngine {
                     .build());
         }
         List<WorkItem> saved = workItemRepository.saveAll(copies);
-        for (int i = 0; i < sourceItems.size(); i++) {
-            ctx.map(sourceItems.get(i).getId(), saved.get(i).getId());
+        for (int i = 0; i < filteredSourceItems.size(); i++) {
+            ctx.map(filteredSourceItems.get(i).getId(), saved.get(i).getId());
         }
 
-        // Lượt 2: nối lại cây cha-con (cha luôn nằm trong tập nguồn - validator đã đảm bảo)
+        // Lượt 2: nối lại cây cha-con (cha luôn nằm trong tập nguồn và không bị loại trừ)
         List<WorkItem> withParent = new ArrayList<>();
-        for (int i = 0; i < sourceItems.size(); i++) {
-            UUID parent = ctx.idOrNull(sourceItems.get(i).getParentId());
+        for (int i = 0; i < filteredSourceItems.size(); i++) {
+            UUID parent = ctx.idOrNull(filteredSourceItems.get(i).getParentId());
             if (parent != null) {
                 saved.get(i).setParentId(parent);
                 withParent.add(saved.get(i));
@@ -402,7 +548,7 @@ public class ProjectCloneEngine {
         workItemRepository.saveAll(withParent);
 
         List<WorkItemLabelMap> labelMaps = ctx.source.labelMaps().stream()
-                .filter(m -> ctx.idMap.containsKey(m.getLabelId()))
+                .filter(m -> ctx.idMap.containsKey(m.getLabelId()) && ctx.idMap.containsKey(m.getWorkItemId()))
                 .map(m -> WorkItemLabelMap.builder()
                         .workItemId(ctx.id(m.getWorkItemId()))
                         .labelId(ctx.id(m.getLabelId()))
@@ -411,7 +557,7 @@ public class ProjectCloneEngine {
         workItemLabelMapRepository.saveAll(labelMaps);
 
         List<WorkItemComponentMap> componentMaps = ctx.source.componentMaps().stream()
-                .filter(m -> ctx.idMap.containsKey(m.getComponentId()))
+                .filter(m -> ctx.idMap.containsKey(m.getComponentId()) && ctx.idMap.containsKey(m.getWorkItemId()))
                 .map(m -> WorkItemComponentMap.builder()
                         .workItemId(ctx.id(m.getWorkItemId()))
                         .componentId(ctx.id(m.getComponentId()))
@@ -420,6 +566,7 @@ public class ProjectCloneEngine {
         workItemComponentMapRepository.saveAll(componentMaps);
 
         List<WorkItemLink> links = ctx.source.links().stream()
+                .filter(l -> ctx.idMap.containsKey(l.getSourceItemId()) && ctx.idMap.containsKey(l.getTargetItemId()))
                 .map(l -> WorkItemLink.builder()
                         .sourceItemId(ctx.id(l.getSourceItemId()))
                         .targetItemId(ctx.id(l.getTargetItemId()))
@@ -433,7 +580,7 @@ public class ProjectCloneEngine {
         for (int i = 0; i < saved.size(); i++) {
             WorkItem item = saved.get(i);
             workItemAuditService.recordCustomEvent(item.getId(), "SUMMARY", null,
-                    "Đã tạo công việc " + item.getCode() + " từ " + sourceItems.get(i).getCode()
+                    "Đã tạo công việc " + item.getCode() + " từ " + filteredSourceItems.get(i).getCode()
                             + " của mẫu " + origin, ctx.actorId);
         }
 

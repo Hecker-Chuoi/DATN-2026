@@ -61,6 +61,7 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
   const [mode, setMode] = useState('BLANK');
   const [previewTemplateId, setPreviewTemplateId] = useState(null);
   const [selectedTemplate, setSelectedTemplate] = useState(null); // TemplatePreviewResponse
+  const [templateCustomizations, setTemplateCustomizations] = useState(null);
   const [isEndDateManuallyEdited, setIsEndDateManuallyEdited] = useState(false);
   const [cloneOptions, setCloneOptions] = useState({ includeSprints: true, includeWorkItems: true, includeVersions: true });
 
@@ -73,6 +74,7 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
       setMode('BLANK');
       setPreviewTemplateId(null);
       setSelectedTemplate(null);
+      setTemplateCustomizations(null);
       setIsEndDateManuallyEdited(false);
       setCloneOptions({ includeSprints: true, includeWorkItems: true, includeVersions: true });
       setFormData({
@@ -111,8 +113,9 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
     return span != null && startDate ? addDays(startDate, span) : '';
   };
 
-  const handleUseTemplate = (preview) => {
+  const handleUseTemplate = (preview, customizations = null) => {
     setSelectedTemplate(preview);
+    setTemplateCustomizations(customizations);
     setPreviewTemplateId(null);
     setIsEndDateManuallyEdited(false);
     setErrors({});
@@ -179,7 +182,7 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
     // workspace chưa tải xong; không guard ở đây thì POST đi với
     // workspaceId: undefined và backend trả 400 khó hiểu.
     if (!currentWorkspaceId) {
-      setErrors({ name: 'Chưa xác định được workspace. Vui lòng tải lại trang.' });
+      setErrors({ name: 'Chưa xác định được không gian làm việc. Vui lòng tải lại trang.' });
       return;
     }
 
@@ -200,13 +203,14 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
           startDate: formData.startDate || undefined,
           endDate: formData.endDate || undefined,
           ...cloneOptions,
+          customizations: templateCustomizations || undefined,
         });
         const result = res.data;
         const createdProject = result?.project;
         const stats = result?.stats || {};
         toast.success(
           `Đã tạo ${createdProject?.name || formData.name} từ mẫu: ${stats.statuses || 0} trạng thái, ` +
-            `${stats.sprints || 0} sprint, ${stats.workItems || 0} công việc`
+            `${stats.sprints || 0} chu kỳ làm việc, ${stats.workItems || 0} công việc`
         );
         if (onProjectCreated) onProjectCreated(createdProject);
         onClose();
@@ -319,8 +323,8 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
               <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>Tạo Dự án Mới</h2>
               <p style={{ fontSize: 12, color: '#64748B', margin: '2px 0 0 0' }}>
                 {currentWorkspace?.name
-                  ? `Trong workspace ${currentWorkspace.name}`
-                  : 'Khởi tạo không gian làm việc Scrum hoặc Kanban cho nhóm của bạn'}
+                  ? `Trong không gian làm việc ${currentWorkspace.name}`
+                  : 'Khởi tạo không gian quản lý tiến độ cho nhóm của bạn'}
               </p>
             </div>
           </div>
@@ -412,8 +416,12 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
           {isTemplateMode && selectedTemplate && (
             <SelectedTemplateBanner
               template={selectedTemplate}
+              customizations={templateCustomizations}
               onPreview={() => setPreviewTemplateId(selectedTemplate.id)}
-              onChange={() => setSelectedTemplate(null)}
+              onChange={() => {
+                setSelectedTemplate(null);
+                setTemplateCustomizations(null);
+              }}
             />
           )}
 
@@ -699,12 +707,12 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
             <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>Sao chép từ mẫu</div>
               <div style={{ fontSize: 12, color: '#64748B' }}>
-                Trạng thái, workflow, board, loại công việc, phân quyền, nhãn, component luôn được sao chép.
+                Trạng thái, quy trình làm việc, bảng làm việc, loại công việc, phân quyền, nhãn, hợp phần luôn được sao chép.
               </div>
               {[
-                ['includeSprints', `Sprint (${selectedTemplate.stats?.sprintCount || 0})`, 'Bỏ chọn: công việc nằm hết trong Backlog'],
-                ['includeWorkItems', `Công việc (${selectedTemplate.stats?.workItemCount || 0})`, 'Epic, story, task, subtask kèm liên kết & nhãn'],
-                ['includeVersions', `Version (${selectedTemplate.versions?.length || 0})`, 'Ngày phát hành được dời theo lịch mới'],
+                ['includeSprints', `Chu kỳ làm việc (${selectedTemplate.stats?.sprintCount || 0})`, 'Bỏ chọn: công việc nằm hết trong Danh sách tồn đọng'],
+                ['includeWorkItems', `Công việc (${selectedTemplate.stats?.workItemCount || 0})`, 'Hạng mục lớn, câu chuyện, nhiệm vụ, nhiệm vụ con kèm liên kết & nhãn'],
+                ['includeVersions', `Phiên bản (${selectedTemplate.versions?.length || 0})`, 'Ngày phát hành được dời theo lịch mới'],
               ].map(([key, label, hint]) => (
                 <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer' }}>
                   <input
@@ -747,23 +755,46 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
               gap: 10,
             }}
           >
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 8,
-                border: '1px solid #CBD5E1',
-                backgroundColor: '#FFFFFF',
-                color: '#475569',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Hủy
-            </button>
+            {isTemplateMode && selectedTemplate ? (
+              <button
+                type="button"
+                onClick={() => setPreviewTemplateId(selectedTemplate.id)}
+                disabled={submitting}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#FFFFFF',
+                  color: '#334155',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                ← Quay lại xem mẫu
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#FFFFFF',
+                  color: '#475569',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy
+              </button>
+            )}
             <button
               type="submit"
               disabled={submitting}
@@ -803,15 +834,26 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
       templateId={previewTemplateId}
       onClose={() => setPreviewTemplateId(null)}
       onUse={handleUseTemplate}
+      initialCustomizations={templateCustomizations}
     />
     </>
   );
 }
 
 /** Mẫu đang được chọn, hiển thị phía trên form khi tạo dự án từ mẫu. */
-function SelectedTemplateBanner({ template, onPreview, onChange }) {
+function SelectedTemplateBanner({ template, customizations, onPreview, onChange }) {
   const cat = categoryToken(template.templateCategory);
   const s = template.stats || {};
+
+  const customCount = customizations
+    ? Object.keys(customizations.renamedStatuses || {}).length +
+      Object.keys(customizations.renamedTypes || {}).length +
+      (customizations.excludedSprintIds || []).length +
+      Object.keys(customizations.renamedSprints || {}).length +
+      (customizations.excludedWorkItemIds || []).length +
+      Object.keys(customizations.renamedWorkItems || {}).length
+    : 0;
+
   return (
     <div
       style={{
@@ -840,20 +882,37 @@ function SelectedTemplateBanner({ template, onPreview, onChange }) {
         <LayoutTemplate size={18} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>
-          MẪU · {cat.label} · {PROJECT_TYPE_LABELS[template.projectType] || template.projectType}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>
+            MẪU · {cat.label} · {PROJECT_TYPE_LABELS[template.projectType] || template.projectType}
+          </span>
+          {customCount > 0 && (
+            <span
+              style={{
+                fontSize: 10.5,
+                fontWeight: 700,
+                color: '#1D4ED8',
+                backgroundColor: '#EFF6FF',
+                padding: '1px 6px',
+                borderRadius: 4,
+                border: '1px solid #BFDBFE',
+              }}
+            >
+              ✨ Đã tùy chỉnh ({customCount})
+            </span>
+          )}
         </div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{template.name}</div>
-        <div style={{ fontSize: 12, color: '#475569' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginTop: 1 }}>{template.name}</div>
+        <div style={{ fontSize: 12, color: '#475569', marginTop: 1 }}>
           {s.statusCount || 0} trạng thái · {s.workflowCount || 0} workflow · {s.sprintCount || 0} sprint ·{' '}
           {s.workItemCount || 0} công việc
           {template.timeline?.spanDays != null && <> · {template.timeline.spanDays} ngày</>}
         </div>
       </div>
-      <button type="button" onClick={onPreview} style={bannerBtn}>
-        <Eye size={13} /> Xem trước
+      <button type="button" onClick={onPreview} style={bannerBtn} title="Xem trước và tùy chỉnh chi tiết">
+        <Eye size={13} /> {customCount > 0 ? 'Tùy chỉnh' : 'Xem trước'}
       </button>
-      <button type="button" onClick={onChange} style={bannerBtn}>
+      <button type="button" onClick={onChange} style={bannerBtn} title="Chọn mẫu khác">
         <RefreshCw size={13} /> Đổi mẫu
       </button>
     </div>

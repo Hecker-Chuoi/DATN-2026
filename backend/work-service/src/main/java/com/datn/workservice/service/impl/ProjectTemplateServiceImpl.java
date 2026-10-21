@@ -147,7 +147,8 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
                 !Boolean.FALSE.equals(request.getIncludeSprints()),
                 !Boolean.FALSE.equals(request.getIncludeWorkItems()),
                 !Boolean.FALSE.equals(request.getIncludeVersions()),
-                offset);
+                offset,
+                request.getCustomizations());
         return cloneAndFinalize(blueprint, target, options, CloneType.FROM_TEMPLATE, currentUserId);
     }
 

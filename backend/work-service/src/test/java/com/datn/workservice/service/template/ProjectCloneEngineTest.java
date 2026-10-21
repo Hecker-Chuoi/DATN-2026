@@ -162,6 +162,42 @@ class ProjectCloneEngineTest {
         assertThat(all(Sprint.class, Sprint.class)).hasSize(2);
     }
 
+    @Test
+    @DisplayName("Áp dụng tùy chỉnh: đổi tên status/type/sprint/task và loại bỏ sprint/task (kèm cascade subtask)")
+    void appliesCustomizationsCorrectly() {
+        UUID actor = UUID.randomUUID();
+
+        var customizations = com.datn.workservice.dto.request.TemplateCustomizationsRequest.builder()
+                .renamedStatuses(Map.of(f.todo.getId(), "Cần làm", f.done.getId(), "Hoàn tất"))
+                .renamedTypes(Map.of(f.epicType.getId(), "Sáng kiến"))
+                .excludedSprintIds(List.of(f.sprint2.getId()))
+                .renamedSprints(Map.of(f.sprint1.getId(), "Sprint Khởi động"))
+                .excludedWorkItemIds(List.of(f.task.getId())) // task bị loại trừ -> subtask con cũng phải tự động bị loại trừ
+                .renamedWorkItems(Map.of(f.epic.getId(), "Epic Tùy chỉnh"))
+                .build();
+
+        var options = new ProjectCloneEngine.Options(true, true, true, 0, customizations);
+        Map<String, Integer> stats = engine.cloneInto(f.blueprint(), target, options, actor);
+
+        // Status: 4 cái, tên To Do -> Cần làm, Done -> Hoàn tất
+        assertThat(all(Status.class, Status.class)).extracting(Status::getName)
+                .contains("Cần làm", "Hoàn tất", "In Progress", "In Review");
+
+        // Type: Epic -> Sáng kiến
+        assertThat(all(WorkItemType.class, WorkItemType.class)).extracting(WorkItemType::getName)
+                .contains("Sáng kiến", "Task", "Subtask");
+
+        // Sprint: sprint2 bị loại trừ -> chỉ còn 1 sprint, tên là "Sprint Khởi động"
+        assertThat(stats).containsEntry("sprints", 1);
+        assertThat(all(Sprint.class, Sprint.class)).extracting(Sprint::getName)
+                .containsExactly("Sprint Khởi động");
+
+        // WorkItem: task bị loại trừ -> subtask con của nó cũng bị loại trừ -> chỉ còn lại epic!
+        assertThat(stats).containsEntry("workItems", 1);
+        assertThat(all(WorkItem.class, WorkItem.class)).extracting(WorkItem::getSummary)
+                .containsExactly("Epic Tùy chỉnh");
+    }
+
     // ─── Mock repository ghi nhớ ────────────────────────────────────────────
 
     private <R> R repo(Class<R> type) {

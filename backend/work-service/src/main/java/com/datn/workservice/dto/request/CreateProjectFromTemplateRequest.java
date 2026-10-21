@@ -9,6 +9,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import jakarta.validation.Valid;
+
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -60,4 +62,7 @@ public class CreateProjectFromTemplateRequest {
 
     @Builder.Default
     private Boolean includeVersions = true;
+
+    @Valid
+    private TemplateCustomizationsRequest customizations;
 }
