@@ -519,7 +519,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 12, marginBottom: showDetailedMatrix ? 16 : 0 }}>
           <div style={{ padding: 12, backgroundColor: '#FAF5FF', borderRadius: 8, border: '1px solid #E9D5FF' }}>
             <div style={{ fontWeight: 700, color: '#7E22CE', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>Quản trị viên (Administrator)</span>
+              <span>Quản trị viên</span>
               <span style={{ fontSize: 11, backgroundColor: '#F3E8FF', padding: '1px 6px', borderRadius: 10 }}>10 / 10 quyền</span>
             </div>
             <div style={{ color: '#6B21A8', lineHeight: 1.4 }}>
@@ -528,7 +528,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
           </div>
           <div style={{ padding: 12, backgroundColor: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
             <div style={{ fontWeight: 700, color: '#1D4ED8', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>Thành viên (Member)</span>
+              <span>Thành viên</span>
               <span style={{ fontSize: 11, backgroundColor: '#DBEAFE', padding: '1px 6px', borderRadius: 10 }}>6 / 10 quyền</span>
             </div>
             <div style={{ color: '#1E40AF', lineHeight: 1.4 }}>
@@ -537,7 +537,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
           </div>
           <div style={{ padding: 12, backgroundColor: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
             <div style={{ fontWeight: 700, color: '#475569', marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>Người xem (Viewer)</span>
+              <span>Người xem</span>
               <span style={{ fontSize: 11, backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: 10 }}>1 / 10 quyền</span>
             </div>
             <div style={{ color: '#64748B', lineHeight: 1.4 }}>

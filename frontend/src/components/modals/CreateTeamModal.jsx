@@ -24,7 +24,7 @@ export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
     // Backend đã đổi POST /teams sang CreateTeamRequest có @NotNull workspaceId
     // (trước đây nó nhận Map và tự nhét user id của người tạo vào workspaceId).
     if (!currentWorkspaceId) {
-      setError('Chưa xác định được workspace. Vui lòng tải lại trang.');
+      setError('Chưa xác định được không gian làm việc. Vui lòng tải lại trang.');
       return;
     }
 

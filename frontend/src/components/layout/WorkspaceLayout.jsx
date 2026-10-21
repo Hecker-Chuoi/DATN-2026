@@ -86,11 +86,11 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
         }}
       >
         <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-          Bạn không có quyền truy cập workspace này
+          Bạn không có quyền truy cập không gian làm việc này
         </h2>
         <p style={{ fontSize: 13, color: '#64748B', margin: 0, textAlign: 'center', maxWidth: 420 }}>
-          Workspace không tồn tại, hoặc bạn đã bị xóa khỏi danh sách thành viên. Hãy liên hệ chủ
-          sở hữu workspace để được thêm lại.
+          Không gian làm việc không tồn tại, hoặc bạn đã bị xóa khỏi danh sách thành viên. Hãy liên hệ chủ
+          sở hữu để được thêm lại.
         </p>
         <button
           type="button"
@@ -107,7 +107,7 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
             cursor: 'pointer',
           }}
         >
-          Về danh sách workspace
+          Về danh sách không gian làm việc
         </button>
       </div>
     );

@@ -100,7 +100,7 @@ export default function BacklogIssueRow({
       {/* Diem */}
       {item.storyPoints != null && (
         <span
-          title="Story points"
+          title="Điểm ước lượng"
           style={{
             flexShrink: 0,
             minWidth: 22,

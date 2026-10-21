@@ -21,6 +21,8 @@ import {
 import WorkspaceSwitcher from '../workspace/WorkspaceSwitcher.jsx';
 import { useWorkspaceRole } from '../../hooks/useWorkspaceRole.js';
 import { wsPath } from '../../utils/workspacePath.js';
+import LanguageSwitcher from '../common/LanguageSwitcher.jsx';
+import { useLanguage } from '../../context/LanguageContext.jsx';
 
 const TEAM_COLORS = [
   '#EC4899', // Pink
@@ -37,6 +39,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
   const location = useLocation();
   const { workspaceId } = useParams();
   const { canCreateTeam, canCreateProject, canManageWorkspace } = useWorkspaceRole();
+  const { t } = useLanguage();
   const [expandedTeams, setExpandedTeams] = useState({ [teams[0]?.id]: true });
 
   // Initializer của useState chỉ chạy MỘT lần, nên state accordion bị stale ngay
@@ -90,7 +93,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         {canCreateProject && (
           <button
             onClick={() => onOpenCreateProject(null)}
-            title="Tạo dự án nhanh"
+            title={t('sidebar.quick_create_project')}
             style={{
               width: 28,
               height: 28,
@@ -124,33 +127,33 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         <NavItem
           to={ws('/projects')}
           icon={<FolderKanban size={17} color="#2563EB" />}
-          label="Dự án & Bảng làm việc"
+          label={t('sidebar.projects_and_boards')}
           active={location.pathname.startsWith(ws('/projects'))}
         />
         <NavItem
           to={ws('/my-issues')}
           icon={<CheckCircle2 size={17} color="#10B981" />}
-          label="Nhiệm vụ của tôi"
+          label={t('sidebar.my_issues')}
           active={location.pathname === ws('/my-issues')}
         />
         <NavItem
           to={ws('/invitations')}
           icon={<Mail size={17} color="#F59E0B" />}
-          label="Lời mời"
+          label={t('sidebar.invitations')}
           badge={invitationCount}
           active={location.pathname === ws('/invitations')}
         />
         <NavItem
           to={ws('/members')}
           icon={<Users size={17} color="#8B5CF6" />}
-          label="Thành viên"
+          label={t('sidebar.members')}
           active={location.pathname === ws('/members')}
         />
         {canManageWorkspace && (
           <NavItem
             to={ws('/settings')}
             icon={<Settings size={17} color="#64748B" />}
-            label="Cài đặt workspace"
+            label={t('sidebar.workspace_settings')}
             active={location.pathname === ws('/settings')}
           />
         )}
@@ -350,7 +353,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
                 textOverflow: 'ellipsis',
               }}
             >
-              {currentUser?.fullName || currentUser?.username || 'User'}
+              {currentUser?.fullName || currentUser?.username || 'Người dùng'}
             </div>
             <div
               style={{
@@ -366,10 +369,12 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
           </div>
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <LanguageSwitcher variant="badge" />
         {onLogout && (
           <button
             onClick={onLogout}
-            title="Đăng xuất"
+            title={t('sidebar.logout')}
             style={{
               background: 'none',
               border: 'none',
@@ -395,6 +400,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
             <LogOut size={16} />
           </button>
         )}
+        </div>
       </div>
     </aside>
   );

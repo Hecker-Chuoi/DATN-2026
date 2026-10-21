@@ -110,7 +110,7 @@ export default function InlineCreateIssueRow({ types = [], defaultTypeId, onSubm
           color: SURFACE.textMuted,
         }}
       >
-        Huỷ
+        Hủy
       </button>
     </div>
   );

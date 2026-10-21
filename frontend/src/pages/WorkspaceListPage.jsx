@@ -56,20 +56,20 @@ export default function WorkspaceListPage() {
         >
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-              Workspace của bạn
+              Không gian làm việc của bạn
             </h1>
             <p style={{ fontSize: 13, color: '#64748B', margin: '6px 0 0' }}>
-              Workspace là cấp cao nhất: mỗi workspace chứa nhiều nhóm, mỗi nhóm chứa nhiều dự án.
+              Không gian làm việc là cấp cao nhất: mỗi không gian chứa nhiều nhóm, mỗi nhóm chứa nhiều dự án.
             </p>
           </div>
           <button type="button" onClick={openCreateWorkspace} style={primaryBtn}>
             <Plus size={15} />
-            <span>Tạo workspace</span>
+            <span>Tạo không gian làm việc</span>
           </button>
         </div>
 
         {loading && (
-          <div style={{ fontSize: 13, color: '#94A3B8' }}>Đang tải danh sách workspace...</div>
+          <div style={{ fontSize: 13, color: '#94A3B8' }}>Đang tải danh sách không gian làm việc...</div>
         )}
 
         {!loading && error && (
@@ -113,11 +113,11 @@ export default function WorkspaceListPage() {
               <Building2 size={28} />
             </div>
             <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', margin: '0 0 6px' }}>
-              Bạn chưa thuộc workspace nào
+              Bạn chưa thuộc không gian làm việc nào
             </h2>
             <p style={{ fontSize: 13, color: '#64748B', margin: '0 auto 20px', maxWidth: 420 }}>
-              Tạo workspace đầu tiên để bắt đầu tổ chức nhóm và dự án, hoặc chờ được người khác mời
-              vào workspace của họ.
+              Tạo không gian làm việc đầu tiên để bắt đầu tổ chức nhóm và dự án, hoặc chờ được người khác mời
+              tham gia.
             </p>
             <button
               type="button"
@@ -125,7 +125,7 @@ export default function WorkspaceListPage() {
               style={{ ...primaryBtn, padding: '10px 20px' }}
             >
               <Plus size={15} />
-              <span>Tạo workspace đầu tiên</span>
+              <span>Tạo không gian làm việc đầu tiên</span>
             </button>
           </div>
         )}

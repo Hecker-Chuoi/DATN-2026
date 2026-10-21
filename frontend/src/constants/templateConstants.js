@@ -5,7 +5,7 @@
 export const TEMPLATE_CATEGORIES = {
   SOFTWARE: { label: 'Phần mềm', color: '#2563EB', bg: '#EFF6FF' },
   BUSINESS: { label: 'Kinh doanh', color: '#0F766E', bg: '#F0FDFA' },
-  MARKETING: { label: 'Marketing', color: '#DB2777', bg: '#FDF2F8' },
+  MARKETING: { label: 'Tiếp thị', color: '#DB2777', bg: '#FDF2F8' },
   DESIGN: { label: 'Thiết kế', color: '#7C3AED', bg: '#F5F3FF' },
   OPERATIONS: { label: 'Vận hành', color: '#EA580C', bg: '#FFF7ED' },
   EDUCATION: { label: 'Giáo dục', color: '#16A34A', bg: '#F0FDF4' },
@@ -17,9 +17,9 @@ export function categoryToken(category) {
 }
 
 export const PROJECT_TYPE_LABELS = {
-  SOFTWARE_SCRUM: 'Scrum',
-  SOFTWARE_KANBAN: 'Kanban',
-  BUSINESS: 'Business',
+  SOFTWARE_SCRUM: 'Quy trình Scrum',
+  SOFTWARE_KANBAN: 'Bảng Kanban',
+  BUSINESS: 'Kinh doanh',
 };
 
 /** Cộng số ngày vào chuỗi yyyy-MM-dd, trả về yyyy-MM-dd (không lệch múi giờ). */

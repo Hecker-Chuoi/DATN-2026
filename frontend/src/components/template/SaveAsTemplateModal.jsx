@@ -157,13 +157,13 @@ export default function SaveAsTemplateModal({ isOpen, onClose, project, onSaved 
 
           <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ fontSize: 12, color: '#64748B' }}>
-              Cấu hình (trạng thái, workflow, board, loại công việc, phân quyền) luôn được sao chép. Thành viên, bình
+              Cấu hình (trạng thái, quy trình làm việc, bảng làm việc, loại công việc, phân quyền) luôn được sao chép. Thành viên, bình
               luận, tệp đính kèm không được sao chép.
             </div>
             {[
-              ['includeSprints', 'Sprint (đặt lại thành Dự kiến)'],
+              ['includeSprints', 'Chu kỳ làm việc (đặt lại thành Dự kiến)'],
               ['includeWorkItems', 'Công việc (về trạng thái khởi tạo, bỏ người được giao)'],
-              ['includeVersions', 'Version'],
+              ['includeVersions', 'Phiên bản'],
             ].map(([k, label]) => (
               <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer' }}>
                 <input

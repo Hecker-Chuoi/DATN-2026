@@ -319,23 +319,23 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
       const res = await workItemApi.getById(currentId);
       if (res && res.data) {
         setItem(res.data);
-        toast.success(targetSprint ? 'Đã chuyển Sprint' : 'Đã đưa về Backlog');
+        toast.success(targetSprint ? 'Đã chuyển chu kỳ' : 'Đã đưa về danh sách tồn đọng');
         fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
-      console.warn('Không đổi được Sprint qua sprintApi, thử fallback workItemApi:', err);
+      console.warn('Không đổi được chu kỳ qua sprintApi, thử fallback workItemApi:', err);
       try {
         const res = await workItemApi.update(currentId, { sprintId: targetSprint });
         if (res && res.data) {
           setItem(res.data);
-          toast.success(targetSprint ? 'Đã chuyển Sprint' : 'Đã đưa về Backlog');
+          toast.success(targetSprint ? 'Đã chuyển chu kỳ' : 'Đã đưa về danh sách tồn đọng');
           fetchChangelogs(currentId);
           if (onItemUpdated) onItemUpdated(res.data);
         }
       } catch (fallbackErr) {
-        console.error('Lỗi khi đổi Sprint:', fallbackErr);
-        toast.error('Lỗi khi chuyển Sprint');
+        console.error('Lỗi khi đổi chu kỳ:', fallbackErr);
+        toast.error('Lỗi khi chuyển chu kỳ');
       }
     }
   };
@@ -347,12 +347,12 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
       const res = await workItemApi.update(currentId, { storyPoints: val === '' ? null : num });
       if (res && res.data) {
         setItem(res.data);
-        toast.success('Đã cập nhật Story Points');
+        toast.success('Đã cập nhật điểm ước lượng');
         fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
-      toast.error('Lỗi cập nhật Story Points');
+      toast.error('Lỗi cập nhật điểm ước lượng');
     }
   };
 
@@ -376,13 +376,13 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
     if (!newSubtaskTitle.trim()) return;
     try {
       await workItemApi.createSubtask(currentId, { summary: newSubtaskTitle.trim() });
-      toast.success('Đã thêm Sub-task mới');
+      toast.success('Đã thêm nhiệm vụ con mới');
       setNewSubtaskTitle('');
       setIsAddingSubtask(false);
       fetchDetail(currentId);
       if (onItemUpdated) onItemUpdated();
     } catch (err) {
-      toast.error('Lỗi khi tạo Sub-task');
+      toast.error('Lỗi khi tạo nhiệm vụ con');
     }
   };
 
@@ -532,7 +532,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
     const isTargetSubtask = selectedTargetItem?.hierarchyLevel === -1 || selectedTargetItem?.isSubtask || selectedTargetItem?.typeCode === 'SUBTASK';
 
     if (linkRelationType === 'BLOCKS' && ((isCurrentEpic && isTargetSubtask) || (isCurrentSubtask && isTargetEpic))) {
-      toast.error('Không thể tạo liên kết BLOCKS trực tiếp giữa Epic và Sub-task (Scale Mismatch). Vui lòng liên kết ở cấp độ Story/Task.');
+      toast.error('Không thể tạo liên kết cản trở trực tiếp giữa Hạng mục lớn và Nhiệm vụ con (chênh lệch cấp bậc). Vui lòng liên kết ở cấp độ công việc tiêu chuẩn.');
       return;
     }
 
@@ -966,7 +966,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       padding: '4px 0',
                       lineHeight: 1.3,
                     }}
-                    title="Click để chỉnh sửa tiêu đề"
+                    title="Nhấn để chỉnh sửa tiêu đề"
                   >
                     {item?.summary || 'Chưa có tiêu đề'}
                   </h2>
@@ -2365,7 +2365,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   <div
                     title={
                       item?.hierarchyLevel === -1
-                        ? 'Sub-task đi theo chu kỳ của công việc cha'
+                        ? 'Nhiệm vụ con đi theo chu kỳ của công việc cha'
                         : undefined
                     }
                     style={{

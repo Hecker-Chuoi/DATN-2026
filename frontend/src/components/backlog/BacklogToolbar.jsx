@@ -63,7 +63,7 @@ export default function BacklogToolbar({
           maxWidth: 200,
         }}
       >
-        <option value="">Tất cả Epic</option>
+        <option value="">Tất cả hạng mục lớn</option>
         {epics.map((e) => (
           <option key={e.id} value={e.id}>{e.code} — {e.summary}</option>
         ))}

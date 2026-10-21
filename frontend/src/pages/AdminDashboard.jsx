@@ -66,7 +66,7 @@ export default function AdminDashboard({ onLogout }) {
     } catch (err) {
       console.error('Error fetching users:', err);
       if (err.status === 403) {
-        setError('403 Forbidden: Bạn cần có quyền ADMIN để truy cập danh sách và quản lý người dùng.');
+        setError('Không có quyền truy cập: Bạn cần có quyền Quản trị viên để truy cập danh sách và quản lý người dùng.');
       } else {
         setError(err.message || 'Lỗi khi kết nối với máy chủ.');
       }
@@ -225,7 +225,7 @@ export default function AdminDashboard({ onLogout }) {
     setConfirmConfig({
       isOpen: true,
       title: 'Xóa tài khoản',
-      message: `Bạn có chắc chắn muốn xóa tài khoản "${user.username}"? Hành động này sẽ khóa tài khoản trên Keycloak và thu hồi quyền thành viên nhóm/task liên quan.`,
+      message: `Bạn có chắc chắn muốn xóa tài khoản "${user.username}"? Hành động này sẽ khóa tài khoản hệ thống và thu hồi quyền thành viên nhóm/nhiệm vụ liên quan.`,
       confirmText: 'Xóa tài khoản',
       cancelText: 'Hủy',
       type: 'danger',

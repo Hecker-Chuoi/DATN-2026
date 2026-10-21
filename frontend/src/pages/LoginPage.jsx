@@ -22,7 +22,7 @@ export default function LoginPage({ onLoginSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.username || !form.password) {
-      setError('Vui lòng nhập Username và Mật khẩu.');
+      setError('Vui lòng nhập Tên đăng nhập và Mật khẩu.');
       return;
     }
 
@@ -76,7 +76,7 @@ export default function LoginPage({ onLoginSuccess }) {
               <span>DATN SYSTEM</span>
             </div>
             <h2 className="auth-title">Đăng Nhập Quản Trị</h2>
-            <p className="auth-subtitle">Nhập thông tin tài khoản của bạn để truy cập Dashboard</p>
+            <p className="auth-subtitle">Nhập thông tin tài khoản của bạn để truy cập Bảng điều khiển Quản trị</p>
           </div>
 
           {error && (
@@ -95,7 +95,7 @@ export default function LoginPage({ onLoginSuccess }) {
 
           <form className="auth-form" onSubmit={handleSubmit}>
             <div className="input-group">
-              <label className="input-label">Organisation ID</label>
+              <label className="input-label">Mã tổ chức</label>
               <div className="input-field-wrapper">
                 <span className="input-icon"><Building2 size={18} /></span>
                 <input
@@ -110,7 +110,7 @@ export default function LoginPage({ onLoginSuccess }) {
             </div>
 
             <div className="input-group">
-              <label className="input-label">Username</label>
+              <label className="input-label">Tên đăng nhập</label>
               <div className="input-field-wrapper">
                 <span className="input-icon"><User size={18} /></span>
                 <input
@@ -126,7 +126,7 @@ export default function LoginPage({ onLoginSuccess }) {
             </div>
 
             <div className="input-group">
-              <label className="input-label">Password</label>
+              <label className="input-label">Mật khẩu</label>
               <div className="input-field-wrapper">
                 <span className="input-icon"><Key size={18} /></span>
                 <input
@@ -148,7 +148,7 @@ export default function LoginPage({ onLoginSuccess }) {
             </div>
 
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'ĐANG XỬ LÝ...' : 'LOG IN'}
+              {loading ? 'ĐANG XỬ LÝ...' : 'ĐĂNG NHẬP'}
               {!loading && <LogIn size={18} />}
             </button>
           </form>
@@ -162,11 +162,11 @@ export default function LoginPage({ onLoginSuccess }) {
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
             </svg>
-            <span>{googleLoading ? 'Chuyển hướng Google...' : 'Sign in with Google'}</span>
+            <span>{googleLoading ? 'Chuyển hướng Google...' : 'Đăng nhập bằng Google'}</span>
           </button>
 
           <div className="auth-footer">
-            Không gian làm việc thành viên ? <Link to="/login">Đăng nhập User Workspace</Link>
+            Không gian làm việc thành viên ? <Link to="/login">Đăng nhập Không gian làm việc</Link>
           </div>
         </div>
 
@@ -184,7 +184,7 @@ export default function LoginPage({ onLoginSuccess }) {
 
             {/* Floating Top Widget */}
             <div className="float-card-top">
-              <span className="badge-tag">Total Users</span>
+              <span className="badge-tag">Tổng người dùng</span>
               <span className="float-val">1,588 <span style={{ fontSize: 12, color: '#10b981', fontWeight: 600 }}>+12%</span></span>
             </div>
 
@@ -192,10 +192,10 @@ export default function LoginPage({ onLoginSuccess }) {
             <div className="mockup-dashboard">
               <div className="mockup-header">
                 <div>
-                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Dashboard Overview</div>
-                  <div className="mockup-title">Identity Service Metrics</div>
+                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Tổng quan bảng điều khiển</div>
+                  <div className="mockup-title">Chỉ số Dịch vụ Định danh</div>
                 </div>
-                <div className="badge-tag">Active</div>
+                <div className="badge-tag">Hoạt động</div>
               </div>
 
               {/* Chart Mockup */}
@@ -218,11 +218,11 @@ export default function LoginPage({ onLoginSuccess }) {
               <div className="mockup-rows">
                 <div className="mockup-row-item">
                   <span style={{ fontWeight: 600 }}>Keycloak IAM Server</span>
-                  <span style={{ color: '#10b981', fontWeight: 600 }}>Connected</span>
+                  <span style={{ color: '#10b981', fontWeight: 600 }}>Đã kết nối</span>
                 </div>
                 <div className="mockup-row-item">
                   <span style={{ fontWeight: 600 }}>Spring API Gateway</span>
-                  <span style={{ color: '#0070f3', fontWeight: 600 }}>Port 8081</span>
+                  <span style={{ color: '#0070f3', fontWeight: 600 }}>Cổng 8081</span>
                 </div>
               </div>
             </div>
@@ -233,8 +233,8 @@ export default function LoginPage({ onLoginSuccess }) {
                 <Award size={24} />
               </div>
               <div>
-                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>MICROSERVICES</div>
-                <div className="float-val" style={{ fontSize: 18 }}>12 Completed</div>
+                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>VI DỊCH VỤ</div>
+                <div className="float-val" style={{ fontSize: 18 }}>12 Đã hoàn thành</div>
               </div>
             </div>
 

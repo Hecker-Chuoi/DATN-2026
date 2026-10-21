@@ -157,7 +157,7 @@ export default function WorkspaceMembersPage() {
 
   const handleRemove = async (member) => {
     const label = member.fullName || member.username || member.userId;
-    if (!window.confirm(`Xóa ${label} khỏi workspace này?`)) return;
+    if (!window.confirm(`Xóa ${label} khỏi không gian làm việc này?`)) return;
     try {
       await workspaceApi.removeMember(workspaceId, member.userId);
       toast.success('Đã xóa thành viên');
@@ -169,10 +169,10 @@ export default function WorkspaceMembersPage() {
   };
 
   const handleLeave = async () => {
-    if (!window.confirm('Rời khỏi workspace này?')) return;
+    if (!window.confirm('Rời khỏi không gian làm việc này?')) return;
     try {
       await workspaceApi.leave(workspaceId);
-      toast.success('Đã rời workspace');
+      toast.success('Đã rời không gian làm việc');
       await refreshWorkspaces();
       navigate('/workspaces');
     } catch {
@@ -201,13 +201,13 @@ export default function WorkspaceMembersPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
           <Users size={20} color="#2563EB" />
           <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-            Thành viên workspace
+            Thành viên không gian làm việc
           </h1>
         </div>
         <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 20px' }}>
           {currentWorkspace?.name
             ? `Quản lý ai được truy cập ${currentWorkspace.name} và với vai trò gì.`
-            : 'Quản lý ai được truy cập workspace này và với vai trò gì.'}
+            : 'Quản lý ai được truy cập không gian làm việc này và với vai trò gì.'}
         </p>
 
         {canManageMembers && (
@@ -232,7 +232,7 @@ export default function WorkspaceMembersPage() {
                   setIdentifier(e.target.value);
                   if (addError) setAddError('');
                 }}
-                placeholder="Email hoặc username"
+                placeholder="Email hoặc tên đăng nhập"
                 style={{ ...inputStyle, flex: 1, minWidth: 220 }}
               />
               <select
@@ -354,7 +354,7 @@ export default function WorkspaceMembersPage() {
                             <button
                               type="button"
                               onClick={() => handleRemove(m)}
-                              title="Xóa khỏi workspace"
+                              title="Xóa khỏi không gian làm việc"
                               style={{
                                 background: 'transparent',
                                 border: 'none',
@@ -389,8 +389,8 @@ export default function WorkspaceMembersPage() {
               <div style={{ ...dangerHint, marginBottom: 10 }}>
                 <AlertCircle size={14} />
                 <span>
-                  Bạn là OWNER duy nhất. Hãy chuyển quyền OWNER cho thành viên khác trước khi rời
-                  workspace.
+                  Bạn là Chủ sở hữu duy nhất. Hãy chuyển quyền Chủ sở hữu cho thành viên khác trước khi rời
+                  không gian làm việc.
                 </span>
               </div>
             )}
@@ -400,8 +400,8 @@ export default function WorkspaceMembersPage() {
               disabled={!!iAmLastOwner}
               title={
                 iAmLastOwner
-                  ? 'Bạn là OWNER duy nhất của workspace này'
-                  : 'Rời khỏi workspace này'
+                  ? 'Bạn là Chủ sở hữu duy nhất của không gian làm việc này'
+                  : 'Rời khỏi không gian làm việc này'
               }
               style={{
                 display: 'inline-flex',
@@ -418,7 +418,7 @@ export default function WorkspaceMembersPage() {
               }}
             >
               <LogOut size={14} />
-              <span>Rời workspace</span>
+              <span>Rời không gian làm việc</span>
             </button>
           </div>
         )}

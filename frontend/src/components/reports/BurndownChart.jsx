@@ -11,7 +11,7 @@ import ChartTooltip from './ChartTooltip.jsx';
  */
 export default function BurndownChart({ rows }) {
   if (!rows?.length) {
-    return <EmptyChart message="Chưa có dữ liệu Burndown cho Sprint này." />;
+    return <EmptyChart message="Chưa có dữ liệu tiến độ cho chu kỳ này." />;
   }
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
@@ -20,7 +20,7 @@ export default function BurndownChart({ rows }) {
         <XAxis dataKey="label" {...AXIS} />
         <YAxis
           {...AXIS}
-          label={{ value: 'Story Points', angle: -90, position: 'insideLeft', style: { fill: SURFACE.textMuted, fontSize: 11 } }}
+          label={{ value: 'Điểm ước lượng', angle: -90, position: 'insideLeft', style: { fill: SURFACE.textMuted, fontSize: 11 } }}
         />
         <Tooltip content={<ChartTooltip />} />
         <Legend wrapperStyle={LEGEND_STYLE} />

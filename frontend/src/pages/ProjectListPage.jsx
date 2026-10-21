@@ -155,10 +155,10 @@ export default function ProjectListPage() {
               <>
                 <span style={{ color: '#64748B', fontWeight: 500 }}>{currentTeam.name}</span>
                 <span style={{ color: '#CBD5E1' }}>/</span>
-                <span>Projects</span>
+                <span>Dự án</span>
               </>
             ) : (
-              <span>Projects</span>
+              <span>Dự án</span>
             )}
           </div>
           <button
@@ -361,7 +361,7 @@ export default function ProjectListPage() {
               Chưa có dự án nào
             </h3>
             <p style={{ fontSize: 13, color: '#64748B', maxWidth: 420, margin: '0 auto 20px auto', lineHeight: 1.5 }}>
-              Bắt đầu tạo dự án Scrum hoặc Kanban đầu tiên để tự động khởi tạo Workflow, Board và quản lý công việc.
+              Bắt đầu tạo dự án Scrum hoặc Kanban đầu tiên để tự động khởi tạo Quy trình làm việc, Bảng tiến độ và quản lý công việc.
             </p>
             {canCreateProject ? (
             <button

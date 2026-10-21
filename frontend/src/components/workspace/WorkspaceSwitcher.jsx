@@ -79,7 +79,7 @@ export default function WorkspaceSwitcher({ currentUser, onLogout }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open]);
 
-  const name = currentWorkspace?.name || 'Chọn workspace';
+  const name = currentWorkspace?.name || 'Chọn không gian làm việc';
   const initial = (currentWorkspace?.name || '?').trim().charAt(0).toUpperCase();
 
   const handleSelectWorkspace = (id) => {
@@ -248,7 +248,7 @@ export default function WorkspaceSwitcher({ currentUser, onLogout }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <Settings size={15} color="#475569" />
               <span style={{ fontSize: 13, fontWeight: 500, color: '#1E293B' }}>
-                Cài đặt workspace
+                Cài đặt không gian làm việc
               </span>
             </div>
           </button>
@@ -314,7 +314,7 @@ export default function WorkspaceSwitcher({ currentUser, onLogout }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                 <Building2 size={15} color="#475569" />
                 <span style={{ fontSize: 13, fontWeight: 500, color: '#1E293B' }}>
-                  Chuyển workspace
+                  Chuyển không gian làm việc
                 </span>
               </div>
               <ChevronRight size={13} color="#94A3B8" />
@@ -359,7 +359,7 @@ export default function WorkspaceSwitcher({ currentUser, onLogout }) {
                 <div style={{ maxHeight: 220, overflowY: 'auto', padding: '4px 0' }}>
                   {workspaces.length === 0 && (
                     <div style={{ padding: '8px 10px', fontSize: 12, color: '#94A3B8' }}>
-                      Chưa có workspace nào
+                      Chưa có không gian làm việc nào
                     </div>
                   )}
                   {workspaces.map((w) => {
@@ -467,7 +467,7 @@ export default function WorkspaceSwitcher({ currentUser, onLogout }) {
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
                   <Plus size={14} color="#2563EB" />
-                  <span>Tạo workspace mới...</span>
+                  <span>Tạo không gian làm việc mới...</span>
                 </button>
                 <button
                   type="button"
@@ -496,7 +496,7 @@ export default function WorkspaceSwitcher({ currentUser, onLogout }) {
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
                   <Compass size={14} color="#64748B" />
-                  <span>Xem tất cả workspace</span>
+                  <span>Xem tất cả không gian làm việc</span>
                 </button>
               </div>
             )}

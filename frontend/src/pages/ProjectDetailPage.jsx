@@ -218,7 +218,7 @@ export default function ProjectDetailPage() {
                   padding: '1px 6px',
                   borderRadius: 4,
                 }}
-                title="Dự án mẫu: dùng làm bản thiết kế, không bắt đầu được Sprint"
+                title="Dự án mẫu: dùng làm bản thiết kế, không thể kích hoạt chu kỳ"
               >
                 MẪU
               </span>

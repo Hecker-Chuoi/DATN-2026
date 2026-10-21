@@ -119,11 +119,11 @@ export default function ProjectBacklogPage() {
 
     // Sub-task luon di theo Sprint cua cong viec cha - chan ngay tren UI.
     if (dragged.isSubtask || dragged.hierarchyLevel === -1) {
-      toast.error('Sub-task đi theo Sprint của công việc cha, không thể kéo riêng.');
+      toast.error('Nhiệm vụ con đi theo chu kỳ của công việc cha, không thể kéo riêng.');
       return;
     }
     if (!canManage) {
-      toast.error('Bạn không có quyền thay đổi Sprint.');
+      toast.error('Bạn không có quyền thay đổi chu kỳ.');
       return;
     }
 
@@ -161,7 +161,7 @@ export default function ProjectBacklogPage() {
       applyGroups(revertMove(result.containers, result.snapshot, keyOf));
       console.warn('Không di chuyển được công việc:', err);
       if (err?.status === 409) {
-        toast.error('Dữ liệu vừa được người khác thay đổi. Đang tải lại Backlog.');
+        toast.error('Dữ liệu vừa được người khác thay đổi. Đang tải lại danh sách tồn đọng.');
         reload({ silent: true });
       }
     }
@@ -184,17 +184,17 @@ export default function ProjectBacklogPage() {
     bumpRefresh?.();
   };
 
-  const suggestedName = `Sprint ${(data?.sprints?.length || 0) + 1}`;
+  const suggestedName = `Chu kỳ ${(data?.sprints?.length || 0) + 1}`;
 
   // ───────────────────────── Render ─────────────────────────
 
   if (loading) {
-    return <div style={centered}>Đang tải Backlog...</div>;
+    return <div style={centered}>Đang tải danh sách tồn đọng...</div>;
   }
   if (error) {
     return (
       <div style={centered}>
-        Không tải được Backlog.{' '}
+        Không tải được danh sách tồn đọng.{' '}
         <button onClick={() => reload()} style={linkBtn}>Thử lại</button>
       </div>
     );
@@ -220,14 +220,14 @@ export default function ProjectBacklogPage() {
         />
         {canManage && (
           <button onClick={() => setCreateOpen(true)} style={createSprintBtn}>
-            <Plus size={14} /> Tạo Sprint
+            <Plus size={14} /> Tạo chu kỳ
           </button>
         )}
       </div>
 
       {!hasAnySprint && (
         <div style={emptyHint}>
-          Dự án chưa có Sprint nào. {canManage ? 'Hãy tạo Sprint đầu tiên để bắt đầu lập kế hoạch.' : ''}
+          Dự án chưa có chu kỳ nào. {canManage ? 'Hãy tạo chu kỳ đầu tiên để bắt đầu lập kế hoạch.' : ''}
         </div>
       )}
 
@@ -280,7 +280,7 @@ export default function ProjectBacklogPage() {
         onSubmit={async (payload) => {
           await backlog.createSprint(payload);
           setCreateOpen(false);
-          toast.success('Đã tạo Sprint');
+          toast.success('Đã tạo chu kỳ');
         }}
       />
 
@@ -296,7 +296,7 @@ export default function ProjectBacklogPage() {
         onSubmit={async (payload) => {
           await backlog.startSprint(startTarget.sprintId, payload);
           setStartTarget(null);
-          toast.success('Sprint đã bắt đầu');
+          toast.success('Chu kỳ đã bắt đầu');
         }}
       />
 
@@ -310,7 +310,7 @@ export default function ProjectBacklogPage() {
           await backlog.completeSprint(completeTarget.sprintId, payload);
           setCompleteTarget(null);
           bumpRefresh?.();
-          toast.success('Đã hoàn tất Sprint');
+          toast.success('Đã hoàn tất chu kỳ');
         }}
       />
     </div>

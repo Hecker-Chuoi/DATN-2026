@@ -36,12 +36,12 @@ export const PRIORITY_TOKENS = {
 
 // Loai cong viec
 export const TYPE_TOKENS = {
-  EPIC: { label: 'Epic', color: '#6554C0', bg: '#F3F0FF', border: '#DDD6FE' },
-  STORY: { label: 'Story', color: '#36B37E', bg: '#ECFDF5', border: '#A7F3D0' },
-  TASK: { label: 'Task', color: '#0052CC', bg: '#EFF6FF', border: '#BFDBFE' },
-  BUG: { label: 'Bug', color: '#E5493A', bg: '#FEF2F2', border: '#FECACA' },
-  SUBTASK: { label: 'Sub-task', color: '#4C9AFF', bg: '#F0F9FF', border: '#BAE6FD' },
-  SUB_TASK: { label: 'Sub-task', color: '#4C9AFF', bg: '#F0F9FF', border: '#BAE6FD' },
+  EPIC: { label: 'Hạng mục lớn', color: '#6554C0', bg: '#F3F0FF', border: '#DDD6FE' },
+  STORY: { label: 'Câu chuyện người dùng', color: '#36B37E', bg: '#ECFDF5', border: '#A7F3D0' },
+  TASK: { label: 'Nhiệm vụ', color: '#0052CC', bg: '#EFF6FF', border: '#BFDBFE' },
+  BUG: { label: 'Lỗi phần mềm', color: '#E5493A', bg: '#FEF2F2', border: '#FECACA' },
+  SUBTASK: { label: 'Nhiệm vụ con', color: '#4C9AFF', bg: '#F0F9FF', border: '#BAE6FD' },
+  SUB_TASK: { label: 'Nhiệm vụ con', color: '#4C9AFF', bg: '#F0F9FF', border: '#BAE6FD' },
 };
 
 export const FONT_STACK =

@@ -58,7 +58,7 @@ export default function WorkspaceSettingsPage() {
   const handleSave = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
-      setError('Tên workspace không được để trống');
+      setError('Tên không gian làm việc không được để trống');
       return;
     }
     try {
@@ -79,13 +79,13 @@ export default function WorkspaceSettingsPage() {
   };
 
   const handleDelete = async () => {
-    const confirmText = currentWorkspace?.name || 'workspace này';
+    const confirmText = currentWorkspace?.name || 'không gian làm việc này';
     if (!window.confirm(`Chuyển "${confirmText}" vào thùng rác? Toàn bộ nhóm và dự án bên trong sẽ không còn truy cập được.`)) {
       return;
     }
     try {
       await workspaceApi.delete(workspaceId);
-      toast.success('Đã chuyển workspace vào thùng rác');
+      toast.success('Đã chuyển không gian làm việc vào thùng rác');
       await refreshWorkspaces();
       navigate('/workspaces');
     } catch (err) {
@@ -107,7 +107,7 @@ export default function WorkspaceSettingsPage() {
         <div style={{ ...panelStyle, maxWidth: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
           <AlertCircle size={18} color="#B45309" />
           <span style={{ fontSize: 13, color: '#475569' }}>
-            Bạn cần vai trò Quản trị trở lên để xem cài đặt workspace.
+            Bạn cần vai trò Quản trị trở lên để xem cài đặt không gian làm việc.
           </span>
         </div>
       </div>
@@ -135,11 +135,11 @@ export default function WorkspaceSettingsPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
           <Settings size={20} color="#2563EB" />
           <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-            Cài đặt workspace
+            Cài đặt không gian làm việc
           </h1>
         </div>
         <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 24px' }}>
-          Thông tin chung của workspace. Đường dẫn (slug) không đổi được sau khi tạo.
+          Thông tin chung của không gian làm việc. Đường dẫn (slug) không đổi được sau khi tạo.
         </p>
 
         <form onSubmit={handleSave} style={{ ...panelStyle, marginBottom: 24 }}>
@@ -165,7 +165,7 @@ export default function WorkspaceSettingsPage() {
 
           <div style={{ marginBottom: 16 }}>
             <label style={labelStyle}>
-              Tên workspace <span style={{ color: '#EF4444' }}>*</span>
+              Tên không gian làm việc <span style={{ color: '#EF4444' }}>*</span>
             </label>
             <input
               type="text"
@@ -227,7 +227,7 @@ export default function WorkspaceSettingsPage() {
               Vùng nguy hiểm
             </div>
             <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 16px' }}>
-              Xóa workspace sẽ chuyển nó vào thùng rác. Toàn bộ nhóm, dự án và công việc bên trong
+              Xóa không gian làm việc sẽ chuyển nó vào thùng rác. Toàn bộ nhóm, dự án và công việc bên trong
               không còn truy cập được. Danh sách thành viên vẫn được giữ để có thể phục hồi.
             </p>
             <button
@@ -248,7 +248,7 @@ export default function WorkspaceSettingsPage() {
               }}
             >
               <Trash2 size={14} />
-              <span>Xóa workspace</span>
+              <span>Xóa không gian làm việc</span>
             </button>
           </div>
         )}

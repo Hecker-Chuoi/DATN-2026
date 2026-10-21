@@ -463,7 +463,7 @@ export const TASK_TYPE_PRESETS = [
   },
   {
     id: 'MARKETING',
-    name: 'Marketing & Truyền thông',
+    name: 'Tiếp thị & Truyền thông',
     description: 'Dành cho chiến dịch tiếp thị, quảng bá truyền thông, sáng tạo nội dung và sản xuất ấn phẩm.',
     icon: 'Sparkles',
     badgeColor: '#7C3AED',
@@ -494,7 +494,7 @@ export function resolveDynamicTypeConfig(type) {
   const hex = type.colorHex || '#3B82F6';
   return {
     id: type.id,
-    name: type.name || 'Task',
+    name: type.name || 'Nhiệm vụ',
     code: type.code || 'TASK',
     hierarchyLevel: type.hierarchyLevel ?? 0,
     color: hex,

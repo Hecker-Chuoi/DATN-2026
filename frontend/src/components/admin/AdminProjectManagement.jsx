@@ -307,7 +307,7 @@ export default function AdminProjectManagement() {
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0284c7')}
           >
             <Plus size={16} />
-            <span>Tạo Dự Án / Template Mới</span>
+            <span>Tạo Dự Án / Mẫu Mới</span>
           </button>
         </div>
       </div>
@@ -940,7 +940,7 @@ export default function AdminProjectManagement() {
                           <button
                             type="button"
                             onClick={() => navigate(`/projects/${project.id}`)}
-                            title="Mở bảng Kanban dự án"
+                            title="Mở bảng làm việc dự án"
                             style={{
                               padding: '5px 8px',
                               borderRadius: 6,
@@ -963,7 +963,7 @@ export default function AdminProjectManagement() {
                           <button
                             type="button"
                             onClick={() => setCloningProject(project)}
-                            title="Nhân bản (Clone) cấu trúc dự án này"
+                            title="Nhân bản cấu trúc dự án này"
                             style={{
                               padding: '5px 8px',
                               borderRadius: 6,
@@ -986,7 +986,7 @@ export default function AdminProjectManagement() {
                           <button
                             type="button"
                             onClick={() => setEditingProject({ ...project })}
-                            title="Chỉnh sửa thông tin & Cấu hình Template"
+                            title="Chỉnh sửa thông tin & cấu hình mẫu"
                             style={{
                               padding: '5px 8px',
                               borderRadius: 6,

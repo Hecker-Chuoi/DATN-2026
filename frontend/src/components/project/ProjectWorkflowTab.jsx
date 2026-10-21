@@ -214,7 +214,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
     const trimmedName = transitionName.trim();
     if (!trimmedName) {
-      toast.error('Vui lòng nhập tên bước chuyển (Action Name)');
+      toast.error('Vui lòng nhập tên bước chuyển');
       return;
     }
 
@@ -641,7 +641,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <GitBranch size={18} color="#2563EB" />
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                  {workflowDetail?.name || 'Sơ đồ Quy trình & Quản lý Trạng thái (Visual Workflow & Transitions)'}
+                  {workflowDetail?.name || 'Sơ đồ Quy trình & Quản lý Trạng thái'}
                 </h3>
                 {workflowDetail?.isDefault && (
                   <span
@@ -660,7 +660,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 )}
               </div>
               <p style={{ fontSize: 13, color: '#64748B', marginTop: 6, marginBottom: 0, maxWidth: 720, lineHeight: 1.5 }}>
-                {workflowDetail?.description || 'Máy trạng thái FSM kiểm soát vòng đời và các bước chuyển trạng thái (FSM) cho công việc trong dự án.'}
+                {workflowDetail?.description || 'Quy trình kiểm soát vòng đời và các bước chuyển trạng thái cho công việc trong dự án.'}
               </p>
             </div>
 
@@ -741,7 +741,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 12 }}>
                 <Clock size={15} color="#64748B" />
-                <span>1. CẦN LÀM (TODO)</span>
+                <span>1. CẦN LÀM</span>
                 <span style={{ fontSize: 11, backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: 10, marginLeft: 'auto' }}>
                   {todoStatuses.length}
                 </span>
@@ -889,7 +889,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#1D4ED8', marginBottom: 12 }}>
                 <Sparkles size={15} color="#2563EB" />
-                <span>2. ĐANG XỬ LÝ (IN PROGRESS)</span>
+                <span>2. ĐANG XỬ LÝ</span>
                 <span style={{ fontSize: 11, backgroundColor: '#DBEAFE', padding: '1px 6px', borderRadius: 10, marginLeft: 'auto' }}>
                   {inProgressStatuses.length}
                 </span>
@@ -1037,7 +1037,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#15803D', marginBottom: 12 }}>
                 <CheckCircle2 size={15} color="#16A34A" />
-                <span>3. HOÀN THÀNH (DONE)</span>
+                <span>3. HOÀN THÀNH</span>
                 <span style={{ fontSize: 11, backgroundColor: '#DCFCE7', padding: '1px 6px', borderRadius: 10, marginLeft: 'auto' }}>
                   {doneStatuses.length}
                 </span>

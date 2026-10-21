@@ -183,7 +183,7 @@ function TemplateCard({ template, selected, onClick }) {
 
       <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#475569', borderTop: '1px solid #F1F5F9', paddingTop: 8 }}>
         <Stat icon={<Layers size={12} />} value={template.workItemTypeCount} label="loại" />
-        <Stat icon={<Timer size={12} />} value={template.sprintCount} label="sprint" />
+        <Stat icon={<Timer size={12} />} value={template.sprintCount} label="chu kỳ" />
         <Stat icon={<ListChecks size={12} />} value={template.workItemCount} label="việc" />
         {template.timelineSpanDays != null && (
           <span style={{ marginLeft: 'auto', color: '#64748B' }}>{template.timelineSpanDays} ngày</span>

@@ -63,7 +63,7 @@ export default function CompleteSprintModal({
               <Radio
                 checked={target === 'BACKLOG'}
                 onChange={() => setTarget('BACKLOG')}
-                label="Backlog"
+                label="Danh sách tồn đọng"
                 hint="Đưa về danh sách tồn đọng để lập kế hoạch lại"
               />
 
@@ -75,18 +75,18 @@ export default function CompleteSprintModal({
                     checked={target === s.sprintId}
                     onChange={() => setTarget(s.sprintId)}
                     label={s.name}
-                    hint={`Sprint chưa bắt đầu — hiện có ${s.itemCount} công việc`}
+                    hint={`Chu kỳ chưa bắt đầu — hiện có ${s.itemCount} công việc`}
                   />
                 ))}
             </div>
           ) : (
             <div style={{ fontSize: 13, color: '#00875A', backgroundColor: '#E3FCEF', padding: '10px 12px', borderRadius: 6 }}>
-              Tất cả công việc đã hoàn thành. Sprint sẽ được đóng ngay.
+              Tất cả công việc đã hoàn thành. Chu kỳ sẽ được đóng ngay.
             </div>
           )}
 
           <div style={{ fontSize: 12, color: SURFACE.textMuted }}>
-            Số liệu của Sprint sẽ được lưu lại để dựng báo cáo Burndown và Velocity.
+            Số liệu của chu kỳ sẽ được lưu lại để dựng báo cáo tiến độ và vận tốc.
           </div>
         </div>
 
@@ -97,7 +97,7 @@ export default function CompleteSprintModal({
             disabled={loading}
             style={primaryBtn(loading)}
           >
-            {loading ? 'Đang đóng...' : 'Hoàn tất Sprint'}
+            {loading ? 'Đang đóng...' : 'Hoàn tất chu kỳ'}
           </button>
         </div>
       </div>

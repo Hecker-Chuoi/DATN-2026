@@ -23,7 +23,7 @@ export default function UserLoginPage({ onLoginSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.username || !form.password) {
-      setError('Vui lòng nhập Username và Mật khẩu.');
+      setError('Vui lòng nhập Tên đăng nhập và Mật khẩu.');
       return;
     }
 
@@ -123,7 +123,7 @@ export default function UserLoginPage({ onLoginSuccess }) {
             D
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: '0 0 6px 0' }}>
-            DATN Workspace
+            Không gian làm việc DATN
           </h1>
           <p style={{ fontSize: 13, color: '#64748B', margin: 0 }}>
             Đăng nhập để vào không gian quản lý dự án & tác vụ
@@ -213,7 +213,7 @@ export default function UserLoginPage({ onLoginSuccess }) {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
-              Tên đăng nhập (Username)
+              Tên đăng nhập
             </label>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <User size={16} color="#94A3B8" style={{ position: 'absolute', left: 12 }} />
@@ -287,7 +287,7 @@ export default function UserLoginPage({ onLoginSuccess }) {
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1D4ED8')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#2563EB')}
           >
-            <span>{loading ? 'Đang đăng nhập...' : 'Đăng nhập vào Workspace'}</span>
+            <span>{loading ? 'Đang đăng nhập...' : 'Đăng nhập vào hệ thống'}</span>
             {!loading && <ArrowRight size={16} />}
           </button>
         </form>
@@ -307,7 +307,7 @@ export default function UserLoginPage({ onLoginSuccess }) {
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #F1F5F9', textAlign: 'center', fontSize: 12, color: '#94A3B8' }}>
           Bạn là Quản trị viên hệ thống?{' '}
           <Link to="/admin/login" style={{ color: '#64748B', fontWeight: 600, textDecoration: 'underline' }}>
-            Cổng Quản trị Admin
+            Cổng Quản trị hệ thống
           </Link>
         </div>
       </div>

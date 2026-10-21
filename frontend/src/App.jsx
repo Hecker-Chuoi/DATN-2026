@@ -247,10 +247,10 @@ function App() {
                     color: '#0F172A',
                   }}
                 >
-                  <span>My tasks</span>
+                  <span>Nhiệm vụ của tôi</span>
                 </div>
                 <div style={{ padding: 40, textAlign: 'center' }}>
-                  <h3 style={{ color: '#0F172A', marginBottom: 6, fontSize: 16 }}>My tasks</h3>
+                  <h3 style={{ color: '#0F172A', marginBottom: 6, fontSize: 16 }}>Nhiệm vụ của tôi</h3>
                   <p style={{ color: '#64748B', fontSize: 13 }}>Danh sách tác vụ được giao cho bạn.</p>
                 </div>
               </div>
