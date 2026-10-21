@@ -8,6 +8,7 @@ import com.datn.workservice.dto.response.ProjectDetailResponse;
 import com.datn.workservice.dto.response.ProjectResponse;
 import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.security.RequireProjectPermission;
+import com.datn.workservice.security.RequireWorkspaceAccess;
 import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.security.WorkspaceAccessChecker;
 import com.datn.workservice.service.ProjectService;
@@ -47,12 +48,11 @@ public class ProjectController {
     private final WorkspaceAccessChecker workspaceAccessChecker;
 
     @PostMapping
+    @RequireWorkspaceAccess("MEMBER")
     public ResponseEntity<ApiResponse<ProjectResponse>> createProject(
             @Valid @RequestBody CreateProjectRequest request
     ) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
-        // GUEST và người ngoài không được tạo project trong workspace.
-        workspaceAccessChecker.requireAtLeast(request.getWorkspaceId(), currentUserId, "MEMBER");
         ProjectResponse response = projectService.createProject(request, currentUserId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Dự án đã được tạo và khởi tạo hệ sinh thái thành công"));

@@ -43,7 +43,9 @@ services:
       KC_HOSTNAME_STRICT: false
       KC_HOSTNAME_STRICT_HTTPS: false
       KC_HTTP_ENABLED: true
-    command: start-dev
+    command: start-dev --import-realm
+    #volumes:
+    # - ./keycloak/realm-export_08082026.json:/opt/keycloak/data/import/realm.json
     ports:
       - "8088:8080"
     depends_on:
@@ -150,15 +152,15 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"  # S3 API
-      - "9001:9001"  # MinIO Console UI
+      - "9000:9000" # S3 API
+      - "9001:9001" # MinIO Console UI
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadminpassword
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: [ "CMD", "mc", "ready", "local" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -175,16 +177,10 @@ services:
       minio:
         condition: service_healthy
     entrypoint: >
-      /bin/sh -c "
-      until (/usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadminpassword); do
+      /bin/sh -c " until (/usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadminpassword); do
         echo 'Waiting for MinIO...';
         sleep 2;
-      done;
-      /usr/bin/mc mb --ignore-existing myminio/work-attachments;
-      /usr/bin/mc anonymous set download myminio/work-attachments;
-      echo 'MinIO work-attachments bucket initialized!';
-      exit 0;
-      "
+      done; /usr/bin/mc mb --ignore-existing myminio/work-attachments; /usr/bin/mc anonymous set download myminio/work-attachments; echo 'MinIO work-attachments bucket initialized!'; exit 0; "
     networks:
       - app-net
 
@@ -212,5 +208,3 @@ networks:
   app-net:
     name: app-net
     driver: bridge
-
-

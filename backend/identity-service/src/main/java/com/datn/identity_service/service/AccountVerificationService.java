@@ -47,16 +47,16 @@ public class AccountVerificationService {
 
     // ─── Xác thực email ─────────────────────────────────────────────────────
 
-    /** Tạo token mới (vô hiệu token cũ) và gửi email xác thực. Trả về false nếu không gửi được mail. */
+    /** Tạo token mới (vô hiệu token cũ) và gửi email xác thực bất đồng bộ theo template. */
     @Transactional
     public boolean sendEmailVerification(User user) {
         String token = issueToken(user, VerificationToken.Type.EMAIL_VERIFY, Duration.ofHours(emailTtlHours));
         String link = frontendUrl + "/verify-email?token=" + token;
-        String html = layout("Xác thực địa chỉ email",
-                "Chào " + displayName(user) + ",<br/><br/>Cảm ơn bạn đã đăng ký DATN-2026. Nhấn nút bên dưới để xác thực email và kích hoạt tài khoản. "
-                        + "Liên kết có hiệu lực trong " + emailTtlHours + " giờ.",
-                link, "Xác thực email");
-        return notificationClient.sendEmail(user.getEmail(), "[DATN-2026] Xác thực email của bạn", html);
+        notificationClient.sendTemplate(user.getEmail(), "[DATN-2026] Xác thực email của bạn", "verify-email", Map.of(
+                "recipient_name", displayName(user),
+                "link", link,
+                "email_ttl_hours", String.valueOf(emailTtlHours)));
+        return true;
     }
 
     @Transactional
@@ -91,9 +91,7 @@ public class AccountVerificationService {
         if (user.getStatus() != User.UserStatus.INACTIVE) {
             throw new InvalidTokenException("Tài khoản này đã được xác thực, bạn có thể đăng nhập");
         }
-        if (!sendEmailVerification(user)) {
-            throw new InvalidTokenException("Không gửi được email lúc này, vui lòng thử lại sau");
-        }
+        sendEmailVerification(user);
     }
 
     // ─── Quên mật khẩu ──────────────────────────────────────────────────────
@@ -124,6 +122,18 @@ public class AccountVerificationService {
         vt.setUsedAt(LocalDateTime.now());
         tokenRepository.save(vt);
         log.info("Password reset via email for user {}", user.getUsername());
+        sendPasswordChangedAlert(user);
+    }
+
+    /** Gửi email cảnh báo theo template khi mật khẩu được thay đổi thành công. */
+    public void sendPasswordChangedAlert(User user) {
+        if (user == null || user.getEmail() == null || user.getEmail().isBlank()) return;
+        String now = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+        notificationClient.sendTemplate(user.getEmail(), "[DATN-2026] Mật khẩu tài khoản của bạn đã được thay đổi", "password-changed", Map.of(
+                "recipient_name", displayName(user),
+                "username", user.getUsername(),
+                "changed_at", now,
+                "link", frontendUrl + "/login"));
     }
 
     // ─── helpers ────────────────────────────────────────────────────────────

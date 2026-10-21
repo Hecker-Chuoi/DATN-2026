@@ -10,7 +10,7 @@ import java.util.Map;
  * Gọi notification-service (HTTP nội bộ, không qua gateway) để gửi email.
  * Caller phải tự bọc try/catch: lỗi mail không được làm hỏng nghiệp vụ chính.
  */
-@FeignClient(name = "notification-service", url = "${app.services.notification.url}")
+@FeignClient(name = "notification-service", url = "${app.services.notification.url:http://localhost:9994}")
 public interface NotificationClient {
 
     record EmailRequest(String to, String subject, String html) {}

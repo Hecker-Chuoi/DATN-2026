@@ -321,6 +321,8 @@ export const teamApi = {
   leaveTeam: (teamId) => apiClient.post(`${WORK_BASE}/teams/${teamId}/leave`),
   getMembers: (teamId) => apiClient.get(`${WORK_BASE}/teams/${teamId}/members`),
   addMember: (teamId, data) => apiClient.post(`${WORK_BASE}/teams/${teamId}/members`, data),
+  assignLeader: (teamId, newLeaderUserId) =>
+    apiClient.put(`${WORK_BASE}/teams/${teamId}/leader`, { newLeaderUserId }),
   updateMemberRole: (teamId, userId, role) =>
     apiClient.put(`${WORK_BASE}/teams/${teamId}/members/${userId}/role`, { role }),
   removeMember: (teamId, userId) =>
