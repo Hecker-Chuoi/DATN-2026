@@ -366,6 +366,27 @@ export const workItemTypeApi = {
   delete: (projectId, typeId) => apiClient.delete(`${WORK_BASE}/projects/${projectId}/types/${typeId}`),
 };
 
+// ─── 2.2. GitHub Integration API ──────────────────────────────────────────────
+export const githubIntegrationApi = {
+  getAuthUrl: (projectId) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/integrations/github/auth-url`),
+  handleCallback: (projectId, code) =>
+    apiClient.post(`${WORK_BASE}/projects/${projectId}/integrations/github/oauth-callback`, null, {
+      params: { code },
+    }),
+  getStatus: (projectId, config = {}) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/integrations/github/status`, config),
+  getRepositories: (projectId) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/integrations/github/repos`),
+  connect: (projectId, data) =>
+    apiClient.post(`${WORK_BASE}/projects/${projectId}/integrations/github/connect`, data),
+  disconnect: (projectId) =>
+    apiClient.delete(`${WORK_BASE}/projects/${projectId}/integrations/github/disconnect`),
+  updateConfig: (projectId, data) =>
+    apiClient.put(`${WORK_BASE}/projects/${projectId}/integrations/github/config`, data),
+};
+
+
 // ─── 3. Work Items API (Jira-grade) ───────────────────────────────────────────
 export const workItemApi = {
   listAll: (params) => {

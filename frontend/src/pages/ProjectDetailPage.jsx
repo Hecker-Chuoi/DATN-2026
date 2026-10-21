@@ -363,6 +363,7 @@ export default function ProjectDetailPage() {
             { to: 'reports', label: 'Báo cáo', icon: BarChart3, visible: true },
             { to: 'members', label: 'Thành viên & Vai trò', icon: Users, visible: true },
             { to: 'workflow', label: 'Cấu hình Dự án', icon: Settings, visible: true },
+            { to: 'github', label: 'Tích hợp GitHub', icon: GitBranch, visible: true },
           ]
             .filter((tab) => tab.visible)
             .map((tab) => {
