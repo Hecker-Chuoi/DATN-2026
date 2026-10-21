@@ -71,8 +71,12 @@ public class ProjectController {
     ) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
         boolean includeAll = SecurityUtils.isGlobalAdmin();
+        Boolean effectiveIsTemplate = isTemplate;
+        if (effectiveIsTemplate == null && !includeAll) {
+            effectiveIsTemplate = false;
+        }
         PageResponse<ProjectResponse> response = projectService.getAllProjects(
-                resolveWorkspaceScope(workspaceId), teamId, search, isTemplate, pageable, currentUserId, includeAll
+                resolveWorkspaceScope(workspaceId), teamId, search, effectiveIsTemplate, pageable, currentUserId, includeAll
         );
         return ResponseEntity.ok(ApiResponse.success(response));
     }

@@ -26,6 +26,7 @@ import MemberSelect from '../common/MemberSelect.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import { PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 import { getTypeDisplayName } from '../../constants/workConstants.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 const TYPE_CONFIGS = {
   EPIC: { label: 'Hạng mục lớn', icon: Zap, color: '#9333EA', bgColor: '#F5F3FF', level: 1 },
@@ -72,6 +73,7 @@ export default function CreateWorkItemModal({
   sprints = [],
   onItemCreated
 }) {
+  const backdropProps = useModalBackdrop(onClose);
   const [types, setTypes] = useState([]);
   const [sprintId, setSprintId] = useState(defaultSprintId);
   const [selectedType, setSelectedType] = useState(null);
@@ -296,7 +298,7 @@ export default function CreateWorkItemModal({
         zIndex: 9999,
         padding: 16,
       }}
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
         style={{
@@ -776,11 +778,11 @@ export default function CreateWorkItemModal({
             {sprints.length > 0 && (
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Sprint
+                  Chu kỳ
                 </label>
                 {isSubtask ? (
                   <div
-                    title="Sub-task đi theo Sprint của công việc cha"
+                    title="Nhiệm vụ con đi theo chu kỳ của công việc cha"
                     style={{
                       padding: '7px 10px', borderRadius: 8, border: '1px solid #CBD5E1',
                       fontSize: 13, color: '#94A3B8', backgroundColor: '#F8FAFC',
@@ -798,7 +800,7 @@ export default function CreateWorkItemModal({
                       color: '#0F172A', cursor: 'pointer',
                     }}
                   >
-                    <option value="">Backlog</option>
+                    <option value="">Danh sách tồn đọng</option>
                     {sprints
                       .filter((sp) => sp.state !== 'CLOSED')
                       .map((sp) => (

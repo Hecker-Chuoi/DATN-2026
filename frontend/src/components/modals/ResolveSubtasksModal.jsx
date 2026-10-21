@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, GitCommitHorizontal, X } from 'lucide-react';
 import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 export default function ResolveSubtasksModal({
   isOpen,
@@ -12,6 +13,8 @@ export default function ResolveSubtasksModal({
   onCancel,
   loading = false,
 }) {
+  const backdropProps = useModalBackdrop(onCancel);
+
   if (!isOpen) return null;
 
   const incompleteSubtasks = subtasks.filter(
@@ -33,7 +36,7 @@ export default function ResolveSubtasksModal({
         zIndex: 10001,
         padding: 20,
       }}
-      onClick={onCancel}
+      {...backdropProps}
     >
       <div
         style={{

@@ -3,8 +3,10 @@ import { X, Users, Sparkles, Check, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { teamApi } from '../../api.js';
 import { useWorkspace } from '../../context/WorkspaceContext.jsx';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
+  const backdropProps = useModalBackdrop(onClose);
   const { currentWorkspaceId, currentWorkspace } = useWorkspace();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -22,7 +24,7 @@ export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
     // Backend đã đổi POST /teams sang CreateTeamRequest có @NotNull workspaceId
     // (trước đây nó nhận Map và tự nhét user id của người tạo vào workspaceId).
     if (!currentWorkspaceId) {
-      setError('Chưa xác định được workspace. Vui lòng tải lại trang.');
+      setError('Chưa xác định được không gian làm việc. Vui lòng tải lại trang.');
       return;
     }
 
@@ -65,7 +67,7 @@ export default function CreateTeamModal({ isOpen, onClose, onTeamCreated }) {
         justifyContent: 'center',
         padding: 16,
       }}
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
         style={{

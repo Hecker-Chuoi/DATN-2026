@@ -10,9 +10,9 @@ import CumulativeFlowChart from '../components/reports/CumulativeFlowChart.jsx';
 import SprintStateBadge from '../components/sprints/SprintStateBadge.jsx';
 
 const TABS = [
-  { id: 'burndown', label: 'Burndown' },
-  { id: 'velocity', label: 'Velocity' },
-  { id: 'cfd', label: 'Cumulative Flow' },
+  { id: 'burndown', label: 'Tiến độ chu kỳ' },
+  { id: 'velocity', label: 'Vận tốc chu kỳ' },
+  { id: 'cfd', label: 'Lưu lượng tích lũy' },
 ];
 
 export default function ProjectReportsPage() {
@@ -86,7 +86,7 @@ export default function ProjectReportsPage() {
 
   if (loading) return <div style={centered}>Đang tải báo cáo...</div>;
   if (!sprints.length) {
-    return <div style={centered}>Dự án chưa có Sprint nào để lập báo cáo.</div>;
+    return <div style={centered}>Dự án chưa có chu kỳ nào để lập báo cáo.</div>;
   }
 
   const selected = sprints.find((s) => s.id === sprintId);
@@ -136,13 +136,13 @@ export default function ProjectReportsPage() {
       {tab === 'burndown' && burndown && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           <ReportMetricCard
-            label="Story Points hoàn thành"
+            label="Điểm ước lượng hoàn thành"
             value={`${num(burndown.completedStoryPoints)} / ${num(burndown.committedStoryPoints)}`}
             tone="positive"
           />
           <ReportMetricCard
             label="Thay đổi phạm vi"
-            value={`${scopeChange > 0 ? '+' : ''}${scopeChange} SP`}
+            value={`${scopeChange > 0 ? '+' : ''}${scopeChange} điểm`}
             tone={scopeChange > 0 ? 'warning' : 'neutral'}
           />
           <ReportMetricCard
@@ -152,22 +152,22 @@ export default function ProjectReportsPage() {
           />
           <ReportMetricCard
             label="Còn lại"
-            value={`${num(burndown.remainingStoryPoints)} SP`}
+            value={`${num(burndown.remainingStoryPoints)} điểm`}
           />
         </div>
       )}
 
       {tab === 'velocity' && velocity && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-          <ReportMetricCard label="Velocity trung bình" value={`${num(velocity.averageVelocity)} SP`} tone="positive" />
-          <ReportMetricCard label="Cam kết trung bình" value={`${num(velocity.averageCommitment)} SP`} />
+          <ReportMetricCard label="Vận tốc trung bình" value={`${num(velocity.averageVelocity)} điểm`} tone="positive" />
+          <ReportMetricCard label="Cam kết trung bình" value={`${num(velocity.averageCommitment)} điểm`} />
           <ReportMetricCard
             label="Độ tin cậy cam kết"
             value={`${num(velocity.commitmentReliabilityPercent)}%`}
             tone="info"
             sub="Hoàn thành / Cam kết"
           />
-          <ReportMetricCard label="Số Sprint đã đóng" value={num(velocity.sprintCount)} />
+          <ReportMetricCard label="Số chu kỳ đã hoàn tất" value={num(velocity.sprintCount)} />
         </div>
       )}
 
@@ -176,7 +176,7 @@ export default function ProjectReportsPage() {
         {tab === 'burndown' && (
           <>
             <ChartTitle
-              title={`Burndown — ${selected?.name || ''}`}
+              title={`Tiến độ — ${selected?.name || ''}`}
               note={sourceNote(burndown?.source)}
             />
             <BurndownChart rows={burndownRows} />
@@ -184,13 +184,13 @@ export default function ProjectReportsPage() {
         )}
         {tab === 'velocity' && (
           <>
-            <ChartTitle title="Velocity qua các Sprint đã đóng" />
+            <ChartTitle title="Vận tốc qua các chu kỳ đã hoàn tất" />
             <VelocityChart rows={velocityRows} average={num(velocity?.averageVelocity)} />
           </>
         )}
         {tab === 'cfd' && (
           <>
-            <ChartTitle title={`Cumulative Flow — ${selected?.name || ''}`} />
+            <ChartTitle title={`Lưu lượng tích lũy — ${selected?.name || ''}`} />
             <CumulativeFlowChart rows={cfdRows} buckets={cfd?.buckets || []} />
           </>
         )}
@@ -220,9 +220,9 @@ function ChartTitle({ title, note }) {
 /** Noi ro so lieu den tu dau de nguoi doc biet muc do tin cay. */
 function sourceNote(source) {
   switch (source) {
-    case 'SNAPSHOT': return 'Số liệu đã chốt khi đóng Sprint';
-    case 'RECONSTRUCTED': return 'Dựng lại từ nhật ký thay đổi (Sprint đang chạy)';
-    case 'RECONSTRUCTED_LEGACY': return 'Dựng lại từ nhật ký — Sprint đóng trước khi có báo cáo';
+    case 'SNAPSHOT': return 'Số liệu đã chốt khi đóng chu kỳ';
+    case 'RECONSTRUCTED': return 'Dựng lại từ nhật ký thay đổi (Chu kỳ đang chạy)';
+    case 'RECONSTRUCTED_LEGACY': return 'Dựng lại từ nhật ký — Chu kỳ đóng trước khi có báo cáo';
     default: return null;
   }
 }

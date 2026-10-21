@@ -2,10 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Trash2, X, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi } from '../../api.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 export default function DeleteProjectModal({ isOpen, onClose, project, onDeleted }) {
   const [confirmInput, setConfirmInput] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const backdropProps = useModalBackdrop(() => {
+    if (!isDeleting) onClose();
+  });
 
   useEffect(() => {
     if (isOpen) {
@@ -60,9 +64,7 @@ export default function DeleteProjectModal({ isOpen, onClose, project, onDeleted
         padding: '16px',
         boxSizing: 'border-box',
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isDeleting) onClose();
-      }}
+      {...backdropProps}
     >
       <div
         style={{

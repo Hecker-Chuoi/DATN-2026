@@ -199,6 +199,10 @@ public class SprintServiceImpl implements SprintService {
         if (project.getDeletedAt() != null) {
             throw new BadRequestException("Dự án đã bị lưu trữ");
         }
+        // Du an mau chi la ban thiet ke: sprint cua mau luon o FUTURE de nhan ban ra du an that.
+        if (Boolean.TRUE.equals(project.getIsTemplate())) {
+            throw new BadRequestException("Không thể bắt đầu Sprint trong dự án mẫu. Hãy tạo dự án từ mẫu rồi bắt đầu Sprint ở dự án đó.");
+        }
 
         // Moi du an chi mot Sprint ACTIVE. Unique index o V2 chan not truong hop chay dua.
         sprintRepository.findFirstByProjectIdAndState(sprint.getProjectId(), SprintState.ACTIVE)

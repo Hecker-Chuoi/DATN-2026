@@ -113,7 +113,7 @@ export default function BoardCard({ item, isOverlay = false, onSelect, dragHandl
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
           {item.storyPoints != null && (
             <span
-              title="Story points"
+              title="Điểm ước lượng"
               style={{
                 minWidth: 20, textAlign: 'center', padding: '1px 6px', borderRadius: 999,
                 backgroundColor: SURFACE.track, color: SURFACE.textMuted, fontSize: 10, fontWeight: 700,

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, Calendar } from 'lucide-react';
 import { SURFACE, FONT_STACK } from '../../constants/jiraTokens.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 const DURATIONS = [
   { label: '1 tuần', days: 7 },
@@ -29,6 +30,7 @@ export default function SprintFormModal({
   onSubmit,
   onClose,
 }) {
+  const backdropProps = useModalBackdrop(onClose);
   const isStart = mode === 'start';
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('');
@@ -39,7 +41,7 @@ export default function SprintFormModal({
   useEffect(() => {
     if (!isOpen) return;
     setError('');
-    setName(sprint?.name || suggestedName || 'Sprint 1');
+    setName(sprint?.name || suggestedName || 'Chu kỳ 1');
     setGoal(sprint?.goal || '');
     const start = sprint?.startDate ? toInput(sprint.startDate) : toInput(new Date());
     setStartDate(start);
@@ -52,8 +54,8 @@ export default function SprintFormModal({
 
   const submit = async () => {
     setError('');
-    if (!name.trim()) { setError('Tên Sprint là bắt buộc'); return; }
-    if (isStart && !endDate) { setError('Ngày kết thúc là bắt buộc để theo dõi Burndown'); return; }
+    if (!name.trim()) { setError('Tên chu kỳ là bắt buộc'); return; }
+    if (isStart && !endDate) { setError('Ngày kết thúc là bắt buộc để theo dõi biểu đồ tiến độ'); return; }
     if (startDate && endDate && new Date(endDate) <= new Date(startDate)) {
       setError('Ngày kết thúc phải sau ngày bắt đầu');
       return;
@@ -69,16 +71,16 @@ export default function SprintFormModal({
     try {
       await onSubmit?.(payload);
     } catch (err) {
-      console.warn('Thao tác Sprint thất bại:', err);
+      console.warn('Thao tác chu kỳ thất bại:', err);
     }
   };
 
   return (
-    <div style={overlay} onClick={onClose}>
+    <div style={overlay} {...backdropProps}>
       <div style={panel} onClick={(e) => e.stopPropagation()}>
         <div style={header}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: SURFACE.text }}>
-            {isStart ? 'Bắt đầu Sprint' : 'Tạo Sprint mới'}
+            {isStart ? 'Bắt đầu chu kỳ' : 'Tạo chu kỳ mới'}
           </h3>
           <button onClick={onClose} style={iconBtn}><X size={18} /></button>
         </div>
@@ -86,16 +88,16 @@ export default function SprintFormModal({
         <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {isStart && (
             <div style={infoBox}>
-              Sprint này gồm <b>{itemCount}</b> công việc, tổng <b>{Number(totalPoints || 0)}</b> story points.
+              Chu kỳ này gồm <b>{itemCount}</b> công việc, tổng <b>{Number(totalPoints || 0)}</b> điểm ước lượng.
               {hasActiveSprint && (
                 <div style={{ marginTop: 6, color: '#B45309' }}>
-                  Dự án đang có một Sprint chạy — cần hoàn tất Sprint đó trước.
+                  Dự án đang có một chu kỳ đang chạy — cần hoàn tất chu kỳ đó trước.
                 </div>
               )}
             </div>
           )}
 
-          <Field label="Tên Sprint">
+          <Field label="Tên chu kỳ">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -104,12 +106,12 @@ export default function SprintFormModal({
             />
           </Field>
 
-          <Field label="Mục tiêu Sprint">
+          <Field label="Mục tiêu chu kỳ">
             <textarea
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
               rows={2}
-              placeholder="Sprint này hướng tới điều gì?"
+              placeholder="Chu kỳ này hướng tới điều gì?"
               style={{ ...input, resize: 'vertical', fontFamily: FONT_STACK }}
             />
           </Field>
@@ -154,9 +156,9 @@ export default function SprintFormModal({
         </div>
 
         <div style={footer}>
-          <button onClick={onClose} style={secondaryBtn}>Huỷ</button>
+          <button onClick={onClose} style={secondaryBtn}>Hủy</button>
           <button onClick={submit} disabled={loading} style={primaryBtn(loading)}>
-            {loading ? 'Đang xử lý...' : isStart ? 'Bắt đầu' : 'Tạo Sprint'}
+            {loading ? 'Đang xử lý...' : isStart ? 'Bắt đầu' : 'Tạo chu kỳ'}
           </button>
         </div>
       </div>

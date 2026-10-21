@@ -65,6 +65,7 @@ export default function ProjectListPage() {
         workspaceId,
         teamId: teamIdFilter || undefined,
         search: searchTerm || undefined,
+        isTemplate: false,
       });
 
       if (res && res.data) {
@@ -88,10 +89,12 @@ export default function ProjectListPage() {
 
   const filteredProjects = useMemo(() => {
     return projects.filter((proj) => {
+      // Màn hình này chỉ hiển thị các dự án thực tế đang triển khai, loại trừ toàn bộ dự án mẫu (Template)
+      if (proj.isTemplate) return false;
+
       // Type Tab Filter
       if (activeTab === 'SCRUM' && proj.projectType !== 'SOFTWARE_SCRUM') return false;
       if (activeTab === 'KANBAN' && proj.projectType !== 'SOFTWARE_KANBAN') return false;
-      if (activeTab === 'TEMPLATES' && !proj.isTemplate) return false;
 
       // Keyword Search Filter
       if (searchTerm.trim()) {
@@ -152,10 +155,10 @@ export default function ProjectListPage() {
               <>
                 <span style={{ color: '#64748B', fontWeight: 500 }}>{currentTeam.name}</span>
                 <span style={{ color: '#CBD5E1' }}>/</span>
-                <span>Projects</span>
+                <span>Dự án</span>
               </>
             ) : (
-              <span>Projects</span>
+              <span>Dự án</span>
             )}
           </div>
           <button
@@ -228,7 +231,6 @@ export default function ProjectListPage() {
             { id: 'ALL', label: 'Tất cả dự án' },
             { id: 'SCRUM', label: 'Dự án Scrum' },
             { id: 'KANBAN', label: 'Dự án Kanban' },
-            { id: 'TEMPLATES', label: 'Dự án mẫu' },
           ].map((tab) => {
             const active = activeTab === tab.id;
             return (
@@ -359,7 +361,7 @@ export default function ProjectListPage() {
               Chưa có dự án nào
             </h3>
             <p style={{ fontSize: 13, color: '#64748B', maxWidth: 420, margin: '0 auto 20px auto', lineHeight: 1.5 }}>
-              Bắt đầu tạo dự án Scrum hoặc Kanban đầu tiên để tự động khởi tạo Workflow, Board và quản lý công việc.
+              Bắt đầu tạo dự án Scrum hoặc Kanban đầu tiên để tự động khởi tạo Quy trình làm việc, Bảng tiến độ và quản lý công việc.
             </p>
             {canCreateProject ? (
             <button

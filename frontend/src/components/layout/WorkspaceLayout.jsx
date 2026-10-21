@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Outlet, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import { teamApi, invitationApi } from '../../api.js';
@@ -65,7 +65,9 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
 
   // Chỉ trưởng nhóm (myRole LEADER, owner cũng là LEADER) hoặc Global ADMIN mới được tạo dự án; backend chặn lại lần nữa.
   const isSystemAdmin = Boolean(currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN'));
-  const leaderTeams = isSystemAdmin ? teams : teams.filter((t) => t.myRole === 'LEADER');
+  const leaderTeams = useMemo(() => {
+    return isSystemAdmin ? teams : teams.filter((t) => t.myRole === 'LEADER');
+  }, [isSystemAdmin, teams]);
   const canCreateProject = isSystemAdmin || leaderTeams.length > 0;
 
   // Deep-link vào workspace mình không thuộc: hiện trạng thái rõ ràng, thay vì
@@ -86,11 +88,11 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
         }}
       >
         <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-          Bạn không có quyền truy cập workspace này
+          Bạn không có quyền truy cập không gian làm việc này
         </h2>
         <p style={{ fontSize: 13, color: '#64748B', margin: 0, textAlign: 'center', maxWidth: 420 }}>
-          Workspace không tồn tại, hoặc bạn đã bị xóa khỏi danh sách thành viên. Hãy liên hệ chủ
-          sở hữu workspace để được thêm lại.
+          Không gian làm việc không tồn tại, hoặc bạn đã bị xóa khỏi danh sách thành viên. Hãy liên hệ chủ
+          sở hữu để được thêm lại.
         </p>
         <button
           type="button"
@@ -107,7 +109,7 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
             cursor: 'pointer',
           }}
         >
-          Về danh sách workspace
+          Về danh sách không gian làm việc
         </button>
       </div>
     );

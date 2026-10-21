@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cơ chế Dự án mẫu — DATN-2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+    <style>
+    /* ─── DESIGN TOKENS (LIGHT SAAS THEME - MATCHING APP UI) ─── */
+    :root, [data-theme="light"] {
+      --bg-base: #F1F5F9;
+      --bg-card: #FFFFFF;
+      --bg-card-alt: #F8FAFC;
+      --bg-glass: rgba(255, 255, 255, 0.94);
+      --border: #E2E8F0;
+      --border-accent: #BFDBFE;
+      --border-glow: rgba(37, 99, 235, 0.10);
+      --grid-line: rgba(148, 163, 184, 0.09);
+
+      --text-main: #0F172A;
+      --text-muted: #334155;
+      --text-dim: #64748B;
+
+      --blue: #2563EB;
+      --blue-deep: #1D4ED8;
+      --blue-soft: #EFF6FF;
+      --indigo: #4F46E5;
+      --indigo-soft: #EEF2FF;
+      --cyan: #0284C7;
+      
+      --todo: #475569;
+      --todo-bg: #F1F5F9;
+      --prog: #2563EB;
+      --prog-bg: #EFF6FF;
+      --done: #059669;
+      --done-bg: #ECFDF5;
+      --warn: #D97706;
+      --warn-bg: #FFFBEB;
+      --err: #DC2626;
+      --err-bg: #FEF2F2;
+
+      --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+      --font-body: "Be Vietnam Pro", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      
+      --shadow-deck: 0 20px 45px -12px rgba(15, 23, 42, 0.08), 0 0 0 1px #E2E8F0;
+      --radius: 14px;
+    }
+
+    [data-theme="dark"] {
+      --bg-base: #080D1A;
+      --bg-card: #0F172A;
+      --bg-card-alt: #162038;
+      --bg-glass: rgba(15, 23, 42, 0.78);
+      --border: #1E293B;
+      --border-accent: rgba(59, 130, 246, 0.35);
+      --border-glow: rgba(59, 130, 246, 0.2);
+      --grid-line: rgba(59, 130, 246, 0.05);
+
+      --text-main: #F8FAFC;
+      --text-muted: #94A3B8;
+      --text-dim: #64748B;
+
+      --blue: #38BDF8;
+      --blue-deep: #0284C7;
+      --blue-soft: rgba(56, 189, 248, 0.12);
+      --indigo: #818CF8;
+      --indigo-soft: rgba(129, 140, 248, 0.12);
+      --cyan: #22D3EE;
+      
+      --todo: #94A3B8;
+      --todo-bg: rgba(148, 163, 184, 0.14);
+      --prog: #60A5FA;
+      --prog-bg: rgba(96, 165, 250, 0.16);
+      --done: #34D399;
+      --done-bg: rgba(52, 211, 153, 0.16);
+      --warn: #FBBF24;
+      --warn-bg: rgba(251, 191, 36, 0.14);
+      --err: #F87171;
+      --err-bg: rgba(248, 113, 113, 0.16);
+
+      --shadow-deck: 0 25px 60px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px var(--border);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg-base); font-family: var(--font-body); color: var(--text-main); }
+
+    /* ─── STAGE & DECK SCALING ─── */
+    .stage {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 16px 80px;
+      position: relative;
+    }
+
+    .deck {
+      width: 1280px;
+      height: 720px;
+      position: relative;
+      flex-shrink: 0;
+      transform-origin: center center;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-deck);
+      padding: 44px 56px 40px;
+      overflow: hidden;
+      background-image: 
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    .slide.active {
+      display: flex;
+      animation: slideIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0.4; transform: translateY(6px) scale(0.995); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ─── TYPOGRAPHY ─── */
+    h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; }
+    h1 { font-size: 52px; font-weight: 800; line-height: 1.1; color: var(--text-main); }
+    h2 { font-size: 34px; margin-bottom: 6px; color: var(--text-main); }
+    h3 { font-size: 19px; font-weight: 700; color: var(--text-main); }
+    h4 { font-size: 15px; font-weight: 600; color: var(--text-muted); }
+    p { font-size: 17px; line-height: 1.5; color: var(--text-muted); }
+    .mono { font-family: var(--font-mono); font-size: 0.9em; }
+
+    /* ─── HEADER / EYEBROW ─── */
+    .slide-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 22px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--blue);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+    .slide-num {
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text-dim);
+      background: var(--bg-card-alt);
+      padding: 3px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    /* ─── SLIDE BODY & GRID ─── */
+    .slide-body {
+      flex: 1;
+      display: grid;
+      gap: 20px;
+      align-content: stretch;
+      min-height: 0;
+    }
+    .cols-2 { grid-template-columns: 1fr 1fr; }
+    .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .cols-1-2 { grid-template-columns: 1fr 2fr; }
+    .cols-2-1 { grid-template-columns: 2fr 1fr; }
+
+    /* ─── CARDS & PANELS ─── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    }
+    .card.accent {
+      background: var(--blue-soft);
+      border-color: var(--border-accent);
+    }
+    .card.highlight {
+      background: var(--bg-card);
+      border-color: var(--border-accent);
+      box-shadow: 0 4px 20px -2px rgba(37, 99, 235, 0.08), 0 0 0 1px var(--border-accent);
+    }
+
+    /* ─── BADGES & TAGS (PILL STYLE MATCHING APP FILTER CHIPS) ─── */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .chip.todo { color: var(--todo); background: var(--todo-bg); border-color: var(--border); }
+    .chip.prog { color: #1D4ED8; background: var(--prog-bg); border-color: var(--border-accent); }
+    .chip.done { color: var(--done); background: var(--done-bg); border-color: rgba(52, 211, 153, 0.35); }
+    .chip.warn { color: #B45309; background: var(--warn-bg); border-color: rgba(251, 191, 36, 0.35); }
+    .chip.err  { color: #B91C1C; background: var(--err-bg);  border-color: rgba(248, 113, 113, 0.35); }
+    .chip.blue { color: #1D4ED8; background: var(--blue-soft); border-color: var(--border-accent); }
+
+    /* ─── VISUAL DIAGRAMS & FLOWS ─── */
+    .flow-pipeline {
+      display: flex;
+      align-items: stretch;
+      gap: 10px;
+      width: 100%;
+    }
+    .flow-step {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    }
+    .flow-step.accent-blue { border-top: 4px solid var(--blue); }
+    .flow-step.accent-prog { border-top: 4px solid #3B82F6; }
+    .flow-step.accent-done { border-top: 4px solid #10B981; }
+    .flow-step.accent-warn { border-top: 4px solid #F59E0B; }
+    .flow-step.accent-err  { border-top: 4px solid #EF4444; }
+    
+    .flow-connector {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--blue);
+      font-size: 18px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ─── VISUAL TABLE ─── */
+    .table-visual {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 13px;
+      background: var(--bg-card);
+    }
+    .table-visual th {
+      background: var(--bg-card-alt);
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .table-visual td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .table-visual tr:last-child td {
+      border-bottom: none;
+    }
+    .table-visual tr:hover td {
+      background: var(--bg-card-alt);
+    }
+
+    /* ─── ICON BADGE & METRIC BOX ─── */
+    .icon-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      flex-shrink: 0;
+    }
+    .icon-badge.blue { background: var(--blue-soft); color: var(--blue); border: 1px solid var(--border-accent); }
+    .icon-badge.done { background: var(--done-bg); color: var(--done); border: 1px solid rgba(52, 211, 153, 0.35); }
+    .icon-badge.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid rgba(251, 191, 36, 0.35); }
+    .icon-badge.err  { background: var(--err-bg); color: var(--err); border: 1px solid rgba(248, 113, 113, 0.35); }
+
+    /* ─── MONOSPACE CODE ─── */
+    code {
+      font-family: var(--font-mono);
+      background: var(--todo-bg);
+      color: var(--blue-deep);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+      border: 1px solid var(--border);
+    }
+
+    /* ─── CLEAN LIST ─── */
+    ul.bullet-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 15px;
+    }
+    ul.bullet-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      line-height: 1.45;
+    }
+    ul.bullet-list li::before {
+      content: "▸";
+      color: var(--blue);
+      font-weight: 700;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    ul.bullet-list li b { color: var(--text-main); font-weight: 600; }
+
+    /* ─── CODE & PRE BLOCKS ─── */
+    pre.code-block {
+      background: #0F172A;
+      border: 1px solid #1E293B;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: var(--font-mono);
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: #F8FAFC;
+      overflow-x: auto;
+    }
+    .kwd { color: #38BDF8; font-weight: 600; }
+    .str { color: #34D399; }
+    .cmt { color: #94A3B8; font-style: italic; }
+    .val { color: #FBBF24; }
+
+    /* ─── BOTTOM CONTROLS BAR ─── */
+    .nav-bar {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-glass);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+      z-index: 100;
+    }
+    .nav-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-family: var(--font-display);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: var(--blue-soft);
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+    .nav-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .nav-indicator {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-dim);
+      min-width: 65px;
+      text-align: center;
+    }
+    .progress-track {
+      width: 120px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--blue);
+      width: 0%;
+      transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* ─── SPEAKER NOTES DRAWER ─── */
+    .speaker-note {
+      display: none !important;
+    }
+    .notes-drawer {
+      position: fixed;
+      right: 20px;
+      top: 20px;
+      bottom: 90px;
+      width: 360px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.15);
+      z-index: 90;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      animation: noteSlide 0.2s ease-out;
+    }
+    @keyframes noteSlide {
+      from { transform: translateX(30px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .notes-drawer.open { display: flex; }
+    .notes-header {
+      padding: 14px 18px;
+      background: var(--bg-card-alt);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--blue);
+    }
+    .notes-content {
+      padding: 18px;
+      overflow-y: auto;
+      font-size: 14.5px;
+      line-height: 1.6;
+      color: var(--text-muted);
+    }
+    .notes-content strong { color: var(--text-main); }
+    .notes-content ul { padding-left: 18px; margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+
+    /* ─── OVERVIEW GRID MODAL ─── */
+    .overview-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(12px);
+      z-index: 150;
+      display: none;
+      padding: 40px;
+      overflow-y: auto;
+    }
+    .overview-modal.open { display: block; }
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .thumb-card {
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .thumb-card:hover {
+      border-color: var(--blue);
+      transform: translateY(-4px);
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+    }
+    .thumb-card.active { border-color: var(--blue); background: var(--blue-soft); }
+    .thumb-num { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--blue); }
+    .thumb-title { font-size: 14px; font-weight: 700; color: var(--text-main); }
+
+    /* ─── PRINT OPTIMIZATION ─── */
+    @media print {
+      body { overflow: visible !important; background: #FFF !important; color: #000 !important; }
+      .stage { display: block !important; padding: 0 !important; width: auto !important; height: auto !important; }
+      .deck { width: 100% !important; height: auto !important; transform: none !important; }
+      .slide { position: relative !important; display: flex !important; page-break-after: always; margin-bottom: 20px; width: 100% !important; height: 100vh !important; }
+      .nav-bar, .notes-drawer, .overview-modal { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<main class="stage" id="stage">
+  <div class="deck" id="deck">
+
+    <!-- ═════════════════════════════════════════════════════════════════════
+         SLIDE 01: BÌA (COVER)
+         ═════════════════════════════════════════════════════════════════════ -->
+    <section class="slide active" aria-label="Bìa">
+      <div class="slide-header">
+        <div class="eyebrow"><span class="dot"></span> DATN-2026 · Work Service</div>
+        <div class="slide-num">01 / 11</div>
+      </div>
+      <div class="slide-body" style="grid-template-rows: auto 1fr; gap: 20px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+          <div>
+            <div style="display:inline-flex; align-items:center; gap:8px; padding: 4px 12px; background: var(--blue-soft); border: 1px solid var(--border-accent); border-radius: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--blue); margin-bottom: 8px;">
+              ⚡ KIẾN TRÚC CỐT LÕI
+            </div>
+            <h1 style="font-size: 42px;">Cơ chế Dự án mẫu</h1>
+          </div>
+          <div style="text-align:right; font-family:var(--font-mono); font-size:13px; color:var(--text-dim);">
+            SAO CHÉP ĐỘC LẬP &amp; DỜI MỐC THỜI GIAN TỰ ĐỘNG
+          </div>
+        </div>
+
+        <!-- SƠ ĐỒ TRỰC QUAN 3 KHỐI -->
+        <div class="card highlight" style="display: grid; grid-template-columns: 1.1fr auto 1.1fr; align-items: center; padding: 24px; gap: 16px;">
+          
+          <!-- KHỐI 1: MẪU F&B -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="chip blue">BẢN MẪU THIẾT KẾ</span>
+              <span style="font-family:var(--font-mono); font-size:12px; color:var(--text-dim);">MÃ: <b>FNB</b></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:28px;">☕</span>
+              <div>
+                <h3 style="font-size: 20px;">Xây dựng quán F&amp;B</h3>
+                <span class="chip todo" style="font-size:11px;">Dự án mẫu = CÓ</span>
+              </div>
+            </div>
+            <!-- Timeline mini -->
+            <div style="background:var(--bg-card-alt); padding:8px 10px; border-radius:6px; border:1px solid var(--border); font-size:12.5px;">
+              <div style="color:var(--text-dim); margin-bottom:4px; font-weight:600;">LỘ TRÌNH CHUẨN (60 NGÀY):</div>
+              <div style="display:flex; gap:4px;">
+                <span class="chip done" style="font-size:10.5px; padding:2px 6px;">1. Mặt bằng</span>
+                <span class="chip done" style="font-size:10.5px; padding:2px 6px;">2. Quầy Bar</span>
+                <span class="chip done" style="font-size:10.5px; padding:2px 6px;">3. Thiết bị</span>
+                <span class="chip done" style="font-size:10.5px; padding:2px 6px;">4. Khai trương</span>
+              </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); font-family:var(--font-mono);">
+              <span>📦 35 Công việc</span>
+              <span>🏷️ 4 Hạng mục</span>
+              <span>🔒 Quyền chuẩn</span>
+            </div>
+          </div>
+
+          <!-- KHỐI 2: CLONE ENGINE TRUNG TÂM -->
+          <div style="display: flex; flex-direction: column; align-items: center; padding: 0 10px; text-align: center; gap: 8px;">
+            <div style="font-family: var(--font-mono); font-size: 11px; color: var(--blue); font-weight: 800; letter-spacing:0.06em;">
+              ĐỘNG CƠ SAO CHÉP DỰ ÁN
+            </div>
+            <div style="position:relative; width: 140px; height: 32px; background: var(--blue-soft); border: 1px solid var(--border-accent); border-radius: 16px; display:flex; align-items:center; justify-content:center;">
+              <span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--blue);">⚡ TỰ ĐỘNG HÓA</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--text-muted);">
+              <span class="chip prog" style="font-size:10.5px;">Độ lệch: +269 Ngày</span>
+              <span class="chip warn" style="font-size:10.5px;">Đặt lại Tiến độ về 0</span>
+              <span class="chip blue" style="font-size:10.5px;">Sinh 100% Mã ID mới</span>
+            </div>
+          </div>
+
+          <!-- KHỐI 3: DỰ ÁN QUÁN CAFE MỚI -->
+          <div style="background: var(--bg-card); border: 1px solid rgba(52, 211, 153, 0.4); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="chip done">DỰ ÁN HOẠT ĐỘNG THẬT</span>
+              <span style="font-family:var(--font-mono); font-size:12px; color:var(--text-dim);">MÃ: <b>CAFE</b></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:28px;">🏪</span>
+              <div>
+                <h3 style="font-size: 20px;">Quán Cafe Chill</h3>
+                <span class="chip prog" style="font-size:11px;">Dự án thực tế</span>
+              </div>
+            </div>
+            <!-- Timeline mini đích -->
+            <div style="background:var(--bg-card-alt); padding:8px 10px; border-radius:6px; border:1px solid var(--border); font-size:12.5px;">
+              <div style="color:var(--text-dim); margin-bottom:4px; font-weight:600;">LỊCH THỰC HIỆN: 01/10 ➔ 30/11</div>
+              <div style="display:flex; gap:4px;">
+                <span class="chip todo" style="font-size:10.5px; padding:2px 6px;">CAFE-1 … CAFE-35</span>
+                <span class="chip warn" style="font-size:10.5px; padding:2px 6px;">Trạng thái: Cần làm</span>
+              </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--done); font-family:var(--font-mono); font-weight:600;">
+              <span>✔ Độc lập 100%</span>
+              <span>✔ Sẵn sàng triển khai</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <aside class="speaker-note">
+        <strong>Điểm nhấn mở đầu:</strong>
+        <ul>
+          <li>Nhấn mạnh bài toán: Muốn mở chuỗi F&B hay mở quán cafe mới, chủ quán thường mất hàng ngày để lập lại danh sách 50+ công việc (thuê mặt bằng, pháp lý, thiết kế quầy bar, mua máy pha cafe, tuyển barista...).</li>
+          <li>Giải pháp: Đóng gói thành <b>Dự án mẫu: Xây dựng quán F&amp;B</b> một lần duy nhất. Khi mở quán cafe mới, chỉ 1 click là sinh ngay toàn bộ dự án với lộ trình hoàn chỉnh.</li>
+          <li>Bản chất kỹ thuật: Dự án mẫu là một dự án chuẩn được đánh dấu gắn cờ làm mẫu (<code>is_template = true</code>).</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════════
+         SLIDE 02: TỔNG QUAN — TEMPLATE DÙNG ĐỂ LÀM GÌ TRONG DỰ ÁN
+         ═════════════════════════════════════════════════════════════════════ -->
+    <section class="slide" aria-label="Template dùng để làm gì">
+      <div class="slide-header">
+        <div class="eyebrow"><span class="dot"></span> Đặt vấn đề &amp; Mục tiêu</div>
+        <div class="slide-num">02 / 11</div>
+      </div>
+      <h2>Dự án mẫu (Template) dùng để làm gì trong hệ thống?</h2>
+      <p style="margin-bottom: 14px; font-size:15px;">Giải quyết bài toán chuẩn hóa quy trình, loại bỏ thao tác thủ công lặp lại và nhân bản dự án tức thì.</p>
+
+      <div class="slide-body cols-2" style="gap: 16px;">
+        
+        <!-- CỘT TRÁI: BÀI TOÁN KHI CHƯA CÓ TEMPLATE -->
+        <div class="card" style="border-left: 5px solid var(--err); padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 22px;">⚠️</span>
+              <h3 style="font-size: 16.5px; color: var(--err);">Khó khăn khi tạo dự án thủ công</h3>
+            </div>
+            <span class="chip err">THỦ CÔNG &amp; TỐN CÔNG</span>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
+            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start;">
+              <span style="font-size: 18px; line-height: 1;">⏳</span>
+              <div>
+                <b style="color: var(--text-main); font-size: 13.5px;">Mất hàng giờ/ngày thiết lập lặp lại</b>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                  Mỗi lần mở quán cafe hay chi nhánh mới, người quản lý phải tự tạo lại từng Trạng thái, Quy trình, Bảng việc và gõ lại hàng chục công việc từ đầu.
+                </div>
+              </div>
+            </div>
+
+            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start;">
+              <span style="font-size: 18px; line-height: 1;">❌</span>
+              <div>
+                <b style="color: var(--text-main); font-size: 13.5px;">Thiếu chuẩn hóa, dễ sót việc trọng yếu</b>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                  Mỗi quản lý làm một kiểu, quy trình rời rạc, dễ bỏ quên các đầu việc quan trọng như: giấy phép pháp lý, an toàn PCCC, mua sắm quầy bar.
+                </div>
+              </div>
+            </div>
+
+            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start;">
+              <span style="font-size: 18px; line-height: 1;">📉</span>
+              <div>
+                <b style="color: var(--text-main); font-size: 13.5px;">Mốc thời gian bị trôi dạt, khó ước lượng</b>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                  Không có định mức ngày chuẩn giữa các giai đoạn thi công, dẫn đến đặt hạn chót tùy hứng và vỡ kế hoạch khai trương.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: auto; padding: 8px 12px; background: rgba(248,113,113,0.08); border-radius: 6px; font-size: 12px; color: var(--err); font-weight: 600;">
+            ➔ Năng suất kém, rủi ro vận hành cao khi mở rộng chuỗi hoặc nhân bản dự án.
+          </div>
+        </div>
+
+        <!-- CỘT PHẢI: GIÁ TRỊ CỐT LÕI CỦA TEMPLATE -->
+        <div class="card" style="border-left: 5px solid var(--done); padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 22px;">🚀</span>
+              <h3 style="font-size: 16.5px; color: var(--done);">Mục tiêu &amp; Lợi ích của Template</h3>
+            </div>
+            <span class="chip done">TỰ ĐỘNG &amp; CHUẨN HÓA</span>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
+            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start;">
+              <span style="font-size: 18px; line-height: 1;">⚡</span>
+              <div>
+                <b style="color: var(--text-main); font-size: 13.5px;">Khởi tạo dự án chỉ với 1 Click (&lt; 2 giây)</b>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                  Sinh trọn vẹn dự án độc lập với toàn bộ cấu trúc nền tảng, bảng việc, vai trò và 35+ công việc thực tế sẵn sàng làm việc ngay.
+                </div>
+              </div>
+            </div>
+
+            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start;">
+              <span style="font-size: 18px; line-height: 1;">📐</span>
+              <div>
+                <b style="color: var(--text-main); font-size: 13.5px;">Chuẩn hóa quy trình nghiệp vụ (Best Practices)</b>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                  Đóng gói kinh nghiệm và mô hình thành công nhất thành "bản thiết kế" dùng chung, đảm bảo mọi chi nhánh quán đều vận hành đúng chuẩn.
+                </div>
+              </div>
+            </div>
+
+            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start;">
+              <span style="font-size: 18px; line-height: 1;">📅</span>
+              <div>
+                <b style="color: var(--text-main); font-size: 13.5px;">Tự dời lịch thông minh &amp; Đặt lại tiến độ</b>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                  Tự động dịch chuyển toàn bộ các chặng theo ngày khởi công mới, xóa sạch kết quả cũ và trả trạng thái về vạch xuất phát.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: auto; padding: 8px 12px; background: var(--done-bg); border-radius: 6px; font-size: 12px; color: var(--done); font-weight: 600;">
+            ➔ Giảm 95% thời gian chuẩn bị; Nhân rộng mô hình kinh doanh nhanh chóng, an toàn.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- THANH TỔNG HỢP 3 CHỈ SỐ GIÁ TRỊ -->
+      <div class="card highlight" style="flex-direction: row; justify-content: space-around; align-items: center; padding: 12px 20px; margin-top: 14px; background: var(--bg-card);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 24px;">⏱️</span>
+          <div>
+            <div style="font-size: 16px; font-weight: 800; color: var(--blue);">Tiết kiệm 95%</div>
+            <div style="font-size: 11.5px; color: var(--text-muted);">Thời gian khởi tạo dự án</div>
+          </div>
+        </div>
+        <div style="width: 1px; height: 30px; background: var(--border);"></div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 24px;">🎯</span>
+          <div>
+            <div style="font-size: 16px; font-weight: 800; color: var(--done);">100% Chuẩn hóa</div>
+            <div style="font-size: 11.5px; color: var(--text-muted);">Quy trình &amp; Tránh sai sót</div>
+          </div>
+        </div>
+        <div style="width: 1px; height: 30px; background: var(--border);"></div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 24px;">🔄</span>
+          <div>
+            <div style="font-size: 16px; font-weight: 800; color: var(--warn);">Tái sử dụng 2 chiều</div>
+            <div style="font-size: 11.5px; color: var(--text-muted);">Đóng gói tri thức tổ chức</div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="speaker-note">
+        <strong>Điểm cần nói:</strong>
+        <ul>
+          <li>Mở đầu vấn đề: Tại sao hệ thống quản lý công việc lại cần tính năng Template / Dự án mẫu? Vì bài toán nhân bản quy trình trong doanh nghiệp (đặc biệt chuỗi F&amp;B, chuỗi cửa hàng, công ty phần mềm) là nhu cầu sống còn.</li>
+          <li>So sánh 2 trạng thái: Nếu không có mẫu, người dùng phải mất cả ngày để nhập liệu thủ công và rất dễ bỏ sót các khâu quan trọng. Khi có mẫu, chỉ cần 1 cú click là toàn bộ dự án từ quy trình đến công việc mẫu được tự động dựng sẵn.</li>
+          <li>Template trong hệ thống không chỉ là danh sách việc tĩnh, mà là một "bộ khung động" có khả năng tự động tịnh tiến thời gian và tái thiết lập tiến độ.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════════
+         SLIDE 03: DANH SÁCH THÔNG TIN ĐƯỢC TẠO KHI CLONE TEMPLATE
+         ═════════════════════════════════════════════════════════════════════ -->
+    <section class="slide" aria-label="Cơ chế 1: Danh sách thông tin clone">
+      <div class="slide-header">
+        <div class="eyebrow"><span class="dot"></span> Cơ chế 1 / 7</div>
+        <div class="slide-num">03 / 11</div>
+      </div>
+      <h2>Danh sách các thông tin được tạo khi Clone Template</h2>
+      <p style="margin-bottom: 12px; font-size:15px;">Phân loại chi tiết 23 danh sách dữ liệu: Khung cấu hình luôn sao chép, kế hoạch tùy chọn và dữ liệu vận hành bị loại bỏ.</p>
+
+      <div class="slide-body cols-3" style="gap: 16px;">
+        
+        <!-- VÙNG 1: CẤU HÌNH GỐC -->
+        <div class="card" style="border-top: 4px solid var(--done); padding: 18px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="font-size:17px; color:var(--done);">1. Cấu hình nền tảng</h3>
+            <span class="chip done">LUÔN SAO CHÉP (100%)</span>
+          </div>
+
+          <!-- Grid Badge Visual -->
+          <div style="display:flex; flex-wrap:wrap; gap:6px; margin: 4px 0;">
+            <span class="chip" style="background:var(--bg-card); border:1px solid var(--border); font-size:11.5px;">🏷️ Trạng thái</span>
+            <span class="chip" style="background:var(--bg-card); border:1px solid var(--border); font-size:11.5px;">⚙️ Loại công việc</span>
+            <span class="chip" style="background:var(--bg-card); border:1px solid var(--border); font-size:11.5px;">🔄 Quy trình &amp; Bộ quy tắc</span>
+            <span class="chip" style="background:var(--bg-card); border:1px solid var(--border); font-size:11.5px;">📋 Bảng công việc &amp; Cột trạng thái</span>
+            <span class="chip" style="background:var(--bg-card); border:1px solid var(--border); font-size:11.5px;">🛡️ Vai trò &amp; Quyền hạn</span>
+            <span class="chip" style="background:var(--bg-card); border:1px solid var(--border); font-size:11.5px;">🏷️ Nhãn &amp; Thẻ phân loại</span>
+            <span class="chip" style="background:var(--bg-card); border:1px solid var(--border); font-size:11.5px;">🧩 Trường dữ liệu tùy chỉnh</span>
+          </div>
+
+          <div style="margin-top:auto; padding:8px 10px; background:var(--done-bg); border-radius:6px; font-size:12px; color:var(--done); font-weight:600;">
+            ✔ 14 Thực thể làm nên khung xương của dự án
+          </div>
+        </div>
+
+        <!-- VÙNG 2: KẾ HOẠCH & TIẾN ĐỘ -->
+        <div class="card" style="border-top: 4px solid var(--warn); padding: 18px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="font-size:17px; color:var(--warn);">2. Kế hoạch &amp; Công việc</h3>
+            <span class="chip warn">TÙY CHỌN BẬT / TẮT</span>
+          </div>
+
+          <!-- Visual Toggle Items -->
+          <div style="display:flex; flex-direction:column; gap:6px; margin: 4px 0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border:1px solid var(--border); padding:6px 10px; border-radius:6px; font-size:12px;">
+              <span>📅 Chu kỳ làm việc</span>
+              <span class="chip prog" style="font-size:10px;">Dời ngày tương đối</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border:1px solid var(--border); padding:6px 10px; border-radius:6px; font-size:12px;">
+              <span>📝 35 Công việc</span>
+              <span class="chip todo" style="font-size:10px;">Đặt lại về Cần làm</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border:1px solid var(--border); padding:6px 10px; border-radius:6px; font-size:12px;">
+              <span>🌳 Cây phân cấp cha-con</span>
+              <span class="chip blue" style="font-size:10px;">Hạng mục lớn ➔ Công việc ➔ Việc con</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-card); border:1px solid var(--border); padding:6px 10px; border-radius:6px; font-size:12px;">
+              <span>🔗 Mối liên kết giữa các việc</span>
+              <span class="chip blue" style="font-size:10px;">Chặn nhau / Liên quan</span>
+            </div>
+          </div>
+
+          <div style="margin-top:auto; padding:8px 10px; background:var(--warn-bg); border-radius:6px; font-size:12px; color:var(--warn); font-weight:600;">
+            ⚙️ Người dùng linh hoạt chọn: Lấy khung hoặc lấy cả việc mẫu
+          </div>
+        </div>
+
+        <!-- VÙNG 3: DỮ LIỆU CÁ NHÂN (LOẠI BỎ) -->
+        <div class="card" style="border-top: 4px solid var(--err); padding: 18px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="font-size:17px; color:var(--err);">3. Dữ liệu vận hành</h3>
+            <span class="chip err">LOẠI BỎ HOÀN TOÀN (0%)</span>
+          </div>
+
+          <!-- Bảng các mục bị chặn -->
+          <div style="display:flex; flex-direction:column; gap:6px; margin: 4px 0;">
+            <div style="display:flex; align-items:center; gap:8px; background:var(--bg-card); border:1px dashed var(--err); padding:6px 10px; border-radius:6px; font-size:12px; color:var(--text-dim);">
+              <span>❌</span> <span>Phân công nhân sự cũ của quán trước</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; background:var(--bg-card); border:1px dashed var(--err); padding:6px 10px; border-radius:6px; font-size:12px; color:var(--text-dim);">
+              <span>❌</span> <span>Bình luận &amp; Tệp đính kèm</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; background:var(--bg-card); border:1px dashed var(--err); padding:6px 10px; border-radius:6px; font-size:12px; color:var(--text-dim);">
+              <span>❌</span> <span>Lịch sử thay đổi &amp; Nhật ký hoạt động cũ</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; background:var(--bg-card); border:1px dashed var(--err); padding:6px 10px; border-radius:6px; font-size:12px; color:var(--text-dim);">
+              <span>❌</span> <span>Bản ghi đã xóa tạm</span>
+            </div>
+          </div>
+
+          <div style="margin-top:auto; padding:8px 10px; background:var(--err-bg); border-radius:6px; font-size:12px; color:var(--err); font-weight:600;">
+            🛡️ Bảo mật tuyệt đối — Không để lộ thông tin của quán cũ
+          </div>
+        </div>
+
+      </div>
+
+      <aside class="speaker-note">
+        <strong>Điểm cần nói:</strong>
+        <ul>
+          <li>Bộ nạp bản thiết kế mẫu nạp toàn bộ cấu trúc bằng các truy vấn có sắp xếp thứ tự ổn định.</li>
+          <li>Phân chia ranh giới rõ ràng: Cái gì là "bản thiết kế" thì sao chép, cái gì là "dữ liệu cá nhân/vận hành" thì loại bỏ hoàn toàn.</li>
+          <li>Bật/tắt tùy chọn: Người dùng có thể chỉ muốn lấy khung Quy trình / Bảng việc mà không cần Chu kỳ / Công việc mẫu.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════════
+         SLIDE 04: THỨ TỰ SAO CHÉP TOPOLOGICAL
+         ═════════════════════════════════════════════════════════════════════ -->
+    <section class="slide" aria-label="Cơ chế 2: Thứ tự sao chép">
+      <div class="slide-header">
+        <div class="eyebrow"><span class="dot"></span> Cơ chế 2 / 7</div>
+        <div class="slide-num">04 / 11</div>
+      </div>
+      <h2>Thứ tự sao chép: Pipeline 4 Chặng tuần tự</h2>
+      <p style="margin-bottom: 14px; font-size:15px;">Giải quyết triệt để phụ thuộc khóa ngoại theo thứ tự trước sau của đồ thị quan hệ.</p>
+
+      <div class="slide-body" style="grid-template-rows: 1fr auto; gap: 16px;">
+        
+        <!-- 4 CỘT CHẶNG TUẦN TỰ -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; align-items: stretch;">
+          
+          <!-- CHẶNG 1 -->
+          <div class="card" style="border-top: 4px solid var(--blue); padding: 18px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="chip blue" style="font-size: 11px;">CHẶNG 1</span>
+              <span style="font-size: 22px;">🏗️</span>
+            </div>
+            <h3 style="font-size: 16px; color: var(--text-main);">Nền tảng dự án</h3>
+            <div style="font-size: 12.5px; color: var(--text-dim); margin-top: -6px;">Khởi tạo các định danh cốt lõi</div>
+            <ul class="bullet-list" style="font-size: 13px; gap: 8px; margin-top: 6px;">
+              <li><b>Mã đếm (Counter):</b> Đặt lại bộ đếm mã công việc bắt đầu từ 1.</li>
+              <li><b>Trạng thái (Status):</b> Cần làm, Đang làm, Hoàn thành.</li>
+              <li><b>Loại công việc:</b> Nhiệm vụ, Lỗi phát sinh, Tính năng mới.</li>
+            </ul>
+            <div style="margin-top: auto; padding: 6px 10px; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border); font-size: 11.5px; color: var(--blue); font-family: var(--font-mono);">
+              ➔ Làm cơ sở cho chặng sau
+            </div>
+          </div>
+
+          <!-- CHẶNG 2 -->
+          <div class="card" style="border-top: 4px solid var(--prog); padding: 18px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="chip prog" style="font-size: 11px;">CHẶNG 2</span>
+              <span style="font-size: 22px;">🔄</span>
+            </div>
+            <h3 style="font-size: 16px; color: var(--text-main);">Quy trình &amp; Bảng</h3>
+            <div style="font-size: 12.5px; color: var(--text-dim); margin-top: -6px;">Thiết lập không gian luồng việc</div>
+            <ul class="bullet-list" style="font-size: 13px; gap: 8px; margin-top: 6px;">
+              <li><b>Quy trình mẫu:</b> Nhân bản quy trình làm việc chuẩn F&amp;B.</li>
+              <li><b>Bộ quy tắc chuyển bước:</b> Sao chép ma trận điều kiện trạng thái.</li>
+              <li><b>Bảng Kanban:</b> Thiết lập các cột tương ứng với trạng thái mới.</li>
+            </ul>
+            <div style="margin-top: auto; padding: 6px 10px; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border); font-size: 11.5px; color: var(--prog); font-family: var(--font-mono);">
+              ➔ Liên kết trạng thái Chặng 1
+            </div>
+          </div>
+
+          <!-- CHẶNG 3 -->
+          <div class="card" style="border-top: 4px solid var(--done); padding: 18px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="chip done" style="font-size: 11px;">CHẶNG 3</span>
+              <span style="font-size: 22px;">🛡️</span>
+            </div>
+            <h3 style="font-size: 16px; color: var(--text-main);">Vai trò &amp; Nhãn</h3>
+            <div style="font-size: 12.5px; color: var(--text-dim); margin-top: -6px;">Cấu trúc phân quyền &amp; thẻ gắn</div>
+            <ul class="bullet-list" style="font-size: 13px; gap: 8px; margin-top: 6px;">
+              <li><b>Vai trò dự án:</b> Quản lý, Giám sát mặt bằng, Kỹ thuật viên.</li>
+              <li><b>Nhãn gắn việc:</b> Mặt bằng, Pháp lý, Thiết bị quầy, Khai trương.</li>
+              <li><b>Trường tùy chỉnh:</b> Các ô thông tin mở rộng của dự án.</li>
+            </ul>
+            <div style="margin-top: auto; padding: 6px 10px; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border); font-size: 11.5px; color: var(--done); font-family: var(--font-mono);">
+              ➔ Sẵn sàng nhãn &amp; vai trò
+            </div>
+          </div>
+
+          <!-- CHẶNG 4 -->
+          <div class="card" style="border-top: 4px solid var(--warn); padding: 18px 16px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="chip warn" style="font-size: 11px;">CHẶNG 4</span>
+              <span style="font-size: 22px;">⚡</span>
+            </div>
+            <h3 style="font-size: 16px; color: var(--text-main);">Công việc &amp; Chu kỳ</h3>
+            <div style="font-size: 12.5px; color: var(--text-dim); margin-top: -6px;">Nạp nội dung thực tế dự án</div>
+            <ul class="bullet-list" style="font-size: 13px; gap: 8px; margin-top: 6px;">
+              <li><b>Chu kỳ (Sprint):</b> Dời mốc thời gian theo ngày khởi công.</li>
+              <li><b>35 Công việc mẫu:</b> Khởi tạo với mã định danh liên tục.</li>
+              <li><b>Phân cấp quan hệ:</b> Nối các việc cha - con, gắn nhãn &amp; chu kỳ.</li>
+            </ul>
+            <div style="margin-top: auto; padding: 6px 10px; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border); font-size: 11.5px; color: var(--warn); font-family: var(--font-mono);">
+              ➔ Hoàn tất 100% dữ liệu
+            </div>
+          </div>
+
+        </div>
+
+        <!-- THANH TỔNG KẾT NGUYÊN TẮC RÀNG BUỘC TOÀN VẸN -->
+        <div class="card highlight" style="padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; background: var(--bg-card);">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="icon-badge blue" style="font-size: 16px;">🔒</div>
+            <div>
+              <div style="font-weight: 700; font-size: 13.5px; color: var(--text-main);">Nguyên tắc thứ tự đồ thị quan hệ (Topological Dependency Ordering)</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                Mọi thực thể cha (Quy trình, Trạng thái, Bảng việc, Vai trò) luôn được lưu trước khi thực thể con (Công việc, Chu kỳ) tham chiếu tới — bảo đảm triệt để toàn vẹn khóa ngoại.
+              </div>
+            </div>
+          </div>
+          <span class="chip done" style="font-size: 11px;">100% AN TOÀN DỮ LIỆU</span>
+        </div>
+
+      </div>
+
+      <aside class="speaker-note">
+        <strong>Điểm cần nói:</strong>
+        <ul>
+          <li>Nhấn mạnh thứ tự thực thi 4 chặng: Nền tảng ➔ Quy trình &amp; Bảng việc ➔ Vai trò &amp; Nhãn ➔ Sao chép công việc.</li>
+          <li>Thứ tự này giải quyết triệt để phụ thuộc khóa ngoại trong cơ sở dữ liệu quan hệ mà không cần tắt kiểm tra ràng buộc khóa ngoại (foreign key check).</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════════
+         SLIDE 05: DỜI MỐC THỜI GIAN
+         ═════════════════════════════════════════════════════════════════════ -->
+    <section class="slide" aria-label="Cơ chế 3: Dời thời gian">
+      <div class="slide-header">
+        <div class="eyebrow"><span class="dot"></span> Cơ chế 3 / 7</div>
+        <div class="slide-num">05 / 11</div>
+      </div>
+      <h2>Dời mốc thời gian tương đối theo lịch khởi công</h2>
+      <p style="margin-bottom: 12px; font-size:15px;">Bảo toàn độ dài chu kỳ làm việc và khoảng cách tiến độ mà không bị trôi dạt ngày.</p>
+
+      <div class="slide-body cols-1-2" style="gap: 16px;">
+        
+        <!-- CỘT TRÁI: 4 CHỈ SỐ OFFSET TRỰC QUAN -->
+        <div class="card" style="padding: 16px; display:flex; flex-direction:column; gap:8px;">
+          <h3 style="font-size:16px; color:var(--blue);">Công thức dịch chuyển</h3>
+          
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:8px 10px;">
+            <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase;">1. Ngày bắt đầu của Mẫu (Mốc gốc)</div>
+            <div class="mono" style="font-size:13px; font-weight:700; color:var(--text-main);">05/01/2026</div>
+          </div>
+
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:8px 10px;">
+            <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase;">2. Khởi công quán mới</div>
+            <div class="mono" style="font-size:13px; font-weight:700; color:var(--blue);">01/10/2026</div>
+          </div>
+
+          <div style="background:var(--blue-soft); border:1px solid var(--border-accent); border-radius:6px; padding:8px 10px;">
+            <div style="font-size:11px; color:var(--blue); font-weight:700; text-transform:uppercase;">3. Khoảng lệch thời gian (Độ dời ngày)</div>
+            <div class="mono" style="font-size:14px; font-weight:800; color:var(--blue);">+269 NGÀY</div>
+          </div>
+
+          <div style="background:var(--done-bg); border:1px solid rgba(52,211,153,0.3); border-radius:6px; padding:8px 10px;">
+            <div style="font-size:11px; color:var(--done); font-weight:700; text-transform:uppercase;">4. Tự tính ngày khai trương</div>
+            <div class="mono" style="font-size:14px; font-weight:800; color:var(--done);">30/11/2026 (60 ngày)</div>
+          </div>
+        </div>
+
+        <!-- CỘT PHẢI: GANTT CHART TRỰC QUAN -->
+        <div class="card" style="justify-content: center; gap: 20px; padding: 20px;">
+          <!-- Timeline Mẫu -->
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:700; margin-bottom:6px;">
+              <span>MẪU FNB: XÂY DỰNG QUÁN F&amp;B (05/01 ➔ 06/03)</span>
+              <span class="chip todo" style="font-size:10px;">ĐỘ DÀI: 60 NGÀY</span>
+            </div>
+            <div style="position:relative; height:34px; background:var(--bg-card); border-radius:6px; border:1px solid var(--border); display:flex; align-items:center; padding:0 4px;">
+              <div style="width:48%; height:24px; background:var(--prog-bg); border:1px solid var(--prog); border-radius:4px; font-size:11.5px; display:flex; align-items:center; justify-content:center; color:var(--prog); font-weight:700;">
+                Chặng 1: Mặt bằng &amp; Pháp lý (14 ngày)
+              </div>
+              <div style="width:48%; height:24px; margin-left:4px; background:var(--prog-bg); border:1px solid var(--prog); border-radius:4px; font-size:11.5px; display:flex; align-items:center; justify-content:center; color:var(--prog); font-weight:700;">
+                Chặng 2: Thiết kế &amp; Quầy Bar (14 ngày)
+              </div>
+              <div style="position:absolute; right:8px; width:2px; height:100%; background:var(--err);" title="Mốc hoàn thành mẫu"></div>
+            </div>
+          </div>
+
+          <!-- Mũi tên Offset -->
+          <div style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <div style="height:1px; flex:1; background:linear-gradient(90deg, transparent, var(--blue));"></div>
+            <span class="chip blue" style="font-size:11.5px; padding:4px 12px;">⬇ TỰ ĐỘNG CỘNG ĐỒNG LOẠT +269 NGÀY ⬇</span>
+            <div style="height:1px; flex:1; background:linear-gradient(90deg, var(--blue), transparent);"></div>
+          </div>
+
+          <!-- Timeline Dự án -->
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:700; margin-bottom:6px;">
+              <span>QUÁN CAFE CHILL (01/10 ➔ 30/11)</span>
+              <span class="chip done" style="font-size:10px;">KHAI TRƯƠNG TỰ GỢI Ý</span>
+            </div>
+            <div style="position:relative; height:34px; background:var(--bg-card); border-radius:6px; border:1px solid var(--border); display:flex; align-items:center; padding:0 4px;">
+              <div style="width:48%; height:24px; background:var(--done-bg); border:1px solid var(--done); border-radius:4px; font-size:11.5px; display:flex; align-items:center; justify-content:center; color:var(--done); font-weight:700;">
+                Chặng 1: 01/10 ➔ 15/10
+              </div>
+              <div style="width:48%; height:24px; margin-left:4px; background:var(--done-bg); border:1px solid var(--done); border-radius:4px; font-size:11.5px; display:flex; align-items:center; justify-content:center; color:var(--done); font-weight:700;">
+                Chặng 2: 15/10 ➔ 29/10
+              </div>
+              <div style="position:absolute; right:8px; width:2px; height:100%; background:var(--done);" title="Ngày khai trương chuẩn xác"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <aside class="speaker-note">
+        <strong>Điểm cần nói:</strong>
+        <ul>
+          <li>Tại sao phải dùng độ dời thời gian tương đối? Vì một mẫu chuẩn "Xây dựng quán F&amp;B" hoàn thiện từ tháng 1 không thể mang nguyên ngày tháng cũ áp vào quán cafe mở vào tháng 10.</li>
+          <li>Hệ thống tự tính khoảng cách giữa ngày bắt đầu mới (01/10) và mốc gốc (05/01) là +269 ngày, sau đó tự động cộng dời cho tất cả các chặng thi công, hạn chót mua sắm và ngày khai trương.</li>
+          <li>Frontend tự động gợi ý ngày kết thúc / ngày khai trương chuẩn xác (30/11), tránh trường hợp chủ quán đặt hạn chót quá gấp khiến tiến độ thi công bị tràn ra ngoài dự án.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════════
+         SLIDE 06: ĐẶT LẠI TIẾN ĐỘ
+         ═════════════════════════════════════════════════════════════════════ -->
+    <section class="slide" aria-label="Cơ chế 4: Đặt lại tiến độ">
+      <div class="slide-header">
+        <div class="eyebrow"><span class="dot"></span> Cơ chế 4 / 7</div>
+        <div class="slide-num">06 / 11</div>
+      </div>
+      <h2>Đặt lại tiến độ: Giữ cấu trúc, xóa kết quả cũ</h2>
+      <p style="margin-bottom: 16px;">Biến các công việc đã hoàn thành hoặc đang dang dở trong mẫu trở về vạch xuất phát sẵn sàng triển khai.</p>
+
+      <div class="slide-body cols-2">
+        <div class="card" style="padding: 16px;">
+          <h3>Bảng chuyển đổi trạng thái thực thể</h3>
+          <table style="width:100%; border-collapse:collapse; font-size:13px; margin-top:6px;">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border); color:var(--text-dim); text-align:left;">
+                <th style="padding:6px 8px;">Thuộc tính</th>
+                <th style="padding:6px 8px;">Mẫu FNB nguồn (FNB-2)</th>
+                <th style="padding:6px 8px;">Quán Cafe mới (CAFE-2)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:6px 8px; font-weight:600;">Tên công việc</td>
+                <td style="padding:6px 8px; color:var(--text-muted);">Mua máy pha cafe Espresso 2 Group</td>
+                <td style="padding:6px 8px; color:var(--text-main); font-weight:600;">Mua máy pha cafe Espresso 2 Group</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:6px 8px; font-weight:600;">Mã định danh</td>
+                <td style="padding:6px 8px; color:var(--text-muted); font-family:var(--font-mono);">FNB-2</td>
+                <td style="padding:6px 8px; color:var(--blue); font-family:var(--font-mono); font-weight:700;">CAFE-2 (sinh mới)</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:6px 8px; font-weight:600;">Trạng thái việc</td>
+                <td style="padding:6px 8px;"><span class="chip done">Hoàn thành (quán cũ)</span></td>
+                <td style="padding:6px 8px;"><span class="chip todo">Cần làm (quán mới)</span></td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:6px 8px; font-weight:600;">Trạng thái Giai đoạn</td>
+                <td style="padding:6px 8px;"><span class="chip done">ĐÃ ĐÓNG / HOÀN THÀNH</span></td>
+                <td style="padding:6px 8px;"><span class="chip warn">DỰ KIẾN (CHƯA CHẠY)</span></td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:6px 8px; font-weight:600;">Người thực hiện</td>
+                <td style="padding:6px 8px; color:var(--text-dim);">Nguyễn Văn A (nhân sự cũ)</td>
+                <td style="padding:6px 8px; color:var(--done); font-weight:600;">Trống (để Quản lý mới giao)</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:6px 8px; font-weight:600;">Thời gian đã làm</td>
+                <td style="padding:6px 8px;">Đã làm: 18 giờ</td>
+                <td style="padding:6px 8px; font-weight:700;">Đã làm = 0 giờ (chưa làm)</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 8px; font-weight:600;">Ước lượng định mức</td>
+                <td style="padding:6px 8px;">Định mức: 20 giờ · Dự toán: 45 triệu</td>
+                <td style="padding:6px 8px; color:var(--blue); font-weight:600;">Giữ nguyên 20 giờ &amp; 45 triệu</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- CỘT PHẢI: SƠ ĐỒ LUỒNG PHÂN GIẢI TRẠNG THÁI -->
+        <div class="card" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="font-size:16px; color:var(--blue);">Sơ đồ phân giải Trạng thái khởi đầu</h3>
+            <span class="chip blue">QUY TRÌNH TỰ ĐỘNG</span>
+          </div>
+
+          <!-- Sơ đồ luồng 3 bước -->
+          <div style="display:flex; flex-direction:column; gap:6px; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:12px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="chip todo" style="font-size:11px;">Bước 1</span>
+              <span style="font-size:12.5px;">Loại công việc: <b>Mua sắm thiết bị</b></span>
+            </div>
+            <div style="text-align:center; color:var(--blue); font-size:12px;">⬇ Tra cứu Bộ quy tắc quy trình</div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="chip prog" style="font-size:11px;">Bước 2</span>
+              <span style="font-size:12.5px;">Tìm bước chuyển khởi tạo: <code>Tạo mới (Khởi đầu)</code></span>
+            </div>
+            <div style="text-align:center; color:var(--done); font-size:12px;">⬇ Lấy trạng thái khởi đầu</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; background:var(--done-bg); border:1px solid rgba(52,211,153,0.3); border-radius:6px; padding:8px 10px;">
+              <span style="font-size:12.5px; font-weight:700; color:var(--done);">Trạng thái khởi đầu:</span>
+              <span class="chip done" style="font-size:11px;">CHỜ DUYỆT NGÂN SÁCH</span>
+            </div>
+          </div>
+
+          <!-- Dòng Changelog UI Mini -->
+          <div style="background:var(--bg-card); border-left:3px solid var(--blue); padding:8px 12px; border-radius:4px; font-size:12px;">
+            <div style="color:var(--text-dim); font-size:11px; font-weight:700; text-transform:uppercase;">Tự động ghi nhận Nhật ký lịch sử:</div>
+            <div class="mono" style="color:var(--text-main); margin-top:2px;">
+              Nhật ký: "Đã tạo CAFE-2 từ FNB-2 của mẫu F&amp;B (Đặt lại tiến độ về 0 giờ)"
+            </div>
+          </div>
+
+          <div style="margin-top:auto; padding:8px 12px; background:var(--blue-soft); border-radius:6px; font-size:12.5px; color:var(--blue);">
+            💡 <b>Quy tắc vàng</b>: Kế hoạch &amp; Định mức (20 giờ, 45 triệu) <b>GIỮ NGUYÊN</b> · Dữ liệu thực thi cũ (Anh A, 18 giờ) <b>ĐẶT LẠI VỀ 0</b>.
+          </div>
+        </div>
+      </div>
+
+      <aside class="speaker-note">
+        <strong>Điểm cần nói:</strong>
+        <ul>
+          <li>Nguyên tắc cốt lõi: <b>Kế hoạch</b> (Tiêu chuẩn kỹ thuật, Dự toán chi phí, Thời gian ước lượng, Cây cha-con) được giữ nguyên, nhưng <b>Dữ liệu thực thi</b> (Người làm cũ, Giờ công đã chi, Kết quả) được reset sạch về 0.</li>
+          <li>Ví dụ cực kỳ trực quan: Đầu việc "Mua máy pha cà phê" ở quán cũ đã hoàn thành (Done), nhưng quán Cafe mới mở chưa có máy, do đó hệ thống tự đưa về "Chờ làm", để trống người thực hiện để Quản lý quán mới chỉ định người đi mua.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════════
+         SLIDE 07: KIỂM TRA TOÀN VẸN
+         ═════════════════════════════════════════════════════════════════════ -->
+    <section class="slide" aria-label="Cơ chế 5: Kiểm tra toàn vẹn">
+      <div class="slide-header">
+        <div class="eyebrow"><span class="dot"></span> Cơ chế 5 / 7</div>
+        <div class="slide-num">07 / 11</div>
+      </div>
+      <h2>Kiểm tra toàn vẹn dữ liệu mẫu</h2>
+      <p style="margin-bottom: 12px; font-size:15px;">Hệ thống kiểm tra tự động và phân loại rõ ràng 2 mức độ: Lỗi chặn tạo và Cảnh báo.</p>
+
+      <div class="slide-body cols-2" style="gap: 16px;">
+        
+        <!-- CỘT 1: 5 LỖI CHẶN (ERROR) -->
+        <div class="card" style="border-left: 5px solid var(--err); padding: 16px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:20px;">🛑</span>
+              <h3 style="font-size:16px; color:var(--err);">Mức LỖI CHẶN (Không cho tạo / Hoàn tác)</h3>
+            </div>
+            <span class="chip err">KHÓA NÚT TẠO</span>
+          </div>
+
+          <!-- 5 Thẻ Box Icon -->
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:6px 10px; display:flex; align-items:center; gap:8px; font-size:12px;">
+              <span style="color:var(--err); font-weight:700;">1. Trạng thái</span>
+              <span style="color:var(--text-muted);">Thiếu nhóm Cần làm hoặc Hoàn thành; Trùng tên trạng thái</span>
+            </div>
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:6px 10px; display:flex; align-items:center; gap:8px; font-size:12px;">
+              <span style="color:var(--err); font-weight:700;">2. Quy trình</span>
+              <span style="color:var(--text-muted);">Bước chuyển trỏ tới Trạng thái không tồn tại trong dự án</span>
+            </div>
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:6px 10px; display:flex; align-items:center; gap:8px; font-size:12px;">
+              <span style="color:var(--err); font-weight:700;">3. Cây phân cấp</span>
+              <span style="color:var(--text-muted);">Vi phạm phân cấp 3 tầng (Hạng mục lớn ➔ Công việc ➔ Việc con)</span>
+            </div>
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:6px 10px; display:flex; align-items:center; gap:8px; font-size:12px;">
+              <span style="color:var(--err); font-weight:700;">4. Hạn chót</span>
+              <span style="color:var(--text-muted);">Chặng thi công kết thúc muộn hơn ngày khai trương quán</span>
+            </div>
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:6px 10px; display:flex; align-items:center; gap:8px; font-size:12px;">
+              <span style="color:var(--err); font-weight:700;">5. Quyền hạn</span>
+              <span style="color:var(--text-muted);">Thiếu 1 trong 3 vai trò chuẩn: Quản trị, Thành viên, Người xem</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CỘT 2: 3 CẢNH BÁO (WARNING) -->
+        <div class="card" style="border-left: 5px solid var(--warn); padding: 16px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:20px;">⚠️</span>
+              <h3 style="font-size:16px; color:var(--warn);">Mức CẢNH BÁO (Lưu ý nhắc nhở)</h3>
+            </div>
+            <span class="chip warn">VẪN CHO PHÉP</span>
+          </div>
+
+          <!-- 3 Thẻ Box Icon -->
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:8px 10px; display:flex; align-items:center; gap:8px; font-size:12px;">
+              <span style="color:var(--warn); font-weight:700;">1. Nhảy cóc</span>
+              <span style="color:var(--text-muted);">Quy trình nhảy thẳng từ Cần làm sang Hoàn thành (thiếu Đang làm)</span>
+            </div>
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:8px 10px; display:flex; align-items:center; gap:8px; font-size:12px;">
+              <span style="color:var(--warn); font-weight:700;">2. Cột trống</span>
+              <span style="color:var(--text-muted);">Trạng thái chưa được đưa vào Cột bảng việc (thẻ công việc bị ẩn)</span>
+            </div>
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:8px 10px; display:flex; align-items:center; gap:8px; font-size:12px;">
+              <span style="color:var(--warn); font-weight:700;">3. Chồng lấn</span>
+              <span style="color:var(--text-muted);">Hai chặng thi công bị trùng thời gian (nhắc nhở người quản lý)</span>
+            </div>
+          </div>
+
+          <div style="margin-top:auto; padding:8px 12px; background:var(--warn-bg); border-radius:6px; font-size:12px; color:var(--warn); font-weight:600;">
+            💡 Khuyến nghị tối ưu hóa quy trình nhưng không ngăn cản thao tác người dùng.
+          </div>
+        </div>
+
+      </div>
+
+      <aside class="speaker-note">
+        <strong>Điểm cần nói:</strong>
+        <ul>
+          <li>Tại sao lại thiết kế thành hàm xử lý độc lập? Không truy cập CSDL, nạp ảnh chụp dữ liệu vào là kiểm tra được ngay, chạy siêu nhanh và cực kỳ dễ kiểm thử tự động.</li>
+          <li>Phân biệt rõ ràng Mức LỖI CHẶN (nguy hiểm, hỏng logic hệ thống) và Mức CẢNH BÁO (khuyến nghị, cấu hình chưa tối ưu nhưng vẫn chạy được).</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════════
+         SLIDE 08: 4 CHỐT CHẶN & 2-PHASE TRANSACTION
+         ═════════════════════════════════════════════════════════════════════ -->
+    <section class="slide" aria-label="Cơ chế 6: Transaction">
+      <div class="slide-header">
+        <div class="eyebrow"><span class="dot"></span> Cơ chế 6 / 7</div>
+        <div class="slide-num">08 / 11</div>
+      </div>
+      <h2>4 Chốt chặn bảo vệ &amp; Giao dịch CSDL 2 pha an toàn</h2>
+      <p style="margin-bottom: 12px; font-size:15px;">Nguyên tắc bất biến: Không một dự án lỗi nào có thể được sinh ra từ hệ thống mẫu.</p>
+
+      <div class="slide-body" style="grid-template-rows: auto 1fr; gap: 14px;">
+        
+        <!-- 4 CHỐT CHẶN BẢO VỆ NGANG -->
+        <div class="flow-pipeline">
+          <div class="flow-step accent-blue" style="padding:10px 14px;">
+            <div style="font-family:var(--font-mono); font-size:10px; color:var(--blue); font-weight:700;">CHỐT 1</div>
+            <h4 style="font-size:13px; color:var(--text-main);">📝 Đánh dấu Mẫu</h4>
+            <div style="font-size:11.5px; color:var(--text-muted);">Kiểm tra hợp lệ trước khi lưu làm dự án mẫu</div>
+          </div>
+          <div class="flow-connector">➔</div>
+          <div class="flow-step accent-warn" style="padding:10px 14px;">
+            <div style="font-family:var(--font-mono); font-size:10px; color:var(--warn); font-weight:700;">CHỐT 2</div>
+            <h4 style="font-size:13px; color:var(--text-main);">🔍 Xem trước mẫu</h4>
+            <div style="font-size:11.5px; color:var(--text-muted);">Khóa nút "Dùng mẫu" nếu có Lỗi chặn</div>
+          </div>
+          <div class="flow-connector">➔</div>
+          <div class="flow-step accent-prog" style="padding:10px 14px;">
+            <div style="font-family:var(--font-mono); font-size:10px; color:var(--prog); font-weight:700;">CHỐT 3</div>
+            <h4 style="font-size:13px; color:var(--text-main);">⚙️ Tiền kiểm tra</h4>
+            <div style="font-size:11.5px; color:var(--text-muted);">Kiểm tra lại dữ liệu nguồn trước khi sao chép</div>
+          </div>
+          <div class="flow-connector">➔</div>
+          <div class="flow-step accent-err" style="padding:10px 14px;">
+            <div style="font-family:var(--font-mono); font-size:10px; color:var(--err); font-weight:700;">CHỐT 4 (PHA 2)</div>
+            <h4 style="font-size:13px; color:var(--text-main);">🛡️ Hậu kiểm tra</h4>
+            <div style="font-size:11.5px; color:var(--text-muted);">Hậu kiểm tra ngay trong giao dịch CSDL</div>
+          </div>
+        </div>
+
+        <!-- SƠ ĐỒ ATOMIC 2-PHASE TRANSACTION -->
+        <div class="card highlight" style="display:flex; flex-direction:column; gap:12px; padding:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="chip blue" style="font-size:11px;">GIAO DỊCH TOÀN VẸN 2 PHA (AN TOÀN CSDL)</span>
+            <span style="font-family:var(--font-mono); font-size:11.5px; color:var(--text-dim);">CƠ CHẾ CÔ LẬP: CHỈ ĐỌC DỮ LIỆU ĐÃ LƯU</span>
+          </div>
+
+          <!-- Sơ đồ luồng quyết định 2 nhánh -->
+          <div style="display:grid; grid-template-columns: 1fr auto 1.3fr; align-items:center; gap:14px;">
+            
+            <!-- Cụm xử lý Phase 1 + Clone -->
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-size:12.5px;">
+                <b>Pha 1</b>: Kiểm tra Mẫu Nguồn ➔ Hợp lệ
+              </div>
+              <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-size:12.5px;">
+                <b>Bộ tạo dữ liệu</b>: Ghi thông tin vào ~20 bảng CSDL
+              </div>
+            </div>
+
+            <!-- Mũi tên tới Phase 2 -->
+            <div style="display:flex; flex-direction:column; align-items:center; color:var(--warn); font-size:14px; font-weight:700;">
+              <span>➔ Hậu kiểm tra ➔</span>
+            </div>
+
+            <!-- 2 Nhánh Rẽ Quyết Định -->
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <!-- Nhánh Thành Công -->
+              <div style="background:var(--done-bg); border:1px solid rgba(52,211,153,0.4); border-radius:6px; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; font-size:12.5px;">
+                <span style="color:var(--done); font-weight:700;">✔ Hợp lệ 100%</span>
+                <span class="chip done" style="font-size:10.5px;">XÁC NHẬN LƯU (COMMIT)</span>
+              </div>
+              <!-- Nhánh Thất Bại -->
+              <div style="background:var(--err-bg); border:1px solid rgba(248,113,113,0.4); border-radius:6px; padding:8px 12px; display:flex; flex-direction:column; gap:4px; font-size:12px;">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <span style="color:var(--err); font-weight:700;">❌ Có vi phạm (vd: Chặng thi công vượt ngày khai trương)</span>
+                  <span class="chip err" style="font-size:10.5px;">HOÀN TÁC TOÀN BỘ (HỦY BỎ)</span>
+                </div>
+                <div style="color:var(--text-dim); font-size:11px;">
+                  Tự động dọn dẹp sạch sẽ, không để lại bất kỳ bản ghi rác nào trong CSDL.
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <aside class="speaker-note">
+        <strong>Điểm cần nói:</strong>
+        <ul>
+          <li>Nhấn mạnh tính năng Hậu kiểm tra (Pha 2): Tại sao mẫu hợp lệ mà khi tạo quán Cafe lại có thể lỗi? Do tham số người dùng nhập vào! Chủ quán đặt ngày khai trương quá gấp (10/10) trong khi lộ trình thi công cần tới 29/10.</li>
+          <li>Cơ chế 2 pha trong 1 giao dịch CSDL đảm bảo dữ liệu luôn toàn vẹn: Phát hiện bất kỳ mâu thuẫn nào là huỷ bỏ toàn bộ, CSDL sạch sẽ 100%.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════════
+         SLIDE 09: PHÂN QUYỀN & ROLE SYNC
+         ═════════════════════════════════════════════════════════════════════ -->
+    <section class="slide" aria-label="Cơ chế 7: Phân quyền">
+      <div class="slide-header">
+        <div class="eyebrow"><span class="dot"></span> Cơ chế 7 / 7</div>
+        <div class="slide-num">09 / 11</div>
+      </div>
+      <h2>Phân quyền thao tác &amp; Quy tắc đồng bộ vai trò</h2>
+      <p style="margin-bottom: 12px; font-size:15px;">Kiểm soát chặt chẽ quyền hạn trên Không gian làm việc kết hợp đồng bộ vai trò thành viên nhóm tự động.</p>
+
+      <div class="slide-body cols-2" style="gap: 16px;">
+        
+        <!-- CỘT 1: MA TRẬN QUYỀN API -->
+        <div class="card" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
+          <h3 style="font-size:16px; color:var(--blue);">Ma trận quyền trên Thư viện mẫu</h3>
+
+          <table class="table-visual" style="font-size:12px;">
+            <thead>
+              <tr>
+                <th>Thao tác</th>
+                <th>Điều kiện tối thiểu</th>
+                <th style="text-align:center;">Quyền</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><b>Xem &amp; Xem trước</b></td>
+                <td>Thành viên Không gian làm việc</td>
+                <td style="text-align:center;"><span class="chip done" style="font-size:10px;">✔ Cho phép</span></td>
+              </tr>
+              <tr>
+                <td><b>Tạo quán từ Mẫu</b></td>
+                <td>Trưởng nhóm của nhóm mới</td>
+                <td style="text-align:center;"><span class="chip done" style="font-size:10px;">✔ Cho phép</span></td>
+              </tr>
+              <tr>
+                <td><b>Lưu thành Mẫu</b></td>
+                <td>Quản trị viên quán nguồn</td>
+                <td style="text-align:center;"><span class="chip done" style="font-size:10px;">✔ Cho phép</span></td>
+              </tr>
+              <tr>
+                <td><b>Chạy chu kỳ mẫu</b></td>
+                <td>Mẫu chỉ là bản thiết kế</td>
+                <td style="text-align:center;"><span class="chip err" style="font-size:10px;">❌ Bị cấm</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- CỘT 2: SƠ ĐỒ ÁNH XẠ VAI TRÒ TEAM SANG DỰ ÁN MỚI -->
+        <div class="card" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="font-size:16px; color:var(--done);">Đồng bộ vai trò (Nhóm ➔ Quán mới)</h3>
+            <span class="chip done">TỰ ĐỘNG GÁN VAI TRÒ</span>
+          </div>
+
+          <!-- Sơ đồ ánh xạ 3 luồng -->
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-card); border:1px solid var(--border); padding:8px 12px; border-radius:6px; font-size:12px;">
+              <span style="font-weight:700;">👑 Trưởng nhóm</span>
+              <span style="color:var(--blue); font-weight:700;">➔</span>
+              <span class="chip done" style="font-size:11px;">QUẢN TRỊ VIÊN</span>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-card); border:1px solid var(--border); padding:8px 12px; border-radius:6px; font-size:12px;">
+              <span style="font-weight:700;">☕ Thành viên nhóm</span>
+              <span style="color:var(--blue); font-weight:700;">➔</span>
+              <span class="chip prog" style="font-size:11px;">THÀNH VIÊN DỰ ÁN</span>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-card); border:1px solid var(--border); padding:8px 12px; border-radius:6px; font-size:12px;">
+              <span style="font-weight:700;">👁️ Người theo dõi</span>
+              <span style="color:var(--blue); font-weight:700;">➔</span>
+              <span class="chip todo" style="font-size:11px;">NGƯỜI XEM</span>
+            </div>
+          </div>
+
+          <div style="margin-top:auto; padding:8px 12px; background:var(--done-bg); border-radius:6px; font-size:12px; color:var(--done); font-weight:600;">
+            🛡️ Không sao chép nhân sự cũ sang quán mới — Đội ngũ quán mới vào việc ngay!
+          </div>
+        </div>
+
+      </div>
+
+      <aside class="speaker-note">
+        <strong>Điểm cần nói:</strong>
+        <ul>
+          <li>Nhấn mạnh tính kế thừa quyền hạn an toàn: Tuyệt đối không sao chép danh sách thành viên của mẫu sang dự án thật để tránh gán nhầm người lạ vào dự án.</li>
+          <li>Logic đồng bộ từ Nhóm cực kỳ tiện lợi: Chọn Nhóm nào là toàn bộ nhân sự nhóm đó tự động có vai trò tương ứng trong dự án mới.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════════
+         SLIDE 10: TRẢI NGHIỆM FRONTEND
+         ═════════════════════════════════════════════════════════════════════ -->
+    <section class="slide" aria-label="Frontend UX">
+      <div class="slide-header">
+        <div class="eyebrow"><span class="dot"></span> Giao diện người dùng</div>
+        <div class="slide-num">10 / 11</div>
+      </div>
+      <h2>Trải nghiệm người dùng: Chọn ➔ Xem trước ➔ Khởi tạo</h2>
+      <p style="margin-bottom: 12px; font-size:15px;">Giao diện React 19: Tìm kiếm nhanh, xem trước 5 tab chi tiết và gợi ý hạn chót thông minh.</p>
+
+      <div class="slide-body" style="grid-template-columns: 1fr auto 1.2fr auto 1fr; align-items: stretch; gap: 10px;">
+        
+        <!-- UI MOCKUP 1: GALLERY -->
+        <div class="card" style="padding: 14px; display:flex; flex-direction:column; gap:8px;">
+          <span class="chip blue" style="font-size:10.5px;">BƯỚC 1: CHỌN MẪU DỰ ÁN</span>
+          
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; justify-content:space-between;">
+              <span class="chip todo" style="font-size:9.5px;">F&amp;B / NHÀ HÀNG</span>
+              <span style="font-family:var(--font-mono); font-size:10.5px; color:var(--blue);">MÃ: FNB</span>
+            </div>
+            <div style="font-size:13px; font-weight:700;">☕ Mở quán F&amp;B chuẩn</div>
+            <div style="font-size:11px; color:var(--text-dim);">4 Chặng · 35 Công việc · 60 Ngày</div>
+            <div style="display:flex; gap:2px; margin-top:2px;">
+              <div style="height:4px; flex:1; background:var(--todo-bg); border-radius:2px;"></div>
+              <div style="height:4px; flex:1; background:var(--prog-bg); border-radius:2px;"></div>
+              <div style="height:4px; flex:1; background:var(--done-bg); border-radius:2px;"></div>
+            </div>
+            <button type="button" style="margin-top:4px; background:var(--blue-soft); border:1px solid var(--border-accent); color:var(--blue); font-size:11px; font-weight:700; padding:4px; border-radius:4px; cursor:pointer;">
+              🔍 Xem trước mẫu
+            </button>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; color:var(--blue); font-size:18px; font-weight:700;">➔</div>
+
+        <!-- UI MOCKUP 2: PREVIEW MODAL 5 TAB -->
+        <div class="card" style="padding: 14px; border-color:var(--border-accent); display:flex; flex-direction:column; gap:8px;">
+          <span class="chip done" style="font-size:10.5px;">BƯỚC 2: XEM TRƯỚC 5 MỤC CHI TIẾT</span>
+          
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px;">
+            <!-- 5 Tabs mini -->
+            <div style="display:flex; gap:3px; border-bottom:1px solid var(--border); padding-bottom:4px;">
+              <span style="font-size:9.5px; font-weight:700; color:var(--blue); border-bottom:2px solid var(--blue); padding-bottom:2px;">Tổng quan</span>
+              <span style="font-size:9.5px; color:var(--text-dim); padding-bottom:2px;">Quy trình</span>
+              <span style="font-size:9.5px; color:var(--text-dim); padding-bottom:2px;">Bảng công việc</span>
+              <span style="font-size:9.5px; color:var(--text-dim); padding-bottom:2px;">Giai đoạn &amp; Công việc</span>
+              <span style="font-size:9.5px; color:var(--text-dim); padding-bottom:2px;">Phân quyền</span>
+            </div>
+
+            <!-- Băng Integrity -->
+            <div style="background:var(--done-bg); border:1px solid rgba(52,211,153,0.3); border-radius:4px; padding:4px 8px; font-size:11px; color:var(--done); font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+              <span>✔ Mẫu hợp lệ (0 Lỗi)</span>
+              <span style="font-size:9.5px; font-weight:normal;">Sẵn sàng khởi tạo</span>
+            </div>
+
+            <button type="button" style="background:var(--done); border:none; color:#FFFFFF; font-size:11px; font-weight:700; padding:6px 12px; border-radius:6px; cursor:pointer;">
+              🚀 Dùng mẫu này để tạo dự án
+            </button>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; color:var(--blue); font-size:18px; font-weight:700;">➔</div>
+
+        <!-- UI MOCKUP 3: FORM KHỞI TẠO -->
+        <div class="card" style="padding: 14px; display:flex; flex-direction:column; gap:8px;">
+          <span class="chip prog" style="font-size:10.5px;">BƯỚC 3: KHỞI TẠO QUÁN MỚI</span>
+          
+          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:6px; font-size:11px;">
+            <div>
+              <span style="color:var(--text-dim);">Tên dự án:</span>
+              <div style="background:var(--bg-card-alt); border:1px solid var(--border); padding:3px 6px; border-radius:3px; font-weight:600; margin-top:2px;">Quán Cafe Chill</div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <div style="flex:1;">
+                <span style="color:var(--text-dim);">Ngày bắt đầu:</span>
+                <div style="background:var(--bg-card-alt); border:1px solid var(--border); padding:3px 6px; border-radius:3px; margin-top:2px;">01/10/2026</div>
+              </div>
+              <div style="flex:1;">
+                <span style="color:var(--done); font-weight:700;">Ngày khai trương dự kiến:</span>
+                <div style="background:var(--done-bg); border:1px solid rgba(52,211,153,0.3); padding:3px 6px; border-radius:3px; color:var(--done); font-weight:700; margin-top:2px;">30/11/2026</div>
+              </div>
+            </div>
+            <button type="button" style="margin-top:4px; background:var(--blue); border:none; color:#FFFFFF; font-size:11px; font-weight:700; padding:6px 12px; border-radius:6px; cursor:pointer;">
+              ✔ Bắt đầu tạo dự án
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="margin-top:auto; font-size:13px; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; padding:8px 14px; background:var(--bg-card-alt); border-radius:6px; border:1px solid var(--border);">
+        <span>📌 Tính năng hai chiều: Dự án đang chạy có thể mở menu <b>⋯ ➔ Lưu thành dự án mẫu</b> để đóng gói thành quy trình chuẩn.</span>
+        <span class="chip warn" style="font-size:11px;">ĐÓNG GÓI 2 CHIỀU</span>
+      </div>
+
+      <aside class="speaker-note">
+        <strong>Điểm cần nói:</strong>
+        <ul>
+          <li>Điểm cộng trải nghiệm người dùng: Người dùng không phải "mua mèo trong bao", họ được xem trước tường tận từng bước chuyển trạng thái, từng cột bảng việc và cả cây phân cấp công việc trước khi quyết định dùng.</li>
+          <li>Băng màu cảnh báo độ toàn vẹn trực tiếp giúp trưởng nhóm biết mẫu có chuẩn hay không ngay từ giao diện.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════════
+         SLIDE 11: TỔNG KẾT
+         ═════════════════════════════════════════════════════════════════════ -->
+    <section class="slide" aria-label="Tổng kết">
+      <div class="slide-header">
+        <div class="eyebrow"><span class="dot"></span> Tổng kết dự án</div>
+        <div class="slide-num">11 / 11</div>
+      </div>
+      <h2>Tổng kết: Cơ chế hoàn chỉnh &amp; Bền vững</h2>
+      <p style="margin-bottom: 14px; font-size:15px;">Hệ thống Dự án mẫu đạt chuẩn chất lượng cao về tính toàn vẹn, bảo mật và hiệu năng xử lý.</p>
+
+      <div class="slide-body cols-3" style="gap: 16px;">
+        <!-- TRỤ CỘT 1 -->
+        <div class="card" style="border-top: 4px solid var(--blue); padding:16px; display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:24px;">📦</span>
+            <div>
+              <span class="chip blue" style="font-size:10px;">TRỤ CỘT 1</span>
+              <h3 style="font-size:16px; margin-top:2px;">Bản thiết kế mẫu đầy đủ</h3>
+            </div>
+          </div>
+          <div style="font-size:12.5px; color:var(--text-muted); line-height:1.5;">
+            Nạp toàn bộ <b>23 danh sách thông tin</b> trong 1 lần đọc bất biến. <b>0 bảng thừa</b>, tái sử dụng 100% CSDL sẵn có.
+          </div>
+        </div>
+
+        <!-- TRỤ CỘT 2 -->
+        <div class="card" style="border-top: 4px solid var(--prog); padding:16px; display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:24px;">⚙️</span>
+            <div>
+              <span class="chip prog" style="font-size:10px;">TRỤ CỘT 2</span>
+              <h3 style="font-size:16px; margin-top:2px;">Động cơ sao chép thông minh</h3>
+            </div>
+          </div>
+          <div style="font-size:12.5px; color:var(--text-muted); line-height:1.5;">
+            Sao chép tuần tự 4 chặng, liên kết phân cấp cha-con, dời ngày tương đối và đặt lại tiến độ về 0.
+          </div>
+        </div>
+
+        <!-- TRỤ CỘT 3 -->
+        <div class="card" style="border-top: 4px solid var(--done); padding:16px; display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:24px;">🛡️</span>
+            <div>
+              <span class="chip done" style="font-size:10px;">TRỤ CỘT 3</span>
+              <h3 style="font-size:16px; margin-top:2px;">Kiểm soát toàn vẹn 2 pha</h3>
+            </div>
+          </div>
+          <div style="font-size:12.5px; color:var(--text-muted); line-height:1.5;">
+            <b>4 chốt chặn</b> bảo vệ, hàm kiểm tra đa tầng, Giao dịch CSDL <b>Hoàn tác 100% (Hủy bỏ an toàn)</b> khi phát sinh bất kỳ lỗi nào.
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 ĐỒNG HỒ CHỈ SỐ LỚN -->
+      <div class="card highlight" style="flex-direction: row; justify-content: space-around; align-items: center; padding: 14px 20px; margin-top: 10px;">
+        <div style="text-align: center;">
+          <div style="font-size: 32px; font-weight: 800; color: var(--done); font-family: var(--font-display);">188 / 188</div>
+          <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">Kiểm thử tự động thành công (100% Đạt)</div>
+        </div>
+        <div style="width: 1px; height: 36px; background: var(--border);"></div>
+        <div style="text-align: center;">
+          <div style="font-size: 32px; font-weight: 800; color: var(--blue); font-family: var(--font-display);">6 Điểm nối</div>
+          <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">Cổng kết nối chuẩn hóa (Giao diện API)</div>
+        </div>
+        <div style="width: 1px; height: 36px; background: var(--border);"></div>
+        <div style="text-align: center;">
+          <div style="font-size: 32px; font-weight: 800; color: var(--indigo); font-family: var(--font-display);">0 Bảng mới</div>
+          <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">Tối ưu CSDL tuyệt đối</div>
+        </div>
+        <div style="width: 1px; height: 36px; background: var(--border);"></div>
+        <div style="text-align: center;">
+          <div style="font-size: 32px; font-weight: 800; color: var(--warn); font-family: var(--font-display);">&lt; 2ms</div>
+          <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">Thời gian tải danh sách mẫu</div>
+        </div>
+      </div>
+
+      <aside class="speaker-note">
+        <strong>Điểm kết luận:</strong>
+        <ul>
+          <li>Tóm tắt giá trị: Giúp người dùng tạo dự án mới trong vài giây với đầy đủ workflow chuẩn hóa từ chuỗi F&amp;B tới mọi ngành nghề.</li>
+          <li>Chất lượng mã nguồn: 188 kịch bản kiểm thử tự động bao phủ toàn diện từ trường hợp biên, lỗi phân cấp, lỗi tràn hạn chu kỳ đến tự động cập nhật ID.</li>
+          <li>Cảm ơn hội đồng / người nghe và sẵn sàng nhận câu hỏi.</li>
+        </ul>
+      </aside>
+    </section>
+
+  </div>
+</main>
+
+<!-- ═════════════════════════════════════════════════════════════════════
+     FLOATING NAV BAR CONTROLS
+     ═════════════════════════════════════════════════════════════════════ -->
+<nav class="nav-bar" aria-label="Điều hướng thuyết trình">
+  <button type="button" class="nav-btn" id="prevBtn" title="Slide trước (Phím ◀ hoặc P)">◀ Trước</button>
+  <span class="nav-indicator" id="slideCounter">01 / 11</span>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <button type="button" class="nav-btn" id="nextBtn" title="Slide sau (Phím ▶, Space hoặc N)">Sau ▶</button>
+
+  <div style="width:1px; height:20px; background:var(--border); margin:0 4px;"></div>
+
+  <button type="button" class="nav-btn" id="overviewBtn" title="Tổng quan tất cả slide (Phím O hoặc Tab)">🗂️ Lưới</button>
+  <button type="button" class="nav-btn" id="notesBtn" title="Bật/Tắt Ghi chú diễn giả (Phím S)">📝 Ghi chú</button>
+  <button type="button" class="nav-btn" id="themeBtn" title="Đổi giao diện Sáng / Tối (Phím T)">🌓</button>
+  <button type="button" class="nav-btn" id="fsBtn" title="Toàn màn hình (Phím F)">⛶</button>
+</nav>
+
+<!-- ═════════════════════════════════════════════════════════════════════
+     SPEAKER NOTES DRAWER (GHI CHÚ DIỄN GIẢ)
+     ═════════════════════════════════════════════════════════════════════ -->
+<aside class="notes-drawer" id="notesDrawer" aria-label="Ghi chú người thuyết trình">
+  <div class="notes-header">
+    <span>📝 GỢI Ý NỘI DUNG NÓI</span>
+    <button type="button" id="closeNotesBtn" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:16px;">✕</button>
+  </div>
+  <div class="notes-content" id="notesBody">
+    <!-- Nội dung nạp động từ slide hiện tại -->
+  </div>
+</aside>
+
+<!-- ═════════════════════════════════════════════════════════════════════
+     OVERVIEW GRID MODAL
+     ═════════════════════════════════════════════════════════════════════ -->
+<div class="overview-modal" id="overviewModal" aria-label="Xem trước tất cả Slide">
+  <div style="max-width:1400px; margin: 0 auto 20px; display:flex; justify-content:space-between; align-items:center;">
+    <h3 style="color:#FFF; font-size:22px;">Danh sách Slide (11 Slides) — Bấm để chuyển đến</h3>
+    <button type="button" class="nav-btn" id="closeOverviewBtn">Đóng (Esc) ✕</button>
+  </div>
+  <div class="overview-grid" id="overviewGrid">
+    <!-- Sinh động bằng JavaScript -->
+  </div>
+</div>
+
+<script>
+(function() {
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const stage = document.getElementById('stage');
+  const deck = document.getElementById('deck');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const slideCounter = document.getElementById('slideCounter');
+  const progressFill = document.getElementById('progressFill');
+  const notesBtn = document.getElementById('notesBtn');
+  const notesDrawer = document.getElementById('notesDrawer');
+  const closeNotesBtn = document.getElementById('closeNotesBtn');
+  const notesBody = document.getElementById('notesBody');
+  const overviewBtn = document.getElementById('overviewBtn');
+  const overviewModal = document.getElementById('overviewModal');
+  const closeOverviewBtn = document.getElementById('closeOverviewBtn');
+  const overviewGrid = document.getElementById('overviewGrid');
+  const themeBtn = document.getElementById('themeBtn');
+  const fsBtn = document.getElementById('fsBtn');
+
+  let current = 0;
+
+  // ─── TỰ ĐỘNG SCALE 16:9 DECK ───
+  function fitDeck() {
+    const sw = window.innerWidth - 32;
+    const sh = window.innerHeight - 90;
+    const scale = Math.min(sw / 1280, sh / 720);
+    deck.style.transform = `scale(${Math.max(scale, 0.25)})`;
+  }
+
+  // ─── HIỂN THỊ SLIDE ───
+  function showSlide(index) {
+    current = Math.max(0, Math.min(index, slides.length - 1));
+
+    slides.forEach((s, idx) => {
+      s.classList.toggle('active', idx === current);
+    });
+
+    slideCounter.textContent = `${String(current + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
+    progressFill.style.width = `${((current + 1) / slides.length) * 100}%`;
+
+    prevBtn.disabled = current === 0;
+    nextBtn.disabled = current === slides.length - 1;
+
+    // Cập nhật Speaker Notes
+    const activeSlide = slides[current];
+    const note = activeSlide.querySelector('.speaker-note');
+    notesBody.innerHTML = note ? note.innerHTML : '<em>Không có ghi chú cho slide này.</em>';
+
+    // Cập nhật URL Hash
+    try {
+      history.replaceState(null, '', '#' + (current + 1));
+    } catch(e) {}
+  }
+
+  function fromHash() {
+    const n = parseInt((location.hash || '').replace('#', ''), 10);
+    return isNaN(n) ? 0 : Math.max(0, Math.min(n - 1, slides.length - 1));
+  }
+
+  // ─── BUILD OVERVIEW GRID ───
+  function buildOverviewGrid() {
+    overviewGrid.innerHTML = '';
+    slides.forEach((slide, idx) => {
+      const title = slide.querySelector('h1, h2')?.innerText || `Slide ${idx + 1}`;
+      const card = document.createElement('div');
+      card.className = `thumb-card ${idx === current ? 'active' : ''}`;
+      card.innerHTML = `
+        <div class="thumb-num">SLIDE ${String(idx + 1).padStart(2, '0')}</div>
+        <div class="thumb-title">${title.replace(/<br>/gi, ' ')}</div>
+      `;
+      card.onclick = () => {
+        showSlide(idx);
+        overviewModal.classList.remove('open');
+      };
+      overviewGrid.appendChild(card);
+    });
+  }
+
+  // ─── SỰ KIỆN NÚT BẤM ───
+  prevBtn.onclick = () => showSlide(current - 1);
+  nextBtn.onclick = () => showSlide(current + 1);
+
+  notesBtn.onclick = () => notesDrawer.classList.toggle('open');
+  closeNotesBtn.onclick = () => notesDrawer.classList.remove('open');
+
+  overviewBtn.onclick = () => {
+    buildOverviewGrid();
+    overviewModal.classList.add('open');
+  };
+  closeOverviewBtn.onclick = () => overviewModal.classList.remove('open');
+
+  themeBtn.onclick = () => {
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', nextTheme);
+  };
+
+  fsBtn.onclick = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  };
+
+  // ─── BÀN PHÍM ĐIỀU KHIỂN ───
+  document.addEventListener('keydown', (e) => {
+    if (overviewModal.classList.contains('open')) {
+      if (e.key === 'Escape') overviewModal.classList.remove('open');
+      return;
+    }
+
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown' || e.key.toLowerCase() === 'n') {
+      e.preventDefault();
+      showSlide(current + 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key.toLowerCase() === 'p') {
+      e.preventDefault();
+      showSlide(current - 1);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      showSlide(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      showSlide(slides.length - 1);
+    } else if (e.key.toLowerCase() === 's') {
+      notesDrawer.classList.toggle('open');
+    } else if (e.key.toLowerCase() === 'o' || e.key === 'Tab') {
+      e.preventDefault();
+      buildOverviewGrid();
+      overviewModal.classList.toggle('open');
+    } else if (e.key.toLowerCase() === 'f') {
+      fsBtn.click();
+    } else if (e.key.toLowerCase() === 't') {
+      themeBtn.click();
+    }
+  });
+
+  window.addEventListener('resize', fitDeck);
+
+  // Khởi động
+  showSlide(fromHash());
+  fitDeck();
+})();
+</script>
+
+</body>
+</html>

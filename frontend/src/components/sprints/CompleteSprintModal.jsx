@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X, CheckCircle2, CircleDashed } from 'lucide-react';
 import { SURFACE, FONT_STACK } from '../../constants/jiraTokens.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 /**
  * Modal hoan tat Sprint.
@@ -16,6 +17,7 @@ export default function CompleteSprintModal({
   onConfirm,
   onClose,
 }) {
+  const backdropProps = useModalBackdrop(onClose);
   const [target, setTarget] = useState('BACKLOG');
 
   useEffect(() => {
@@ -23,12 +25,11 @@ export default function CompleteSprintModal({
   }, [isOpen]);
 
   if (!isOpen || !sprint) return null;
-
   const done = sprint.doneCount ?? 0;
   const incomplete = (sprint.itemCount ?? 0) - done;
 
   return (
-    <div style={overlay} onClick={onClose}>
+    <div style={overlay} {...backdropProps}>
       <div style={panel} onClick={(e) => e.stopPropagation()}>
         <div style={header}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: SURFACE.text }}>
@@ -62,7 +63,7 @@ export default function CompleteSprintModal({
               <Radio
                 checked={target === 'BACKLOG'}
                 onChange={() => setTarget('BACKLOG')}
-                label="Backlog"
+                label="Danh sách tồn đọng"
                 hint="Đưa về danh sách tồn đọng để lập kế hoạch lại"
               />
 
@@ -74,18 +75,18 @@ export default function CompleteSprintModal({
                     checked={target === s.sprintId}
                     onChange={() => setTarget(s.sprintId)}
                     label={s.name}
-                    hint={`Sprint chưa bắt đầu — hiện có ${s.itemCount} công việc`}
+                    hint={`Chu kỳ chưa bắt đầu — hiện có ${s.itemCount} công việc`}
                   />
                 ))}
             </div>
           ) : (
             <div style={{ fontSize: 13, color: '#00875A', backgroundColor: '#E3FCEF', padding: '10px 12px', borderRadius: 6 }}>
-              Tất cả công việc đã hoàn thành. Sprint sẽ được đóng ngay.
+              Tất cả công việc đã hoàn thành. Chu kỳ sẽ được đóng ngay.
             </div>
           )}
 
           <div style={{ fontSize: 12, color: SURFACE.textMuted }}>
-            Số liệu của Sprint sẽ được lưu lại để dựng báo cáo Burndown và Velocity.
+            Số liệu của chu kỳ sẽ được lưu lại để dựng báo cáo tiến độ và vận tốc.
           </div>
         </div>
 
@@ -96,7 +97,7 @@ export default function CompleteSprintModal({
             disabled={loading}
             style={primaryBtn(loading)}
           >
-            {loading ? 'Đang đóng...' : 'Hoàn tất Sprint'}
+            {loading ? 'Đang đóng...' : 'Hoàn tất chu kỳ'}
           </button>
         </div>
       </div>

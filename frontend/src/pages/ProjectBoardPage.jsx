@@ -133,13 +133,13 @@ export default function ProjectBoardPage() {
             )}
             {(canManageSprint || isAdmin) && (
               <button onClick={openComplete} disabled={busy} style={primaryBtn(busy)}>
-                Hoàn tất Sprint
+                Hoàn tất chu kỳ
               </button>
             )}
           </div>
         ) : (
           <div style={emptyHint}>
-            Chưa có Sprint nào đang chạy. Hãy sang tab <b>Backlog</b> để bắt đầu một Sprint.
+            Chưa có chu kỳ nào đang chạy. Hãy sang tab <b>Danh sách tồn đọng</b> để bắt đầu một chu kỳ.
           </div>
         )
       )}
@@ -232,7 +232,7 @@ export default function ProjectBoardPage() {
             setBusy(true);
             await sprintApi.close(sprint.id, payload);
             setCompleteOpen(false);
-            toast.success('Đã hoàn tất Sprint');
+            toast.success('Đã hoàn tất chu kỳ');
             await reload({ silent: true });
             bumpRefresh?.();
           } catch (err) {

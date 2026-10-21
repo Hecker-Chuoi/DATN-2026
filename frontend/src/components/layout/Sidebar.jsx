@@ -22,6 +22,7 @@ import WorkspaceSwitcher from '../workspace/WorkspaceSwitcher.jsx';
 import { useWorkspaceRole } from '../../hooks/useWorkspaceRole.js';
 import { wsPath } from '../../utils/workspacePath.js';
 
+
 const TEAM_COLORS = [
   '#EC4899', // Pink
   '#8B5CF6', // Purple
@@ -69,45 +70,53 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         userSelect: 'none',
       }}
     >
-      {/* ─── 1. Workspace Header ─── */}
+      {/* ─── 1. Workspace Header (Linear Style) ─── */}
       <div
         style={{
-          padding: '16px 18px',
+          padding: '10px 12px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           borderBottom: '1px solid #F1F5F9',
+          position: 'relative',
         }}
       >
-        {/* Block cũ ở đây là avatar chữ "D" + chữ "DATN Workspace" + ChevronDown
-            trang trí (đang trơ) + "Free Plan", tất cả hardcode. Nó vốn đã có đúng
-            hình dạng của một switcher trigger nên được thay thẳng bằng switcher thật. */}
-        <div style={{ flex: 1, minWidth: 0, margin: '-12px -12px -8px' }}>
-          <WorkspaceSwitcher />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <WorkspaceSwitcher
+            currentUser={currentUser}
+            onLogout={onLogout}
+          />
         </div>
 
         {canCreateProject && (
-        <button
-          onClick={() => onOpenCreateProject(null)}
-          title="Tạo dự án nhanh"
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 6,
-            border: '1px solid #E2E8F0',
-            backgroundColor: '#F8FAFC',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: '#475569',
-            transition: 'all 0.15s ease',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#EFF6FF'; e.currentTarget.style.color = '#2563EB'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#475569'; }}
-        >
-          <Plus size={15} />
-        </button>
+          <button
+            onClick={() => onOpenCreateProject(null)}
+            title="Tạo dự án nhanh"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              border: 'none',
+              backgroundColor: 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#64748B',
+              transition: 'all 0.15s ease',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#F1F5F9';
+              e.currentTarget.style.color = '#0F172A';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = '#64748B';
+            }}
+          >
+            <Plus size={16} />
+          </button>
         )}
       </div>
 
@@ -142,7 +151,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
           <NavItem
             to={ws('/settings')}
             icon={<Settings size={17} color="#64748B" />}
-            label="Cài đặt workspace"
+            label="Cài đặt không gian làm việc"
             active={location.pathname === ws('/settings')}
           />
         )}
@@ -342,7 +351,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
                 textOverflow: 'ellipsis',
               }}
             >
-              {currentUser?.fullName || currentUser?.username || 'User'}
+              {currentUser?.fullName || currentUser?.username || 'Người dùng'}
             </div>
             <div
               style={{
@@ -358,7 +367,8 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
           </div>
         </div>
 
-        {onLogout && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  {onLogout && (
           <button
             onClick={onLogout}
             title="Đăng xuất"
@@ -387,6 +397,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
             <LogOut size={16} />
           </button>
         )}
+        </div>
       </div>
     </aside>
   );

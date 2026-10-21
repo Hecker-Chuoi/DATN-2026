@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { workspaceApi } from '../../api/workspaceServiceApi';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { wsPath } from '../../utils/workspacePath';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop';
 
 const overlay = {
   position: 'fixed',
@@ -63,10 +64,12 @@ export default function CreateWorkspaceModal() {
     closeCreateWorkspace();
   };
 
+  const backdropProps = useModalBackdrop(close);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
-      setError('Vui lòng nhập tên workspace');
+      setError('Vui lòng nhập tên không gian làm việc');
       return;
     }
 
@@ -79,13 +82,13 @@ export default function CreateWorkspaceModal() {
       });
 
       await refreshWorkspaces();
-      toast.success('Đã tạo workspace mới');
+      toast.success('Đã tạo không gian làm việc mới');
       close();
       if (res?.data?.id) {
         navigate(wsPath(res.data.id, '/projects'));
       }
     } catch (err) {
-      setError(err.body?.message || err.message || 'Không thể tạo workspace. Vui lòng thử lại.');
+      setError(err.body?.message || err.message || 'Không thể tạo không gian làm việc. Vui lòng thử lại.');
     } finally {
       setSubmitting(false);
     }
@@ -94,7 +97,7 @@ export default function CreateWorkspaceModal() {
   const disabled = submitting || !name.trim();
 
   return (
-    <div style={overlay} onClick={close}>
+    <div style={overlay} {...backdropProps}>
       <div
         style={{
           backgroundColor: '#FFFFFF',
@@ -133,10 +136,10 @@ export default function CreateWorkspaceModal() {
             </div>
             <div>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                Tạo Workspace mới
+                Tạo Không gian làm việc mới
               </h3>
               <p style={{ fontSize: 12, color: '#64748B', margin: 0 }}>
-                Cấp cao nhất: một workspace chứa nhiều nhóm và dự án
+                Cấp cao nhất: một không gian làm việc chứa nhiều nhóm và dự án
               </p>
             </div>
           </div>
@@ -180,7 +183,7 @@ export default function CreateWorkspaceModal() {
 
           <div>
             <label style={labelStyle}>
-              Tên workspace <span style={{ color: '#EF4444' }}>*</span>
+              Tên không gian làm việc <span style={{ color: '#EF4444' }}>*</span>
             </label>
             <input
               type="text"
@@ -204,7 +207,7 @@ export default function CreateWorkspaceModal() {
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Mục tiêu hoặc phạm vi của workspace..."
+              placeholder="Mục tiêu hoặc phạm vi của không gian làm việc..."
               style={{ ...inputStyle, fontSize: 13, resize: 'vertical', fontFamily: 'inherit' }}
             />
           </div>
@@ -254,7 +257,7 @@ export default function CreateWorkspaceModal() {
               }}
             >
               <Sparkles size={14} />
-              <span>{submitting ? 'Đang tạo...' : 'Tạo workspace'}</span>
+              <span>{submitting ? 'Đang tạo...' : 'Tạo không gian làm việc'}</span>
             </button>
           </div>
         </form>

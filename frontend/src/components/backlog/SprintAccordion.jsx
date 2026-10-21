@@ -93,16 +93,16 @@ export default function SprintAccordion({
         {!isBacklog && canManageSprint && group.state === 'FUTURE' && (
           <button
             disabled={busy || !group.canStart}
-            title={group.canStart ? 'Bắt đầu Sprint' : 'Cần có công việc và không có Sprint nào đang chạy'}
+            title={group.canStart ? 'Bắt đầu chu kỳ' : 'Cần có công việc và không có chu kỳ nào đang chạy'}
             onClick={() => onStart?.(group)}
             style={primaryBtn(busy || !group.canStart)}
           >
-            Bắt đầu Sprint
+            Bắt đầu chu kỳ
           </button>
         )}
         {!isBacklog && canManageSprint && group.state === 'ACTIVE' && (
           <button disabled={busy} onClick={() => onComplete?.(group)} style={primaryBtn(busy)}>
-            Hoàn tất Sprint
+            Hoàn tất chu kỳ
           </button>
         )}
       </div>
@@ -129,8 +129,8 @@ export default function SprintAccordion({
               }}
             >
               {isBacklog
-                ? 'Backlog trống. Hãy tạo công việc mới.'
-                : 'Kéo công việc từ Backlog vào Sprint này.'}
+                ? 'Danh sách tồn đọng trống. Hãy tạo công việc mới.'
+                : 'Kéo công việc từ danh sách tồn đọng vào chu kỳ này.'}
             </div>
           )}
 

@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workflowApi, workItemTypeApi } from '../../api.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 import {
   STATUS_CATEGORY_CONFIG,
   WORK_ITEM_TYPE_CONFIG,
@@ -78,6 +79,7 @@ const ICON_PRESETS = [
 ];
 
 export default function ProjectWorkflowTab({ projectId, project, isAdmin, onTypesUpdated }) {
+  const { handleBackdropClick } = useModalBackdrop();
   const SUBTAB_STORAGE_KEY = `project_${projectId}_workflow_subtab`;
   const [activeSubTab, setActiveSubTab] = useState(() => {
     try {
@@ -212,7 +214,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
     const trimmedName = transitionName.trim();
     if (!trimmedName) {
-      toast.error('Vui lòng nhập tên bước chuyển (Action Name)');
+      toast.error('Vui lòng nhập tên bước chuyển');
       return;
     }
 
@@ -639,7 +641,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <GitBranch size={18} color="#2563EB" />
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                  {workflowDetail?.name || 'Sơ đồ Quy trình & Quản lý Trạng thái (Visual Workflow & Transitions)'}
+                  {workflowDetail?.name || 'Sơ đồ Quy trình & Quản lý Trạng thái'}
                 </h3>
                 {workflowDetail?.isDefault && (
                   <span
@@ -658,7 +660,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 )}
               </div>
               <p style={{ fontSize: 13, color: '#64748B', marginTop: 6, marginBottom: 0, maxWidth: 720, lineHeight: 1.5 }}>
-                {workflowDetail?.description || 'Máy trạng thái FSM kiểm soát vòng đời và các bước chuyển trạng thái (FSM) cho công việc trong dự án.'}
+                {workflowDetail?.description || 'Quy trình kiểm soát vòng đời và các bước chuyển trạng thái cho công việc trong dự án.'}
               </p>
             </div>
 
@@ -719,9 +721,10 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
               gap: 16,
               marginBottom: 24,
+              width: '100%',
             }}
           >
             {/* TODO Lane */}
@@ -733,16 +736,17 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 padding: '14px',
                 display: 'flex',
                 flexDirection: 'column',
+                minWidth: 0,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 12 }}>
                 <Clock size={15} color="#64748B" />
-                <span>1. CẦN LÀM (TODO)</span>
+                <span>1. CẦN LÀM</span>
                 <span style={{ fontSize: 11, backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: 10, marginLeft: 'auto' }}>
                   {todoStatuses.length}
                 </span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
                 {todoStatuses.map((st) => {
                   const canDelete = todoStatuses.length > 1;
                   return (
@@ -758,13 +762,20 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: 8,
+                        minWidth: 0,
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.name}
+                        >
                           {st.name}
                         </div>
-                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.description || 'Trạng thái khởi tạo'}
+                        >
                           {st.description || 'Trạng thái khởi tạo'}
                         </div>
                       </div>
@@ -873,16 +884,17 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 padding: '14px',
                 display: 'flex',
                 flexDirection: 'column',
+                minWidth: 0,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#1D4ED8', marginBottom: 12 }}>
                 <Sparkles size={15} color="#2563EB" />
-                <span>2. ĐANG XỬ LÝ (IN PROGRESS)</span>
+                <span>2. ĐANG XỬ LÝ</span>
                 <span style={{ fontSize: 11, backgroundColor: '#DBEAFE', padding: '1px 6px', borderRadius: 10, marginLeft: 'auto' }}>
                   {inProgressStatuses.length}
                 </span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
                 {inProgressStatuses.map((st) => {
                   const canDelete = inProgressStatuses.length > 1;
                   return (
@@ -898,13 +910,20 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: 8,
+                        minWidth: 0,
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.name}
+                        >
                           {st.name}
                         </div>
-                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.description || 'Đang thực hiện'}
+                        >
                           {st.description || 'Đang thực hiện'}
                         </div>
                       </div>
@@ -1013,16 +1032,17 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 padding: '14px',
                 display: 'flex',
                 flexDirection: 'column',
+                minWidth: 0,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#15803D', marginBottom: 12 }}>
                 <CheckCircle2 size={15} color="#16A34A" />
-                <span>3. HOÀN THÀNH (DONE)</span>
+                <span>3. HOÀN THÀNH</span>
                 <span style={{ fontSize: 11, backgroundColor: '#DCFCE7', padding: '1px 6px', borderRadius: 10, marginLeft: 'auto' }}>
                   {doneStatuses.length}
                 </span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
                 {doneStatuses.map((st) => {
                   const canDelete = doneStatuses.length > 1;
                   return (
@@ -1038,13 +1058,20 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: 8,
+                        minWidth: 0,
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.name}
+                        >
                           {st.name}
                         </div>
-                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.description || 'Đã nghiệm thu'}
+                        >
                           {st.description || 'Đã nghiệm thu'}
                         </div>
                       </div>
@@ -1151,6 +1178,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               borderRadius: 8,
               border: '1px solid #E2E8F0',
               overflow: 'hidden',
+              backgroundColor: '#FFFFFF',
             }}
           >
             <div
@@ -1161,6 +1189,8 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 8,
               }}
             >
               <div style={{ fontWeight: 700, fontSize: 13, color: '#0F172A' }}>
@@ -1171,196 +1201,213 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               </span>
             </div>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: isAdmin ? '2fr 2fr 2fr 2.5fr 140px' : '2fr 2fr 2fr 3fr',
-                padding: '12px 16px',
-                backgroundColor: '#F8FAFC',
-                borderBottom: '1px solid #E2E8F0',
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#475569',
-              }}
-            >
-              <span>Từ trạng thái xuất phát</span>
-              <span>Tên nút thao tác</span>
-              <span>Đến trạng thái đích</span>
-              <span>Điều kiện & Ràng buộc</span>
-              {isAdmin && <span style={{ textAlign: 'right' }}>Thao tác</span>}
-            </div>
+            <div style={{ overflowX: 'auto', width: '100%' }}>
+              <div style={{ minWidth: 720 }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isAdmin ? '2fr 2fr 2fr 2.5fr 140px' : '2fr 2fr 2fr 3fr',
+                    padding: '12px 16px',
+                    backgroundColor: '#F8FAFC',
+                    borderBottom: '1px solid #E2E8F0',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#475569',
+                  }}
+                >
+                  <span>Từ trạng thái xuất phát</span>
+                  <span>Tên nút thao tác</span>
+                  <span>Đến trạng thái đích</span>
+                  <span>Điều kiện & Ràng buộc</span>
+                  {isAdmin && <span style={{ textAlign: 'right' }}>Thao tác</span>}
+                </div>
 
-            {transitions.length === 0 ? (
-              <div style={{ padding: '32px', textAlign: 'center', color: '#64748B', fontSize: 13 }}>
-                Chưa có bước chuyển nào được thiết lập.
-              </div>
-            ) : (
-              transitions.map((t) => {
-                const hasConditions = t.conditionsConfig && Array.isArray(t.conditionsConfig) && t.conditionsConfig.length > 0;
-                const hasValidators = t.validatorsConfig && Array.isArray(t.validatorsConfig) && t.validatorsConfig.length > 0;
-
-                return (
-                  <div
-                    key={t.id}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: isAdmin ? '2fr 2fr 2fr 2.5fr 140px' : '2fr 2fr 2fr 3fr',
-                      padding: '14px 16px',
-                      borderBottom: '1px solid #F1F5F9',
-                      alignItems: 'center',
-                      fontSize: 13,
-                    }}
-                  >
-                    {/* From Status */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: 4,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          backgroundColor: '#F1F5F9',
-                          color: '#334155',
-                          border: '1px solid #CBD5E1',
-                        }}
-                      >
-                        {getStatusDisplayName(t.fromStatusName)}
-                      </span>
-                    </div>
-
-                    {/* Transition Name */}
-                    <div style={{ fontWeight: 600, color: '#2563EB', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <ArrowRight size={14} color="#64748B" />
-                      <span>{t.name}</span>
-                    </div>
-
-                    {/* To Status */}
-                    <div>
-                      <span
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: 4,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          backgroundColor: t.toStatusCategory === 'DONE' ? '#DCFCE7' : t.toStatusCategory === 'IN_PROGRESS' ? '#DBEAFE' : '#F1F5F9',
-                          color: t.toStatusCategory === 'DONE' ? '#15803D' : t.toStatusCategory === 'IN_PROGRESS' ? '#1D4ED8' : '#475569',
-                          border: `1px solid ${t.toStatusCategory === 'DONE' ? '#86EFAC' : t.toStatusCategory === 'IN_PROGRESS' ? '#93C5FD' : '#CBD5E1'}`,
-                        }}
-                      >
-                        {getStatusDisplayName(t.toStatusName)}
-                      </span>
-                    </div>
-
-                    {/* Rules */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {hasConditions && (
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                            backgroundColor: '#FEF3C7',
-                            color: '#92400E',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 3,
-                          }}
-                        >
-                          <Shield size={11} /> Điều kiện
-                        </span>
-                      )}
-                      {hasValidators && (
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                            backgroundColor: '#FEE2E2',
-                            color: '#991B1B',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 3,
-                          }}
-                        >
-                          <FileCheck size={11} /> Kiểm tra hợp lệ
-                        </span>
-                      )}
-                      {!hasConditions && !hasValidators && (
-                        <span style={{ fontSize: 12, color: '#94A3B8' }}>Không ràng buộc</span>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    {isAdmin && (
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditTransition(t)}
-                          style={{
-                            border: '1px solid #E2E8F0',
-                            background: '#FFFFFF',
-                            color: '#64748B',
-                            cursor: 'pointer',
-                            padding: '5px 8px',
-                            borderRadius: 6,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            fontSize: 12,
-                            fontWeight: 500,
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = '#2563EB';
-                            e.currentTarget.style.borderColor = '#BFDBFE';
-                            e.currentTarget.style.backgroundColor = '#EFF6FF';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.color = '#64748B';
-                            e.currentTarget.style.borderColor = '#E2E8F0';
-                            e.currentTarget.style.backgroundColor = '#FFFFFF';
-                          }}
-                          title="Chỉnh sửa bước chuyển"
-                        >
-                          <Edit2 size={13} />
-                          <span>Sửa</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTransition(t.id)}
-                          style={{
-                            border: '1px solid #E2E8F0',
-                            background: '#FFFFFF',
-                            color: '#64748B',
-                            cursor: 'pointer',
-                            padding: '5px 8px',
-                            borderRadius: 6,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            fontSize: 12,
-                            fontWeight: 500,
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = '#EF4444';
-                            e.currentTarget.style.borderColor = '#FECACA';
-                            e.currentTarget.style.backgroundColor = '#FEF2F2';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.color = '#64748B';
-                            e.currentTarget.style.borderColor = '#E2E8F0';
-                            e.currentTarget.style.backgroundColor = '#FFFFFF';
-                          }}
-                          title="Xóa bước chuyển"
-                        >
-                          <Trash2 size={13} />
-                          <span>Xóa</span>
-                        </button>
-                      </div>
-                    )}
+                {transitions.length === 0 ? (
+                  <div style={{ padding: '32px', textAlign: 'center', color: '#64748B', fontSize: 13 }}>
+                    Chưa có bước chuyển nào được thiết lập.
                   </div>
-                );
-              })
-            )}
+                ) : (
+                  transitions.map((t) => {
+                    const hasConditions = t.conditionsConfig && Array.isArray(t.conditionsConfig) && t.conditionsConfig.length > 0;
+                    const hasValidators = t.validatorsConfig && Array.isArray(t.validatorsConfig) && t.validatorsConfig.length > 0;
+
+                    return (
+                      <div
+                        key={t.id}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: isAdmin ? '2fr 2fr 2fr 2.5fr 140px' : '2fr 2fr 2fr 3fr',
+                          padding: '14px 16px',
+                          borderBottom: '1px solid #F1F5F9',
+                          alignItems: 'center',
+                          fontSize: 13,
+                        }}
+                      >
+                        {/* From Status */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                          <span
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: 4,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              backgroundColor: '#F1F5F9',
+                              color: '#334155',
+                              border: '1px solid #CBD5E1',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              maxWidth: '100%',
+                            }}
+                            title={getStatusDisplayName(t.fromStatusName)}
+                          >
+                            {getStatusDisplayName(t.fromStatusName)}
+                          </span>
+                        </div>
+
+                        {/* Transition Name */}
+                        <div style={{ fontWeight: 600, color: '#2563EB', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                          <ArrowRight size={14} color="#64748B" style={{ flexShrink: 0 }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.name}>
+                            {t.name}
+                          </span>
+                        </div>
+
+                        {/* To Status */}
+                        <div style={{ minWidth: 0 }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '3px 8px',
+                              borderRadius: 4,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              backgroundColor: t.toStatusCategory === 'DONE' ? '#DCFCE7' : t.toStatusCategory === 'IN_PROGRESS' ? '#DBEAFE' : '#F1F5F9',
+                              color: t.toStatusCategory === 'DONE' ? '#15803D' : t.toStatusCategory === 'IN_PROGRESS' ? '#1D4ED8' : '#475569',
+                              border: `1px solid ${t.toStatusCategory === 'DONE' ? '#86EFAC' : t.toStatusCategory === 'IN_PROGRESS' ? '#93C5FD' : '#CBD5E1'}`,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              maxWidth: '100%',
+                            }}
+                            title={getStatusDisplayName(t.toStatusName)}
+                          >
+                            {getStatusDisplayName(t.toStatusName)}
+                          </span>
+                        </div>
+
+                        {/* Rules */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {hasConditions && (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                backgroundColor: '#FEF3C7',
+                                color: '#92400E',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 3,
+                              }}
+                            >
+                              <Shield size={11} /> Điều kiện
+                            </span>
+                          )}
+                          {hasValidators && (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                backgroundColor: '#FEE2E2',
+                                color: '#991B1B',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 3,
+                              }}
+                            >
+                              <FileCheck size={11} /> Kiểm tra hợp lệ
+                            </span>
+                          )}
+                          {!hasConditions && !hasValidators && (
+                            <span style={{ fontSize: 12, color: '#94A3B8' }}>Không ràng buộc</span>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        {isAdmin && (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditTransition(t)}
+                              style={{
+                                border: '1px solid #E2E8F0',
+                                background: '#FFFFFF',
+                                color: '#64748B',
+                                cursor: 'pointer',
+                                padding: '5px 8px',
+                                borderRadius: 6,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontSize: 12,
+                                fontWeight: 500,
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = '#2563EB';
+                                e.currentTarget.style.borderColor = '#BFDBFE';
+                                e.currentTarget.style.backgroundColor = '#EFF6FF';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = '#64748B';
+                                e.currentTarget.style.borderColor = '#E2E8F0';
+                                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                              }}
+                              title="Chỉnh sửa bước chuyển"
+                            >
+                              <Edit2 size={13} />
+                              <span>Sửa</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTransition(t.id)}
+                              style={{
+                                border: '1px solid #E2E8F0',
+                                background: '#FFFFFF',
+                                color: '#64748B',
+                                cursor: 'pointer',
+                                padding: '5px 8px',
+                                borderRadius: 6,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontSize: 12,
+                                fontWeight: 500,
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = '#EF4444';
+                                e.currentTarget.style.borderColor = '#FECACA';
+                                e.currentTarget.style.backgroundColor = '#FEF2F2';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = '#64748B';
+                                e.currentTarget.style.borderColor = '#E2E8F0';
+                                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                              }}
+                              title="Xóa bước chuyển"
+                            >
+                              <Trash2 size={13} />
+                              <span>Xóa</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1485,20 +1532,22 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
           </div>
 
           {/* Types Table */}
-          <div style={{ borderRadius: 8, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: isAdmin ? '3fr 1.2fr 2fr 100px' : '3.5fr 1.5fr 2.5fr',
-                padding: '12px 16px',
-                backgroundColor: '#F8FAFC',
-                borderBottom: '1px solid #E2E8F0',
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#475569',
-              }}
-            >
-              <span>Loại công việc & Mô tả</span>
+          <div style={{ borderRadius: 8, border: '1px solid #E2E8F0', overflow: 'hidden', backgroundColor: '#FFFFFF' }}>
+            <div style={{ overflowX: 'auto', width: '100%' }}>
+              <div style={{ minWidth: 680 }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isAdmin ? '3fr 1.2fr 2fr 100px' : '3.5fr 1.5fr 2.5fr',
+                    padding: '12px 16px',
+                    backgroundColor: '#F8FAFC',
+                    borderBottom: '1px solid #E2E8F0',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#475569',
+                  }}
+                >
+                  <span>Loại công việc & Mô tả</span>
               <span>Cấp bậc</span>
               <span>Quy trình làm việc áp dụng</span>
               {isAdmin && <span style={{ textAlign: 'right' }}>Thao tác</span>}
@@ -1692,6 +1741,8 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 );
               })
             )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2643,7 +2694,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
             zIndex: 1000,
             padding: '16px',
           }}
-          onClick={() => setIsExplanationModalOpen(false)}
+          {...handleBackdropClick(() => setIsExplanationModalOpen(false))}
         >
           <div
             style={{

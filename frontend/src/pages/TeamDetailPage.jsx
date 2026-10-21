@@ -29,8 +29,10 @@ import { teamApi, userApi } from '../api.js';
 import { workspaceApi } from '../api/workspaceServiceApi.js';
 import PendingInvitations from '../components/common/PendingInvitations.jsx';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
+import { useModalBackdrop } from '../hooks/useModalBackdrop.js';
 
 export default function TeamDetailPage() {
+  const addModalBackdrop = useModalBackdrop(() => setIsAddModalOpen(false));
   const { teamId, workspaceId } = useParams();
   const navigate = useNavigate();
   const outletContext = useOutletContext();
@@ -1127,7 +1129,7 @@ export default function TeamDetailPage() {
             justifyContent: 'center',
             padding: 16,
           }}
-          onClick={() => setIsAddModalOpen(false)}
+          {...addModalBackdrop}
         >
           <div
             style={{

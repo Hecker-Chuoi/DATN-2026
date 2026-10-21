@@ -2,6 +2,7 @@ package com.datn.workservice.dto.response;
 
 import com.datn.workservice.enums.DefaultAssigneeType;
 import com.datn.workservice.enums.ProjectType;
+import com.datn.workservice.enums.TemplateCategory;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -33,6 +34,7 @@ public class ProjectDetailResponse {
     private DefaultAssigneeType defaultAssigneeType;
     private ProjectType projectType;
     private Boolean isTemplate;
+    private TemplateCategory templateCategory;
     private LocalDate startDate;
     private LocalDate endDate;
     private UUID createdBy;
