@@ -21,8 +21,6 @@ public class ProjectDetailResponse {
 
     private UUID id;
     private UUID workspaceId;
-    private UUID teamId;
-    private String teamName;
     private String name;
     private String key;
     private String description;

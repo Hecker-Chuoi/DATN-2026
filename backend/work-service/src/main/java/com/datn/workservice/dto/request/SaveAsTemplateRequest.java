@@ -9,8 +9,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 /**
  * Lưu một dự án đang có thành dự án mẫu mới (dự án nguồn giữ nguyên).
  */
@@ -35,9 +33,6 @@ public class SaveAsTemplateRequest {
     private String description;
 
     private TemplateCategory templateCategory;
-
-    /** Bỏ trống thì dùng nhóm của dự án nguồn. */
-    private UUID teamId;
 
     @Builder.Default
     private Boolean includeSprints = true;

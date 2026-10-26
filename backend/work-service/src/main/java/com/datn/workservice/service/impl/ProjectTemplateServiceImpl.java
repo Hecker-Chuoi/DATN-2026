@@ -68,7 +68,7 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
     @Override
     @Transactional
     public List<TemplateSummaryResponse> listTemplates(List<UUID> workspaceIds, TemplateCategory category, String search) {
-        Specification<Project> spec = ProjectSpecification.withFilters(workspaceIds, null, search, true, false);
+        Specification<Project> spec = ProjectSpecification.withFilters(workspaceIds, search, true, false);
         if (category != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("templateCategory"), category));
         }
@@ -114,7 +114,7 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
         workspaceAccessChecker.requireAtLeast(request.getWorkspaceId(), currentUserId, "MEMBER");
 
         UUID leadUserId = request.getLeadUserId() != null ? request.getLeadUserId() : currentUserId;
-        projectService.assertCanCreateProject(request.getTeamId(), currentUserId, leadUserId);
+        projectService.assertCanCreateProject(request.getWorkspaceId(), currentUserId, leadUserId);
 
         ProjectBlueprint blueprint = blueprintLoader.load(template);
         assertValid(TemplateIntegrityValidator.validate(blueprint), "Mẫu chưa hợp lệ, không thể dùng để tạo dự án");
@@ -128,7 +128,6 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
 
         Project target = Project.builder()
                 .workspaceId(request.getWorkspaceId())
-                .teamId(request.getTeamId())
                 .name(request.getName().trim())
                 .key(normalizeKey(request.getKey()))
                 .description(request.getDescription() != null ? request.getDescription() : template.getDescription())
@@ -158,12 +157,10 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
     @Transactional
     public TemplateInstantiationResponse saveAsTemplate(UUID projectId, SaveAsTemplateRequest request, UUID currentUserId) {
         Project source = requireProject(projectId);
-        UUID teamId = request.getTeamId() != null ? request.getTeamId() : source.getTeamId();
-        projectService.assertCanCreateProject(teamId, currentUserId, currentUserId);
+        projectService.assertCanCreateProject(source.getWorkspaceId(), currentUserId, currentUserId);
 
         Project target = Project.builder()
                 .workspaceId(source.getWorkspaceId())
-                .teamId(teamId)
                 .name(request.getName().trim())
                 .key(normalizeKey(request.getKey()))
                 .description(request.getDescription() != null ? request.getDescription() : source.getDescription())
@@ -193,14 +190,13 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
     @Transactional
     public TemplateInstantiationResponse duplicateProject(UUID projectId, CloneProjectRequest request, UUID currentUserId) {
         Project source = requireProject(projectId);
-        projectService.assertCanCreateProject(source.getTeamId(), currentUserId, currentUserId);
+        projectService.assertCanCreateProject(source.getWorkspaceId(), currentUserId, currentUserId);
 
         ProjectBlueprint blueprint = blueprintLoader.load(source);
         long offset = dateOffset(blueprint, request.getStartDate());
 
         Project target = Project.builder()
                 .workspaceId(source.getWorkspaceId())
-                .teamId(source.getTeamId())
                 .name(request.getName().trim())
                 .key(normalizeKey(request.getKey()))
                 .description(source.getDescription())
@@ -271,8 +267,7 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
     }
 
     /**
-     * Thành viên của mẫu KHÔNG được sao chép. Dự án mới có: Lead + người tạo là ADMINISTRATOR,
-     * cộng thành viên nhóm (nếu gắn nhóm) theo quy tắc LEADER→ADMINISTRATOR, VIEWER→VIEWER, còn lại MEMBER.
+     * Thành viên của mẫu KHÔNG được sao chép. Dự án mới có: Lead + người tạo là ADMINISTRATOR.
      */
     private void assignInitialMembers(Project project, UUID currentUserId) {
         ProjectRole adminRole = projectRoleRepository.findByProjectIdAndName(project.getId(), ROLE_ADMINISTRATOR)
@@ -289,7 +284,6 @@ public class ProjectTemplateServiceImpl implements ProjectTemplateService {
                         .build());
             }
         }
-        projectMemberService.syncTeamMembersToProject(project.getId());
     }
 
     /**

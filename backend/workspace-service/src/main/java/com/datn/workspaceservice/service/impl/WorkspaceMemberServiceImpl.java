@@ -262,10 +262,10 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         }
 
         assertNotLastOwner(workspaceId, target);
-        assertNotLeadingAnyTeam(workspaceId, targetUserId);
+        assertNotLeadingAnyProject(workspaceId, targetUserId);
 
         memberRepository.delete(target);
-        cleanupTeamMemberships(workspaceId, targetUserId);
+        cleanupProjectMemberships(workspaceId, targetUserId);
         log.info("Đã xóa user {} khỏi workspace {}", targetUserId, workspaceId);
     }
 
@@ -276,40 +276,40 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
                 .orElseThrow(() -> new ResourceNotFoundException("Bạn không phải thành viên của workspace này"));
 
         assertNotLastOwner(workspaceId, member);
-        assertNotLeadingAnyTeam(workspaceId, currentUserId);
+        assertNotLeadingAnyProject(workspaceId, currentUserId);
 
         memberRepository.delete(member);
-        cleanupTeamMemberships(workspaceId, currentUserId);
+        cleanupProjectMemberships(workspaceId, currentUserId);
         log.info("User {} đã rời workspace {}", currentUserId, workspaceId);
     }
 
-    private void assertNotLeadingAnyTeam(UUID workspaceId, UUID userId) {
+    private void assertNotLeadingAnyProject(UUID workspaceId, UUID userId) {
         try {
             Integer count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM teams WHERE workspace_id = ? AND owner_id = ?",
+                    "SELECT COUNT(*) FROM projects WHERE workspace_id = ? AND lead_user_id = ? AND deleted_at IS NULL",
                     Integer.class,
                     workspaceId,
                     userId
             );
             if (count != null && count > 0) {
-                throw new BadRequestException("Không thể xóa thành viên này (hoặc không thể rời Workspace) vì người dùng đang là Trưởng nhóm của nhóm làm việc trong Workspace này. Vui lòng bổ nhiệm Trưởng nhóm thay thế hoặc giải thể nhóm trước.");
+                throw new BadRequestException("Không thể xóa thành viên này (hoặc không thể rời Workspace) vì người dùng đang là Project Lead của một hoặc nhiều dự án trong Workspace này. Vui lòng bàn giao vai trò Lead cho thành viên khác trước.");
             }
         } catch (BadRequestException e) {
             throw e;
         } catch (Exception e) {
-            log.debug("Bảng teams có thể chưa tồn tại hoặc lỗi query: {}", e.getMessage());
+            log.debug("Bảng projects có thể chưa sẵn sàng hoặc lỗi query: {}", e.getMessage());
         }
     }
 
-    private void cleanupTeamMemberships(UUID workspaceId, UUID userId) {
+    private void cleanupProjectMemberships(UUID workspaceId, UUID userId) {
         try {
             jdbcTemplate.update(
-                    "DELETE FROM team_members WHERE user_id = ? AND team_id IN (SELECT id FROM teams WHERE workspace_id = ?)",
+                    "DELETE FROM role_assignments WHERE user_id = ? AND project_id IN (SELECT id FROM projects WHERE workspace_id = ?)",
                     userId,
                     workspaceId
             );
         } catch (Exception e) {
-            log.debug("Không dọn dẹp được team_members: {}", e.getMessage());
+            log.debug("Không dọn dẹp được role_assignments: {}", e.getMessage());
         }
     }
 
@@ -392,7 +392,7 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
     /**
      * Hydrate tên/email của nhiều thành viên bằng MỘT lời gọi batch.
      * <p>
-     * Không bao giờ gọi getUserById theo từng member: TeamController.getUserAliasIds
+     * Không bao giờ gọi getUserById theo từng member (tránh N+1 calls)
      * làm vậy và tốn 4+ round-trip chỉ để xóa một thành viên.
      * <p>
      * Khi identity-service lỗi thì degrade - trả map rỗng để các trường hiển thị

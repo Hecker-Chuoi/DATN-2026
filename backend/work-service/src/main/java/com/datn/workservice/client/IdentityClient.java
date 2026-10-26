@@ -29,19 +29,19 @@ public interface IdentityClient {
     ApiResponse<UserResponse> getUserById(@PathVariable("id") UUID id);
 
     /**
-     * Tìm kiếm User theo Email (dùng khi mời thành viên vào Team)
+     * Tìm kiếm User theo Email (dùng khi mời thành viên vào Project/Workspace)
      */
     @GetMapping("/internal/users/by-email")
     ApiResponse<UserResponse> getUserByEmail(@RequestParam("email") String email);
 
     /**
-     * Tìm kiếm User theo Username (dùng khi mời thành viên vào Team)
+     * Tìm kiếm User theo Username (dùng khi mời thành viên vào Project/Workspace)
      */
     @GetMapping("/internal/users/by-username")
     ApiResponse<UserResponse> getUserByUsername(@RequestParam("username") String username);
 
     /**
-     * Tìm kiếm User theo Email hoặc Username (dùng khi mời thành viên vào Team)
+     * Tìm kiếm User theo Email hoặc Username (dùng khi mời thành viên vào Project/Workspace)
      */
     @GetMapping("/internal/users/by-identifier")
     ApiResponse<UserResponse> getUserByIdentifier(@RequestParam("identifier") String identifier);

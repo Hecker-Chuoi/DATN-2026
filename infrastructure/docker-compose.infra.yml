@@ -1,4 +1,4 @@
-services:
+﻿services:
 
   # ─────────────────────────────────────────────
   # 1. PostgreSQL for Keycloak
@@ -147,7 +147,7 @@ services:
   # 7. MinIO Object Storage (S3-compatible)
   # ─────────────────────────────────────────────
   minio:
-    image: minio/minio:latest
+    image: cgr.dev/chainguard/minio:latest
     container_name: minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -171,7 +171,7 @@ services:
   # 7.1 MinIO Auto-Init (Bucket & Download Policy)
   # ─────────────────────────────────────────────
   minio-init:
-    image: minio/mc:latest
+    image: cgr.dev/chainguard/minio-client:latest-dev
     container_name: minio-init
     depends_on:
       minio:

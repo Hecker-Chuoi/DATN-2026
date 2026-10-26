@@ -2,7 +2,6 @@ package com.datn.workservice.service;
 
 import com.datn.workservice.client.NotificationClient;
 import com.datn.workservice.dto.response.InvitationResponse;
-import com.datn.workservice.enums.InvitationType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,8 +11,8 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * Gửi email thông báo lời mời tham gia nhóm / dự án (template invite-member.html ở notification-service).
- * Tách khỏi InvitationServiceImpl để @Async có hiệu lực (self-invoke không qua proxy):
+ * Gửi email thông báo lời mời tham gia dự án (template invite-member.html ở notification-service).
+ * Tách khỏi InvitationServiceImpl để @Async có hiệu lực:
  * request mời trả về ngay, SMTP chậm hay chết chỉ ảnh hưởng thread nền. Fail-safe: lỗi chỉ log.
  */
 @Component
@@ -33,7 +32,7 @@ public class InvitationMailer {
             return;
         }
         try {
-            String kind = inv.getType() == InvitationType.TEAM ? "nhóm" : "dự án";
+            String kind = "dự án";
             String name = inv.getTargetName() == null ? "" : inv.getTargetName();
             notificationClient.sendTemplate(new NotificationClient.TemplateEmailRequest(
                     inv.getInviteeEmail(),

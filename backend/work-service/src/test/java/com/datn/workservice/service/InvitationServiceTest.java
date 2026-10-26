@@ -1,21 +1,20 @@
 package com.datn.workservice.service;
 
 import com.datn.common.exception.BadRequestException;
+import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.client.IdentityClient;
 import com.datn.workservice.dto.response.InvitationResponse;
 import com.datn.workservice.entity.Invitation;
-import com.datn.workservice.entity.Team;
+import com.datn.workservice.entity.Project;
+import com.datn.workservice.entity.ProjectRole;
+import com.datn.workservice.entity.RoleAssignment;
 import com.datn.workservice.enums.InvitationStatus;
 import com.datn.workservice.enums.InvitationType;
-import com.datn.workservice.enums.TeamRole;
+import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.repository.InvitationRepository;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.ProjectRoleRepository;
 import com.datn.workservice.repository.RoleAssignmentRepository;
-import com.datn.workservice.repository.TeamMemberRepository;
-import com.datn.workservice.repository.TeamRepository;
-import com.datn.workservice.security.TeamSecurity;
-import com.datn.workservice.security.WorkspaceAccessChecker;
 import com.datn.workservice.service.impl.InvitationServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,10 +42,6 @@ class InvitationServiceTest {
     @Mock
     private InvitationRepository invitationRepository;
     @Mock
-    private TeamRepository teamRepository;
-    @Mock
-    private TeamMemberRepository teamMemberRepository;
-    @Mock
     private ProjectRepository projectRepository;
     @Mock
     private ProjectRoleRepository projectRoleRepository;
@@ -54,10 +50,6 @@ class InvitationServiceTest {
     @Mock
     private ProjectMemberService projectMemberService;
     @Mock
-    private TeamSecurity teamSecurity;
-    @Mock
-    private WorkspaceAccessChecker workspaceAccessChecker;
-    @Mock
     private IdentityClient identityClient;
     @Mock
     private InvitationMailer mailer;
@@ -65,51 +57,93 @@ class InvitationServiceTest {
     @InjectMocks
     private InvitationServiceImpl invitationService;
 
-    private UUID teamId;
+    private UUID projectId;
     private UUID workspaceId;
+    private UUID roleId;
     private UUID inviteeUserId;
     private UUID inviterUserId;
-    private Team team;
+    private Project project;
+    private ProjectRole projectRole;
 
     @BeforeEach
     void setUp() {
-        teamId = UUID.randomUUID();
+        projectId = UUID.randomUUID();
         workspaceId = UUID.randomUUID();
+        roleId = UUID.randomUUID();
         inviteeUserId = UUID.randomUUID();
         inviterUserId = UUID.randomUUID();
 
-        team = Team.builder()
-                .id(teamId)
+        project = Project.builder()
+                .id(projectId)
                 .workspaceId(workspaceId)
-                .name("Core Squad")
-                .ownerId(inviterUserId)
+                .name("Alpha Project")
+                .key("ALPHA")
+                .build();
+
+        projectRole = ProjectRole.builder()
+                .id(roleId)
+                .projectId(projectId)
+                .name("Developer")
                 .build();
     }
 
     @Test
-    @DisplayName("Ném BadRequestException khi mời user KHÔNG thuộc Workspace vào Team")
-    void inviteToTeam_FailsWhenUserNotInWorkspace() {
-        when(teamRepository.findById(teamId)).thenReturn(Optional.of(team));
-        when(projectMemberService.canonicalUserId(inviteeUserId)).thenReturn(inviteeUserId);
-        doThrow(new AccessDeniedException("Forbidden")).when(workspaceAccessChecker).requireMember(workspaceId, inviteeUserId);
+    @DisplayName("Ném ResourceNotFoundException khi không tìm thấy dự án")
+    void inviteToProject_ThrowsNotFound_WhenProjectNotFound() {
+        when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> invitationService.inviteToTeam(teamId, inviteeUserId, TeamRole.MEMBER, inviterUserId))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Chỉ có thể mời người dùng đang là thành viên của Không gian làm việc (Workspace) này vào nhóm");
+        assertThatThrownBy(() -> invitationService.inviteToProject(projectId, inviteeUserId, roleId, inviterUserId))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Không tìm thấy dự án");
 
         verify(invitationRepository, never()).save(any());
-        verify(mailer, never()).send(any());
     }
 
     @Test
-    @DisplayName("Mời thành công khi user là thành viên cùng Workspace")
-    void inviteToTeam_SucceedsWhenUserInWorkspace() {
-        when(teamRepository.findById(teamId)).thenReturn(Optional.of(team));
+    @DisplayName("Ném BadRequestException khi vai trò không thuộc về dự án")
+    void inviteToProject_ThrowsBadRequest_WhenRoleNotBelongsToProject() {
+        ProjectRole foreignRole = ProjectRole.builder()
+                .id(roleId)
+                .projectId(UUID.randomUUID()) // khác projectId
+                .name("Developer")
+                .build();
+
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRoleRepository.findById(roleId)).thenReturn(Optional.of(foreignRole));
+
+        assertThatThrownBy(() -> invitationService.inviteToProject(projectId, inviteeUserId, roleId, inviterUserId))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Vai trò không thuộc dự án này");
+
+        verify(invitationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Ném BadRequestException khi user đã là thành viên của dự án")
+    void inviteToProject_ThrowsBadRequest_WhenUserAlreadyMember() {
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRoleRepository.findById(roleId)).thenReturn(Optional.of(projectRole));
         when(projectMemberService.canonicalUserId(inviteeUserId)).thenReturn(inviteeUserId);
-        doNothing().when(workspaceAccessChecker).requireMember(workspaceId, inviteeUserId);
-        when(teamMemberRepository.existsByTeamIdAndUserId(teamId, inviteeUserId)).thenReturn(false);
+        when(roleAssignmentRepository.findByProjectIdAndUserId(projectId, inviteeUserId))
+                .thenReturn(List.of(RoleAssignment.builder().id(UUID.randomUUID()).build()));
+
+        assertThatThrownBy(() -> invitationService.inviteToProject(projectId, inviteeUserId, roleId, inviterUserId))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Người dùng đã là thành viên của dự án");
+
+        verify(invitationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Mời vào dự án thành công và gửi mail thông báo")
+    void inviteToProject_Succeeds() {
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectRoleRepository.findById(roleId)).thenReturn(Optional.of(projectRole));
+        when(projectMemberService.canonicalUserId(inviteeUserId)).thenReturn(inviteeUserId);
+        when(roleAssignmentRepository.findByProjectIdAndUserId(projectId, inviteeUserId))
+                .thenReturn(Collections.emptyList());
         when(invitationRepository.existsByTypeAndTargetIdAndInviteeUserIdAndStatus(
-                eq(InvitationType.TEAM), eq(teamId), eq(inviteeUserId), eq(InvitationStatus.PENDING)))
+                eq(InvitationType.PROJECT), eq(projectId), eq(inviteeUserId), eq(InvitationStatus.PENDING)))
                 .thenReturn(false);
 
         UUID invitationId = UUID.randomUUID();
@@ -119,31 +153,32 @@ class InvitationServiceTest {
             return inv;
         });
 
-        InvitationResponse response = invitationService.inviteToTeam(teamId, inviteeUserId, TeamRole.MEMBER, inviterUserId);
+        InvitationResponse response = invitationService.inviteToProject(projectId, inviteeUserId, roleId, inviterUserId);
 
         assertThat(response).isNotNull();
         assertThat(response.getId()).isEqualTo(invitationId);
         assertThat(response.getInviteeUserId()).isEqualTo(inviteeUserId);
+        assertThat(response.getType()).isEqualTo(InvitationType.PROJECT);
         verify(mailer, times(1)).send(any());
     }
 
     @Test
-    @DisplayName("Hủy lời mời: Thành công khi người gọi là canManageTeam (Workspace Owner / Admin)")
-    void cancel_SucceedsForWorkspaceManager() {
+    @DisplayName("Hủy lời mời: Thành công khi người gọi có quyền PROJECT_ADMIN")
+    void cancel_SucceedsForProjectAdmin() {
         UUID invitationId = UUID.randomUUID();
         UUID managerUserId = UUID.randomUUID();
 
         Invitation inv = Invitation.builder()
                 .id(invitationId)
-                .type(InvitationType.TEAM)
-                .targetId(teamId)
+                .type(InvitationType.PROJECT)
+                .targetId(projectId)
                 .inviteeUserId(inviteeUserId)
                 .invitedBy(inviterUserId)
                 .status(InvitationStatus.PENDING)
                 .build();
 
         when(invitationRepository.findById(invitationId)).thenReturn(Optional.of(inv));
-        when(teamSecurity.canManageTeam(teamId)).thenReturn(true);
+        when(projectMemberService.hasPermission(projectId, managerUserId, PermissionKey.PROJECT_ADMIN)).thenReturn(true);
         when(invitationRepository.save(any(Invitation.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         InvitationResponse res = invitationService.cancel(invitationId, managerUserId, false);

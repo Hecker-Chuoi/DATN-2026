@@ -29,7 +29,7 @@ public interface ProjectService {
     ProjectDetailResponse getProjectByKey(String key);
 
     /**
-     * Lists and filters projects within a workspace or team with pagination and search.
+     * Lists and filters projects within workspace with pagination and search.
      *
      * <p>Hai tầng lọc bổ sung cho nhau:
      * <ul>
@@ -42,7 +42,6 @@ public interface ProjectService {
      */
     PageResponse<ProjectResponse> getAllProjects(
             List<UUID> workspaceIds,
-            UUID teamId,
             String search,
             Boolean isTemplate,
             Pageable pageable,
@@ -67,9 +66,9 @@ public interface ProjectService {
 
     /**
      * Quy tắc tạo dự án dùng chung (tạo mới, tạo từ mẫu, lưu thành mẫu, nhân bản):
-     * chỉ trưởng nhóm của {@code teamId} hoặc Global ADMIN; dự án không gắn nhóm chỉ ADMIN.
+     * người dùng có vai trò MEMBER trở lên trong Workspace hoặc Global ADMIN.
      */
-    void assertCanCreateProject(UUID teamId, UUID currentUserId, UUID leadUserId);
+    void assertCanCreateProject(UUID workspaceId, UUID currentUserId, UUID leadUserId);
 
     ProjectResponse toProjectResponse(Project project);
 

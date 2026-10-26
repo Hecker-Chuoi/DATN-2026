@@ -23,8 +23,6 @@ public class UpdateProjectRequest {
     @Size(max = 255, message = "Project name cannot exceed 255 characters")
     private String name;
 
-    private UUID teamId;
-
     private String description;
 
     @Size(max = 500, message = "Icon URL cannot exceed 500 characters")

@@ -18,7 +18,6 @@ import com.datn.workservice.repository.PermissionSchemeEntryRepository;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.ProjectRoleRepository;
 import com.datn.workservice.repository.RoleAssignmentRepository;
-import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.service.impl.ProjectMemberServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,8 +52,6 @@ class ProjectMemberServiceTest {
     private RoleAssignmentRepository roleAssignmentRepository;
     @Mock
     private PermissionSchemeEntryRepository permissionSchemeEntryRepository;
-    @Mock
-    private TeamMemberRepository teamMemberRepository;
     @Mock
     private IdentityClient identityClient;
     @Mock
@@ -93,7 +90,7 @@ class ProjectMemberServiceTest {
                 .id(roleId)
                 .projectId(projectId)
                 .name("MEMBER")
-                .description("Team member")
+                .description("Project member")
                 .build();
 
         adminRole = ProjectRole.builder()

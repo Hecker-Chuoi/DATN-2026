@@ -17,7 +17,7 @@ public enum WorkspaceRole {
     /** Quản trị thành viên và cấu hình workspace, nhưng không xóa được workspace. */
     ADMIN,
 
-    /** Thành viên thường: tạo được team/project trong workspace. */
+    /** Thành viên thường: tạo được project trong workspace. */
     MEMBER,
 
     /** Chỉ xem: không tạo được gì, không thấy nút quản trị. */

@@ -194,7 +194,7 @@ class WorkspaceMemberServiceTest {
         assertThat(page.getContent().get(0).getUsername()).isNotNull();
 
         // Đây là điểm dễ hỏng nhất: một lời gọi Feign cho mỗi member sẽ thành 50
-        // round-trip. TeamController.getUserAliasIds mắc chính lỗi này.
+        // round-trip thay vì batching.
         verify(identityClient, times(1)).getUsersByIds(anyList());
         verify(identityClient, never()).getUserById(any());
     }

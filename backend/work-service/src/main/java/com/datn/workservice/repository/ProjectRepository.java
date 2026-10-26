@@ -19,6 +19,5 @@ public interface ProjectRepository extends JpaRepository<Project, UUID>, JpaSpec
     boolean existsByKeyIgnoreCase(String key);
     List<Project> findByWorkspaceId(UUID workspaceId);
     Page<Project> findByWorkspaceId(UUID workspaceId, Pageable pageable);
-    List<Project> findByTeamId(UUID teamId);
     Optional<Project> findByWorkspaceIdAndKey(UUID workspaceId, String key);
 }

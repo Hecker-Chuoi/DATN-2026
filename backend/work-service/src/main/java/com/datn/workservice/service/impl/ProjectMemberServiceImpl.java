@@ -11,14 +11,11 @@ import com.datn.workservice.dto.response.RoleAssignmentResponse;
 import com.datn.workservice.entity.Project;
 import com.datn.workservice.entity.ProjectRole;
 import com.datn.workservice.entity.RoleAssignment;
-import com.datn.workservice.entity.TeamMember;
 import com.datn.workservice.enums.PermissionKey;
-import com.datn.workservice.enums.TeamRole;
 import com.datn.workservice.repository.PermissionSchemeEntryRepository;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.ProjectRoleRepository;
 import com.datn.workservice.repository.RoleAssignmentRepository;
-import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.security.WorkspaceAccessChecker;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +39,6 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     private final ProjectRoleRepository projectRoleRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final PermissionSchemeEntryRepository permissionSchemeEntryRepository;
-    private final TeamMemberRepository teamMemberRepository;
     private final IdentityClient identityClient;
     private final WorkspaceAccessChecker workspaceAccessChecker;
 
@@ -65,7 +61,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
             return true;
         }
 
-        // 1b. Workspace Owner & Workspace Admin (Manager Workspace) have super-admin privileges over all projects in the workspace (Bóng ma Siêu Quản Trị)
+        // 1b. Workspace Owner & Workspace Admin (Manager Workspace) have super-admin privileges over all projects in the workspace
         if (project.getWorkspaceId() != null) {
             try {
                 String wsRole = workspaceAccessChecker.getRole(project.getWorkspaceId(), userId);
@@ -224,65 +220,6 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
 
     @Override
     @Transactional
-    public void syncTeamMemberToProjects(UUID teamId, UUID userId, TeamRole teamRole) {
-        if (teamId == null || userId == null || teamRole == null) return;
-        for (Project project : projectRepository.findByTeamId(teamId)) {
-            List<ProjectRole> roles = projectRoleRepository.findByProjectId(project.getId());
-            ProjectRole targetRole = teamRole == TeamRole.LEADER ? findRole(roles, ROLE_ADMINISTRATOR)
-                    : teamRole == TeamRole.VIEWER ? findRole(roles, ROLE_VIEWER)
-                    : findRole(roles, ROLE_MEMBER);
-            if (targetRole == null) continue;
-
-            List<RoleAssignment> existing = roleAssignmentRepository.findByProjectIdAndUserId(project.getId(), userId);
-            if (existing.isEmpty()) {
-                roleAssignmentRepository.save(RoleAssignment.builder()
-                        .projectId(project.getId()).userId(userId).roleId(targetRole.getId()).build());
-            } else {
-                for (RoleAssignment ra : existing) {
-                    ra.setRoleId(targetRole.getId());
-                    roleAssignmentRepository.save(ra);
-                }
-            }
-        }
-    }
-
-    @Override
-    @Transactional
-    public void syncTeamMembersToProject(UUID projectId) {
-        Project project = projectRepository.findById(projectId).orElse(null);
-        if (project == null || project.getTeamId() == null) return;
-
-        List<TeamMember> teamMembers = teamMemberRepository.findByTeamId(project.getTeamId());
-        if (teamMembers.isEmpty()) return;
-
-        List<ProjectRole> projectRoles = projectRoleRepository.findByProjectId(project.getId());
-        ProjectRole adminRole = findRole(projectRoles, ROLE_ADMINISTRATOR);
-        ProjectRole memberRole = findRole(projectRoles, ROLE_MEMBER);
-        ProjectRole viewerRole = findRole(projectRoles, ROLE_VIEWER);
-        if (adminRole == null || memberRole == null || viewerRole == null) return;
-
-        for (TeamMember tm : teamMembers) {
-            if (tm.getUserId() == null) continue;
-            List<RoleAssignment> existing = roleAssignmentRepository.findByProjectIdAndUserId(project.getId(), tm.getUserId());
-            if (!existing.isEmpty()) continue;
-
-            ProjectRole targetRole = memberRole;
-            if (tm.getRole() == TeamRole.LEADER) {
-                targetRole = adminRole;
-            } else if (tm.getRole() == TeamRole.VIEWER) {
-                targetRole = viewerRole;
-            }
-
-            roleAssignmentRepository.save(RoleAssignment.builder()
-                    .projectId(project.getId())
-                    .userId(tm.getUserId())
-                    .roleId(targetRole.getId())
-                    .build());
-        }
-    }
-
-    @Override
-    @Transactional
     public RoleAssignmentResponse addMemberToProject(UUID projectId, AssignProjectRoleRequest request, UUID currentUserId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
@@ -396,21 +333,6 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
-
-    private boolean isImplicitAdmin(Project project, UUID userId) {
-        return userId.equals(project.getLeadUserId()) || userId.equals(project.getCreatedBy());
-    }
-
-    private static List<String> allPermissionKeys() {
-        return Arrays.stream(PermissionKey.values()).map(Enum::name).collect(Collectors.toList());
-    }
-
-    private int rolePriority(String roleName) {
-        if (ROLE_ADMINISTRATOR.equalsIgnoreCase(roleName)) return 0;
-        if (ROLE_MEMBER.equalsIgnoreCase(roleName)) return 1;
-        if (ROLE_VIEWER.equalsIgnoreCase(roleName)) return 2;
-        return 3;
-    }
 
     private static ProjectRole findRole(List<ProjectRole> roles, String name) {
         return roles.stream().filter(r -> name.equalsIgnoreCase(r.getName())).findFirst().orElse(null);

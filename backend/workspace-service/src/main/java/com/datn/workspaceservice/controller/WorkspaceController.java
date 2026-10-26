@@ -31,8 +31,7 @@ import java.util.UUID;
  * (StripPrefix=1).
  * <p>
  * Theo style của ProjectMemberController: DTO có kiểu kèm Valid, 201 CREATED khi
- * tạo. KHÔNG theo TeamController (nhồi ~540 dòng logic vào controller và dùng
- * Map nên Valid không bao giờ chạy).
+ * tạo. Sử dụng Controller chuẩn mực, validation chặt chẽ qua DTO.
  */
 @Slf4j
 @RestController

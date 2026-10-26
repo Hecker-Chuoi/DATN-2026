@@ -1,6 +1,7 @@
 package com.datn.identity_service.service;
 
 import com.datn.identity_service.client.NotificationClient;
+import com.datn.identity_service.client.WorkspaceClient;
 import com.datn.identity_service.entity.User;
 import com.datn.identity_service.entity.VerificationToken;
 import com.datn.identity_service.exception.InvalidTokenException;
@@ -35,6 +36,7 @@ public class AccountVerificationService {
     private final UserRepository userRepository;
     private final KeycloakService keycloakService;
     private final NotificationClient notificationClient;
+    private final WorkspaceClient workspaceClient;
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
@@ -77,6 +79,7 @@ public class AccountVerificationService {
         keycloakService.activateVerifiedUser(user.getKeycloakId());
         user.setStatus(User.UserStatus.ACTIVE);
         userRepository.save(user);
+        workspaceClient.createDefaultWorkspace(user.getId());
     }
 
     /** identifier = email hoặc username. Chỉ gửi khi tài khoản đang chờ xác thực. */

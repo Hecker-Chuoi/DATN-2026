@@ -30,8 +30,6 @@ public class CreateProjectFromTemplateRequest {
     @NotNull(message = "Workspace ID is required")
     private UUID workspaceId;
 
-    private UUID teamId;
-
     @NotBlank(message = "Project name is required")
     @Size(max = 255, message = "Project name cannot exceed 255 characters")
     private String name;

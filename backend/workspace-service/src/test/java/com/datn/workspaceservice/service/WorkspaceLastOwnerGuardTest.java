@@ -34,9 +34,8 @@ import static org.mockito.Mockito.when;
 /**
  * Bất biến "workspace luôn có ít nhất một OWNER" được tách thành class test
  * riêng vì đây là thứ chưa từng được implement ở bất kỳ đâu trong codebase:
- * TeamController.leaveTeam chỉ chặn ownerId, nên một user role LEADER rời nhóm
- * tự do và team có thể về zero LEADER - lúc đó updateMemberRole (chỉ leader gọi
- * được) thành bất khả đạt và không ai promote được ai nữa.
+ * Đảm bảo một workspace luôn có ít nhất một OWNER quản trị, không rơi vào trạng thái
+ * mồ côi khi người quản trị cuối cùng rời đi.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)

@@ -14,8 +14,7 @@ public interface WorkspaceService {
 
     /**
      * Chỉ những workspace mà user có hàng membership, và chưa soft-delete.
-     * Cố tình KHÔNG có endpoint liệt kê toàn cục - TeamController.listAllTeams
-     * trả về mọi team trong DB cho bất kỳ ai đã đăng nhập, đó là lỗi không lặp lại.
+     * Không có endpoint liệt kê toàn cục: chỉ người dùng thuộc workspace mới thấy workspace đó.
      */
     List<WorkspaceResponse> getMyWorkspaces(UUID currentUserId);
 
@@ -32,4 +31,7 @@ public interface WorkspaceService {
     List<UUID> getWorkspaceIdsOfUser(UUID userId);
 
     boolean existsActive(UUID workspaceId);
+
+    /** Tự động khởi tạo workspace mặc định cho user nếu chưa có. */
+    WorkspaceResponse createDefaultWorkspace(UUID userId);
 }

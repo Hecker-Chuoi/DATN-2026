@@ -13,7 +13,7 @@ public @interface RequireWorkspaceAccess {
 
     /**
      * Bậc vai trò tối thiểu trong workspace ("OWNER", "ADMIN", "MEMBER", "GUEST").
-     * Mặc định là "MEMBER" (cho phép tạo team/project).
+     * Mặc định là "MEMBER" (cho phép tạo project).
      */
     String value() default "MEMBER";
 

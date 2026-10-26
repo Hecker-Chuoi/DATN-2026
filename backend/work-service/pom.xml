@@ -12,7 +12,7 @@
 
     <artifactId>work-service</artifactId>
     <name>work-service</name>
-    <description>Work Service - Core Work Management Engine (Teams, Projects, Milestones, Tasks, Kanban)</description>
+    <description>Work Service - Core Work Management Engine (Projects, Milestones, Tasks, Kanban, Workspaces)</description>
 
     <properties>
         <java.version>21</java.version>

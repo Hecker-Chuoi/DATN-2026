@@ -18,9 +18,7 @@ import java.util.UUID;
  * account khác, nên {@code keycloak_id} là MUTABLE. Một bảng membership khóa
  * theo id mutable sẽ âm thầm mất quyền khi id đó đổi.
  * <p>
- * Nhờ bất biến này, workspace-service KHÔNG cần cơ chế "alias id" như
- * {@code TeamController.getUserAliasIds} của work-service (vốn bắn một lời gọi
- * Feign cho MỖI lần kiểm tra quyền). Lookup membership ở đây luôn chỉ là
+ * Nhờ bất biến này, workspace-service KHÔNG cần cơ chế alias id phức tạp hay Feign lặp lại cho mỗi lần kiểm tra quyền. Lookup membership ở đây luôn chỉ là
  * {@code findByWorkspaceIdAndUserId} - một lần hit index, zero Feign.
  */
 @Slf4j
