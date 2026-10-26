@@ -40,7 +40,7 @@ câu hỏi khác nhau — hiểu nhầm ranh giới giữa chúng là nguồn g�
 **Điểm cần nắm trước tiên:** tầng 1–3 chỉ trả lời *xác thực* (authentication). Toàn bộ
 *phân quyền* (authorization) thực sự nằm ở tầng 5, và nó **không dùng role của Keycloak**.
 Role `ADMIN`/`USER` trong Keycloak chỉ phục vụ cổng quản trị hệ thống, hoàn toàn tách biệt
-với vai trò trong Workspace/Team/Project.
+với vai trò trong Workspace/Project.
 
 ---
 
@@ -204,7 +204,7 @@ Ba phạm vi lồng nhau, và **mỗi phạm vi dùng một cơ chế hoàn toà
 
 ```
 Workspace  →  enum có thứ tự   + AOP guard (fail closed)   ← mới, nhất quán
-   └─ Team →  enum, kiểm tra tay trong controller           ← không có cơ chế khai báo
+   └─ [ĐÃ LOẠI BỎ] Team (Refactor kiến trúc phẳng 2 cấp: Workspace -> Project)
         └─ Project → ma trận quyền 3 bảng + AOP guard (fail OPEN)
 ```
 
@@ -228,7 +228,7 @@ public ResponseEntity<...> update(@PathVariable UUID workspaceId, ...)
 | Thao tác | Bậc tối thiểu |
 | :--- | :--- |
 | Xem workspace, xem danh sách thành viên | thành viên bất kỳ (kể cả GUEST) |
-| Tạo team / project trong workspace | `MEMBER` |
+| Tạo project trong workspace | `MEMBER` |
 | Thêm / xóa / đổi vai trò thành viên | `ADMIN` |
 | Sửa tên, mô tả workspace | `ADMIN` |
 | Xóa (soft) / phục hồi workspace | `OWNER` |
@@ -244,26 +244,17 @@ public ResponseEntity<...> update(@PathVariable UUID workspaceId, ...)
    cùng vượt qua, cùng xóa → workspace về **zero OWNER** và không ai còn quyền sửa vai trò
    cho ai nữa.
 
-### 6.2. Team — kiểm tra tay, không có cơ chế khai báo
+### 6.2. Team (ĐÃ LOẠI BỎ TRONG REFACTOR KIẾN TRÚC PHẲNG)
 
-Nguồn: `work-service/controller/TeamController.java`
-
-`TeamRole` chỉ có `LEADER`, `MEMBER`, `VIEWER`. **Không có annotation nào** — toàn bộ kiểm
-tra nằm trực tiếp trong thân method controller qua các helper `isTeamOwner`, `isTeamLeader`:
-
-| Thao tác | Điều kiện |
-| :--- | :--- |
-| Xem team, xem danh sách thành viên | bất kỳ ai đã đăng nhập |
-| Sửa thông tin team | Owner **hoặc** Leader |
-| Thêm / xóa thành viên | Owner **hoặc** Leader |
-| Đổi vai trò thành viên | **chỉ** Leader (Owner không đủ) |
-| Xóa team | **chỉ** Owner |
-| Rời team | thành viên bất kỳ; Owner bị từ chối |
-
-Team mang **hai nguồn sự thật**: cột `teams.owner_id` *và* vai trò `LEADER` trong
-`team_members`. Việc hòa giải hai nguồn này là lý do tồn tại của ~6 helper trong controller.
-Workspace cố ý **không** lặp lại thiết kế đó (không có cột `owner_id`; hàng membership là
-nguồn duy nhất).
+> [!IMPORTANT]
+> **Tầng Team đã bị loại bỏ hoàn toàn** khỏi mã nguồn và cơ sở dữ liệu (`Flyway V8__drop_team_hierarchy.sql`).
+> 
+> **Lý do loại bỏ:**
+> 1. **Hai nguồn sự thật xung đột**: `teams.owner_id` và `team_members.role = 'LEADER'` gây xung đột logic.
+> 2. **Không có cơ chế khai báo nhất quán**: Code kiểm tra thủ công trong controller, thiếu bảo vệ "Leader cuối cùng" (`zero leader`).
+> 3. **Thừa thãi cấp bậc**: Với các tổ chức vừa và nhỏ, cấp Workspace $\rightarrow$ Project $\rightarrow$ Tasks đem lại trải nghiệm tinh gọn, trực tiếp tương tự Jira Cloud và Linear.
+>
+> Toàn bộ logic phân quyền hiện nay tập trung vào 2 tầng: **WorkspaceRole** (OWNER, ADMIN, MEMBER, GUEST) và **Project Permission Matrix** (RoleAssignment + PermissionScheme).
 
 ### 6.3. Project — ma trận quyền động 3 bảng
 

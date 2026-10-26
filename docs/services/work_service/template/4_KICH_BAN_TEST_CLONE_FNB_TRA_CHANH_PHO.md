@@ -124,7 +124,6 @@ Mục tiêu: Thực hiện sao chép sâu (Deep Clone) mẫu `TPLFNB` sang dự 
 - [ ] **Bước 2.1.2:** Nhập các thông tin chi tiết:
   - **Tên dự án:** `Trà Chanh Phố 1983 - Không Gian Vỉa Hè Chill & Check-in`
   - **Mã dự án (Key):** `TCP`
-  - **Nhóm triển khai (Team):** Chọn nhóm vận hành (hoặc để trống tùy phân quyền).
   - **Ngày bắt đầu (Start Date):** Chọn ngày `01/11/2026`.
   - **Hạn chót dự án (End Date):** Kiểm tra ô input — hệ thống tự động gợi ý `30/01/2027` (đúng 90 ngày sau ngày bắt đầu).
   - **Mô tả:** `Dự án setup điểm kinh doanh Trà Chanh Phố: cải tạo mặt tiền ngã tư vỉa hè, lắp đặt quầy bar dập nắp cốc, menu trà chanh giã tay & đồ ăn vặt, hoàn thiện ATTP và tổ chức tuần lễ khai trương.`

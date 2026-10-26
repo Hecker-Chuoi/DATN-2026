@@ -1452,29 +1452,29 @@
           </table>
         </div>
 
-        <!-- CỘT 2: SƠ ĐỒ ÁNH XẠ VAI TRÒ TEAM SANG DỰ ÁN MỚI -->
+        <!-- CỘT 2: SƠ ĐỒ PHÂN QUYỀN KHỞI TẠO DỰ ÁN MỚI -->
         <div class="card" style="padding:16px; display:flex; flex-direction:column; gap:10px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <h3 style="font-size:16px; color:var(--done);">Đồng bộ vai trò (Nhóm ➔ Quán mới)</h3>
+            <h3 style="font-size:16px; color:var(--done);">Khởi tạo vai trò Dự án mới</h3>
             <span class="chip done">TỰ ĐỘNG GÁN VAI TRÒ</span>
           </div>
 
           <!-- Sơ đồ ánh xạ 3 luồng -->
           <div style="display:flex; flex-direction:column; gap:8px;">
             <div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-card); border:1px solid var(--border); padding:8px 12px; border-radius:6px; font-size:12px;">
-              <span style="font-weight:700;">👑 Trưởng nhóm</span>
+              <span style="font-weight:700;">👑 Trưởng dự án (Lead)</span>
               <span style="color:var(--blue); font-weight:700;">➔</span>
               <span class="chip done" style="font-size:11px;">QUẢN TRỊ VIÊN</span>
             </div>
             <div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-card); border:1px solid var(--border); padding:8px 12px; border-radius:6px; font-size:12px;">
-              <span style="font-weight:700;">☕ Thành viên nhóm</span>
+              <span style="font-weight:700;">🚀 Người khởi tạo</span>
               <span style="color:var(--blue); font-weight:700;">➔</span>
-              <span class="chip prog" style="font-size:11px;">THÀNH VIÊN DỰ ÁN</span>
+              <span class="chip prog" style="font-size:11px;">QUẢN TRỊ VIÊN</span>
             </div>
             <div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-card); border:1px solid var(--border); padding:8px 12px; border-radius:6px; font-size:12px;">
-              <span style="font-weight:700;">👁️ Người theo dõi</span>
+              <span style="font-weight:700;">👥 Thành viên Không gian</span>
               <span style="color:var(--blue); font-weight:700;">➔</span>
-              <span class="chip todo" style="font-size:11px;">NGƯỜI XEM</span>
+              <span class="chip todo" style="font-size:11px;">GÁN THEO LỜI MỜI</span>
             </div>
           </div>
 
@@ -1489,7 +1489,7 @@
         <strong>Điểm cần nói:</strong>
         <ul>
           <li>Nhấn mạnh tính kế thừa quyền hạn an toàn: Tuyệt đối không sao chép danh sách thành viên của mẫu sang dự án thật để tránh gán nhầm người lạ vào dự án.</li>
-          <li>Logic đồng bộ từ Nhóm cực kỳ tiện lợi: Chọn Nhóm nào là toàn bộ nhân sự nhóm đó tự động có vai trò tương ứng trong dự án mới.</li>
+          <li>Phân quyền trực tiếp theo Dự án: Người tạo và Lead nắm quyền Quản trị, các thành viên khác được mời và phân quyền theo RoleAssignment.</li>
         </ul>
       </aside>
     </section>

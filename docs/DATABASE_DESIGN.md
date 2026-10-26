@@ -11,7 +11,7 @@
     - [2.1.3. Bảng `users` (Người dùng)](#213-bảng-users-người-dùng)
     - [2.1.4. Phân quyền RBAC (`roles`, `permissions`, `role_permissions`, `user_roles`)](#214-phân-quyền-rbac-roles-permissions-role_permissions-user_roles)
   - [2.2. Phân hệ Quản trị Công việc (Work Service — Jira-Grade Engine)](#22-phân-hệ-quản-trị-công-việc-work-service--jira-grade-engine)
-    - [2.2.1. Đội nhóm (`teams`, `team_members`)](#221-đội-nhóm-teams-team_members)
+    - [2.2.1. Kiến trúc Tổ chức Phẳng (Loại bỏ Team)](#221-kiến-trúc-tổ-chức-phẳng-loại-bỏ-team)
     - [2.2.2. Dự án & Phân quyền Dự án (`projects`, `project_roles`, `role_assignments`, `permission_scheme_entries`)](#222-dự-án--phân-quyền-dự-án-projects-project_roles-role_assignments-permission_scheme_entries)
     - [2.2.3. Loại công việc & Máy trạng thái (`work_item_types`, `statuses`, `workflows`, `workflow_transitions`, `workflow_schemes`, `workflow_scheme_mappings`)](#223-loại-công-việc--máy-trạng-thái-work_item_types-statuses-workflows-workflow_transitions-workflow_schemes-workflow_scheme_mappings)
     - [2.2.4. Agile Scrum, Sprint, Phân hệ & Phiên bản (`sprints`, `sprint_report_snapshots`, `components`, `versions`, `labels`)](#224-agile-scrum-sprint-phân-hệ--phiên-bản-sprints-sprint_report_snapshots-components-versions-labels)
@@ -80,7 +80,7 @@ Hệ thống sử dụng cơ sở dữ liệu quan hệ (PostgreSQL) hỗ trợ 
 | Field | Type | Ràng buộc | Ghi chú |
 | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | **PK** | Định danh quyền hạn |
-| `code` | `VARCHAR(100)` | `NOT NULL`, `UNIQUE` | Mã quyền hạn (VD: `task.create`, `workspace.manage`, `team.delete`) |
+| `code` | `VARCHAR(100)` | `NOT NULL`, `UNIQUE` | Mã quyền hạn (VD: `task.create`, `workspace.manage`, `project.delete`) |
 | `description` | `TEXT` | `NULL` | Mô tả chi tiết quyền hạn |
 
 ##### Bảng `role_permissions`
@@ -102,29 +102,12 @@ Hệ thống sử dụng cơ sở dữ liệu quan hệ (PostgreSQL) hỗ trợ 
 
 ### 2.2. Phân hệ Quản trị Công việc (Work Service — Jira-Grade Engine)
 
-#### 2.2.1. Đội nhóm (`teams`, `team_members`)
+#### 2.2.1. Kiến trúc Tổ chức Phẳng (Loại bỏ Team)
 
-##### Bảng `teams`
-| Field | Type | Ràng buộc | Ghi chú |
-| :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **PK**, Default `gen_random_uuid()` | Định danh nhóm làm việc |
-| `workspace_id` | `UUID` | **FK** $\rightarrow$ `workspaces(id)`, `NOT NULL` | Workspace trực thuộc |
-| `name` | `VARCHAR(255)` | `NOT NULL` | Tên nhóm / phòng ban |
-| `description` | `TEXT` | `NULL` | Mô tả nhóm |
-| `owner_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Trưởng nhóm / Người tạo |
-| `created_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian tạo |
-| `updated_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời gian cập nhật |
-
-##### Bảng `team_members`
-| Field | Type | Ràng buộc | Ghi chú |
-| :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **PK**, Default `gen_random_uuid()` | Định danh bản ghi thành viên |
-| `team_id` | `UUID` | **FK** $\rightarrow$ `teams(id)`, `NOT NULL` | Nhóm trực thuộc (ON DELETE CASCADE) |
-| `user_id` | `UUID` | **FK** $\rightarrow$ `users(id)`, `NOT NULL` | Thành viên nhóm |
-| `role` | `VARCHAR(50)` | Default `'MEMBER'`, `NOT NULL` | Vai trò trong nhóm: `LEADER`, `MEMBER`, `VIEWER` |
-| `joined_at` | `TIMESTAMP WITH TIME ZONE` | Default `CURRENT_TIMESTAMP` | Thời điểm gia nhập nhóm |
-
-*Ràng buộc duy nhất*: `UNIQUE(team_id, user_id)`.
+> [!NOTE]
+> Hệ thống đã được tái cấu trúc sang mô hình tổ chức **2 tầng phẳng**: **Workspace $\rightarrow$ Project $\rightarrow$ Work Item** (theo chuẩn Linear / Jira Cloud hiện đại).
+> Hai bảng `teams` và `team_members` đã bị loại bỏ hoàn toàn (Flyway migration `V8__drop_team_hierarchy.sql`), cột `team_id` trong bảng `projects` đã được drop.
+> Toàn bộ quyền hạn và thành viên được phân cấp trực tiếp: cấp Không gian làm việc (`WorkspaceRole`) và cấp Dự án (`RoleAssignment` + `PermissionScheme`).
 
 ---
 
@@ -135,7 +118,6 @@ Hệ thống sử dụng cơ sở dữ liệu quan hệ (PostgreSQL) hỗ trợ 
 | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | **PK**, Default `gen_random_uuid()` | Định danh dự án |
 | `workspace_id` | `UUID` | **FK** $\rightarrow$ `workspaces(id)`, `NOT NULL` | Workspace trực thuộc |
-| `team_id` | `UUID` | **FK** $\rightarrow$ `teams(id)`, `NULL` | Nhóm phụ trách (ON DELETE SET NULL) |
 | `name` | `VARCHAR(255)` | `NOT NULL` | Tên dự án |
 | `key` | `VARCHAR(20)` | `UNIQUE`, `NOT NULL` | Mã tiền tố dự án (ví dụ: `SCRUM`, `PROJ`) |
 | `description` | `TEXT` | `NULL` | Mô tả chi tiết dự án |
@@ -547,11 +529,8 @@ Hệ thống sử dụng cơ sở dữ liệu quan hệ (PostgreSQL) hỗ trợ 
 | Bảng gốc (Source) | Bảng đích (Target) | Loại quan hệ | Ý nghĩa nghiệp vụ |
 | :--- | :--- | :---: | :--- |
 | `workspaces` | `workspace_members` | **1 - N** | Quản lý danh sách thành viên thuộc Workspace. |
-| `workspaces` | `teams` | **1 - N** | Workspace đóng vai trò bao bọc toàn bộ các Teams. |
 | `workspaces` | `projects` | **1 - N** | Tất cả Dự án đều gói gọn trong phạm vi 1 Workspace. |
-| `users` | `user_roles` | **1 - N** | Người dùng có nhiều vai trò theo từng phạm vi (`workspace`/`team`/`project`). |
-| `teams` | `users` (qua `team_members`) | **N - N** | Người dùng tham gia nhiều Team với vai trò (`LEADER`, `MEMBER`, `VIEWER`). |
-| `teams` | `projects` | **1 - N** | Team quản lý và triển khai các dự án được giao. |
+| `users` | `user_roles` | **1 - N** | Người dùng có nhiều vai trò theo từng phạm vi (`workspace`/`project`). |
 | `projects` | `project_roles` / `role_assignments` | **1 - N** | Quản trị phân quyền hạt mịn (Project RBAC & Permission Scheme). |
 | `projects` | `sprints` | **1 - N** | Quản lý chu kỳ lặp Agile Scrum (`FUTURE`, `ACTIVE`, `CLOSED`). |
 | `sprints` | `sprint_report_snapshots` | **1 - 1** | Báo cáo chốt sổ cố định phục vụ vẽ Burndown & Velocity vĩnh viễn. |
@@ -567,12 +546,8 @@ Hệ thống sử dụng cơ sở dữ liệu quan hệ (PostgreSQL) hỗ trợ 
 ```mermaid
 erDiagram
     workspaces ||--o{ workspace_members : has
-    workspaces ||--o{ teams : contains
     workspaces ||--o{ projects : contains
     users ||--o{ workspace_members : joins
-    users ||--o{ team_members : belongs_to
-    teams ||--o{ team_members : has
-    teams ||--o{ projects : manages
     projects ||--o{ sprints : plans
     sprints ||--o| sprint_report_snapshots : generates
     projects ||--o{ work_items : contains
@@ -591,7 +566,7 @@ erDiagram
 ## 4. QUY TẮC RÀNG BUỘC & DỮ LIỆU (DATABASE RULES)
 
 1. **Khóa chính kép (Composite Primary Key)**:
-   - Sử dụng khóa chính kép trực tiếp từ 2 cột Foreign Key cho tất cả các bảng quan hệ $N-N$: `workspace_members`, `team_members`, `work_item_component_maps`, `work_item_label_maps`, `board_column_statuses`, `workflow_scheme_mappings`, `post_tags`, `initiative_votes`, `post_votes`, `role_permissions`.
+   - Sử dụng khóa chính kép trực tiếp từ 2 cột Foreign Key cho tất cả các bảng quan hệ $N-N$: `workspace_members`, `work_item_component_maps`, `work_item_label_maps`, `board_column_statuses`, `workflow_scheme_mappings`, `post_tags`, `initiative_votes`, `post_votes`, `role_permissions`.
    - Giúp đảm bảo tính toàn vẹn dữ liệu (tránh trùng lặp quan hệ), không tạo thừa cột ID tự tăng và tối ưu hóa hiệu năng truy vấn chỉ mục (B-Tree Indexing).
 
 2. **Quy tắc xóa dữ liệu (ON DELETE Constraint)**:
