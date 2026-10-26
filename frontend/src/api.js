@@ -88,6 +88,27 @@ function isAdminPortalPage() {
   return typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
 }
 
+/** Kiểm tra xem token (access hoặc refresh) đã hết hạn theo claim exp hay chưa */
+export function isTokenExpired(token) {
+  if (!token || typeof token !== 'string') return true;
+  const payload = decodeJwtPayload(token);
+  if (!payload || !payload.exp) return false;
+  return payload.exp * 1000 <= Date.now();
+}
+
+/** Kiểm tra phiên của store (user hoặc admin) còn hiệu lực hay không */
+export function isSessionValid(store = userTokenStore) {
+  const token = store.get();
+  if (!token) return false;
+  const refreshToken = store.getRefreshToken();
+  // Nếu có refreshToken: phiên còn sống chừng nào refreshToken chưa hết hạn
+  if (refreshToken) {
+    return !isTokenExpired(refreshToken);
+  }
+  // Nếu không có refreshToken: kiểm tra accessToken
+  return !isTokenExpired(token);
+}
+
 // ─── Recursive Normalizer for Spring Boot / Jackson DefaultTyping ────────────
 function normalizeResponseData(data) {
   if (data === null || data === undefined) return data;
@@ -153,11 +174,25 @@ apiClient.interceptors.request.use(
 let isRefreshing = false;
 let failedQueue = [];
 
-// Hết phiên (không có / không refresh được token): đưa về trang 401 (user) hoặc trang đăng nhập admin.
-const AUTH_PAGE_RE = /^\/(login|register|401|auth\/callback|admin\/login|admin\/auth\/callback)/;
-const redirectToSessionExpired = (isAdminRoute) => {
-  if (typeof window === 'undefined' || AUTH_PAGE_RE.test(window.location.pathname)) return;
-  window.location.replace(isAdminRoute ? '/admin/login' : '/401');
+// Hết phiên (không có / không refresh được token): tự động đá về trang đăng nhập tương ứng thay vì trang lỗi 401
+const PUBLIC_AUTH_PAGES = /^\/(login|register|verify-email|forgot-password|reset-password|auth\/callback|admin\/login|admin\/auth\/callback)/;
+export const redirectToSessionExpired = (isAdminRoute) => {
+  if (typeof window === 'undefined') return;
+  const currentPath = window.location.pathname;
+  if (PUBLIC_AUTH_PAGES.test(currentPath)) return;
+
+  const target = isAdminRoute ? '/admin/login' : '/login';
+
+  try {
+    sessionStorage.setItem('session_expired_notice', 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    if (currentPath && currentPath !== '/' && currentPath !== '/401' && !PUBLIC_AUTH_PAGES.test(currentPath)) {
+      sessionStorage.setItem('redirect_after_login', currentPath + window.location.search);
+    }
+  } catch {
+    // ignore
+  }
+
+  window.location.replace(target);
 };
 
 const processQueue = (error, token = null) => {
@@ -310,29 +345,10 @@ export const userApi = {
 // ─── Work Service: Base Endpoint ──────────────────────────────────────────────
 const WORK_BASE = '/work/api/v1/work';
 
-// ─── 1. Teams API ─────────────────────────────────────────────────────────────
-export const teamApi = {
-  listAll: (params) => apiClient.get(`${WORK_BASE}/teams`, { params }),
-  listMine: (params) => apiClient.get(`${WORK_BASE}/teams/my`, { params }),
-  getById: (id) => apiClient.get(`${WORK_BASE}/teams/${id}`),
-  create: (data) => apiClient.post(`${WORK_BASE}/teams`, data),
-  update: (id, data) => apiClient.put(`${WORK_BASE}/teams/${id}`, data),
-  delete: (id) => apiClient.delete(`${WORK_BASE}/teams/${id}`),
-  leaveTeam: (teamId) => apiClient.post(`${WORK_BASE}/teams/${teamId}/leave`),
-  getMembers: (teamId) => apiClient.get(`${WORK_BASE}/teams/${teamId}/members`),
-  addMember: (teamId, data) => apiClient.post(`${WORK_BASE}/teams/${teamId}/members`, data),
-  assignLeader: (teamId, newLeaderUserId) =>
-    apiClient.put(`${WORK_BASE}/teams/${teamId}/leader`, { newLeaderUserId }),
-  updateMemberRole: (teamId, userId, role) =>
-    apiClient.put(`${WORK_BASE}/teams/${teamId}/members/${userId}/role`, { role }),
-  removeMember: (teamId, userId) =>
-    apiClient.delete(`${WORK_BASE}/teams/${teamId}/members/${userId}`),
-};
 
 // ─── 2. Projects API ──────────────────────────────────────────────────────────
 export const invitationApi = {
   my: () => apiClient.get(`${WORK_BASE}/invitations/my`, { skipErrorToast: true }),
-  forTeam: (teamId) => apiClient.get(`${WORK_BASE}/invitations`, { params: { teamId }, skipErrorToast: true }),
   forProject: (projectId) => apiClient.get(`${WORK_BASE}/invitations`, { params: { projectId }, skipErrorToast: true }),
   accept: (id) => apiClient.post(`${WORK_BASE}/invitations/${id}/accept`),
   decline: (id) => apiClient.post(`${WORK_BASE}/invitations/${id}/decline`),

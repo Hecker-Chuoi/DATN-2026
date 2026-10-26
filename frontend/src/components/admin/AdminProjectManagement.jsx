@@ -27,7 +27,7 @@ import {
   LayoutGrid,
   ListFilter
 } from 'lucide-react';
-import { projectApi, teamApi } from '../../api.js';
+import { projectApi } from '../../api.js';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 export default function AdminProjectManagement() {
@@ -46,11 +46,9 @@ export default function AdminProjectManagement() {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [templateFilter, setTemplateFilter] = useState('ALL'); // 'ALL' | 'TEMPLATE_ONLY' | 'STANDARD_ONLY'
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'PLANNING' | 'COMPLETED' | 'ON_HOLD'
-  const [teamFilter, setTeamFilter] = useState('ALL');
-
+  
   // ─── States: Auxiliary Data ───
-  const [teams, setTeams] = useState([]);
-  const [stats, setStats] = useState({
+    const [stats, setStats] = useState({
     total: 0,
     templates: 0,
     active: 0,
@@ -65,21 +63,6 @@ export default function AdminProjectManagement() {
   const [deletingProject, setDeletingProject] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ─── 1. Load Teams for filtering & modals ───
-  useEffect(() => {
-    async function loadTeams() {
-      try {
-        const res = await teamApi.listAll();
-        if (res && res.data) {
-          setTeams(Array.isArray(res.data) ? res.data : []);
-        }
-      } catch (err) {
-        console.warn('Could not load teams:', err);
-      }
-    }
-    loadTeams();
-  }, []);
-
   // ─── 2. Fetch Projects Data ───
   const fetchProjects = useCallback(async (targetPage = page, targetPageSize = pageSize) => {
     setLoading(true);
@@ -89,7 +72,6 @@ export default function AdminProjectManagement() {
         size: targetPageSize,
         search: searchKeyword.trim() || undefined,
         status: statusFilter !== 'ALL' ? statusFilter : undefined,
-        teamId: teamFilter !== 'ALL' ? teamFilter : undefined,
       };
 
       // Xử lý bộ lọc Template
@@ -122,7 +104,7 @@ export default function AdminProjectManagement() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, searchKeyword, templateFilter, statusFilter, teamFilter]);
+  }, [page, pageSize, searchKeyword, templateFilter, statusFilter]);
 
   // ─── 3. Fetch Quick Stats (Non-paginated summary) ───
   const fetchStats = async () => {
@@ -154,7 +136,7 @@ export default function AdminProjectManagement() {
   useEffect(() => {
     fetchProjects(0, pageSize);
     fetchStats();
-  }, [templateFilter, statusFilter, teamFilter, pageSize]);
+  }, [templateFilter, statusFilter, pageSize]);
 
   // Trigger search submit
   const handleSearchSubmit = (e) => {
@@ -168,7 +150,6 @@ export default function AdminProjectManagement() {
     setSearchKeyword('');
     setTemplateFilter('ALL');
     setStatusFilter('ALL');
-    setTeamFilter('ALL');
     setPage(0);
   };
 
@@ -201,7 +182,6 @@ export default function AdminProjectManagement() {
         status: editingProject.status,
         isPublic: editingProject.isPublic,
         isTemplate: editingProject.isTemplate,
-        teamId: editingProject.teamId || null,
         startDate: editingProject.startDate || null,
         endDate: editingProject.endDate || null,
       });
@@ -620,39 +600,8 @@ export default function AdminProjectManagement() {
                 </select>
               </div>
 
-              {/* Team Filter */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Nhóm:</span>
-                <select
-                  value={teamFilter}
-                  onChange={(e) => {
-                    setTeamFilter(e.target.value);
-                    setPage(0);
-                  }}
-                  style={{
-                    height: 38,
-                    padding: '0 12px',
-                    borderRadius: 8,
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: '#ffffff',
-                    fontSize: 13,
-                    color: '#0f172a',
-                    outline: 'none',
-                    cursor: 'pointer',
-                    maxWidth: 180,
-                  }}
-                >
-                  <option value="ALL">Tất cả các nhóm</option>
-                  {teams.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               {/* Reset Filter Button */}
-              {(searchKeyword || templateFilter !== 'ALL' || statusFilter !== 'ALL' || teamFilter !== 'ALL') && (
+              {(searchKeyword || templateFilter !== 'ALL' || statusFilter !== 'ALL') && (
                 <button
                   type="button"
                   onClick={handleResetFilters}
@@ -880,13 +829,13 @@ export default function AdminProjectManagement() {
                         </span>
                       </td>
 
-                      {/* Team & Visibility */}
+                      {/* Workspace & Visibility */}
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#334155' }}>
                             <Users size={13} color="#64748b" />
                             <span style={{ fontWeight: 500 }}>
-                              {project.teamName || 'Cá nhân / Toàn cục'}
+                              {'Dự án Không gian'}
                             </span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#64748b' }}>
@@ -1175,7 +1124,6 @@ export default function AdminProjectManagement() {
       {/* ─── MODAL 1: Create Project / Template Modal ─── */}
       {showCreateModal && (
         <CreateProjectModal
-          teams={teams}
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
@@ -1306,7 +1254,7 @@ export default function AdminProjectManagement() {
                 />
               </div>
 
-              {/* Status & Team */}
+              {/* Status */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
@@ -1328,31 +1276,6 @@ export default function AdminProjectManagement() {
                     <option value="ACTIVE">Đang hoạt động</option>
                     <option value="COMPLETED">Đã hoàn thành</option>
                     <option value="ON_HOLD">Tạm dừng</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                    Nhóm sở hữu
-                  </label>
-                  <select
-                    value={editingProject.teamId || ''}
-                    onChange={(e) => setEditingProject({ ...editingProject, teamId: e.target.value || null })}
-                    style={{
-                      width: '100%',
-                      height: 40,
-                      padding: '0 12px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  >
-                    <option value="">Không gán nhóm (Cá nhân)</option>
-                    {teams.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
                   </select>
                 </div>
               </div>
@@ -1460,7 +1383,6 @@ export default function AdminProjectManagement() {
       {/* ─── MODAL 3: Clone Project Modal ─── */}
       {cloningProject && (
         <CreateProjectModal
-          teams={teams}
           sourceProject={cloningProject}
           onClose={() => setCloningProject(null)}
           onSuccess={() => {

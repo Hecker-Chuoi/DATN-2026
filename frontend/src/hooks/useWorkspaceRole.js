@@ -60,7 +60,6 @@ export function useWorkspaceRole() {
     isOwner: role === 'OWNER',
     isAdmin: roleAtLeast(role, 'ADMIN'),
     canView: !!role,
-    canCreateTeam: roleAtLeast(role, 'MEMBER'),
     canCreateProject: roleAtLeast(role, 'MEMBER'),
     canManageMembers: roleAtLeast(role, 'ADMIN'),
     canManageWorkspace: roleAtLeast(role, 'ADMIN'),

@@ -1,59 +1,66 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation, useParams } from 'react-router-dom';
 import {
-  Inbox,
-  CheckCircle2,
   FolderKanban,
-  Eye,
+  CheckCircle2,
   Plus,
   ChevronDown,
   ChevronRight,
-  Home,
   Layers,
-  Sparkles,
   Users,
-  Building2,
-  Compass,
-  LogOut,
   Settings,
-  Mail
+  Mail,
+  LogOut,
+  LayoutGrid,
+  ListTodo
 } from 'lucide-react';
 import WorkspaceSwitcher from '../workspace/WorkspaceSwitcher.jsx';
 import { useWorkspaceRole } from '../../hooks/useWorkspaceRole.js';
 import { wsPath } from '../../utils/workspacePath.js';
 
-
-const TEAM_COLORS = [
-  '#EC4899', // Pink
+const PROJECT_COLORS = [
+  '#2563EB', // Blue
   '#8B5CF6', // Purple
-  '#3B82F6', // Blue
   '#10B981', // Green
   '#F59E0B', // Amber
+  '#EC4899', // Pink
   '#06B6D4', // Cyan
   '#6366F1'  // Indigo
 ];
 
-export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreateProject, invitationCount = 0, currentUser, onLogout }) {
+export default function Sidebar({
+  projects = [],
+  loading = false,
+  onOpenCreateProject,
+  invitationCount = 0,
+  currentUser,
+  onLogout
+}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { workspaceId } = useParams();
-  const { canCreateTeam, canCreateProject, canManageWorkspace } = useWorkspaceRole();
-  const [expandedTeams, setExpandedTeams] = useState({ [teams[0]?.id]: true });
+  const { canCreateProject, canManageWorkspace } = useWorkspaceRole();
+  const [expandedProjects, setExpandedProjects] = useState({});
 
-  // Initializer của useState chỉ chạy MỘT lần, nên state accordion bị stale ngay
-  // khi danh sách team đổi - đúng điều xảy ra mỗi lần đổi workspace. Reset lại
-  // theo workspaceId để không còn key của workspace cũ.
   useEffect(() => {
-    setExpandedTeams(teams[0]?.id ? { [teams[0].id]: true } : {});
+    // Tự động mở accordion của dự án đầu tiên hoặc dự án đang xem
+    const activeProject = projects.find((p) => location.pathname.includes(`/projects/${p.id}`));
+    if (activeProject) {
+      setExpandedProjects({ [activeProject.id]: true });
+    } else if (projects[0]?.id) {
+      setExpandedProjects({ [projects[0].id]: true });
+    } else {
+      setExpandedProjects({});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
   const ws = (sub) => wsPath(workspaceId, sub);
 
-  const toggleTeam = (teamId) => {
-    setExpandedTeams((prev) => ({
+  const toggleProject = (projectId) => {
+    setExpandedProjects((prev) => ({
       ...prev,
-      [teamId]: !prev[teamId],
+      [projectId]: !prev[projectId],
     }));
   };
 
@@ -70,7 +77,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         userSelect: 'none',
       }}
     >
-      {/* ─── 1. Workspace Header (Linear Style) ─── */}
+      {/* ─── 1. Workspace Header ─── */}
       <div
         style={{
           padding: '10px 12px',
@@ -82,16 +89,13 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
-          <WorkspaceSwitcher
-            currentUser={currentUser}
-            onLogout={onLogout}
-          />
+          <WorkspaceSwitcher currentUser={currentUser} onLogout={onLogout} />
         </div>
 
         {canCreateProject && (
           <button
-            onClick={() => onOpenCreateProject(null)}
-            title="Tạo dự án nhanh"
+            onClick={() => onOpenCreateProject && onOpenCreateProject()}
+            title="Tạo dự án mới"
             style={{
               width: 28,
               height: 28,
@@ -125,8 +129,8 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         <NavItem
           to={ws('/projects')}
           icon={<FolderKanban size={17} color="#2563EB" />}
-          label="Dự án & Bảng làm việc"
-          active={location.pathname.startsWith(ws('/projects'))}
+          label="Tất cả dự án"
+          active={location.pathname === ws('/projects')}
         />
         <NavItem
           to={ws('/my-issues')}
@@ -144,14 +148,14 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         <NavItem
           to={ws('/members')}
           icon={<Users size={17} color="#8B5CF6" />}
-          label="Thành viên"
+          label="Thành viên Không gian"
           active={location.pathname === ws('/members')}
         />
         {canManageWorkspace && (
           <NavItem
             to={ws('/settings')}
             icon={<Settings size={17} color="#64748B" />}
-            label="Cài đặt không gian làm việc"
+            label="Cài đặt không gian"
             active={location.pathname === ws('/settings')}
           />
         )}
@@ -159,7 +163,7 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
 
       <div style={{ margin: '8px 16px', height: 1, backgroundColor: '#F1F5F9' }} />
 
-      {/* ─── 3. Your Teams Section (Accordion) ─── */}
+      {/* ─── 3. Projects Section (Direct Workspace Projects) ─── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px' }}>
         <div
           style={{
@@ -174,54 +178,54 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
             letterSpacing: '0.05em',
           }}
         >
-          <span>Nhóm của bạn</span>
-          {canCreateTeam && (
-          <button
-            onClick={onOpenCreateTeam}
-            title="Thêm nhóm mới"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#94A3B8',
-              display: 'flex',
-              alignItems: 'center',
-              padding: 2,
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#2563EB')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#94A3B8')}
-          >
-            <Plus size={14} />
-          </button>
+          <span>Dự án của bạn</span>
+          {canCreateProject && (
+            <button
+              onClick={() => onOpenCreateProject && onOpenCreateProject()}
+              title="Thêm dự án mới"
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#94A3B8',
+                display: 'flex',
+                alignItems: 'center',
+                padding: 2,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#2563EB')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#94A3B8')}
+            >
+              <Plus size={14} />
+            </button>
           )}
         </div>
 
         {loading ? (
-          <div style={{ padding: '12px 8px', fontSize: 12, color: '#94A3B8' }}>Đang tải danh sách nhóm...</div>
-        ) : teams.length === 0 ? (
+          <div style={{ padding: '12px 8px', fontSize: 12, color: '#94A3B8' }}>Đang tải danh sách dự án...</div>
+        ) : projects.length === 0 ? (
           <div style={{ padding: '12px 8px', fontSize: 12, color: '#94A3B8' }}>
-            Chưa có nhóm nào.{' '}
-            {canCreateTeam && (
+            Chưa có dự án nào.{' '}
+            {canCreateProject && (
               <span
-                onClick={onOpenCreateTeam}
+                onClick={() => onOpenCreateProject && onOpenCreateProject()}
                 style={{ color: '#2563EB', cursor: 'pointer', fontWeight: 600 }}
               >
-                Tạo nhóm ngay
+                Tạo dự án ngay
               </span>
             )}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {teams.map((team, idx) => {
-              const isExpanded = !!expandedTeams[team.id];
-              const color = TEAM_COLORS[idx % TEAM_COLORS.length];
-              const isCurrentTeam = location.pathname.includes(`/teams/${team.id}`);
+            {projects.map((project, idx) => {
+              const isExpanded = !!expandedProjects[project.id];
+              const color = PROJECT_COLORS[idx % PROJECT_COLORS.length];
+              const isCurrentProject = location.pathname.includes(`/projects/${project.id}`);
 
               return (
-                <div key={team.id || `team-${idx}`} style={{ display: 'flex', flexDirection: 'column' }}>
-                  {/* Team Accordion Trigger */}
+                <div key={project.id || `proj-${idx}`} style={{ display: 'flex', flexDirection: 'column' }}>
+                  {/* Project Trigger */}
                   <div
-                    onClick={() => toggleTeam(team.id)}
+                    onClick={() => toggleProject(project.id)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -230,16 +234,16 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
                       borderRadius: 6,
                       fontSize: 13,
                       fontWeight: 600,
-                      color: isCurrentTeam ? '#0F172A' : '#334155',
-                      backgroundColor: isCurrentTeam ? '#F1F5F9' : 'transparent',
+                      color: isCurrentProject ? '#0F172A' : '#334155',
+                      backgroundColor: isCurrentProject ? '#F1F5F9' : 'transparent',
                       cursor: 'pointer',
                       transition: 'background-color 0.15s ease',
                     }}
                     onMouseEnter={(e) => {
-                      if (!isCurrentTeam) e.currentTarget.style.backgroundColor = '#F8FAFC';
+                      if (!isCurrentProject) e.currentTarget.style.backgroundColor = '#F8FAFC';
                     }}
                     onMouseLeave={(e) => {
-                      if (!isCurrentTeam) e.currentTarget.style.backgroundColor = 'transparent';
+                      if (!isCurrentProject) e.currentTarget.style.backgroundColor = 'transparent';
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
@@ -253,30 +257,36 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
                         }}
                       />
                       <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {team.name}
+                        {project.name}
                       </span>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontSize: 11, color: '#94A3B8' }}>{team.key || ''}</span>
+                      <span style={{ fontSize: 11, color: '#94A3B8' }}>{project.key || ''}</span>
                       {isExpanded ? <ChevronDown size={14} color="#94A3B8" /> : <ChevronRight size={14} color="#94A3B8" />}
                     </div>
                   </div>
 
-                  {/* Accordion Children */}
+                  {/* Project Sub-items */}
                   {isExpanded && (
                     <div style={{ paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
                       <SubNavItem
-                        to={ws(`/teams/${team.id}`)}
-                        icon={<Home size={14} />}
-                        label="Trang chủ & Thành viên"
-                        active={location.pathname === ws(`/teams/${team.id}`)}
+                        to={ws(`/projects/${project.id}/board`)}
+                        icon={<LayoutGrid size={13} />}
+                        label="Bảng làm việc"
+                        active={location.pathname === ws(`/projects/${project.id}/board`)}
                       />
                       <SubNavItem
-                        to={ws(`/projects?teamId=${team.id}`)}
-                        icon={<Layers size={14} />}
-                        label="Danh sách dự án"
-                        active={location.search.includes(`teamId=${team.id}`)}
+                        to={ws(`/projects/${project.id}/backlog`)}
+                        icon={<ListTodo size={13} />}
+                        label="Danh sách công việc"
+                        active={location.pathname === ws(`/projects/${project.id}/backlog`)}
+                      />
+                      <SubNavItem
+                        to={ws(`/projects/${project.id}/members`)}
+                        icon={<Users size={13} />}
+                        label="Thành viên"
+                        active={location.pathname === ws(`/projects/${project.id}/members`)}
                       />
                     </div>
                   )}
@@ -368,35 +378,35 @@ export default function Sidebar({ teams, loading, onOpenCreateTeam, onOpenCreate
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                  {onLogout && (
-          <button
-            onClick={onLogout}
-            title="Đăng xuất"
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#64748B',
-              cursor: 'pointer',
-              padding: '6px',
-              borderRadius: 6,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#FEE2E2';
-              e.currentTarget.style.color = '#DC2626';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = '#64748B';
-            }}
-          >
-            <LogOut size={16} />
-          </button>
-        )}
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              title="Đăng xuất"
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#64748B',
+                cursor: 'pointer',
+                padding: '6px',
+                borderRadius: 6,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#FEE2E2';
+                e.currentTarget.style.color = '#DC2626';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#64748B';
+              }}
+            >
+              <LogOut size={16} />
+            </button>
+          )}
         </div>
       </div>
     </aside>
@@ -436,7 +446,16 @@ function NavItem({ to, icon, label, active, badge = 0 }) {
       {icon}
       <span style={{ flex: 1 }}>{label}</span>
       {badge > 0 && (
-        <span style={{ fontSize: 11, fontWeight: 700, backgroundColor: '#F59E0B', color: '#FFFFFF', padding: '1px 7px', borderRadius: 10 }}>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            backgroundColor: '#F59E0B',
+            color: '#FFFFFF',
+            padding: '1px 7px',
+            borderRadius: 10,
+          }}
+        >
           {badge}
         </span>
       )}

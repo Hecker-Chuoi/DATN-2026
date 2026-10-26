@@ -30,9 +30,6 @@ export default function Header({ currentUser, onLogout, onOpenCreateProject }) {
     if (location.pathname === '/projects') {
       return <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Dự án & Quy trình</span>;
     }
-    if (location.pathname.startsWith('/teams/')) {
-      return <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Chi tiết Nhóm</span>;
-    }
     return <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>Quản lý Công việc</span>;
   };
 

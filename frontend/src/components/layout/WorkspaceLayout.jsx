@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Outlet, useParams, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
-import { teamApi, invitationApi } from '../../api.js';
+import { projectApi, invitationApi } from '../../api.js';
 import { workspaceInvitationApi } from '../../api/workspaceServiceApi';
 import CreateProjectModal from '../project/CreateProjectModal.jsx';
-import CreateTeamModal from '../modals/CreateTeamModal.jsx';
+import ErrorBoundary from '../common/ErrorBoundary.jsx';
 import { useWorkspace } from '../../context/WorkspaceContext.jsx';
 import { useWorkspaceRole } from '../../hooks/useWorkspaceRole.js';
 
@@ -12,66 +12,63 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
   const { workspaceId } = useParams();
   const navigate = useNavigate();
   const { loading: workspaceLoading } = useWorkspace();
-  const { notMember } = useWorkspaceRole();
-  const [teams, setTeams] = useState([]);
-  const [loadingTeams, setLoadingTeams] = useState(true);
-  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
-  const [isCreateTeamModalOpen, setIsCreateTeamModalOpen] = useState(false);
-  const [selectedTeamIdForProject, setSelectedTeamIdForProject] = useState(null);
+  const { notMember, canCreateProject: canCreateProjectByRole } = useWorkspaceRole();
 
-  // Danh sách team PHẢI được scope theo workspace đang xem, nếu không thì đổi
-  // workspace vẫn thấy y nguyên team cũ và tính năng chỉ là trang trí.
-  const fetchTeams = useCallback(async () => {
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+
+  // Danh sách dự án scope theo workspace đang xem
+  const fetchProjects = useCallback(async () => {
     if (!workspaceId) return;
     try {
-      setLoadingTeams(true);
-      const res = await teamApi.listMine({ workspaceId });
-      setTeams(Array.isArray(res?.data) ? res.data : []);
+      setLoadingProjects(true);
+      const res = await projectApi.listAll({ workspaceId, size: 50 });
+      const content = res?.data?.content || (Array.isArray(res?.data) ? res.data : []);
+      setProjects(content);
     } catch (err) {
-      console.error('Failed to load teams:', err);
-      setTeams([]);
+      console.error('Failed to load projects:', err);
+      setProjects([]);
     } finally {
-      setLoadingTeams(false);
+      setLoadingProjects(false);
     }
   }, [workspaceId]);
 
-  // Phụ thuộc workspaceId: một lần navigate đổi workspace là đủ để fetch lại,
-  // không cần điều phối refetch thủ công ở switcher.
   useEffect(() => {
-    fetchTeams();
-  }, [fetchTeams]);
+    fetchProjects();
+  }, [fetchProjects]);
 
-  // Lời mời đang chờ: nguồn chung cho badge sidebar và trang /invitations. Poll 30s là đủ, không cần WebSocket.
+  // Lời mời đang chờ: nguồn chung cho badge sidebar và trang /invitations
   const [invitations, setInvitations] = useState([]);
-  // Gộp 2 nguồn: work-service (TEAM/PROJECT) + workspace-service (WORKSPACE, map về cùng shape).
   const fetchInvitations = async () => {
     const [work, ws] = await Promise.allSettled([invitationApi.my(), workspaceInvitationApi.my()]);
     const workList = work.status === 'fulfilled' && Array.isArray(work.value?.data) ? work.value.data : [];
     const wsList = ws.status === 'fulfilled' && Array.isArray(ws.value?.data)
-      ? ws.value.data.map((inv) => ({ ...inv, type: 'WORKSPACE', targetId: inv.workspaceId, targetName: inv.workspaceName, roleName: inv.role }))
+      ? ws.value.data.map((inv) => ({
+          ...inv,
+          type: 'WORKSPACE',
+          targetId: inv.workspaceId,
+          targetName: inv.workspaceName,
+          roleName: inv.role,
+        }))
       : [];
     setInvitations([...wsList, ...workList]);
   };
+
   useEffect(() => {
     fetchInvitations();
     const timer = setInterval(fetchInvitations, 30000);
     return () => clearInterval(timer);
   }, []);
 
-  const handleOpenCreateProject = (teamId = null) => {
-    setSelectedTeamIdForProject(teamId);
+  const handleOpenCreateProject = () => {
     setIsCreateProjectModalOpen(true);
   };
 
-  // Chỉ trưởng nhóm (myRole LEADER, owner cũng là LEADER) hoặc Global ADMIN mới được tạo dự án; backend chặn lại lần nữa.
   const isSystemAdmin = Boolean(currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN'));
-  const leaderTeams = useMemo(() => {
-    return isSystemAdmin ? teams : teams.filter((t) => t.myRole === 'LEADER');
-  }, [isSystemAdmin, teams]);
-  const canCreateProject = isSystemAdmin || leaderTeams.length > 0;
+  const canCreateProject = isSystemAdmin || canCreateProjectByRole;
 
-  // Deep-link vào workspace mình không thuộc: hiện trạng thái rõ ràng, thay vì
-  // sidebar rỗng kèm một loạt request lỗi.
+  // Deep-link vào workspace mình không thuộc
   if (!workspaceLoading && notMember) {
     return (
       <div
@@ -127,11 +124,10 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
     >
-      {/* ─── Left Sidebar (Linear Style Accordion) ─── */}
+      {/* ─── Left Sidebar ─── */}
       <Sidebar
-        teams={teams}
-        loading={loadingTeams}
-        onOpenCreateTeam={() => setIsCreateTeamModalOpen(true)}
+        projects={projects}
+        loading={loadingProjects}
         onOpenCreateProject={handleOpenCreateProject}
         invitationCount={invitations.length}
         currentUser={currentUser}
@@ -159,41 +155,29 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
             height: '100%',
           }}
         >
-          <Outlet
-            context={{
-              teams,
-              leaderTeams,
-              canCreateProject,
-              isSystemAdmin,
-              currentUser,
-              invitations,
-              refreshInvitations: fetchInvitations,
-              refreshTeams: fetchTeams,
-              onOpenCreateProject: handleOpenCreateProject,
-              onOpenCreateTeam: () => setIsCreateTeamModalOpen(true),
-            }}
-          />
+          <ErrorBoundary>
+            <Outlet
+              context={{
+                projects,
+                canCreateProject,
+                isSystemAdmin,
+                currentUser,
+                invitations,
+                refreshInvitations: fetchInvitations,
+                refreshProjects: fetchProjects,
+                onOpenCreateProject: handleOpenCreateProject,
+              }}
+            />
+          </ErrorBoundary>
         </main>
       </div>
-
-      {/* ─── Global Create Team Modal ─── */}
-      <CreateTeamModal
-        isOpen={isCreateTeamModalOpen}
-        onClose={() => setIsCreateTeamModalOpen(false)}
-        onTeamCreated={() => {
-          fetchTeams();
-        }}
-      />
 
       {/* ─── Global Create Project Modal ─── */}
       <CreateProjectModal
         isOpen={isCreateProjectModalOpen}
         onClose={() => setIsCreateProjectModalOpen(false)}
-        teams={leaderTeams}
-        allowPersonal={isSystemAdmin}
-        defaultTeamId={selectedTeamIdForProject}
         onProjectCreated={() => {
-          fetchTeams();
+          fetchProjects();
         }}
       />
     </div>
