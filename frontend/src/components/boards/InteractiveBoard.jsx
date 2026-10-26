@@ -263,7 +263,7 @@ function handleMoveError(err, item, column, onReload, onResolveSubtasks) {
   }
 
   // Cha con dang mo -> mo modal dong loat thay vi bat nguoi dung tu lam tung cai.
-  if (/sub-?task|công việc con/i.test(msg) && onResolveSubtasks) {
+  if (/sub-?task|công việc con|nhiệm vụ con/i.test(msg) && onResolveSubtasks) {
     toast.error(msg);
     onResolveSubtasks(item, column);
     return;

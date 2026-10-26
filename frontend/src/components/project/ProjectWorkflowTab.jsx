@@ -68,9 +68,9 @@ const COLOR_PRESETS = [
 const ICON_PRESETS = [
   { name: 'Zap', label: 'Tia chớp (Hạng mục lớn)' },
   { name: 'CheckSquare', label: 'Ô kiểm (Nhiệm vụ)' },
-  { name: 'Bookmark', label: 'Thẻ đánh dấu (Câu chuyện)' },
-  { name: 'Bug', label: 'Con bọ (Lỗi phần mềm)' },
-  { name: 'GitCommit', label: 'Điểm nhánh (Nhiệm vụ con)' },
+  { name: 'Bookmark', label: 'Thẻ đánh dấu (Yêu cầu)' },
+  { name: 'Bug', label: 'Cảnh báo (Sự cố)' },
+  { name: 'GitCommit', label: 'Nhánh việc (Nhiệm vụ con)' },
   { name: 'Layers', label: 'Phân tầng (Giai đoạn)' },
   { name: 'FileCheck', label: 'Kiểm định (Nghiệm thu)' },
   { name: 'Sparkles', label: 'Ngôi sao (Chiến dịch)' },
@@ -2904,7 +2904,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE' }}>
                       <CheckSquare size={16} color="#2563EB" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8' }}>Cấp 0: Tiêu chuẩn (Nhiệm vụ / Câu chuyện / Lỗi)</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8' }}>Cấp 0: Tiêu chuẩn (Nhiệm vụ / Yêu cầu / Sự cố)</span>
                     </div>
 
                     <ArrowRight size={18} color="#94A3B8" />
@@ -2958,7 +2958,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                           Cấp 0
                         </span>
                         <h4 style={{ fontSize: 15, fontWeight: 700, color: '#1E3A8A', margin: 0 }}>
-                          Công Việc Tiêu Chuẩn (Nhiệm vụ, Câu chuyện, Lỗi...) — Tầng Thực Thi Cốt Lõi
+                          Công Việc Tiêu Chuẩn (Nhiệm vụ, Yêu cầu, Sự cố...) — Tầng Thực Thi Cốt Lõi
                         </h4>
                       </div>
                       <p style={{ fontSize: 13, color: '#1E40AF', margin: '0 0 10px 0', lineHeight: 1.5 }}>
@@ -3044,7 +3044,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     <div style={{ padding: 14, borderRadius: 8, border: '1px solid #BFDBFE', backgroundColor: '#EFF6FF' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: '#2563EB', fontWeight: 700, fontSize: 13 }}>
                         <CheckSquare size={16} />
-                        <span>Quy trình Nhiệm vụ / Câu chuyện</span>
+                        <span>Quy trình Nhiệm vụ / Yêu cầu</span>
                       </div>
                       <div style={{ fontSize: 12, color: '#1E40AF', lineHeight: 1.5 }}>
                         Dòng chảy công việc linh hoạt tinh gọn:

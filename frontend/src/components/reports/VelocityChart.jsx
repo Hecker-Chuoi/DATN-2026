@@ -8,7 +8,7 @@ import { EmptyChart } from './BurndownChart.jsx';
 /** Velocity: so sanh cam ket vs hoan thanh qua cac Sprint da dong. */
 export default function VelocityChart({ rows, average }) {
   if (!rows?.length) {
-    return <EmptyChart message="Chưa có chu kỳ nào đã đóng để tính vận tốc." />;
+    return <EmptyChart message="Chưa có chu kỳ nào hoàn tất để tính năng suất làm việc." />;
   }
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT}>

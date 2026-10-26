@@ -50,9 +50,9 @@ import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 const TYPE_ICONS = {
   EPIC: { icon: Bookmark, color: '#6554C0', label: 'Hạng mục lớn' },
-  STORY: { icon: Bookmark, color: '#36B37E', label: 'Câu chuyện người dùng' },
+  STORY: { icon: Bookmark, color: '#36B37E', label: 'Yêu cầu' },
   TASK: { icon: CheckSquare, color: '#0052CC', label: 'Nhiệm vụ' },
-  BUG: { icon: CircleDot, color: '#E5493A', label: 'Lỗi phần mềm' },
+  BUG: { icon: CircleDot, color: '#E5493A', label: 'Sự cố' },
   SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Nhiệm vụ con' },
 };
 
@@ -319,7 +319,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
       const res = await workItemApi.getById(currentId);
       if (res && res.data) {
         setItem(res.data);
-        toast.success(targetSprint ? 'Đã chuyển chu kỳ' : 'Đã đưa về danh sách tồn đọng');
+        toast.success(targetSprint ? 'Đã chuyển chu kỳ' : 'Đã đưa về kho việc');
         fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
@@ -329,7 +329,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
         const res = await workItemApi.update(currentId, { sprintId: targetSprint });
         if (res && res.data) {
           setItem(res.data);
-          toast.success(targetSprint ? 'Đã chuyển chu kỳ' : 'Đã đưa về danh sách tồn đọng');
+          toast.success(targetSprint ? 'Đã chuyển chu kỳ' : 'Đã đưa về kho việc');
           fetchChangelogs(currentId);
           if (onItemUpdated) onItemUpdated(res.data);
         }
@@ -2379,7 +2379,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       color: '#2563EB',
                     }}
                   >
-                    {item?.sprintName || 'Danh sách tồn đọng'}
+                    {item?.sprintName || 'Kho việc chờ phân bổ'}
                   </div>
                 ) : (
                   <select
@@ -2398,7 +2398,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       cursor: 'pointer',
                     }}
                   >
-                    <option value="">Danh sách tồn đọng</option>
+                    <option value="">Kho việc chờ phân bổ</option>
                     {sprints
                       .filter((sp) => sp.state !== 'CLOSED')
                       .map((sp) => (

@@ -63,8 +63,8 @@ export default function CompleteSprintModal({
               <Radio
                 checked={target === 'BACKLOG'}
                 onChange={() => setTarget('BACKLOG')}
-                label="Danh sách tồn đọng"
-                hint="Đưa về danh sách tồn đọng để lập kế hoạch lại"
+                label="Kho việc chờ phân bổ"
+                hint="Đưa về kho việc chờ phân bổ để lập kế hoạch lại"
               />
 
               {futureSprints

@@ -366,7 +366,7 @@ export default function TemplatePreviewModal({
           }}
         >
           <span style={{ fontSize: 12, color: '#64748B', flex: 1 }}>
-            Thành viên, bình luận, tệp đính kèm và lịch sử của mẫu không được sao chép. Sprint được đặt lại thành
+            Thành viên, bình luận, tệp đính kèm và lịch sử của mẫu không được sao chép. Các chu kỳ được đặt lại thành
             “Dự kiến”, công việc về trạng thái khởi tạo.
           </span>
           <button type="button" onClick={onClose} style={secondaryBtn}>
@@ -573,7 +573,7 @@ function IntegrityBanner({ errors, warnings }) {
   if (errors.length === 0 && warnings.length === 0) {
     return (
       <div style={{ ...banner('#ECFDF5', '#A7F3D0', '#047857'), marginBottom: 16 }}>
-        <CheckCircle2 size={15} /> Mẫu hợp lệ: trạng thái, workflow, board, sprint và thời gian đều nhất quán.
+        <CheckCircle2 size={15} /> Mẫu hợp lệ: trạng thái, quy trình, bảng làm việc, chu kỳ và thời gian đều nhất quán.
       </div>
     );
   }
@@ -695,7 +695,7 @@ function TimelineChart({ p }) {
         ngày bắt đầu bạn chọn và giữ nguyên khoảng cách tương đối.
       </div>
       {sprints.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: '#94A3B8' }}>Mẫu không có sprint có ngày.</div>
+        <div style={{ fontSize: 12.5, color: '#94A3B8' }}>Mẫu không có chu kỳ nào được gắn mốc ngày.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {sprints.map((s) => (
@@ -799,7 +799,7 @@ function WorkflowTab({ p, customizations, onRenameStatus, onRenameType }) {
       {(p.workflows || []).map((w) => (
         <Section
           key={w.id}
-          title={`Workflow: ${w.name}${w.isDefault ? ' (mặc định)' : ''}`}
+          title={`Quy trình: ${w.name}${w.isDefault ? ' (mặc định)' : ''}`}
           subtitle={w.appliesToTypes?.length ? `Áp dụng cho: ${w.appliesToTypes.join(', ')}` : 'Chưa gắn loại công việc nào'}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -962,19 +962,19 @@ function PlanTab({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Section
-        title={`Sprint (${p.sprints?.length || 0})`}
-        subtitle="Có thể đổi tên hoặc bấm icon Thùng rác để bỏ qua sprint không cần (công việc thuộc sprint đó sẽ tự động chuyển về Backlog)."
+        title={`Chu kỳ làm việc (${p.sprints?.length || 0})`}
+        subtitle="Có thể đổi tên hoặc bấm biểu tượng Thùng rác để bỏ qua chu kỳ không cần (công việc thuộc chu kỳ đó sẽ tự động chuyển về Kho việc)."
       >
         {p.sprints?.length ? (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead>
               <tr style={{ color: '#64748B', textAlign: 'left' }}>
-                <th style={th}>Sprint</th>
+                <th style={th}>Tên chu kỳ</th>
                 <th style={th}>Mục tiêu</th>
                 <th style={th}>Bắt đầu</th>
                 <th style={th}>Độ dài</th>
                 <th style={th}>Công việc</th>
-                <th style={th}>Points</th>
+                <th style={th}>Khối lượng (Điểm)</th>
                 <th style={{ ...th, textAlign: 'right' }}>Thao tác</th>
               </tr>
             </thead>
@@ -1018,7 +1018,7 @@ function PlanTab({
                       <button
                         type="button"
                         onClick={() => onToggleSprint(sp.id)}
-                        title={isExcluded ? 'Khôi phục sprint này' : 'Bỏ qua sprint này'}
+                        title={isExcluded ? 'Khôi phục chu kỳ này' : 'Bỏ qua chu kỳ này'}
                         style={{
                           border: 'none',
                           background: isExcluded ? '#EFF6FF' : '#FEF2F2',

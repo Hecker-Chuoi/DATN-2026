@@ -129,8 +129,8 @@ export default function SprintAccordion({
               }}
             >
               {isBacklog
-                ? 'Danh sách tồn đọng trống. Hãy tạo công việc mới.'
-                : 'Kéo công việc từ danh sách tồn đọng vào chu kỳ này.'}
+                ? 'Kho công việc hiện đang trống. Hãy tạo công việc mới.'
+                : 'Kéo công việc từ kho việc vào chu kỳ này.'}
             </div>
           )}
 

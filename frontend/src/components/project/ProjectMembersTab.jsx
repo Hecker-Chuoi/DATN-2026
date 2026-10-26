@@ -60,7 +60,7 @@ const PERMISSION_DEFINITIONS = [
       {
         key: 'ISSUE_CREATE',
         name: 'Tạo Công việc Mới',
-        desc: 'Tạo mới Hạng mục lớn, Câu chuyện người dùng, Nhiệm vụ, Lỗi phần mềm và Nhiệm vụ con trong dự án.',
+        desc: 'Tạo mới Hạng mục lớn, Yêu cầu, Nhiệm vụ, Sự cố và Nhiệm vụ con trong dự án.',
         roles: ['ADMINISTRATOR', 'MEMBER'],
       },
       {

@@ -254,7 +254,7 @@ export default function StoryPointsHelpTooltip({
                 gap: 4,
               }}
             >
-              <span>Thang Fibonacci:</span>
+              <span>Thang điểm gợi ý:</span>
               <span style={{ display: 'inline-flex', gap: 3 }}>
                 {[1, 2, 3, 5, 8, 13].map((pt) => (
                   <span
@@ -302,7 +302,7 @@ export default function StoryPointsHelpTooltip({
                   flexShrink: 0,
                 }}
               />
-              <span><strong>Câu chuyện / Nhiệm vụ:</strong> Nhập điểm trực tiếp</span>
+              <span><strong>Yêu cầu / Nhiệm vụ:</strong> Nhập điểm trực tiếp</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span
@@ -326,7 +326,7 @@ export default function StoryPointsHelpTooltip({
                   flexShrink: 0,
                 }}
               />
-              <span><strong>Nhiệm vụ con:</strong> Không tính điểm (theo dõi theo giờ làm)</span>
+              <span><strong>Nhiệm vụ con:</strong> Không tính điểm (theo dõi theo tiến độ chi tiết)</span>
             </div>
           </div>
 

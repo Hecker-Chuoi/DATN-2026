@@ -30,9 +30,9 @@ import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 const TYPE_CONFIGS = {
   EPIC: { label: 'Hạng mục lớn', icon: Zap, color: '#9333EA', bgColor: '#F5F3FF', level: 1 },
-  STORY: { label: 'Câu chuyện người dùng', icon: Bookmark, color: '#10B981', bgColor: '#ECFDF5', level: 0 },
+  STORY: { label: 'Yêu cầu', icon: Bookmark, color: '#10B981', bgColor: '#ECFDF5', level: 0 },
   TASK: { label: 'Nhiệm vụ', icon: CheckSquare, color: '#3B82F6', bgColor: '#EFF6FF', level: 0 },
-  BUG: { label: 'Lỗi phần mềm', icon: AlertCircle, color: '#EF4444', bgColor: '#FEF2F2', level: 0 },
+  BUG: { label: 'Sự cố', icon: AlertCircle, color: '#EF4444', bgColor: '#FEF2F2', level: 0 },
   SUBTASK: { label: 'Nhiệm vụ con', icon: GitCommit, color: '#06B6D4', bgColor: '#ECFEFF', level: -1 },
 };
 
@@ -550,7 +550,7 @@ export default function CreateWorkItemModal({
             </label>
             <input
               type="text"
-              placeholder="VD: Khách hàng quét mã QR VNPay để thanh toán..."
+              placeholder="VD: Triển khai kế hoạch khảo sát, chuẩn bị báo cáo tiến độ..."
               value={summary}
               onChange={(e) => {
                 setSummary(e.target.value);
@@ -615,7 +615,7 @@ export default function CreateWorkItemModal({
                 }}
               >
                 <option value="">
-                  {isSubtask ? '-- Bắt buộc chọn công việc cha --' : '-- Không có (Độc lập / Danh sách tồn đọng) --'}
+                  {isSubtask ? '-- Bắt buộc chọn công việc cha --' : '-- Không có (Độc lập / Kho việc) --'}
                 </option>
                 {availableParents.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -800,7 +800,7 @@ export default function CreateWorkItemModal({
                       color: '#0F172A', cursor: 'pointer',
                     }}
                   >
-                    <option value="">Danh sách tồn đọng</option>
+                    <option value="">Kho việc chờ phân bổ</option>
                     {sprints
                       .filter((sp) => sp.state !== 'CLOSED')
                       .map((sp) => (
