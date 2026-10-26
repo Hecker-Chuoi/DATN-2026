@@ -17,9 +17,9 @@ export function categoryToken(category) {
 }
 
 export const PROJECT_TYPE_LABELS = {
-  SOFTWARE_SCRUM: 'Quy trình Scrum',
-  SOFTWARE_KANBAN: 'Bảng Kanban',
-  BUSINESS: 'Kinh doanh',
+  SOFTWARE_SCRUM: 'Quy trình đợt việc (Scrum)',
+  SOFTWARE_KANBAN: 'Bảng luồng việc (Kanban)',
+  BUSINESS: 'Nghiệp vụ doanh nghiệp',
 };
 
 /** Cộng số ngày vào chuỗi yyyy-MM-dd, trả về yyyy-MM-dd (không lệch múi giờ). */

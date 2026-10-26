@@ -59,7 +59,7 @@ export function validateHierarchyDrop(draggedItem, targetParent) {
     if (!targetParent) {
       return {
         allowed: false,
-        reason: 'Nhiệm vụ con bắt buộc phải trực thuộc một Công việc tiêu chuẩn (Câu chuyện, Nhiệm vụ hoặc Lỗi phần mềm)!',
+        reason: 'Nhiệm vụ con bắt buộc phải trực thuộc một Công việc tiêu chuẩn (Yêu cầu, Nhiệm vụ hoặc Sự cố)!',
         icon: 'Ban',
       };
     }
