@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { authApi, adminTokenStore } from '../api.js';
@@ -14,6 +14,14 @@ export default function LoginPage({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const expiredMsg = sessionStorage.getItem('session_expired_notice');
+    if (expiredMsg) {
+      toast.error(expiredMsg);
+      sessionStorage.removeItem('session_expired_notice');
+    }
+  }, []);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -38,7 +46,9 @@ export default function LoginPage({ onLoginSuccess }) {
       }
       toast.success('Đăng nhập Quản trị viên thành công!');
       if (onLoginSuccess) onLoginSuccess();
-      navigate('/admin');
+      const redirectPath = sessionStorage.getItem('redirect_after_login') || '/admin';
+      sessionStorage.removeItem('redirect_after_login');
+      navigate(redirectPath);
     } catch (err) {
       setError(err.message || 'Đăng nhập thất bại. Kiểm tra lại thông tin!');
     } finally {
@@ -73,7 +83,7 @@ export default function LoginPage({ onLoginSuccess }) {
           <div className="auth-header">
             <div className="auth-brand">
               <ShieldCheck size={26} />
-              <span>DATN SYSTEM</span>
+              <span>HỆ THỐNG QUẢN TRỊ DỰ ÁN</span>
             </div>
             <h2 className="auth-title">Đăng Nhập Quản Trị</h2>
             <p className="auth-subtitle">Nhập thông tin tài khoản của bạn để truy cập Bảng điều khiển Quản trị</p>
@@ -104,7 +114,7 @@ export default function LoginPage({ onLoginSuccess }) {
                   className="input-control"
                   value={form.orgId}
                   onChange={handleChange}
-                  placeholder="541115DSFA"
+                  placeholder="Mã tổ chức / Mã phòng ban"
                 />
               </div>
             </div>
@@ -193,7 +203,7 @@ export default function LoginPage({ onLoginSuccess }) {
               <div className="mockup-header">
                 <div>
                   <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Tổng quan bảng điều khiển</div>
-                  <div className="mockup-title">Chỉ số Dịch vụ Định danh</div>
+                  <div className="mockup-title">Chỉ số Hoạt động Hệ thống</div>
                 </div>
                 <div className="badge-tag">Hoạt động</div>
               </div>
@@ -217,12 +227,12 @@ export default function LoginPage({ onLoginSuccess }) {
 
               <div className="mockup-rows">
                 <div className="mockup-row-item">
-                  <span style={{ fontWeight: 600 }}>Keycloak IAM Server</span>
+                  <span style={{ fontWeight: 600 }}>Máy chủ Xác thực</span>
                   <span style={{ color: '#10b981', fontWeight: 600 }}>Đã kết nối</span>
                 </div>
                 <div className="mockup-row-item">
-                  <span style={{ fontWeight: 600 }}>Spring API Gateway</span>
-                  <span style={{ color: '#0070f3', fontWeight: 600 }}>Cổng 8081</span>
+                  <span style={{ fontWeight: 600 }}>Cổng Điều phối Trung tâm</span>
+                  <span style={{ color: '#0070f3', fontWeight: 600 }}>Sẵn sàng</span>
                 </div>
               </div>
             </div>
@@ -233,8 +243,8 @@ export default function LoginPage({ onLoginSuccess }) {
                 <Award size={24} />
               </div>
               <div>
-                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>VI DỊCH VỤ</div>
-                <div className="float-val" style={{ fontSize: 18 }}>12 Đã hoàn thành</div>
+                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>DỰ ÁN ĐANG CHẠY</div>
+                <div className="float-val" style={{ fontSize: 18 }}>12 Hoàn thành tốt</div>
               </div>
             </div>
 

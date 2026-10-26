@@ -161,7 +161,7 @@ export default function ProjectBacklogPage() {
       applyGroups(revertMove(result.containers, result.snapshot, keyOf));
       console.warn('Không di chuyển được công việc:', err);
       if (err?.status === 409) {
-        toast.error('Dữ liệu vừa được người khác thay đổi. Đang tải lại danh sách tồn đọng.');
+        toast.error('Dữ liệu vừa được người khác thay đổi. Đang tải lại kho công việc.');
         reload({ silent: true });
       }
     }
@@ -189,12 +189,12 @@ export default function ProjectBacklogPage() {
   // ───────────────────────── Render ─────────────────────────
 
   if (loading) {
-    return <div style={centered}>Đang tải danh sách tồn đọng...</div>;
+    return <div style={centered}>Đang tải kho công việc & kế hoạch...</div>;
   }
   if (error) {
     return (
       <div style={centered}>
-        Không tải được danh sách tồn đọng.{' '}
+        Không tải được kho công việc & kế hoạch.{' '}
         <button onClick={() => reload()} style={linkBtn}>Thử lại</button>
       </div>
     );

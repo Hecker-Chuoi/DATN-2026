@@ -107,7 +107,7 @@ export default function WorkspaceSettingsPage() {
         <div style={{ ...panelStyle, maxWidth: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
           <AlertCircle size={18} color="#B45309" />
           <span style={{ fontSize: 13, color: '#475569' }}>
-            Bạn cần vai trò Quản trị trở lên để xem cài đặt không gian làm việc.
+            Bạn cần vai trò Quản trị viên trở lên để xem cài đặt không gian làm việc.
           </span>
         </div>
       </div>
@@ -139,7 +139,7 @@ export default function WorkspaceSettingsPage() {
           </h1>
         </div>
         <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 24px' }}>
-          Thông tin chung của không gian làm việc. Đường dẫn (slug) không đổi được sau khi tạo.
+          Thông tin chung của không gian làm việc. Mã định danh URL không đổi được sau khi tạo.
         </p>
 
         <form onSubmit={handleSave} style={{ ...panelStyle, marginBottom: 24 }}>

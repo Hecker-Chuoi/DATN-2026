@@ -11,8 +11,8 @@ import SprintStateBadge from '../components/sprints/SprintStateBadge.jsx';
 
 const TABS = [
   { id: 'burndown', label: 'Tiến độ chu kỳ' },
-  { id: 'velocity', label: 'Vận tốc chu kỳ' },
-  { id: 'cfd', label: 'Lưu lượng tích lũy' },
+  { id: 'velocity', label: 'Năng suất làm việc' },
+  { id: 'cfd', label: 'Phân bổ luồng trạng thái' },
 ];
 
 export default function ProjectReportsPage() {
@@ -159,7 +159,7 @@ export default function ProjectReportsPage() {
 
       {tab === 'velocity' && velocity && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-          <ReportMetricCard label="Vận tốc trung bình" value={`${num(velocity.averageVelocity)} điểm`} tone="positive" />
+          <ReportMetricCard label="Năng suất trung bình" value={`${num(velocity.averageVelocity)} điểm`} tone="positive" />
           <ReportMetricCard label="Cam kết trung bình" value={`${num(velocity.averageCommitment)} điểm`} />
           <ReportMetricCard
             label="Độ tin cậy cam kết"
@@ -184,13 +184,13 @@ export default function ProjectReportsPage() {
         )}
         {tab === 'velocity' && (
           <>
-            <ChartTitle title="Vận tốc qua các chu kỳ đã hoàn tất" />
+            <ChartTitle title="Năng suất qua các chu kỳ đã hoàn tất" />
             <VelocityChart rows={velocityRows} average={num(velocity?.averageVelocity)} />
           </>
         )}
         {tab === 'cfd' && (
           <>
-            <ChartTitle title={`Lưu lượng tích lũy — ${selected?.name || ''}`} />
+            <ChartTitle title={`Phân bổ luồng trạng thái — ${selected?.name || ''}`} />
             <CumulativeFlowChart rows={cfdRows} buckets={cfd?.buckets || []} />
           </>
         )}

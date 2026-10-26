@@ -139,7 +139,7 @@ export default function ProjectBoardPage() {
           </div>
         ) : (
           <div style={emptyHint}>
-            Chưa có chu kỳ nào đang chạy. Hãy sang tab <b>Danh sách tồn đọng</b> để bắt đầu một chu kỳ.
+            Chưa có chu kỳ nào đang chạy. Hãy sang tab <b>Kho việc & Kế hoạch</b> để bắt đầu một chu kỳ.
           </div>
         )
       )}

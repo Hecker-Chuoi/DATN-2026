@@ -316,11 +316,11 @@ export default function AdminDashboard({ onLogout }) {
             <span>Quản Lý Người Dùng</span>
           </button>
 
-          <a href="#keycloak" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang cấu hình Keycloak IAM'); }}>
+          <a href="#keycloak" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang cấu hình xác thực tập trung'); }}>
             <KeyRound size={18} />
-            <span>Xác thực Keycloak</span>
+            <span>Bảo mật & Xác thực</span>
           </a>
-          <a href="#gateway" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang thông số API Gateway'); }}>
+          <a href="#gateway" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang thông số cổng điều phối'); }}>
             <Server size={18} />
             <span>Nhật ký Cổng kết nối</span>
           </a>
@@ -470,7 +470,7 @@ export default function AdminDashboard({ onLogout }) {
 
                 {loading ? (
                   <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
-                    Đang tải dữ liệu từ Identity Service...
+                    Đang tải danh sách tài khoản người dùng...
                   </div>
                 ) : users.length === 0 ? (
                   <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>

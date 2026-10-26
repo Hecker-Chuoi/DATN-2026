@@ -51,7 +51,7 @@ export default function RegisterPage() {
           <div className="auth-header">
             <div className="auth-brand">
               <ShieldCheck size={26} />
-              <span>DATN SYSTEM</span>
+              <span>HỆ THỐNG QUẢN TRỊ DỰ ÁN</span>
             </div>
             <h2 className="auth-title">Tạo Tài Khoản Mới</h2>
             <p className="auth-subtitle">Đăng ký tài khoản người dùng mới vào hệ thống</p>
@@ -140,7 +140,7 @@ export default function RegisterPage() {
                   className="input-control"
                   value={form.email}
                   onChange={handleChange}
-                  placeholder="user@domain.com"
+                  placeholder="email_cua_ban@congty.com"
                   required
                 />
               </div>
@@ -195,7 +195,7 @@ export default function RegisterPage() {
                   <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Đăng ký tài khoản</div>
                   <div className="mockup-title">Hệ thống tiếp nhận người dùng</div>
                 </div>
-                <div className="badge-tag" style={{ background: '#f0fdf4', color: '#16a34a' }}>Chuẩn OIDC</div>
+                <div className="badge-tag" style={{ background: '#f0fdf4', color: '#16a34a' }}>Bảo mật cao</div>
               </div>
 
               <div className="mockup-chart-placeholder">
@@ -226,7 +226,7 @@ export default function RegisterPage() {
                 <Award size={24} />
               </div>
               <div>
-                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>DATN 2026</div>
+                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>HỆ THỐNG 2026</div>
                 <div className="float-val" style={{ fontSize: 18 }}>Xác thực liên kết</div>
               </div>
             </div>
