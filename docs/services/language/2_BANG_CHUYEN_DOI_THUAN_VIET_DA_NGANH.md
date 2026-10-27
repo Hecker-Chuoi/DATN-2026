@@ -34,7 +34,7 @@ Hệ thống **DATN-2026** ban đầu kế thừa bộ thuật ngữ từ Jira S
 
 **Mục tiêu của đợt chuyển hóa Thuần Việt:**
 1. **Loại bỏ rào cản chuyên ngành IT**: Thay thế các từ ngữ kỹ thuật phần mềm hẹp (như *"Câu chuyện người dùng"*, *"Con bọ"*, *"Lỗi phần mềm"*, *"Danh sách tồn đọng"*, *"Vận tốc"*, *"Lưu lượng tích lũy"*) bằng các từ ngữ tiếng Việt tự nhiên, lịch sự, dễ hiểu với mọi nhân sự.
-2. **Duy trì bản chất phương pháp luận**: Vẫn giữ được tính ưu việt của mô hình quản trị theo đợt việc (Scrum) và bảng luồng việc (Kanban) mà không làm biến dạng ý nghĩa khoa học quản lý.
+2. **Duy trì bản chất phương pháp luận**: Vẫn giữ được tính ưu việt của mô hình quản trị Theo chu kỳ / Theo giai đoạn (Scrum) và Bảng công việc liên tục (Kanban) mà không làm biến dạng ý nghĩa khoa học quản lý.
 3. **Bảo toàn 100% hợp đồng API**: Giữ nguyên toàn bộ mã enum và giá trị code của Backend (như `STORY`, `BUG`, `TASK`, `EPIC`, `SUBTASK`, `TODO`, `IN_PROGRESS`, `DONE`, `SOFTWARE_SCRUM`, `SOFTWARE_KANBAN`).
 
 ---
@@ -79,8 +79,8 @@ Hệ thống **DATN-2026** ban đầu kế thừa bộ thuật ngữ từ Jira S
 | **11** | `CUMULATIVE_FLOW_DIAGRAM` | Biểu đồ lưu lượng tích lũy | **Biểu đồ luồng trạng thái** *(Phân bổ luồng trạng thái)* | Phản ánh chính xác phân bố các thẻ việc qua các giai đoạn quy trình. |
 | **12** | `WIP_LIMIT` | Giới hạn WIP / Giới hạn đang làm | **Giới hạn việc đang làm** | Kiểm soát số lượng công việc cùng lúc, tránh quá tải. |
 | **13** | `SWIMLANE` | Swimlane | **Phân làn công việc** | Gom nhóm các thẻ theo người phụ trách hoặc hạng mục lớn. |
-| **14** | `SOFTWARE_SCRUM` | Dự án Scrum | **Quy trình đợt việc (Scrum)** | Quản lý theo từng đợt làm việc định kỳ, lập kế hoạch và đo lường khối lượng. |
-| **15** | `SOFTWARE_KANBAN` | Dự án Kanban | **Bảng luồng việc (Kanban)** | Luồng công việc liên tục, trực quan hóa trạng thái và giới hạn việc đang làm. |
+| **14** | `SOFTWARE_SCRUM` | Dự án Scrum | **Theo chu kỳ / Theo giai đoạn** | Quản lý theo từng chu kỳ hoặc giai đoạn định kỳ, lập kế hoạch đợt việc và đo lường khối lượng. |
+| **15** | `SOFTWARE_KANBAN` | Dự án Kanban | **Bảng công việc liên tục** | Luồng công việc liên tục, trực quan hóa trạng thái và giới hạn việc đang làm. |
 | **16** | `BUSINESS` | Kinh doanh | **Nghiệp vụ doanh nghiệp** | Khái quát rộng hơn việc buôn bán, bao gồm cả vận hành, dịch vụ. |
 | **17** | `WORKSPACE` | Workspace | **Không gian làm việc** | Cấp bao bọc cao nhất quản lý toàn bộ các dự án của doanh nghiệp. |
 | **18** | `ADMIN` / `ADMINISTRATOR` | Administrator / Quản trị | **Quản trị viên** | Danh xưng trang trọng, lịch sự và chuẩn chính tả tiếng Việt. |
@@ -100,12 +100,12 @@ Hệ thống **DATN-2026** ban đầu kế thừa bộ thuật ngữ từ Jira S
 | `frontend/src/constants/workConstants.js` | `WORK_ITEM_TYPE_CONFIG.STORY.name` | `Câu chuyện người dùng` | `Yêu cầu` |
 | `frontend/src/constants/workConstants.js` | `WORK_ITEM_TYPE_CONFIG.BUG.name` | `Lỗi phần mềm` | `Sự cố` |
 | `frontend/src/constants/workConstants.js` | `getTypeDisplayName(type)` | `STORY` $\to$ `Câu chuyện người dùng`<br>`BUG` $\to$ `Lỗi phần mềm` | `STORY` $\to$ `Yêu cầu`<br>`BUG` $\to$ `Sự cố` |
-| `frontend/src/constants/workConstants.js` | `PROJECT_TYPE_CONFIG.SCRUM.name` | `Quy trình Scrum` | `Quy trình đợt việc (Scrum)` |
-| `frontend/src/constants/workConstants.js` | `PROJECT_TYPE_CONFIG.KANBAN.name` | `Bảng Kanban` | `Bảng luồng công việc (Kanban)` |
+| `frontend/src/constants/workConstants.js` | `PROJECT_TYPE_CONFIG.SCRUM.name` | `Quy trình Scrum` | `Theo chu kỳ / Theo giai đoạn` |
+| `frontend/src/constants/workConstants.js` | `PROJECT_TYPE_CONFIG.KANBAN.name` | `Bảng Kanban` | `Bảng công việc liên tục` |
 | `frontend/src/constants/workConstants.js` | Bổ sung helper mới | *(chưa có)* | `export const getRoleDisplayName(role)` |
 | `frontend/src/constants/jiraTokens.js` | `TYPE_TOKENS.STORY.label` | `Câu chuyện người dùng` | `Yêu cầu` |
 | `frontend/src/constants/jiraTokens.js` | `TYPE_TOKENS.BUG.label` | `Lỗi phần mềm` | `Sự cố` |
-| `frontend/src/constants/templateConstants.js` | `PROJECT_TYPE_LABELS` | `Quy trình Scrum`<br>`Bảng Kanban`<br>`Kinh doanh` | `Quy trình đợt việc (Scrum)`<br>`Bảng luồng việc (Kanban)`<br>`Nghiệp vụ doanh nghiệp` |
+| `frontend/src/constants/templateConstants.js` | `PROJECT_TYPE_LABELS` | `Quy trình Scrum`<br>`Bảng Kanban`<br>`Kinh doanh` | `Theo chu kỳ / Theo giai đoạn`<br>`Bảng công việc liên tục`<br>`Nghiệp vụ doanh nghiệp` |
 | `frontend/src/utils/reportAdapters.js` | Line 34 | `label: s.sprintName \|\| 'Sprint'` | `label: s.sprintName \|\| 'Đợt làm việc'` |
 | `frontend/src/utils/dragGuards.js` | Line 62 (thông báo kéo thẻ) | `(Câu chuyện, Nhiệm vụ hoặc Lỗi phần mềm)` | `(Yêu cầu, Nhiệm vụ hoặc Sự cố)` |
 | `frontend/src/utils/workspaceRole.js` | `ROLE_LABELS.ADMIN` | `Quản trị` | `Quản trị viên` |
@@ -134,7 +134,7 @@ Hệ thống **DATN-2026** ban đầu kế thừa bộ thuật ngữ từ Jira S
 | `WorkItemDetailModal.jsx` | Dropdown chọn chu kỳ | `Danh sách tồn đọng` | `Kho việc chờ phân bổ` |
 | `CreateProjectModal.jsx` | Placeholder tên dự án | `VD: Core Banking Platform, E-Commerce App...` | `VD: Chiến dịch Marketing 2026, Xây dựng Văn phòng...` |
 | `CreateProjectModal.jsx` | Placeholder mã dự án | `VD: CBE, PRJ` | `VD: MKT, XD, KH` |
-| `CreateProjectModal.jsx` | Thẻ chọn loại dự án | `Quy trình Scrum`, `Bảng Kanban` | `Quy trình đợt việc (Scrum)`, `Bảng luồng việc (Kanban)` |
+| `CreateProjectModal.jsx` | Thẻ chọn loại dự án | `Quy trình Scrum`, `Bảng Kanban` | `Theo chu kỳ / Theo giai đoạn`, `Bảng công việc liên tục` |
 | `CreateProjectModal.jsx` | Tùy chọn nhân bản mẫu | `công việc nằm hết trong Danh sách tồn đọng` | `công việc nằm hết trong Kho việc chờ phân bổ` |
 | `ProjectMembersTab.jsx` | Mô tả quyền tạo việc | `Hạng mục lớn, Câu chuyện người dùng, Nhiệm vụ, Lỗi phần mềm...` | `Hạng mục lớn, Yêu cầu, Nhiệm vụ, Sự cố và Nhiệm vụ con...` |
 | `ProjectWorkflowTab.jsx` | Nhãn biểu tượng preset | `Thẻ đánh dấu (Câu chuyện)`<br>`Con bọ (Lỗi phần mềm)`<br>`Điểm nhánh (Nhiệm vụ con)` | `Thẻ đánh dấu (Yêu cầu)`<br>`Cảnh báo (Sự cố)`<br>`Nhánh việc (Nhiệm vụ con)` |
@@ -169,7 +169,7 @@ Hệ thống **DATN-2026** ban đầu kế thừa bộ thuật ngữ từ Jira S
 | `WorkspaceListPage.jsx`| Tiêu đề khối lời mời | `Lời mời workspace đang chờ` | `Lời mời không gian làm việc đang chờ` |
 | `WorkspaceSettingsPage.jsx` | Quyền xem trang | `vai trò Quản trị trở lên` | `vai trò Quản trị viên trở lên` |
 | `WorkspaceSettingsPage.jsx` | Chú thích URL slug | `Đường dẫn (slug) không đổi được` | `Mã định danh URL không đổi được` |
-| `ProjectListPage.jsx` | Bộ lọc danh mục dự án | `Dự án Scrum`<br>`Dự án Kanban` | `Dự án theo đợt việc (Scrum)`<br>`Dự án theo luồng việc (Kanban)` |
+| `ProjectListPage.jsx` | Bộ lọc danh mục dự án | `Dự án Scrum`<br>`Dự án Kanban` | `Theo chu kỳ / giai đoạn`<br>`Bảng công việc liên tục` |
 | `ProjectDetailPage.jsx` | Thanh tab con | `Bảng làm việc`<br>`Danh sách tồn đọng` | `Bảng tiến độ`<br>`Kho việc & Kế hoạch` |
 | `ProjectBoardPage.jsx` | Gợi ý khi chưa có sprint | `Hãy sang tab Danh sách tồn đọng để bắt đầu...` | `Hãy sang tab Kho việc & Kế hoạch để bắt đầu...` |
 | `ProjectBacklogPage.jsx`| Thông báo & Loading | `Đang tải danh sách tồn đọng...`<br>`Không tải được danh sách tồn đọng.` | `Đang tải kho công việc & kế hoạch...`<br>`Không tải được kho công việc & kế hoạch.` |

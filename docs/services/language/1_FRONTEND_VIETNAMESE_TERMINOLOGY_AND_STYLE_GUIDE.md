@@ -253,7 +253,7 @@ Hệ sinh thái trạng thái được nhóm thành 3 Category chuẩn Jira Clou
 - **Tên nhóm làm việc \*** (`teamName`): Bắt buộc.
 - **Tên dự án \*** (`projectName`): Bắt buộc.
 - **Mã dự án (Tiền tố viết tắt) \*** (`projectKey`): Viết hoa, từ 2 đến 10 ký tự (VD: `PROJ`).
-- **Mô hình quản lý công việc**: Lựa chọn giữa Quy trình Scrum hoặc Bảng Kanban.
+- **Mô hình quản lý công việc**: Lựa chọn giữa Theo chu kỳ / Theo giai đoạn (Scrum) hoặc Bảng công việc liên tục (Kanban).
 - **Tiêu đề công việc \*** (`summary`): Tiêu đề ngắn gọn mô tả tác vụ.
 - **Loại công việc \*** (`workItemType`): Danh sách Hạng mục lớn, Câu chuyện, Nhiệm vụ, Lỗi, Nhiệm vụ con.
 - **Công việc cha \*** (`parentItem`): Bắt buộc khi tạo Nhiệm vụ con (Subtask).

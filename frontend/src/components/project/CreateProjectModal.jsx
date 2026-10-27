@@ -45,7 +45,6 @@ export default function CreateProjectModal({ isOpen, onClose, onProjectCreated }
     key: '',
     description: '',
     projectType: 'SOFTWARE_SCRUM',
-    isTemplate: false,
     startDate: new Date().toISOString().split('T')[0],
     endDate: '',
   });
@@ -80,7 +79,6 @@ export default function CreateProjectModal({ isOpen, onClose, onProjectCreated }
         key: '',
         description: '',
         projectType: 'SOFTWARE_SCRUM',
-        isTemplate: false,
         startDate: new Date().toISOString().split('T')[0],
         endDate: '',
       });
@@ -114,7 +112,6 @@ export default function CreateProjectModal({ isOpen, onClose, onProjectCreated }
       key: prev.key || (preview.name ? generateProjectKey(preview.name) : ''),
       projectType: preview.projectType,
       description: prev.description || preview.description || '',
-      isTemplate: false,
       endDate: suggestedEndDate(prev.startDate, preview) || prev.endDate,
     }));
   };
@@ -217,7 +214,7 @@ export default function CreateProjectModal({ isOpen, onClose, onProjectCreated }
         key: formData.key.trim().toUpperCase(),
         description: formData.description?.trim() || undefined,
         projectType: formData.projectType,
-        isTemplate: formData.isTemplate,
+        isTemplate: false,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
       };
@@ -517,10 +514,10 @@ export default function CreateProjectModal({ isOpen, onClose, onProjectCreated }
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1D4ED8', fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
                   <Zap size={16} />
-                  <span>Quy trình đợt việc (Scrum)</span>
+                  <span>Theo chu kỳ / Theo giai đoạn</span>
                 </div>
                 <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.4 }}>
-                  Quản lý theo từng đợt làm việc định kỳ, lập kế hoạch đợt việc và theo dõi tiến độ.
+                  Quản lý theo từng chu kỳ hoặc giai đoạn định kỳ, lập kế hoạch và theo dõi tiến độ.
                 </p>
               </div>
 
@@ -558,7 +555,7 @@ export default function CreateProjectModal({ isOpen, onClose, onProjectCreated }
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1D4ED8', fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
                   <Kanban size={16} />
-                  <span>Bảng luồng việc (Kanban)</span>
+                  <span>Bảng công việc liên tục</span>
                 </div>
                 <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.4 }}>
                   Luồng công việc liên tục, trực quan hóa trạng thái với giới hạn việc đang làm.
@@ -670,22 +667,6 @@ export default function CreateProjectModal({ isOpen, onClose, onProjectCreated }
                 </label>
               ))}
             </div>
-          )}
-
-          {/* Template Checkbox */}
-          {!isTemplateMode && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
-            <input
-              type="checkbox"
-              id="isTemplate"
-              checked={formData.isTemplate}
-              onChange={(e) => setFormData({ ...formData, isTemplate: e.target.checked })}
-              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#2563EB' }}
-            />
-            <label htmlFor="isTemplate" style={{ fontSize: 13, color: '#334155', cursor: 'pointer', userSelect: 'none' }}>
-              Đặt làm <strong>Dự án mẫu</strong> để tái sử dụng cấu hình cho các dự án sau
-            </label>
-          </div>
           )}
 
           {/* ─── Footer Buttons ─── */}

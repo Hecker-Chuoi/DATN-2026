@@ -17,8 +17,8 @@ export function categoryToken(category) {
 }
 
 export const PROJECT_TYPE_LABELS = {
-  SOFTWARE_SCRUM: 'Quy trình đợt việc (Scrum)',
-  SOFTWARE_KANBAN: 'Bảng luồng việc (Kanban)',
+  SOFTWARE_SCRUM: 'Theo chu kỳ / Theo giai đoạn',
+  SOFTWARE_KANBAN: 'Bảng công việc liên tục',
   BUSINESS: 'Nghiệp vụ doanh nghiệp',
 };
 

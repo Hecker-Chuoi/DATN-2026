@@ -290,13 +290,13 @@ export const PROJECT_TYPES = {
 export const PROJECT_TYPE_CONFIG = {
   SCRUM: {
     code: 'SCRUM',
-    name: 'Quy trình đợt việc (Scrum)',
-    description: 'Quản lý theo từng đợt làm việc định kỳ, lập kế hoạch đợt việc, theo dõi tiến độ và khối lượng công việc.',
+    name: 'Theo chu kỳ / Theo giai đoạn',
+    description: 'Quản lý theo từng chu kỳ hoặc giai đoạn định kỳ, lập kế hoạch đợt việc, theo dõi tiến độ và khối lượng công việc.',
     icon: 'RotateCw',
   },
   KANBAN: {
     code: 'KANBAN',
-    name: 'Bảng luồng công việc (Kanban)',
+    name: 'Bảng công việc liên tục',
     description: 'Luồng công việc liên tục trực quan hóa qua các cột trạng thái với giới hạn việc đang làm.',
     icon: 'Kanban',
   },
