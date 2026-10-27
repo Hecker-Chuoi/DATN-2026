@@ -135,7 +135,7 @@ export default function Sidebar({
         <NavItem
           to={ws('/my-issues')}
           icon={<CheckCircle2 size={17} color="#10B981" />}
-          label="Nhiệm vụ của tôi"
+          label="Công việc của tôi"
           active={location.pathname === ws('/my-issues')}
         />
         <NavItem

@@ -68,9 +68,9 @@ Hệ thống **DATN-2026** ban đầu kế thừa bộ thuật ngữ từ Jira S
 | :---: | :--- | :--- | :--- | :--- |
 | **1** | `STORY` / `USER_STORY` | Câu chuyện người dùng | **Yêu cầu / Đầu việc** | Phù hợp mọi nghiệp vụ; tránh từ "câu chuyện" gây khó hiểu ngoài ngành phần mềm. |
 | **2** | `BUG` | Lỗi phần mềm / Con bọ | **Sự cố / Vấn đề phát sinh** | Mọi ngành nghề đều có sự cố hiện trường, trục trặc vận hành, vấn đề phát sinh. |
-| **3** | `TASK` | Nhiệm vụ | **Nhiệm vụ** | Chuẩn xác, ngắn gọn, phù hợp tác vụ tiêu chuẩn. |
+| **3** | `TASK` | Nhiệm vụ / Task | **Công việc** | Tác vụ tiêu chuẩn, trung tính và phổ biến trong mọi tổ chức/ngành nghề. |
 | **4** | `EPIC` | Hạng mục lớn | **Hạng mục lớn** | Bao quát mục tiêu dài hạn, gói thầu hoặc giai đoạn lớn. |
-| **5** | `SUB_TASK` / `SUBTASK` | Nhiệm vụ con | **Nhiệm vụ con** | Tác vụ chi tiết trực thuộc công việc cha cấp 0. |
+| **5** | `SUB_TASK` / `SUBTASK` | Nhiệm vụ con / Subtask | **Công việc con** | Tác vụ chi tiết trực thuộc công việc cha cấp 0. |
 | **6** | `BACKLOG` | Danh sách tồn đọng | **Kho việc & Kế hoạch** *(Kho việc chờ phân bổ)* | Tránh cảm giác tiêu cực "tồn đọng"; thể hiện kho việc sẵn sàng xếp lịch. |
 | **7** | `SPRINT` | Sprint / Chu kỳ chạy | **Chu kỳ** / **Đợt làm việc** | Khung thời gian làm việc có định kỳ, cam kết mục tiêu cụ thể. |
 | **8** | `ACTIVE_BOARD` / `BOARD` | Bảng làm việc | **Bảng tiến độ** | Trực quan hóa tiến trình dịch chuyển công việc qua các cột. |

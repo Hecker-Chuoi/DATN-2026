@@ -119,7 +119,7 @@ export default function ProjectBacklogPage() {
 
     // Sub-task luon di theo Sprint cua cong viec cha - chan ngay tren UI.
     if (dragged.isSubtask || dragged.hierarchyLevel === -1) {
-      toast.error('Nhiệm vụ con đi theo chu kỳ của công việc cha, không thể kéo riêng.');
+      toast.error('Công việc con đi theo chu kỳ của công việc cha, không thể kéo riêng.');
       return;
     }
     if (!canManage) {

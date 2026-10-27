@@ -105,7 +105,7 @@ export default function UsersPage({ currentUser, onLogout }) {
   };
 
   const handleDelete = async (u) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa người dùng "${u.username}" không?\nTài khoản này sẽ bị khóa trên hệ thống và thu hồi quyền trong các dự án/nhiệm vụ liên quan.`)) {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa người dùng "${u.username}" không?\nTài khoản này sẽ bị khóa trên hệ thống và thu hồi quyền trong các dự án/công việc liên quan.`)) {
       setActionLoading(true);
       try {
         await userApi.delete(u.id);

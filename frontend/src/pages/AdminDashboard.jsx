@@ -225,7 +225,7 @@ export default function AdminDashboard({ onLogout }) {
     setConfirmConfig({
       isOpen: true,
       title: 'Xóa tài khoản',
-      message: `Bạn có chắc chắn muốn xóa tài khoản "${user.username}"? Hành động này sẽ khóa tài khoản hệ thống và thu hồi quyền thành viên nhóm/nhiệm vụ liên quan.`,
+      message: `Bạn có chắc chắn muốn xóa tài khoản "${user.username}"? Hành động này sẽ khóa tài khoản hệ thống và thu hồi quyền thành viên dự án/công việc liên quan.`,
       confirmText: 'Xóa tài khoản',
       cancelText: 'Hủy',
       type: 'danger',

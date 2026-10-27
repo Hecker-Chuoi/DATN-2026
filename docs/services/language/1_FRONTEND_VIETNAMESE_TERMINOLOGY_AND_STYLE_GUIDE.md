@@ -79,9 +79,9 @@ Hệ thống phân cấp công việc tuân thủ cấu trúc 3 tầng chuẩn J
 | **Work Item / Issue** | **Công việc / Hạng mục** | — | `WORK_ITEM` | Thực thể đơn vị công việc trong dự án |
 | **Epic** | **Hạng mục lớn** | Cấp 1 (`1`) | `EPIC` | Mục tiêu lớn hoặc tập hợp tính năng phức tạp kéo dài qua nhiều chu kỳ |
 | **User Story** | **Câu chuyện người dùng** | Cấp 0 (`0`) | `STORY` | Yêu cầu nghiệp vụ hoặc tính năng nhìn từ góc độ người dùng cuối |
-| **Task** | **Nhiệm vụ** | Cấp 0 (`0`) | `TASK` | Công việc kỹ thuật hoặc tác vụ phát triển tiêu chuẩn |
+| **Task** | **Công việc** | Cấp 0 (`0`) | `TASK` | Công việc hoặc tác vụ thực thi tiêu chuẩn |
 | **Bug** | **Lỗi phần mềm** | Cấp 0 (`0`) | `BUG` | Lỗi phát sinh hoặc sự cố kỹ thuật cần khắc phục |
-| **Sub-task / Subtask** | **Nhiệm vụ con** | Cấp -1 (`-1`)| `SUB_TASK` | Tác vụ chi tiết được chia nhỏ từ công việc cấp cha (Level 0) |
+| **Sub-task / Subtask** | **Công việc con** | Cấp -1 (`-1`)| `SUB_TASK` | Tác vụ chi tiết được chia nhỏ từ công việc cấp cha (Level 0) |
 | **Parent Item** | **Công việc cha** | — | `parentItemId` | Công việc cấp trên sở hữu nhiệm vụ con |
 | **Hierarchy Level** | **Cấp bậc phân cấp** | — | `hierarchyLevel` | Bậc phân cấp: 1 (Lớn), 0 (Tiêu chuẩn), -1 (Con) |
 | **Summary** | **Tiêu đề công việc** | — | `summary` | Tóm tắt ngắn gọn nội dung công việc |
@@ -255,8 +255,8 @@ Hệ sinh thái trạng thái được nhóm thành 3 Category chuẩn Jira Clou
 - **Mã dự án (Tiền tố viết tắt) \*** (`projectKey`): Viết hoa, từ 2 đến 10 ký tự (VD: `PROJ`).
 - **Mô hình quản lý công việc**: Lựa chọn giữa Theo chu kỳ / Theo giai đoạn (Scrum) hoặc Bảng công việc liên tục (Kanban).
 - **Tiêu đề công việc \*** (`summary`): Tiêu đề ngắn gọn mô tả tác vụ.
-- **Loại công việc \*** (`workItemType`): Danh sách Hạng mục lớn, Câu chuyện, Nhiệm vụ, Lỗi, Nhiệm vụ con.
-- **Công việc cha \*** (`parentItem`): Bắt buộc khi tạo Nhiệm vụ con (Subtask).
+- **Loại công việc \*** (`workItemType`): Danh sách Hạng mục lớn, Yêu cầu, Công việc, Sự cố, Công việc con.
+- **Công việc cha \*** (`parentItem`): Bắt buộc khi tạo Công việc con (Subtask).
 - **Mức độ ưu tiên** (`priority`): Khẩn cấp, Cao, Trung bình, Thấp, Rất thấp.
 - **Điểm ước lượng** (`storyPoints`): Điểm Fibonacci (1, 2, 3, 5, 8, 13...).
 - **Người thực hiện** (`assignee`): Thành viên được chỉ định chịu trách nhiệm chính.

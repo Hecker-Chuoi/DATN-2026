@@ -230,7 +230,7 @@ export default function StoryPointsHelpTooltip({
           >
             Đơn vị ước lượng tương đối dùng để đo lường{' '}
             <strong>độ phức tạp</strong>, <strong>khối lượng công việc</strong> và{' '}
-            <strong>mức độ rủi ro</strong> của nhiệm vụ thay vì số giờ cố định.
+            <strong>mức độ rủi ro</strong> của công việc thay vì số giờ cố định.
           </p>
 
           {/* Fibonacci Scale Reference */}
@@ -302,7 +302,7 @@ export default function StoryPointsHelpTooltip({
                   flexShrink: 0,
                 }}
               />
-              <span><strong>Yêu cầu / Nhiệm vụ:</strong> Nhập điểm trực tiếp</span>
+              <span><strong>Yêu cầu / Công việc:</strong> Nhập điểm trực tiếp</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span
@@ -326,7 +326,7 @@ export default function StoryPointsHelpTooltip({
                   flexShrink: 0,
                 }}
               />
-              <span><strong>Nhiệm vụ con:</strong> Không tính điểm (theo dõi theo tiến độ chi tiết)</span>
+              <span><strong>Công việc con:</strong> Không tính điểm (theo dõi theo tiến độ chi tiết)</span>
             </div>
           </div>
 

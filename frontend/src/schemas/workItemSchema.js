@@ -47,7 +47,7 @@ export function validateWorkItemForm(formData, parentItem = null) {
 
   // 6. Hierarchy rules
   if (formData.typeCode === 'SUB_TASK' && !formData.parentId) {
-    errors.parentId = 'Nhiệm vụ con bắt buộc phải có công việc cha thuộc cấp tiêu chuẩn';
+    errors.parentId = 'Công việc con bắt buộc phải có công việc cha thuộc cấp tiêu chuẩn';
   }
 
   if (formData.typeCode === 'EPIC' && formData.parentId) {

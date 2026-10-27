@@ -20,11 +20,11 @@ import { templateApi } from '../../api.js';
 import { STATUS_TOKENS, PRIORITY_TOKENS } from '../../constants/jiraTokens.js';
 import { categoryToken, PROJECT_TYPE_LABELS, formatOffset } from '../../constants/templateConstants.js';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
+import { getTypeDisplayName } from '../../constants/workConstants.js';
 
 const TABS = [
   { id: 'OVERVIEW', label: 'Tổng quan' },
   { id: 'WORKFLOW', label: 'Trạng thái & Quy trình' },
-  { id: 'BOARD', label: 'Bảng làm việc' },
   { id: 'PLAN', label: 'Chu kỳ & Công việc' },
   { id: 'ROLES', label: 'Phân quyền' },
 ];
@@ -339,7 +339,6 @@ export default function TemplatePreviewModal({
                   onRenameType={handleRenameType}
                 />
               )}
-              {tab === 'BOARD' && <BoardTab p={preview} customizations={customizations} />}
               {tab === 'PLAN' && (
                 <PlanTab
                   p={preview}
@@ -770,20 +769,20 @@ function WorkflowTab({ p, customizations, onRenameStatus, onRenameType }) {
 
       <Section
         title={`Loại công việc (${p.workItemTypes?.length || 0})`}
-        subtitle="Nhấp vào biểu tượng bút chì để đổi tên phân cấp công việc (VD: Hạng mục lớn → Dự án lớn, Nhiệm vụ → Công việc). Để thêm loại mới, bạn có thể tạo dự án xong rồi vào Cài đặt dự án."
+        subtitle="Nhấp vào biểu tượng bút chì để đổi tên phân cấp công việc (VD: Hạng mục lớn → Dự án lớn, Công việc → Tác vụ). Để thêm loại mới, bạn có thể tạo dự án xong rồi vào Cài đặt dự án."
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {(p.workItemTypes || []).map((t) => {
-            const currentName = renamedTypes[t.id] || t.name;
+            const currentName = renamedTypes[t.id] || getTypeDisplayName(t.name || t.code);
             return (
               <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                 <span style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: t.colorHex || '#94A3B8' }} />
                 <div style={{ paddingLeft: t.hierarchyLevel === 0 ? 14 : t.hierarchyLevel < 0 ? 28 : 0 }}>
                   <EditableText
                     value={currentName}
-                    originalValue={t.name}
+                    originalValue={getTypeDisplayName(t.name || t.code)}
                     onSave={(val) => onRenameType(t.id, t.name, val)}
-                    onReset={() => onRenameType(t.id, t.name, t.name)}
+                    onReset={() => onRenameType(t.id, t.name, getTypeDisplayName(t.name || t.code))}
                     textStyle={{ fontWeight: 600, color: '#0F172A' }}
                   />
                 </div>
@@ -800,7 +799,7 @@ function WorkflowTab({ p, customizations, onRenameStatus, onRenameType }) {
         <Section
           key={w.id}
           title={`Quy trình: ${w.name}${w.isDefault ? ' (mặc định)' : ''}`}
-          subtitle={w.appliesToTypes?.length ? `Áp dụng cho: ${w.appliesToTypes.join(', ')}` : 'Chưa gắn loại công việc nào'}
+          subtitle={w.appliesToTypes?.length ? `Áp dụng cho: ${w.appliesToTypes.map(getTypeDisplayName).join(', ')}` : 'Chưa gắn loại công việc nào'}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {(w.transitions || []).map((t, i) => {
@@ -828,84 +827,6 @@ function WorkflowTab({ p, customizations, onRenameStatus, onRenameType }) {
     </div>
   );
 }
-
-// ─── Tab: Board ─────────────────────────────────────────────────────────────
-
-function BoardTab({ p, customizations }) {
-  const renamedStatuses = customizations?.renamedStatuses || {};
-  if (!p.boards?.length) return <div style={{ fontSize: 13, color: '#64748B' }}>Mẫu không có board.</div>;
-
-  const resolveColName = (c) => {
-    const colStatuses = c.statuses || [];
-    if (!colStatuses.length || !Object.keys(renamedStatuses).length) return c.name;
-
-    if (colStatuses.length === 1) {
-      const sName = colStatuses[0];
-      const st = (p.statuses || []).find((s) => s.name === sName);
-      if (st && renamedStatuses[st.id]) {
-        const newName = renamedStatuses[st.id];
-        if ((c.name.includes('&') || c.name.includes('/')) && c.name.toLowerCase().includes(sName.toLowerCase())) {
-          return c.name.replace(new RegExp(sName, 'gi'), newName);
-        }
-        return newName;
-      }
-    }
-
-    let name = c.name;
-    for (const sName of colStatuses) {
-      const st = (p.statuses || []).find((s) => s.name === sName);
-      if (st && renamedStatuses[st.id]) {
-        name = name.replace(new RegExp(sName, 'gi'), renamedStatuses[st.id]);
-      }
-    }
-    return name;
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {p.boards.map((b, bi) => (
-        <Section key={bi} title={`${b.name} · ${b.type}`}>
-          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
-            {(b.columns || []).map((c, ci) => (
-              <div
-                key={ci}
-                style={{
-                  minWidth: 160,
-                  flex: '0 0 160px',
-                  backgroundColor: '#F1F5F9',
-                  borderRadius: 8,
-                  padding: 10,
-                }}
-              >
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', letterSpacing: '0.04em' }}>
-                  {resolveColName(c)}
-                </div>
-                {(c.minWipLimit != null || c.maxWipLimit != null) && (
-                  <div style={{ fontSize: 10.5, color: '#B45309', marginTop: 2 }}>
-                    WIP {c.minWipLimit ?? 0} – {c.maxWipLimit ?? '∞'}
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-                  {(c.statuses || []).map((sName) => {
-                    const st = (p.statuses || []).find((s) => s.name === sName);
-                    const displayName = st && renamedStatuses[st.id] ? renamedStatuses[st.id] : sName;
-                    return <StatusPill key={sName} name={displayName} category={st?.category} />;
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-          {b.swimlanes?.length > 0 && (
-            <div style={{ fontSize: 12, color: '#64748B', marginTop: 8 }}>
-              Swimlane: {b.swimlanes.map((s) => `${s.name} (${s.strategy})`).join(', ')}
-            </div>
-          )}
-        </Section>
-      ))}
-    </div>
-  );
-}
-
 // ─── Helper tính tập ID công việc bị loại trừ theo cây cha-con ───────────────
 
 function getExcludedItemIdsSet(excludedList, workItemsTree) {
@@ -1126,7 +1047,7 @@ function TreeRow({
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
         <span style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: node.typeColor || '#94A3B8', flexShrink: 0 }} />
-        <span style={{ fontSize: 11, color: '#64748B', width: 70, flexShrink: 0 }}>{node.typeName}</span>
+        <span style={{ fontSize: 11, color: '#64748B', width: 85, flexShrink: 0 }}>{getTypeDisplayName(node.typeName || node.typeCode)}</span>
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <EditableText

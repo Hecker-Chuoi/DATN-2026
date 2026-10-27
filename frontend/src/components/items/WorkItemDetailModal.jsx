@@ -51,9 +51,9 @@ import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 const TYPE_ICONS = {
   EPIC: { icon: Bookmark, color: '#6554C0', label: 'Hạng mục lớn' },
   STORY: { icon: Bookmark, color: '#36B37E', label: 'Yêu cầu' },
-  TASK: { icon: CheckSquare, color: '#0052CC', label: 'Nhiệm vụ' },
+  TASK: { icon: CheckSquare, color: '#0052CC', label: 'Công việc' },
   BUG: { icon: CircleDot, color: '#E5493A', label: 'Sự cố' },
-  SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Nhiệm vụ con' },
+  SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Công việc con' },
 };
 
 export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [], sprints = [], canManageSprint = true }) {
@@ -260,7 +260,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
       setShowStatusDropdown(false);
       const res = await workItemApi.executeTransition(currentId, transitionId, { comment: '', resolveAllSubtasks });
       if (res && res.data) {
-        toast.success(resolveAllSubtasks ? 'Đã hoàn thành tất cả nhiệm vụ con và công việc cha!' : 'Đã chuyển trạng thái thành công');
+        toast.success(resolveAllSubtasks ? 'Đã hoàn thành tất cả công việc con và công việc cha!' : 'Đã chuyển trạng thái thành công');
         setShowResolveSubtasksModal(false);
         setPendingTransitionId(null);
         fetchDetail(currentId);
@@ -376,13 +376,13 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
     if (!newSubtaskTitle.trim()) return;
     try {
       await workItemApi.createSubtask(currentId, { summary: newSubtaskTitle.trim() });
-      toast.success('Đã thêm nhiệm vụ con mới');
+      toast.success('Đã thêm công việc con mới');
       setNewSubtaskTitle('');
       setIsAddingSubtask(false);
       fetchDetail(currentId);
       if (onItemUpdated) onItemUpdated();
     } catch (err) {
-      toast.error('Lỗi khi tạo nhiệm vụ con');
+      toast.error('Lỗi khi tạo công việc con');
     }
   };
 
@@ -532,7 +532,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
     const isTargetSubtask = selectedTargetItem?.hierarchyLevel === -1 || selectedTargetItem?.isSubtask || selectedTargetItem?.typeCode === 'SUBTASK';
 
     if (linkRelationType === 'BLOCKS' && ((isCurrentEpic && isTargetSubtask) || (isCurrentSubtask && isTargetEpic))) {
-      toast.error('Không thể tạo liên kết cản trở trực tiếp giữa Hạng mục lớn và Nhiệm vụ con (chênh lệch cấp bậc). Vui lòng liên kết ở cấp độ công việc tiêu chuẩn.');
+      toast.error('Không thể tạo liên kết cản trở trực tiếp giữa Hạng mục lớn và Công việc con (chênh lệch cấp bậc). Vui lòng liên kết ở cấp độ công việc tiêu chuẩn.');
       return;
     }
 
@@ -661,7 +661,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
             {(() => {
               const displayColor = item?.typeColor || typeInfo.color || '#2563EB';
               const lvl = item?.hierarchyLevel;
-              const lvlLabel = lvl === 1 ? 'Cấp 1 • Hạng mục lớn' : lvl === 0 ? 'Cấp 0 • Tiêu chuẩn' : lvl === -1 ? 'Cấp -1 • Nhiệm vụ con' : null;
+              const lvlLabel = lvl === 1 ? 'Cấp 1 • Hạng mục lớn' : lvl === 0 ? 'Cấp 0 • Tiêu chuẩn' : lvl === -1 ? 'Cấp -1 • Công việc con' : null;
               return (
                 <div
                   style={{
@@ -1195,7 +1195,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Nhiệm vụ con</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Công việc con</span>
                       {subtaskTotal > 0 && (
                         <span style={{ fontSize: 12, color: '#64748B' }}>
                           {subtaskDone}/{subtaskTotal} hoàn thành ({Math.round(progressPercent)}%)
@@ -1218,7 +1218,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         }}
                       >
                         <Plus size={14} />
-                        <span>Thêm nhiệm vụ con</span>
+                        <span>Thêm công việc con</span>
                       </button>
                     )}
                   </div>
@@ -1305,7 +1305,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         type="text"
                         value={newSubtaskTitle}
                         onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                        placeholder="Nhập tiêu đề nhiệm vụ con..."
+                        placeholder="Nhập tiêu đề công việc con..."
                         autoFocus
                         style={{
                           flex: 1,
@@ -2261,7 +2261,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       type="text"
                       disabled
                       value="Không áp dụng"
-                      title="Nhiệm vụ con không tính điểm trực tiếp"
+                      title="Công việc con không tính điểm trực tiếp"
                       style={{
                         width: '100%',
                         marginTop: 6,
@@ -2277,7 +2277,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       }}
                     />
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                      Nhiệm vụ con không tính điểm trực tiếp
+                      Công việc con không tính điểm trực tiếp
                     </div>
                   </div>
                 ) : item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC' ? (
@@ -2342,7 +2342,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   </div>
                   {item?.subtasks && item.subtasks.length > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: '#0284C7' }}>
-                      <span>Tổng cộng dồn (Gồm nhiệm vụ con):</span>
+                      <span>Tổng cộng dồn (Gồm công việc con):</span>
                       <strong>
                         {Math.round(((item?.totalTimeSpentSeconds || 0) / 3600) * 10) / 10} giờ
                       </strong>
@@ -2365,7 +2365,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   <div
                     title={
                       item?.hierarchyLevel === -1
-                        ? 'Nhiệm vụ con đi theo chu kỳ của công việc cha'
+                        ? 'Công việc con đi theo chu kỳ của công việc cha'
                         : undefined
                     }
                     style={{

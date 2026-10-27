@@ -204,7 +204,7 @@ export default function ProjectBoardPage() {
         )}
         {data?.swimlaneStrategy && (
           <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: SURFACE.textMuted }}>
-            <Layers size={13} /> Phân luồng: {data.swimlaneStrategy}
+            <Layers size={13} /> Phân làn: {data.swimlaneStrategy === 'BY_EPIC' ? 'Theo Hạng mục lớn' : data.swimlaneStrategy === 'BY_ASSIGNEE' ? 'Theo Người thực hiện' : data.swimlaneStrategy === 'BY_PRIORITY' ? 'Theo Mức độ ưu tiên' : data.swimlaneStrategy === 'NONE' ? 'Không phân làn' : data.swimlaneStrategy}
           </span>
         )}
       </div>

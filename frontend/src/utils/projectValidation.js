@@ -145,7 +145,7 @@ export function validateWorkItemTypeForm(data = {}) {
   } else {
     const level = Number(data.hierarchyLevel);
     if (![-1, 0, 1].includes(level)) {
-      errors.hierarchyLevel = 'Cấp bậc phân cấp phải là -1 (Nhiệm vụ con), 0 (Tiêu chuẩn), hoặc 1 (Hạng mục lớn)';
+      errors.hierarchyLevel = 'Cấp bậc phân cấp phải là -1 (Công việc con), 0 (Tiêu chuẩn), hoặc 1 (Hạng mục lớn)';
     }
   }
 
