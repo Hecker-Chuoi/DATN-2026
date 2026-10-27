@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
-import { userTokenStore, adminTokenStore, authApi, userApi } from './api.js';
+import { userTokenStore, adminTokenStore, authApi, userApi, isSessionValid } from './api.js';
 import { PermissionProvider } from './context/PermissionContext.jsx';
 
 import WorkspaceLayout from './components/layout/WorkspaceLayout.jsx';
@@ -12,7 +12,6 @@ import ProjectBacklogPage from './pages/ProjectBacklogPage.jsx';
 import ProjectReportsPage from './pages/ProjectReportsPage.jsx';
 import ProjectMembersPage from './pages/ProjectMembersPage.jsx';
 import ProjectWorkflowPage from './pages/ProjectWorkflowPage.jsx';
-import TeamDetailPage from './pages/TeamDetailPage.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import UserLoginPage from './pages/UserLoginPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -26,6 +25,7 @@ import WorkspaceListPage from './pages/WorkspaceListPage.jsx';
 import WorkspaceMembersPage from './pages/WorkspaceMembersPage.jsx';
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage.jsx';
 import AccessDenied from './components/common/AccessDenied.jsx';
+import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 import InvitationsPage from './pages/InvitationsPage.jsx';
 import VerifyEmailPage from './pages/VerifyEmailPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
@@ -54,13 +54,21 @@ function AuthedShell() {
 function App() {
   // ─── User Workspace Auth State ───
   const [isUserAuth, setIsUserAuth] = useState(() => {
-    return !!userTokenStore.get();
+    if (!isSessionValid(userTokenStore)) {
+      userTokenStore.clear();
+      return false;
+    }
+    return true;
   });
   const [currentUser, setCurrentUser] = useState(null);
 
   // ─── Admin Portal Auth State ───
   const [isAdminAuth, setIsAdminAuth] = useState(() => {
-    return !!adminTokenStore.get();
+    if (!isSessionValid(adminTokenStore)) {
+      adminTokenStore.clear();
+      return false;
+    }
+    return true;
   });
 
   const fetchCurrentUser = async () => {
@@ -163,7 +171,8 @@ function App() {
         }}
       />
 
-      <Routes>
+      <ErrorBoundary>
+        <Routes>
         {/* ─── 1. User Workspace Authentication Routes ─── */}
         <Route
           path="/login"
@@ -223,7 +232,6 @@ function App() {
               <Route path="members" element={<ProjectMembersPage />} />
               <Route path="workflow" element={<ProjectWorkflowPage />} />
             </Route>
-            <Route path="teams/:teamId" element={<TeamDetailPage />} />
             <Route path="members" element={<WorkspaceMembersPage />} />
             <Route path="settings" element={<WorkspaceSettingsPage />} />
             <Route path="profile" element={<ProfilePage />} />
@@ -248,10 +256,10 @@ function App() {
                     color: '#0F172A',
                   }}
                 >
-                  <span>Nhiệm vụ của tôi</span>
+                  <span>Công việc của tôi</span>
                 </div>
                 <div style={{ padding: 40, textAlign: 'center' }}>
-                  <h3 style={{ color: '#0F172A', marginBottom: 6, fontSize: 16 }}>Nhiệm vụ của tôi</h3>
+                  <h3 style={{ color: '#0F172A', marginBottom: 6, fontSize: 16 }}>Công việc của tôi</h3>
                   <p style={{ color: '#64748B', fontSize: 13 }}>Danh sách tác vụ được giao cho bạn.</p>
                 </div>
               </div>
@@ -290,13 +298,14 @@ function App() {
           element={<Navigate to="/register" replace />}
         />
 
-        {/* 401: phiên hết hạn (interceptor chuyển hướng tới đây khi refresh token thất bại) */}
-        <Route path="/401" element={<AccessDenied status={401} />} />
+        {/* 401: phiên hết hạn -> tự động điều hướng về /login thay vì hiển thị màn hình trung gian */}
+        <Route path="/401" element={<Navigate to="/login" replace />} />
 
         {/* Catch-all: về workspace phù hợp thay vì đường dẫn phẳng /projects
             (vốn không còn tồn tại sau khi workspace vào URL). */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </ErrorBoundary>
      </PermissionProvider>
     </BrowserRouter>
   );

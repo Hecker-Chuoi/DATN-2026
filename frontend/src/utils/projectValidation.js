@@ -1,5 +1,5 @@
 /**
- * projectValidation.js - Validation Rules & Helpers for Projects, Teams, and WorkItemTypes
+ * projectValidation.js - Validation Rules & Helpers for Projects and WorkItemTypes
  */
 
 export const PROJECT_KEY_REGEX = /^[A-Z][A-Z0-9_]{1,9}$/;
@@ -119,25 +119,6 @@ export function validateCloneProjectForm(data = {}) {
   };
 }
 
-/**
- * Validates the Team Form data.
- * @param {Object} data
- * @returns {{ isValid: boolean, errors: Record<string, string> }}
- */
-export function validateTeamForm(data = {}) {
-  const errors = {};
-
-  if (!data.name || !data.name.trim()) {
-    errors.name = 'Tên nhóm là bắt buộc';
-  } else if (data.name.trim().length > 255) {
-    errors.name = 'Tên nhóm không được vượt quá 255 ký tự';
-  }
-
-  return {
-    isValid: Object.keys(errors).length === 0,
-    errors,
-  };
-}
 
 /**
  * Validates the Work Item Type Form data.
@@ -164,7 +145,7 @@ export function validateWorkItemTypeForm(data = {}) {
   } else {
     const level = Number(data.hierarchyLevel);
     if (![-1, 0, 1].includes(level)) {
-      errors.hierarchyLevel = 'Cấp bậc phân cấp phải là -1 (Nhiệm vụ con), 0 (Tiêu chuẩn), hoặc 1 (Hạng mục lớn)';
+      errors.hierarchyLevel = 'Cấp bậc phân cấp phải là -1 (Công việc con), 0 (Tiêu chuẩn), hoặc 1 (Hạng mục lớn)';
     }
   }
 

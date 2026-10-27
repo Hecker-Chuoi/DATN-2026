@@ -1,7 +1,10 @@
 package com.datn.workspaceservice.service.impl;
 
+import com.datn.common.dto.ApiResponse;
 import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ResourceNotFoundException;
+import com.datn.workspaceservice.client.IdentityClient;
+import com.datn.workspaceservice.client.dto.UserResponse;
 import com.datn.workspaceservice.dto.request.CreateWorkspaceRequest;
 import com.datn.workspaceservice.dto.request.UpdateWorkspaceRequest;
 import com.datn.workspaceservice.dto.response.WorkspaceResponse;
@@ -23,7 +26,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -35,6 +37,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMemberRepository memberRepository;
+    private final IdentityClient identityClient;
 
     @Override
     @Transactional
@@ -63,11 +66,69 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
+    public synchronized WorkspaceResponse createDefaultWorkspace(UUID userId) {
+        List<WorkspaceMember> existingMemberships = memberRepository.findByUserId(userId);
+        if (!existingMemberships.isEmpty()) {
+            Workspace firstWs = workspaceRepository.findByIdAndDeletedAtIsNull(existingMemberships.get(0).getWorkspaceId())
+                    .orElse(null);
+            if (firstWs != null) {
+                return toResponse(firstWs, existingMemberships.get(0).getRole(), 1L, 1L);
+            }
+        }
+
+        String displayName = "Cá nhân";
+        String username = "user";
+        try {
+            ApiResponse<UserResponse> userRes = identityClient.getUserById(userId);
+            if (userRes != null && userRes.getData() != null) {
+                UserResponse u = userRes.getData();
+                if (u.getFullName() != null && !u.getFullName().isBlank()) {
+                    displayName = u.getFullName().trim();
+                } else if (u.getUsername() != null && !u.getUsername().isBlank()) {
+                    displayName = u.getUsername().trim();
+                }
+                if (u.getUsername() != null && !u.getUsername().isBlank()) {
+                    username = u.getUsername().trim();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Không lấy được thông tin user {} từ identity-service: {}", userId, e.getMessage());
+        }
+
+        String wsName = "Không gian của " + displayName;
+        String slug = resolveSlug(null, "ws-" + username);
+
+        Workspace workspace = workspaceRepository.save(Workspace.builder()
+                .name(wsName)
+                .slug(slug)
+                .description("Không gian làm việc mặc định của " + displayName)
+                .createdBy(userId)
+                .build());
+
+        memberRepository.save(WorkspaceMember.builder()
+                .workspaceId(workspace.getId())
+                .userId(userId)
+                .role(WorkspaceRole.OWNER)
+                .build());
+
+        log.info("Đã tự động khởi tạo default workspace {} (slug={}) cho user {}", workspace.getId(), slug, userId);
+        return toResponse(workspace, WorkspaceRole.OWNER, 1L, 1L);
+    }
+
+    @Override
+    @Transactional
     public List<WorkspaceResponse> getMyWorkspaces(UUID currentUserId) {
         List<WorkspaceMember> memberships = memberRepository.findByUserId(currentUserId);
         if (memberships.isEmpty()) {
-            return List.of();
+            log.info("User {} chưa thuộc workspace nào, tự động khởi tạo default workspace...", currentUserId);
+            try {
+                WorkspaceResponse defaultWs = createDefaultWorkspace(currentUserId);
+                return List.of(defaultWs);
+            } catch (Exception e) {
+                log.error("Lỗi khi tự động tạo default workspace cho user {}: {}", currentUserId, e.getMessage(), e);
+                return List.of();
+            }
         }
 
         Map<UUID, WorkspaceRole> roleByWorkspace = memberships.stream()
@@ -77,6 +138,17 @@ public class WorkspaceServiceImpl implements WorkspaceService {
         // membership còn sót lại của một workspace đã xóa không lọt ra ngoài.
         List<Workspace> workspaces =
                 workspaceRepository.findByIdInAndDeletedAtIsNull(List.copyOf(roleByWorkspace.keySet()));
+
+        if (workspaces.isEmpty()) {
+            log.info("Tất cả workspace của user {} đã bị xóa, tự động tạo default workspace mới...", currentUserId);
+            try {
+                WorkspaceResponse defaultWs = createDefaultWorkspace(currentUserId);
+                return List.of(defaultWs);
+            } catch (Exception e) {
+                log.error("Lỗi khi tạo default workspace: {}", e.getMessage());
+                return List.of();
+            }
+        }
 
         // Một query duy nhất cho toàn bộ thành viên của các workspace này, thay vì
         // một query cho mỗi workspace (N+1).
@@ -258,8 +330,6 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 .myRole(myRole)
                 .memberCount(memberCount)
                 .ownerCount(ownerCount)
-                // teamCount để null ở v1 - xem javadoc của WorkspaceResponse.
-                .teamCount(null)
                 .build();
     }
 }

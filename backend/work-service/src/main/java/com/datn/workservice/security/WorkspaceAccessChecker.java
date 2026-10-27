@@ -15,7 +15,7 @@ import java.util.UUID;
  * Kiểm tra quyền truy cập workspace từ phía work-service.
  * <p>
  * <b>FAIL CLOSED.</b> Mọi lỗi Feign hoặc timeout đều thành ForbiddenException.
- * Cố tình KHÔNG copy thái độ catch-rồi-bỏ-qua của TeamController.getUserAliasIds
+ * Xử lý kiểm tra quyền workspace nghiêm ngặt, fail-closed khi có lỗi
  * và ProjectMemberServiceImpl.getProjectMembers: bỏ qua lỗi là chấp nhận được khi
  * chỉ hydrate dữ liệu HIỂN THỊ, nhưng chí tử khi đang PHÂN QUYỀN - workspace-service
  * chết sẽ biến thành "ai cũng vào được mọi workspace".

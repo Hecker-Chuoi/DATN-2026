@@ -27,7 +27,6 @@ public class WorkDataCleanupService {
         if (userIds == null || userIds.isEmpty()) return;
         for (UUID id : userIds) {
             try {
-                userRepository.deleteTeamMembershipsByUserId(id);
                 userRepository.deleteProjectRoleAssignmentsByUserId(id);
                 userRepository.unassignWorkItemsByUserId(id);
             } catch (Exception ex) {

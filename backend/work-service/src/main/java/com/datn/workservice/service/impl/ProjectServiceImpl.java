@@ -17,16 +17,11 @@ import com.datn.workservice.enums.DefaultAssigneeType;
 import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.enums.ProjectType;
 import com.datn.workservice.enums.StatusCategory;
-import com.datn.workservice.enums.TeamRole;
 import com.datn.workservice.repository.*;
 import com.datn.workservice.service.AtomicKeySequenceGenerator;
 import com.datn.workservice.service.ProjectAccessService;
 import com.datn.workservice.service.ProjectMemberService;
 import com.datn.workservice.service.ProjectService;
-import com.datn.workservice.dto.response.TemplateIntegrityReport;
-import com.datn.workservice.security.WorkspaceAccessChecker;
-import com.datn.workservice.service.template.ProjectBlueprintLoader;
-import com.datn.workservice.service.template.TemplateIntegrityValidator;
 import com.datn.workservice.specification.ProjectSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,7 +42,6 @@ import java.util.stream.Collectors;
 public class ProjectServiceImpl implements ProjectService {
 
     private final ProjectRepository projectRepository;
-    private final TeamRepository teamRepository;
     private final WorkItemTypeRepository workItemTypeRepository;
     private final StatusRepository statusRepository;
     private final WorkflowRepository workflowRepository;
@@ -61,31 +55,29 @@ public class ProjectServiceImpl implements ProjectService {
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final PermissionSchemeEntryRepository permissionSchemeEntryRepository;
     private final WorkItemRepository workItemRepository;
-    private final TeamMemberRepository teamMemberRepository;
 
     private final AtomicKeySequenceGenerator atomicKeySequenceGenerator;
     private final IdentityClient identityClient;
     private final ProjectAccessService projectAccessService;
     private final ProjectMemberService projectMemberService;
-    private final WorkspaceAccessChecker workspaceAccessChecker;
-    private final ProjectBlueprintLoader projectBlueprintLoader;
+    private final com.datn.workservice.security.WorkspaceAccessChecker workspaceAccessChecker;
 
     @Override
     @Transactional
     public ProjectResponse createProject(CreateProjectRequest request, UUID currentUserId) {
         String key = request.getKey().trim().toUpperCase();
+
         if (projectRepository.existsByKeyIgnoreCase(key)) {
-            throw new BadRequestException("Mã dự án '" + key + "' đã tồn tại trong hệ thống");
+            throw new BadRequestException("Mã dự án '" + key + "' đã tồn tại trong hệ thống. Vui lòng chọn mã khác.");
         }
 
         UUID leadUserId = request.getLeadUserId() != null ? request.getLeadUserId() : currentUserId;
 
-        // Chỉ thành viên của team (hoặc Global ADMIN) mới được gắn dự án vào team đó
-        validateTeamMembership(request.getTeamId(), currentUserId, leadUserId);
+        // Chỉ thành viên Workspace (MEMBER trở lên) hoặc Global ADMIN mới được tạo dự án
+        assertCanCreateProject(request.getWorkspaceId(), currentUserId, leadUserId);
 
         Project project = Project.builder()
                 .workspaceId(request.getWorkspaceId())
-                .teamId(request.getTeamId())
                 .name(request.getName().trim())
                 .key(key)
                 .description(request.getDescription())
@@ -93,18 +85,19 @@ public class ProjectServiceImpl implements ProjectService {
                 .leadUserId(leadUserId)
                 .defaultAssigneeType(request.getDefaultAssigneeType() != null ? request.getDefaultAssigneeType() : DefaultAssigneeType.PROJECT_LEADER)
                 .projectType(request.getProjectType() != null ? request.getProjectType() : ProjectType.SOFTWARE_SCRUM)
-                .isTemplate(Boolean.TRUE.equals(request.getIsTemplate()))
-                .templateCategory(Boolean.TRUE.equals(request.getIsTemplate()) ? request.getTemplateCategory() : null)
+                .isTemplate(false)
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
                 .createdBy(currentUserId)
                 .build();
 
         Project savedProject = projectRepository.save(project);
-        log.info("Project created successfully: ID={}, Key={}", savedProject.getId(), savedProject.getKey());
 
-        // Auto-seed project ecosystem
-        seedProjectEcosystem(savedProject, currentUserId, leadUserId);
+        // Auto-seed project dependencies
+        initProjectEcosystem(savedProject, leadUserId, currentUserId);
+
+        log.info("Project created successfully: ID={}, Key={}, WorkspaceId={}",
+                savedProject.getId(), savedProject.getKey(), savedProject.getWorkspaceId());
 
         return mapToProjectResponse(savedProject);
     }
@@ -121,8 +114,7 @@ public class ProjectServiceImpl implements ProjectService {
     @Transactional(readOnly = true)
     public ProjectDetailResponse getProjectByKey(String key) {
         Project project = projectRepository.findByKeyIgnoreCase(key.trim())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với mã Key: " + key));
-        projectAccessService.assertProjectPermission(project.getId(), PermissionKey.PROJECT_VIEW);
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với mã: " + key));
         return mapToProjectDetailResponse(project);
     }
 
@@ -130,33 +122,23 @@ public class ProjectServiceImpl implements ProjectService {
     @Transactional(readOnly = true)
     public PageResponse<ProjectResponse> getAllProjects(
             List<UUID> workspaceIds,
-            UUID teamId,
             String search,
             Boolean isTemplate,
             Pageable pageable,
             UUID currentUserId,
             boolean includeAll
     ) {
-        // Hai tang loc bo sung cho nhau: workspaceIds gioi han WORKSPACE nao duoc thay,
-        // accessibleBy gioi han DU AN nao trong do duoc thay.
-        Specification<Project> spec = ProjectSpecification.withFilters(workspaceIds, teamId, search, isTemplate, false);
+        Specification<Project> spec = ProjectSpecification.withFilters(workspaceIds, search, isTemplate, false);
 
         Map<UUID, String> myRoles = currentUserId != null ? resolveMyRoles(currentUserId) : Collections.emptyMap();
         if (!includeAll) {
-            if (currentUserId == null) {
-                return PageResponse.of(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0L, 0, true, true);
-            }
             spec = spec.and(ProjectSpecification.accessibleBy(currentUserId, myRoles.keySet()));
         }
 
         Page<Project> page = projectRepository.findAll(spec, pageable);
-
         List<ProjectResponse> content = page.getContent().stream()
-                .map(p -> {
-                    ProjectResponse response = mapToProjectResponse(p);
-                    response.setMyRole(resolveMyRoleLabel(p, currentUserId, myRoles));
-                    return response;
-                })
+                .map(this::mapToProjectResponse)
+                .peek(r -> r.setMyRole(myRoles.get(r.getId())))
                 .collect(Collectors.toList());
 
         return PageResponse.of(
@@ -178,7 +160,7 @@ public class ProjectServiceImpl implements ProjectService {
             UUID currentUserId,
             boolean includeAll
     ) {
-        return getAllProjects(workspaceIds, null, null, true, pageable, currentUserId, includeAll);
+        return getAllProjects(workspaceIds, null, true, pageable, currentUserId, includeAll);
     }
 
     @Override
@@ -187,20 +169,8 @@ public class ProjectServiceImpl implements ProjectService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với ID: " + projectId));
 
-        if (project.getDeletedAt() != null) {
-            throw new BadRequestException("Không thể cập nhật dự án đã bị xóa");
-        }
-
-        boolean teamChanged = false;
-        boolean leadChanged = false;
-
         if (request.getName() != null && !request.getName().isBlank()) {
             project.setName(request.getName().trim());
-        }
-        if (request.getTeamId() != null && !request.getTeamId().equals(project.getTeamId())) {
-            validateTeamMembership(request.getTeamId(), currentUserId, null);
-            project.setTeamId(request.getTeamId());
-            teamChanged = true;
         }
         if (request.getDescription() != null) {
             project.setDescription(request.getDescription());
@@ -208,32 +178,8 @@ public class ProjectServiceImpl implements ProjectService {
         if (request.getIconUrl() != null) {
             project.setIconUrl(request.getIconUrl());
         }
-        if (request.getLeadUserId() != null && !request.getLeadUserId().equals(project.getLeadUserId())) {
-            UUID newLead = request.getLeadUserId();
-            boolean isProjectMember = !roleAssignmentRepository.findByProjectIdAndUserId(projectId, newLead).isEmpty();
-            boolean isTeamMember = project.getTeamId() != null && teamRepository.findById(project.getTeamId())
-                    .map(t -> isTeamMember(t, newLead))
-                    .orElse(false);
-            if (!isProjectMember && !isTeamMember) {
-                throw new BadRequestException("Trưởng dự án (Project Lead) mới phải là thành viên của dự án hoặc của nhóm");
-            }
-            project.setLeadUserId(newLead);
-            leadChanged = true;
-        }
         if (request.getDefaultAssigneeType() != null) {
             project.setDefaultAssigneeType(request.getDefaultAssigneeType());
-        }
-        if (request.getProjectType() != null) {
-            project.setProjectType(request.getProjectType());
-        }
-        if (request.getIsTemplate() != null) {
-            if (request.getIsTemplate() && !Boolean.TRUE.equals(project.getIsTemplate())) {
-                assertTemplateReady(project);
-            }
-            project.setIsTemplate(request.getIsTemplate());
-        }
-        if (request.getTemplateCategory() != null) {
-            project.setTemplateCategory(request.getTemplateCategory());
         }
         if (request.getStartDate() != null) {
             project.setStartDate(request.getStartDate());
@@ -242,22 +188,43 @@ public class ProjectServiceImpl implements ProjectService {
             project.setEndDate(request.getEndDate());
         }
 
-        Project updatedProject = projectRepository.save(project);
-        log.info("Project updated: ID={}, Name={}", updatedProject.getId(), updatedProject.getName());
+        if (request.getLeadUserId() != null && !request.getLeadUserId().equals(project.getLeadUserId())) {
+            UUID newLead = request.getLeadUserId();
+            boolean isProjectMember = roleAssignmentRepository.findByProjectIdAndUserId(projectId, newLead)
+                    .stream().findAny().isPresent();
+            if (!isProjectMember) {
+                workspaceAccessChecker.requireMember(project.getWorkspaceId(), newLead);
+            }
+            project.setLeadUserId(newLead);
+        }
 
-        if (leadChanged) {
-            ensureAdministratorAssignment(updatedProject.getId(), updatedProject.getLeadUserId());
-        }
-        if (teamChanged) {
-            projectMemberService.syncTeamMembersToProject(updatedProject.getId());
-        }
+        Project updatedProject = projectRepository.save(project);
+        log.info("Project updated: ID={}, Key={}", updatedProject.getId(), updatedProject.getKey());
 
         return mapToProjectResponse(updatedProject);
     }
 
     @Override
-    public void assertCanCreateProject(UUID teamId, UUID currentUserId, UUID leadUserId) {
-        validateTeamMembership(teamId, currentUserId, leadUserId);
+    public void assertCanCreateProject(UUID workspaceId, UUID currentUserId, UUID leadUserId) {
+        if (projectAccessService.isGlobalAdmin()) {
+            return;
+        }
+        if (workspaceId != null) {
+            workspaceAccessChecker.requireMember(workspaceId, currentUserId);
+            if (leadUserId != null && !leadUserId.equals(currentUserId)) {
+                workspaceAccessChecker.requireMember(workspaceId, leadUserId);
+            }
+        }
+    }
+
+    private boolean isWorkspaceAdminOrOwner(UUID workspaceId, UUID userId) {
+        if (workspaceId == null || userId == null) return false;
+        try {
+            workspaceAccessChecker.requireAtLeast(workspaceId, userId, "ADMIN");
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     @Override
@@ -265,347 +232,178 @@ public class ProjectServiceImpl implements ProjectService {
         return mapToProjectResponse(project);
     }
 
-    /**
-     * Chỉ đánh dấu dự án là mẫu khi bản thiết kế của nó không vi phạm ràng buộc toàn vẹn
-     * (đủ trạng thái TODO/DONE, workflow, vai trò, sprint & công việc đúng khung thời gian...).
-     */
-    private void assertTemplateReady(Project project) {
-        TemplateIntegrityReport report = TemplateIntegrityValidator.validate(projectBlueprintLoader.load(project));
-        if (!report.isValid()) {
-            throw new BadRequestException("Dự án chưa đủ điều kiện làm mẫu: " + report.getErrors().stream()
-                    .map(TemplateIntegrityReport.Issue::getMessage)
-                    .collect(Collectors.joining("; ")));
-        }
-    }
-
-    // ─── ACCESS VALIDATION HELPERS ─────────────────────────────────────────────
-
-    /**
-     * Chỉ thành viên/owner của team (hoặc Global ADMIN) mới được gắn dự án vào team.
-     * Nếu chỉ định Project Lead khác người tạo thì Lead cũng phải thuộc team.
-     */
-    /**
-     * Chỉ trưởng nhóm (owner hoặc TeamRole.LEADER) của nhóm được chọn, hoặc Global ADMIN, mới được tạo dự án.
-     * Dự án không gắn nhóm chỉ Global ADMIN tạo được (tránh lách quy tắc bằng cách bỏ trống nhóm).
-     */
-    private void validateTeamMembership(UUID teamId, UUID currentUserId, UUID leadUserId) {
-        boolean globalAdmin = projectAccessService.isGlobalAdmin();
-
-        if (teamId == null) {
-            if (!globalAdmin) {
-                throw new AccessDeniedException("Chỉ trưởng nhóm mới được tạo dự án. Hãy chọn nhóm mà bạn là trưởng nhóm");
-            }
-            return;
-        }
-
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
-
-        boolean canManage = globalAdmin
-                || isTeamLeader(team, currentUserId)
-                || isWorkspaceAdminOrOwner(team.getWorkspaceId(), currentUserId);
-
-        if (!canManage) {
-            throw new AccessDeniedException("Chỉ trưởng nhóm (LEADER) hoặc Quản trị viên Không gian làm việc mới được tạo dự án cho nhóm này");
-        }
-
-        if (leadUserId != null && !leadUserId.equals(currentUserId) && !isTeamMember(team, leadUserId)) {
-            throw new BadRequestException("Trưởng dự án (Project Lead) phải là thành viên của nhóm");
-        }
-    }
-
-    private boolean isWorkspaceAdminOrOwner(UUID workspaceId, UUID userId) {
-        if (workspaceId == null || userId == null) return false;
-        try {
-            String wsRole = workspaceAccessChecker.getRole(workspaceId, userId);
-            return "OWNER".equalsIgnoreCase(wsRole) || "ADMIN".equalsIgnoreCase(wsRole);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private boolean isTeamLeader(Team team, UUID userId) {
-        if (team == null || userId == null) return false;
-        if (userId.equals(team.getOwnerId())) return true;
-        return teamMemberRepository.findByTeamIdAndUserId(team.getId(), userId)
-                .map(m -> m.getRole() == TeamRole.LEADER)
-                .orElse(false);
-    }
-
-    private boolean isTeamMember(Team team, UUID userId) {
-        if (team == null || userId == null) return false;
-        if (userId.equals(team.getOwnerId())) return true;
-        return teamMemberRepository.existsByTeamIdAndUserId(team.getId(), userId);
-    }
-
-    /**
-     * Đảm bảo user có vai trò ADMINISTRATOR trong dự án (dùng khi đổi Project Lead).
-     */
-    private void ensureAdministratorAssignment(UUID projectId, UUID userId) {
-        if (userId == null) return;
-        ProjectRole adminRole = projectRoleRepository.findByProjectId(projectId).stream()
-                .filter(r -> "ADMINISTRATOR".equalsIgnoreCase(r.getName()))
-                .findFirst()
-                .orElse(null);
-        if (adminRole == null) return;
-
-        List<RoleAssignment> existing = roleAssignmentRepository.findByProjectIdAndUserId(projectId, userId);
-        if (existing.isEmpty()) {
-            roleAssignmentRepository.save(RoleAssignment.builder()
-                    .projectId(projectId)
-                    .userId(userId)
-                    .roleId(adminRole.getId())
-                    .build());
-        } else {
-            RoleAssignment assignment = existing.get(0);
-            if (!adminRole.getId().equals(assignment.getRoleId())) {
-                assignment.setRoleId(adminRole.getId());
-                roleAssignmentRepository.save(assignment);
-            }
-        }
-    }
-
-    /**
-     * Map projectId -> tên vai trò cao nhất của user trong dự án đó.
-     */
-    private Map<UUID, String> resolveMyRoles(UUID userId) {
-        List<RoleAssignment> assignments = roleAssignmentRepository.findByUserId(userId);
-        if (assignments == null || assignments.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
-        Set<UUID> roleIds = assignments.stream().map(RoleAssignment::getRoleId).collect(Collectors.toSet());
-        Map<UUID, String> roleNames = projectRoleRepository.findAllById(roleIds).stream()
-                .collect(Collectors.toMap(ProjectRole::getId, ProjectRole::getName, (a, b) -> a));
-
-        Map<UUID, String> result = new HashMap<>();
-        for (RoleAssignment assignment : assignments) {
-            String name = roleNames.getOrDefault(assignment.getRoleId(), "MEMBER");
-            result.merge(assignment.getProjectId(), name,
-                    (oldName, newName) -> rolePriority(newName) < rolePriority(oldName) ? newName : oldName);
-        }
-        return result;
-    }
-
-    private String resolveMyRoleLabel(Project project, UUID userId, Map<UUID, String> myRoles) {
-        if (userId == null) return null;
-        if (userId.equals(project.getLeadUserId()) || userId.equals(project.getCreatedBy()) || isWorkspaceAdminOrOwner(project.getWorkspaceId(), userId)) {
-            return "ADMINISTRATOR";
-        }
-        return myRoles.get(project.getId());
-    }
-
-    private static int rolePriority(String roleName) {
-        if ("ADMINISTRATOR".equalsIgnoreCase(roleName)) return 0;
-        if ("MEMBER".equalsIgnoreCase(roleName)) return 1;
-        if ("VIEWER".equalsIgnoreCase(roleName)) return 2;
-        return 3;
-    }
-
     @Override
     @Transactional
     public void deleteProject(UUID projectId, UUID currentUserId) {
         Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với ID: " + projectId));
-
-        if (project.getDeletedAt() != null) {
-            return;
-        }
-
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
         project.setDeletedAt(LocalDateTime.now());
         projectRepository.save(project);
-        log.info("Project soft-deleted: ID={}, Key={}", project.getId(), project.getKey());
+        log.info("Project soft-deleted: id={}, by={}", projectId, currentUserId);
     }
 
     @Override
     @Transactional
     public ProjectResponse restoreProject(UUID projectId, UUID currentUserId) {
         Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với ID: " + projectId));
-
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
         project.setDeletedAt(null);
         Project saved = projectRepository.save(project);
-        log.info("Project restored: ID={}, Key={}", saved.getId(), saved.getKey());
+        log.info("Project restored: id={}, by={}", projectId, currentUserId);
         return mapToProjectResponse(saved);
     }
 
-    // ─── AUTO-SEEDING ECOSYSTEM ───────────────────────────────────────────────
+    // ─── PRIVATE ECOSYSTEM SEEDING ──────────────────────────────────────────
 
-    private void seedProjectEcosystem(Project project, UUID currentUserId, UUID leadUserId) {
-        // 1. Sequence in PostgreSQL
-        try {
-            atomicKeySequenceGenerator.createSequenceForProject(project.getKey());
-        } catch (Exception e) {
-            log.warn("Sequence initialization notice for project '{}': {}", project.getKey(), e.getMessage());
-        }
+    private void initProjectEcosystem(Project project, UUID leadUserId, UUID currentUserId) {
+        // 1. PostgreSQL Sequence
+        atomicKeySequenceGenerator.createSequenceForProject(project.getKey());
 
-        // 2. Default 3 Work Item Types
-        List<WorkItemType> defaultTypes = List.of(
-                WorkItemType.builder()
-                        .projectId(project.getId())
-                        .name("Epic")
-                        .code("EPIC")
-                        .description("Hạng mục lớn bao quát nhiều công việc (Epic)")
-                        .iconName("Zap")
-                        .colorHex("#9333EA")
-                        .hierarchyLevel(1)
-                        .isSubtask(false)
-                        .isSystemDefault(true)
-                        .build(),
-                WorkItemType.builder()
-                        .projectId(project.getId())
-                        .name("Task")
-                        .code("TASK")
-                        .description("Công việc tiêu chuẩn (Standard task or action item)")
-                        .iconName("CheckSquare")
-                        .colorHex("#3B82F6")
-                        .hierarchyLevel(0)
-                        .isSubtask(false)
-                        .isSystemDefault(true)
-                        .build(),
-                WorkItemType.builder()
-                        .projectId(project.getId())
-                        .name("Subtask")
-                        .code("SUBTASK")
-                        .description("Công việc con phụ thuộc (Sub-element of a parent task)")
-                        .iconName("GitCommit")
-                        .colorHex("#06B6D4")
-                        .hierarchyLevel(-1)
-                        .isSubtask(true)
-                        .isSystemDefault(true)
-                        .build()
-        );
-        List<WorkItemType> savedTypes = workItemTypeRepository.saveAll(defaultTypes);
+        // 2. Default WorkItemTypes
+        WorkItemType epic = WorkItemType.builder()
+                .projectId(project.getId())
+                .name("Epic")
+                .code("EPIC")
+                .description("A large body of work that can be broken down into smaller tasks")
+                .iconName("bookmark")
+                .colorHex("#904EE2")
+                .hierarchyLevel(1)
+                .isSubtask(false)
+                .isSystemDefault(true)
+                .build();
 
-        // 3. Default Project Statuses (Unique per project)
-        Status todoStatus = createDefaultProjectStatus(project.getId(), "To Do", StatusCategory.TODO, "#64748B", "Initial backlog state");
-        Status inProgressStatus = createDefaultProjectStatus(project.getId(), "In Progress", StatusCategory.IN_PROGRESS, "#3B82F6", "Work actively ongoing");
-        Status doneStatus = createDefaultProjectStatus(project.getId(), "Done", StatusCategory.DONE, "#10B981", "Task completed");
+        WorkItemType task = WorkItemType.builder()
+                .projectId(project.getId())
+                .name("Task")
+                .code("TASK")
+                .description("A small piece of work that needs to be done")
+                .iconName("check-square")
+                .colorHex("#4BADE8")
+                .hierarchyLevel(0)
+                .isSubtask(false)
+                .isSystemDefault(true)
+                .build();
+
+        WorkItemType subtask = WorkItemType.builder()
+                .projectId(project.getId())
+                .name("Sub-task")
+                .code("SUBTASK")
+                .description("A sub-component of a parent task")
+                .iconName("corner-down-right")
+                .colorHex("#4BADE8")
+                .hierarchyLevel(-1)
+                .isSubtask(true)
+                .isSystemDefault(true)
+                .build();
+
+        workItemTypeRepository.saveAll(List.of(epic, task, subtask));
+
+        // 3. Default Statuses
+        Status todo = createDefaultProjectStatus(project.getId(), "TO DO", StatusCategory.TODO, "#4BADE8", "Work not yet started");
+        Status inProgress = createDefaultProjectStatus(project.getId(), "IN PROGRESS", StatusCategory.IN_PROGRESS, "#F5A623", "Work currently active");
+        Status done = createDefaultProjectStatus(project.getId(), "DONE", StatusCategory.DONE, "#27AE60", "Work completed and verified");
 
         // 4. Default Workflow & Transitions
-        Workflow workflow = Workflow.builder()
+        Workflow workflow = workflowRepository.save(Workflow.builder()
                 .projectId(project.getId())
-                .name(project.getName() + " Default Workflow")
-                .description("Standard 3-state agile workflow for " + project.getName())
+                .name(project.getName() + " Workflow")
+                .description("Default Agile Workflow for " + project.getName())
                 .isDefault(true)
-                .build();
-        workflow = workflowRepository.save(workflow);
+                .build());
 
-        List<WorkflowTransition> transitions = List.of(
-                WorkflowTransition.builder().workflowId(workflow.getId()).fromStatusId(null).toStatusId(todoStatus.getId()).name("Create").build(),
-                WorkflowTransition.builder().workflowId(workflow.getId()).fromStatusId(todoStatus.getId()).toStatusId(inProgressStatus.getId()).name("Start Work").build(),
-                WorkflowTransition.builder().workflowId(workflow.getId()).fromStatusId(inProgressStatus.getId()).toStatusId(doneStatus.getId()).name("Complete").build(),
-                WorkflowTransition.builder().workflowId(workflow.getId()).fromStatusId(doneStatus.getId()).toStatusId(inProgressStatus.getId()).name("Reopen").build(),
-                WorkflowTransition.builder().workflowId(workflow.getId()).fromStatusId(inProgressStatus.getId()).toStatusId(todoStatus.getId()).name("Stop Progress").build(),
-                WorkflowTransition.builder().workflowId(workflow.getId()).fromStatusId(todoStatus.getId()).toStatusId(doneStatus.getId()).name("Quick Done").build()
-        );
-        workflowTransitionRepository.saveAll(transitions);
+        workflowTransitionRepository.saveAll(List.of(
+                WorkflowTransition.builder().workflowId(workflow.getId()).name("Start Work").fromStatusId(todo.getId()).toStatusId(inProgress.getId()).build(),
+                WorkflowTransition.builder().workflowId(workflow.getId()).name("Complete Work").fromStatusId(inProgress.getId()).toStatusId(done.getId()).build(),
+                WorkflowTransition.builder().workflowId(workflow.getId()).name("Reopen").fromStatusId(done.getId()).toStatusId(todo.getId()).build()
+        ));
 
-        // 5. Workflow Scheme & Mappings
-        WorkflowScheme scheme = WorkflowScheme.builder()
+        // 5. Workflow Scheme
+        WorkflowScheme scheme = workflowSchemeRepository.save(WorkflowScheme.builder()
                 .projectId(project.getId())
                 .name(project.getName() + " Workflow Scheme")
-                .description("Default scheme binding all types to standard workflow")
-                .build();
-        scheme = workflowSchemeRepository.save(scheme);
+                .build());
 
-        UUID schemeId = scheme.getId();
-        UUID workflowId = workflow.getId();
-        List<WorkflowSchemeMapping> mappings = savedTypes.stream()
-                .map(type -> WorkflowSchemeMapping.builder()
-                        .schemeId(schemeId)
-                        .workItemTypeId(type.getId())
-                        .workflowId(workflowId)
-                        .build())
-                .collect(Collectors.toList());
-        workflowSchemeMappingRepository.saveAll(mappings);
+        workflowSchemeMappingRepository.saveAll(List.of(
+                WorkflowSchemeMapping.builder().schemeId(scheme.getId()).workItemTypeId(epic.getId()).workflowId(workflow.getId()).build(),
+                WorkflowSchemeMapping.builder().schemeId(scheme.getId()).workItemTypeId(task.getId()).workflowId(workflow.getId()).build(),
+                WorkflowSchemeMapping.builder().schemeId(scheme.getId()).workItemTypeId(subtask.getId()).workflowId(workflow.getId()).build()
+        ));
 
-        // 6. Default Board & Board Columns
+        // 6. Default Kanban / Scrum Board
         BoardType boardType = project.getProjectType() == ProjectType.SOFTWARE_KANBAN ? BoardType.KANBAN : BoardType.SCRUM;
-        Board board = Board.builder()
+        Board board = boardRepository.save(Board.builder()
                 .projectId(project.getId())
                 .name(project.getName() + " Board")
                 .type(boardType)
-                .build();
-        board = boardRepository.save(board);
+                .build());
 
         BoardColumn colTodo = boardColumnRepository.save(BoardColumn.builder().boardId(board.getId()).name("TO DO").columnOrder(0).build());
         BoardColumn colInProgress = boardColumnRepository.save(BoardColumn.builder().boardId(board.getId()).name("IN PROGRESS").columnOrder(1).build());
         BoardColumn colDone = boardColumnRepository.save(BoardColumn.builder().boardId(board.getId()).name("DONE").columnOrder(2).build());
 
-        List<BoardColumnStatus> columnStatuses = List.of(
-                BoardColumnStatus.builder().columnId(colTodo.getId()).statusId(todoStatus.getId()).build(),
-                BoardColumnStatus.builder().columnId(colInProgress.getId()).statusId(inProgressStatus.getId()).build(),
-                BoardColumnStatus.builder().columnId(colDone.getId()).statusId(doneStatus.getId()).build()
-        );
-        boardColumnStatusRepository.saveAll(columnStatuses);
+        boardColumnStatusRepository.saveAll(List.of(
+                BoardColumnStatus.builder().columnId(colTodo.getId()).statusId(todo.getId()).build(),
+                BoardColumnStatus.builder().columnId(colInProgress.getId()).statusId(inProgress.getId()).build(),
+                BoardColumnStatus.builder().columnId(colDone.getId()).statusId(done.getId()).build()
+        ));
 
-        // 7. Default Project Roles & Permissions
+        // 7. Standard Jira-like Project Roles
         ProjectRole adminRole = projectRoleRepository.save(ProjectRole.builder()
                 .projectId(project.getId())
                 .name("ADMINISTRATOR")
-                .description("Full administrative access to project settings, members, workflows and items")
+                .description("Project administrator with full control")
                 .build());
 
         ProjectRole memberRole = projectRoleRepository.save(ProjectRole.builder()
                 .projectId(project.getId())
                 .name("MEMBER")
-                .description("Standard member who can view, create, edit, and transition work items")
+                .description("Project member with work item management abilities")
                 .build());
 
         ProjectRole viewerRole = projectRoleRepository.save(ProjectRole.builder()
                 .projectId(project.getId())
                 .name("VIEWER")
-                .description("Read-only access to project work items and boards")
+                .description("Read-only access to the project")
                 .build());
 
-        // Seed permission entries for ADMINISTRATOR (All 10 permissions)
-        List<PermissionSchemeEntry> adminEntries = Arrays.stream(PermissionKey.values())
-                .map(pk -> PermissionSchemeEntry.builder()
-                        .projectId(project.getId())
-                        .roleId(adminRole.getId())
-                        .permissionKey(pk.name())
-                        .build())
-                .toList();
+        // Assign standard permissions to ADMINISTRATOR
+        for (PermissionKey key : PermissionKey.values()) {
+            permissionSchemeEntryRepository.save(PermissionSchemeEntry.builder()
+                    .projectId(project.getId())
+                    .roleId(adminRole.getId())
+                    .permissionKey(key.name())
+                    .build());
+        }
 
-        // Seed permission entries for MEMBER
-        List<PermissionSchemeEntry> memberEntries = List.of(
+        // Assign standard permissions to MEMBER
+        List<PermissionKey> memberPerms = List.of(
                 PermissionKey.PROJECT_VIEW,
                 PermissionKey.ISSUE_CREATE,
                 PermissionKey.ISSUE_EDIT,
-                PermissionKey.ISSUE_TRANSITION,
                 PermissionKey.ISSUE_ASSIGN,
+                PermissionKey.ISSUE_TRANSITION,
                 PermissionKey.COMMENT_CREATE,
-                PermissionKey.COMMENT_EDIT_OWN,
-                PermissionKey.COMMENT_DELETE_OWN,
-                PermissionKey.ATTACHMENT_DELETE_OWN
-        ).stream()
-                .map(pk -> PermissionSchemeEntry.builder()
-                        .projectId(project.getId())
-                        .roleId(memberRole.getId())
-                        .permissionKey(pk.name())
-                        .build())
-                .toList();
+                PermissionKey.COMMENT_EDIT_OWN
+        );
+        for (PermissionKey key : memberPerms) {
+            permissionSchemeEntryRepository.save(PermissionSchemeEntry.builder()
+                    .projectId(project.getId())
+                    .roleId(memberRole.getId())
+                    .permissionKey(key.name())
+                    .build());
+        }
 
-        // Seed permission entries for VIEWER (read-only + trao đổi bằng bình luận, giống Observer trong thiết kế)
-        List<PermissionSchemeEntry> viewerEntries = List.of(
-                PermissionKey.PROJECT_VIEW,
-                PermissionKey.COMMENT_CREATE,
-                PermissionKey.COMMENT_EDIT_OWN,
-                PermissionKey.COMMENT_DELETE_OWN
-        ).stream()
-                .map(pk -> PermissionSchemeEntry.builder()
-                        .projectId(project.getId())
-                        .roleId(viewerRole.getId())
-                        .permissionKey(pk.name())
-                        .build())
-                .toList();
-
-        List<PermissionSchemeEntry> allEntries = new ArrayList<>();
-        allEntries.addAll(adminEntries);
-        allEntries.addAll(memberEntries);
-        allEntries.addAll(viewerEntries);
-        permissionSchemeEntryRepository.saveAll(allEntries);
+        // Assign standard permissions to VIEWER
+        List<PermissionKey> viewerPerms = List.of(
+                PermissionKey.PROJECT_VIEW
+        );
+        for (PermissionKey key : viewerPerms) {
+            permissionSchemeEntryRepository.save(PermissionSchemeEntry.builder()
+                    .projectId(project.getId())
+                    .roleId(viewerRole.getId())
+                    .permissionKey(key.name())
+                    .build());
+        }
 
         // Assign Lead / Creator as ADMINISTRATOR
         Set<UUID> adminUserIds = new HashSet<>();
@@ -620,29 +418,6 @@ public class ProjectServiceImpl implements ProjectService {
                     .userId(userId)
                     .roleId(adminRole.getId())
                     .build());
-        }
-
-        // Auto-assign Team Members if project belongs to a Team
-        if (project.getTeamId() != null) {
-            List<TeamMember> teamMembers = teamMemberRepository.findByTeamId(project.getTeamId());
-            for (TeamMember tm : teamMembers) {
-                if (tm.getUserId() != null && !adminUserIds.contains(tm.getUserId())) {
-                    UUID targetRoleId = memberRole.getId();
-                    if (tm.getRole() == com.datn.workservice.enums.TeamRole.LEADER) {
-                        targetRoleId = adminRole.getId();
-                    } else if (tm.getRole() == com.datn.workservice.enums.TeamRole.VIEWER) {
-                        targetRoleId = viewerRole.getId();
-                    }
-
-                    if (!roleAssignmentRepository.existsByProjectIdAndUserIdAndRoleId(project.getId(), tm.getUserId(), targetRoleId)) {
-                        roleAssignmentRepository.save(RoleAssignment.builder()
-                                .projectId(project.getId())
-                                .userId(tm.getUserId())
-                                .roleId(targetRoleId)
-                                .build());
-                    }
-                }
-            }
         }
 
         log.info("Project ecosystem seeded successfully for project: ID={}", project.getId());
@@ -666,7 +441,6 @@ public class ProjectServiceImpl implements ProjectService {
         return ProjectResponse.builder()
                 .id(p.getId())
                 .workspaceId(p.getWorkspaceId())
-                .teamId(p.getTeamId())
                 .name(p.getName())
                 .key(p.getKey())
                 .description(p.getDescription())
@@ -686,13 +460,6 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     private ProjectDetailResponse mapToProjectDetailResponse(Project p) {
-        String teamName = null;
-        if (p.getTeamId() != null) {
-            teamName = teamRepository.findById(p.getTeamId())
-                    .map(Team::getName)
-                    .orElse(null);
-        }
-
         String leadUserName = null;
         String leadUserEmail = null;
         String leadUserAvatar = null;
@@ -745,8 +512,6 @@ public class ProjectServiceImpl implements ProjectService {
         return ProjectDetailResponse.builder()
                 .id(p.getId())
                 .workspaceId(p.getWorkspaceId())
-                .teamId(p.getTeamId())
-                .teamName(teamName)
                 .name(p.getName())
                 .key(p.getKey())
                 .description(p.getDescription())
@@ -770,5 +535,24 @@ public class ProjectServiceImpl implements ProjectService {
                 .workItemTypes(workItemTypes)
                 .roles(roles)
                 .build();
+    }
+
+    private Map<UUID, String> resolveMyRoles(UUID userId) {
+        if (userId == null) return Collections.emptyMap();
+        List<RoleAssignment> assignments = roleAssignmentRepository.findByUserId(userId);
+        if (assignments.isEmpty()) return Collections.emptyMap();
+
+        Set<UUID> roleIds = assignments.stream().map(RoleAssignment::getRoleId).collect(Collectors.toSet());
+        Map<UUID, String> roleNameById = projectRoleRepository.findAllById(roleIds).stream()
+                .collect(Collectors.toMap(ProjectRole::getId, ProjectRole::getName));
+
+        Map<UUID, String> result = new HashMap<>();
+        for (RoleAssignment ra : assignments) {
+            String roleName = roleNameById.get(ra.getRoleId());
+            if (roleName != null) {
+                result.put(ra.getProjectId(), roleName);
+            }
+        }
+        return result;
     }
 }

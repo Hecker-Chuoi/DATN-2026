@@ -140,12 +140,20 @@ class WorkspaceServiceTest {
     }
 
     @Test
-    @DisplayName("Không tham gia workspace nào -> danh sách rỗng, không query thêm")
-    void getMyWorkspaces_noMembership_returnsEmpty() {
+    @DisplayName("Không tham gia workspace nào -> tự động khởi tạo Default Workspace cho user")
+    void getMyWorkspaces_noMembership_createsDefaultWorkspace() {
         when(memberRepository.findByUserId(userId)).thenReturn(List.of());
+        when(workspaceRepository.existsBySlug(anyString())).thenReturn(false);
+        when(workspaceRepository.save(any(Workspace.class))).thenAnswer(inv -> {
+            Workspace ws = inv.getArgument(0);
+            if (ws.getId() == null) ws.setId(UUID.randomUUID());
+            return ws;
+        });
 
-        assertThat(service.getMyWorkspaces(userId)).isEmpty();
-        verify(workspaceRepository, never()).findByIdInAndDeletedAtIsNull(anyList());
+        List<WorkspaceResponse> result = service.getMyWorkspaces(userId);
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getMyRole()).isEqualTo(WorkspaceRole.OWNER);
+        assertThat(result.get(0).getName()).contains("Không gian");
     }
 
     @Test

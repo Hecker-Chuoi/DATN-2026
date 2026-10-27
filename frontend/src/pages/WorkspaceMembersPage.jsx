@@ -352,8 +352,7 @@ export default function WorkspaceMembersPage() {
                           )}
                         </td>
                         <td style={{ ...tdStyle, textAlign: 'right' }}>
-                          {/* Xóa OWNER cuối cùng không bao giờ hợp lệ -> bỏ hẳn nút,
-                              giống cách TeamDetailPage bỏ nút xóa với team owner. */}
+                          {/* Xóa OWNER cuối cùng không bao giờ hợp lệ -> bỏ hẳn nút. */}
                           {canManageMembers && !isMe && !isThisLastOwner && (
                             <button
                               type="button"

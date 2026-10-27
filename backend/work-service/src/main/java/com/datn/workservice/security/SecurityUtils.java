@@ -15,7 +15,7 @@ import java.util.UUID;
  * Tiện ích đọc thông tin người dùng hiện tại từ JWT của Keycloak.
  *
  * Quy ước định danh: work-service dùng DUY NHẤT claim {@code sub} (Keycloak user id)
- * làm user_id ở mọi bảng (role_assignments, team_members, created_by, assignee_id...).
+ * làm user_id ở mọi bảng (role_assignments, created_by, assignee_id...).
  */
 @Slf4j
 public final class SecurityUtils {

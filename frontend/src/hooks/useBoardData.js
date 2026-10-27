@@ -2,11 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { boardApi, workflowApi } from '../api.js';
 
 /**
- * Nap du lieu Board + ban do buoc chuyen cua quy trinh.
- *
- * Ban do buoc chuyen cho phep biet TRUOC khi keo cot nao la hop le, nho vay UI vo hieu
- * hoa o tha thay vi de nguoi dung tha roi moi nhan loi tu server. Vi du thuc te: quy trinh
- * mac dinh cua du an KHONG co buoc DONE -> TO DO.
+ * Nạp dữ liệu Board + bản đồ bước chuyển của quy trình.
+ * Tự động đảm bảo các Hạng mục lớn (Epic) liên quan đến các công việc
+ * trong chu kỳ xuất hiện đầy đủ trên Bảng.
  */
 export function useBoardData(projectId, boardId, sprintId) {
   const [data, setData] = useState(null);
@@ -24,7 +22,8 @@ export function useBoardData(projectId, boardId, sprintId) {
           boardApi.getBoardData(boardId, sprintId ? { sprintId } : undefined),
           workflowApi.getProjectWorkflow(projectId).catch(() => null),
         ]);
-        setData(boardRes?.data ?? null);
+        const enriched = enrichBoardDataWithEpics(boardRes?.data ?? null);
+        setData(enriched);
         setTransitions(buildTransitionMap(workflowRes?.data));
       } catch (err) {
         console.warn('Không tải được dữ liệu bảng:', err);
@@ -40,7 +39,7 @@ export function useBoardData(projectId, boardId, sprintId) {
     load();
   }, [load]);
 
-  /** Gom the theo cot, giu dung thu tu cot va rank. */
+  /** Gom thẻ theo cột, giữ đúng thứ tự cột và rank. */
   const columns = useMemo(() => {
     if (!data) return [];
     const byColumn = new Map();
@@ -54,7 +53,7 @@ export function useBoardData(projectId, boardId, sprintId) {
     }));
   }, [data]);
 
-  /** Cac cot ma the dang keo KHONG the chuyen toi. */
+  /** Các cột mà thẻ đang kéo KHÔNG thể chuyển tới. */
   const forbiddenColumnIds = useCallback(
     (card) => {
       if (!card || transitions.size === 0) return new Set();
@@ -73,7 +72,101 @@ export function useBoardData(projectId, boardId, sprintId) {
   return { data, setData, columns, loading, error, reload: load, forbiddenColumnIds, transitions };
 }
 
-/** statusId hien tai -> tap statusId co the toi. */
+/**
+ * Đảm bảo các Hạng mục lớn (Epic) mà các công việc trong Sprint thuộc về
+ * đều có mặt trong cards của Board, giúp hiển thị thẻ Epic trên cột Kanban,
+ * banner Hạng mục lớn và cấu trúc cây trong Chế độ Danh sách.
+ */
+function enrichBoardDataWithEpics(boardData) {
+  if (!boardData || !boardData.cards || !boardData.columns || boardData.columns.length === 0) {
+    return boardData;
+  }
+
+  const existingEpicIds = new Set(
+    boardData.cards
+      .filter((c) => c.hierarchyLevel === 1 || c.typeCode === 'EPIC')
+      .map((c) => c.id)
+  );
+
+  const firstColumnId = boardData.columns[0]?.id;
+  const newCards = [...boardData.cards];
+  const epicsToPrepend = [];
+  const cardEpicMap = new Map();
+
+  // 1. Duyệt qua các thẻ công việc (Level 2: Task/Story/Bug) để truy tìm Epic cha
+  for (let i = 0; i < newCards.length; i++) {
+    const card = newCards[i];
+    const isSub = Boolean(card.isSubtask || card.hierarchyLevel === 3);
+    const parentId = card.epicId || card.parentId;
+    const parentCode = card.epicCode || card.parentCode;
+    const parentSummary = card.epicSummary || card.parentSummary;
+    const parentColor = card.epicColor || '#8B5CF6';
+
+    if (!isSub && parentId && parentCode) {
+      // Đảm bảo card task có đầy đủ thông tin epic
+      if (!card.epicId) {
+        newCards[i] = {
+          ...card,
+          epicId: parentId,
+          epicCode: parentCode,
+          epicSummary: parentSummary,
+          epicColor: parentColor,
+        };
+      }
+
+      cardEpicMap.set(card.id, {
+        id: parentId,
+        code: parentCode,
+        summary: parentSummary,
+        color: parentColor,
+      });
+
+      // Nếu Epic chưa có thẻ trên Board thì tạo thẻ Epic
+      if (!existingEpicIds.has(parentId)) {
+        existingEpicIds.add(parentId);
+        epicsToPrepend.push({
+          id: parentId,
+          code: parentCode,
+          summary: parentSummary || 'Hạng mục lớn',
+          typeCode: 'EPIC',
+          typeName: 'Hạng mục lớn',
+          typeColor: parentColor,
+          hierarchyLevel: 1,
+          isSubtask: false,
+          columnId: firstColumnId,
+          statusName: 'CẦN LÀM',
+          statusCategory: 'TO_DO',
+          projectId: card.projectId,
+          projectKey: card.projectKey,
+          isVirtual: false,
+        });
+      }
+    }
+  }
+
+  // 2. Điền epicId cho các subtask nếu task cha của chúng thuộc Epic
+  for (let i = 0; i < newCards.length; i++) {
+    const card = newCards[i];
+    const isSub = Boolean(card.isSubtask || card.hierarchyLevel === 3);
+    if (isSub && card.parentId && cardEpicMap.has(card.parentId) && !card.epicId) {
+      const ep = cardEpicMap.get(card.parentId);
+      newCards[i] = {
+        ...card,
+        epicId: ep.id,
+        epicCode: ep.code,
+        epicSummary: ep.summary,
+        epicColor: ep.color,
+      };
+    }
+  }
+
+  return {
+    ...boardData,
+    cards: [...epicsToPrepend, ...newCards],
+  };
+}
+
+/** statusId hiện tại -> tập statusId có thể tới. */
 function buildTransitionMap(workflow) {
   const map = new Map();
   const list = workflow?.transitions || workflow?.workflowTransitions || [];
@@ -81,7 +174,7 @@ function buildTransitionMap(workflow) {
     const from = t.fromStatusId;
     const to = t.toStatusId;
     if (!to) continue;
-    if (from == null) continue; // buoc "Create" khong dung cho keo tha
+    if (from == null) continue; // bước "Create" không dùng cho kéo thả
     if (!map.has(from)) map.set(from, new Set());
     map.get(from).add(to);
   }

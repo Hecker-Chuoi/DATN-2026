@@ -59,21 +59,21 @@ export function validateHierarchyDrop(draggedItem, targetParent) {
     if (!targetParent) {
       return {
         allowed: false,
-        reason: 'Nhiệm vụ con bắt buộc phải trực thuộc một Công việc tiêu chuẩn (Câu chuyện, Nhiệm vụ hoặc Lỗi phần mềm)!',
+        reason: 'Công việc con bắt buộc phải trực thuộc một Công việc tiêu chuẩn (Yêu cầu, Công việc hoặc Sự cố)!',
         icon: 'Ban',
       };
     }
     if (parentLevel === HIERARCHY_LEVELS.EPIC) {
       return {
         allowed: false,
-        reason: 'Nhiệm vụ con không thể gắn trực tiếp vào Hạng mục lớn (Phải gắn qua Công việc tiêu chuẩn)!',
+        reason: 'Công việc con không thể gắn trực tiếp vào Hạng mục lớn (Phải gắn qua Công việc tiêu chuẩn)!',
         icon: 'Ban',
       };
     }
     if (parentLevel === HIERARCHY_LEVELS.SUBTASK) {
       return {
         allowed: false,
-        reason: 'Không cho phép lồng nhiệm vụ con đa tầng bên trong nhiệm vụ con khác!',
+        reason: 'Không cho phép lồng công việc con đa tầng bên trong công việc con khác!',
         icon: 'Ban',
       };
     }

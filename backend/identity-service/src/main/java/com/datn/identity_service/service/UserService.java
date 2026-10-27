@@ -10,6 +10,7 @@ import com.datn.identity_service.exception.EmailNotVerifiedException;
 import com.datn.identity_service.exception.ResourceNotFoundException;
 import com.datn.identity_service.exception.UserAlreadyExistsException;
 import com.datn.identity_service.repository.UserRepository;
+import com.datn.identity_service.client.WorkspaceClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -38,6 +39,7 @@ public class UserService {
     private final KeycloakService keycloakService;
     private final WorkDataCleanupService workDataCleanupService;
     private final AccountVerificationService accountVerificationService;
+    private final WorkspaceClient workspaceClient;
 
 
     /**
@@ -88,6 +90,7 @@ public class UserService {
 
         // 5. Gửi email xác thực (fail-safe: lỗi gửi mail không chặn đăng ký, người dùng có thể gửi lại)
         accountVerificationService.sendEmailVerification(user);
+        workspaceClient.createDefaultWorkspace(user.getId());
 
         return UserResponse.from(user);
     }
@@ -195,6 +198,7 @@ public class UserService {
                     newUser = userRepository.save(newUser);
                     log.info("Google login: created new user '{}' (keycloakId='{}', userId='{}')",
                             newUser.getUsername(), keycloakId, newUser.getId());
+                    workspaceClient.createDefaultWorkspace(newUser.getId());
                     return UserResponse.from(newUser);
                 });
 
@@ -298,11 +302,15 @@ public class UserService {
     }
 
     /**
-     * Finds a user by email (used by internal microservices)
+     * Finds a user by email (used by internal microservices and member search)
      */
     public UserResponse getUserByEmail(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+        if (email == null || email.isBlank()) {
+            throw new ResourceNotFoundException("Email cannot be blank");
+        }
+        String clean = email.trim();
+        User user = userRepository.findByEmailIgnoreCase(clean)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + clean));
         return UserResponse.from(user);
     }
 
@@ -316,7 +324,7 @@ public class UserService {
     }
 
     /**
-     * Finds a user by either email or username (used for team member invitations)
+     * Finds a user by either email or username (used for project/workspace member invitations)
      */
     public UserResponse getUserByIdentifier(String identifier) {
         if (identifier == null || identifier.isBlank()) {
@@ -333,7 +341,7 @@ public class UserService {
     }
 
     /**
-     * Batch queries users by a list of IDs (used for Kanban/Team rendering)
+     * Batch queries users by a list of IDs (used for Kanban/Project rendering)
      */
     public List<UserResponse> getUsersByIds(List<UUID> ids) {
         if (ids == null || ids.isEmpty()) {
@@ -394,6 +402,7 @@ public class UserService {
         user = userRepository.save(user);
         keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
         log.info("Admin created user: username='{}', keycloakId='{}', userId='{}'", user.getUsername(), keycloakId, user.getId());
+        workspaceClient.createDefaultWorkspace(user.getId());
 
         return UserResponse.from(user);
     }
@@ -426,7 +435,7 @@ public class UserService {
         user.setStatus(User.UserStatus.SUSPENDED);
         userRepository.save(user);
 
-        // 3. Cleanup work-service references (team memberships, project roles, assignee).
+        // 3. Cleanup work-service references (project roles, assignee).
         //    work-service lưu user_id = Keycloak sub, nên dọn theo cả 2 định danh (Keycloak id + DB id cũ).
         Set<UUID> referenceIds = new java.util.HashSet<>();
         referenceIds.add(userId);

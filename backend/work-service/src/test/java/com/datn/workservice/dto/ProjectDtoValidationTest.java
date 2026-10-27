@@ -2,7 +2,6 @@ package com.datn.workservice.dto;
 
 import com.datn.workservice.dto.request.CreateProjectRequest;
 import com.datn.workservice.dto.request.CreateWorkItemTypeRequest;
-import com.datn.workservice.dto.request.UpdateTeamRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -129,16 +128,5 @@ class ProjectDtoValidationTest {
                 .build();
         Set<ConstraintViolation<CreateWorkItemTypeRequest>> violationsHex = validator.validate(invalidHex);
         assertThat(violationsHex).anyMatch(v -> v.getPropertyPath().toString().equals("colorHex"));
-    }
-
-    @Test
-    @DisplayName("UpdateTeamRequest: Blank name should fail validation")
-    void testUpdateTeamValidation() {
-        UpdateTeamRequest req = UpdateTeamRequest.builder()
-                .name("")
-                .build();
-        Set<ConstraintViolation<UpdateTeamRequest>> violations = validator.validate(req);
-        assertThat(violations).isNotEmpty();
-        assertThat(violations).anyMatch(v -> v.getPropertyPath().toString().equals("name"));
     }
 }

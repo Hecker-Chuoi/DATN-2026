@@ -27,7 +27,7 @@
 
 ### 1.1. Hiện trạng Hệ thống (Work Service V1)
 Trong giai đoạn đầu phát triển, `work-service` được xây dựng với mục tiêu cung cấp tính năng quản lý công việc và dự án cơ bản:
-- **Tổ chức:** Đã có khái niệm Team, Thành viên (TeamMember), Dự án (Project) và sao chép Template (ProjectClone).
+- **Tổ chức:** Cấu trúc phân cấp phẳng 2 tầng: Workspace -> Dự án (Project) -> Work Items, hỗ trợ phân quyền hạt mịn và sao chép Template (ProjectClone).
 - **Công việc:** Mô hình Todo/Task phẳng hoặc liên kết cha-con đơn giản, trạng thái (Status) gắn cố định theo enum hoặc bảng cấu hình rời rạc.
 - **Hạn chế gặp phải khi mở rộng:**
   1. *Thiếu phân cấp chuẩn Agile:* Khó phân biệt ranh giới giữa Epic (sáng kiến lớn), Story/Task (công việc tiêu chuẩn) và Sub-task (nhiệm vụ kỹ thuật con).
@@ -57,8 +57,8 @@ Chiến lược refactor này tuân thủ nguyên tắc: **"Kế thừa vững c
 ├─────────────────────────┬──────────────────────────┬────────────────────────┤
 │ 🛡️ TÔN TRỌNG CÁI CŨ    │ ⚙️ CHUẨN HÓA JIRA-GRADE  │ 🧩 LINH HOẠT & THỰC DỤNG│
 ├─────────────────────────┼──────────────────────────┼────────────────────────┤
-│ • Giữ nguyên logic Team,│ • Phân cấp 3 tầng rõ     │ • Cho phép tùy biến    │
-│   Project ownership &   │   ràng (Epic/Story/Sub). │   Custom Fields JSONB. │
+│ • Giữ vững cấu trúc     │ • Phân cấp 3 tầng rõ     │ • Cho phép tùy biến    │
+│   Workspace & Project   │   ràng (Epic/Story/Sub). │   Custom Fields JSONB. │
 │   Workspace boundary.   │ • Máy trạng thái FSM     │ • Không gò bó DDL khi  │
 │ • Không làm hỏng các    │   chặt chẽ (Conditions,  │   thêm trường mới.     │
 │   tính năng Frontend    │   Validators, Post-fns). │ • Hỗ trợ cả 2 mô hình: │
@@ -69,7 +69,7 @@ Chiến lược refactor này tuân thủ nguyên tắc: **"Kế thừa vững c
 ```
 
 1. **Tôn trọng hệ thống cũ:**
-   - Bảo toàn phân định Workspace của `identity-service` và Team/Project mapping của `work-service`.
+   - Bảo toàn phân định Workspace của `workspace-service` và phân quyền Project của `work-service`.
    - Các API cũ vẫn có adapter/wrapper tương thích để Frontend chuyển tiếp mượt mà.
    - Giữ lại tính năng cốt lõi đã làm tốt: Quản lý thành viên, vai trò trong dự án, clone template dự án kèm dịch chuyển timeline (Two-pass Date Shifting).
 

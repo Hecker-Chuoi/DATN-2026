@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Building2, Sparkles, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -38,11 +38,11 @@ const labelStyle = {
 };
 
 /**
- * Fork của CreateTeamModal, giữ nguyên bố cục để nhất quán thị giác.
+ * Modal tạo Không gian làm việc mới (Workspace).
  *
  * Hai điểm KHÁC có chủ đích so với bản gốc:
  * - Đọc lỗi bằng err.body?.message. Chuỗi err.response?.data?.message trong
- *   CreateTeamModal/TeamDetailPage là DEAD CODE: response interceptor của api.js
+ *   response interceptor của api.js
  *   throw một Error mới chỉ mang .status và .body.
  * - KHÔNG gọi toast.error. Interceptor đã toast tập trung rồi, page toast thêm
  *   là toast thứ hai. Ở đây chỉ set inline error.
@@ -55,8 +55,6 @@ export default function CreateWorkspaceModal() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  if (!isCreateOpen) return null;
-
   const close = () => {
     setName('');
     setDescription('');
@@ -65,6 +63,16 @@ export default function CreateWorkspaceModal() {
   };
 
   const backdropProps = useModalBackdrop(close);
+
+  useEffect(() => {
+    if (isCreateOpen) {
+      setName('');
+      setDescription('');
+      setError('');
+    }
+  }, [isCreateOpen]);
+
+  if (!isCreateOpen) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -84,8 +92,9 @@ export default function CreateWorkspaceModal() {
       await refreshWorkspaces();
       toast.success('Đã tạo không gian làm việc mới');
       close();
-      if (res?.data?.id) {
-        navigate(wsPath(res.data.id, '/projects'));
+      const newId = res?.data?.id || res?.id;
+      if (newId) {
+        navigate(wsPath(newId, '/projects'));
       }
     } catch (err) {
       setError(err.body?.message || err.message || 'Không thể tạo không gian làm việc. Vui lòng thử lại.');

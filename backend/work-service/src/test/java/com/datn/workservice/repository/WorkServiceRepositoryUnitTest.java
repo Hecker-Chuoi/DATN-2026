@@ -15,12 +15,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class WorkServiceRepositoryUnitTest {
 
     @Test
-    @DisplayName("Verify all 33 Repositories are properly annotated with @Repository and extend JpaRepository")
+    @DisplayName("Verify all 31 Repositories are properly annotated with @Repository and extend JpaRepository")
     void testAllRepositoriesContract() {
         List<Class<?>> repositories = List.of(
                 ProjectRepository.class,
-                TeamRepository.class,
-                TeamMemberRepository.class,
                 ProjectRoleRepository.class,
                 RoleAssignmentRepository.class,
                 PermissionSchemeEntryRepository.class,
@@ -53,7 +51,7 @@ class WorkServiceRepositoryUnitTest {
                 ProjectCloneRepository.class
         );
 
-        assertEquals(33, repositories.size(), "Should have exactly 33 repository interfaces implemented");
+        assertEquals(31, repositories.size(), "Should have exactly 31 repository interfaces implemented");
 
         for (Class<?> repo : repositories) {
             assertTrue(repo.isInterface(), repo.getSimpleName() + " must be an interface");
@@ -67,7 +65,6 @@ class WorkServiceRepositoryUnitTest {
     void testSpecificationExecutors() {
         List<Class<?>> specRepos = List.of(
                 ProjectRepository.class,
-                TeamRepository.class,
                 WorkItemRepository.class,
                 SprintRepository.class,
                 BoardRepository.class,
@@ -106,8 +103,8 @@ class WorkServiceRepositoryUnitTest {
     }
 
     @Test
-    @DisplayName("Verify key query methods exist on ProjectRepository and TeamRepository")
-    void testProjectAndTeamRepositoryMethods() {
+    @DisplayName("Verify key query methods exist on ProjectRepository")
+    void testProjectRepositoryMethods() {
         List<String> projectMethodNames = Arrays.stream(ProjectRepository.class.getMethods())
                 .map(Method::getName)
                 .toList();
@@ -116,14 +113,6 @@ class WorkServiceRepositoryUnitTest {
         assertTrue(projectMethodNames.contains("findByKeyIgnoreCase"));
         assertTrue(projectMethodNames.contains("existsByKey"));
         assertTrue(projectMethodNames.contains("findByWorkspaceId"));
-        assertTrue(projectMethodNames.contains("findByTeamId"));
-
-        List<String> teamMethodNames = Arrays.stream(TeamRepository.class.getMethods())
-                .map(Method::getName)
-                .toList();
-
-        assertTrue(teamMethodNames.contains("findByWorkspaceId"));
-        assertTrue(teamMethodNames.contains("findByOwnerId"));
     }
 
     @Test

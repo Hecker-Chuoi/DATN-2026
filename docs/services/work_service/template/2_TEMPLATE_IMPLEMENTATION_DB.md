@@ -250,7 +250,7 @@ Quyền: như 6.1 (thành viên workspace của mẫu / thành viên mẫu / ADM
 ### 6.3 `POST /templates/{templateId}/projects` → 201
 ```json
 {
-  "workspaceId": "…", "teamId": "…", "name": "Web bán hàng", "key": "SHOP",
+  "workspaceId": "…", "name": "Web bán hàng", "key": "SHOP",
   "description": null, "leadUserId": null,
   "startDate": "2026-10-01", "endDate": null,
   "includeSprints": true, "includeWorkItems": true, "includeVersions": true
@@ -266,10 +266,10 @@ Response `TemplateInstantiationResponse`:
             "labelMaps":12,"componentMaps":0},
   "integrity": {"errors":[],"warnings":[…]} }
 ```
-Lỗi: 404 (không phải mẫu hoặc đã xóa), 403 (không thuộc workspace / không phải trưởng nhóm), 400 (trùng mã, mẫu có lỗi toàn vẹn, hạn chót trước ngày bắt đầu, dự án đích vi phạm ràng buộc).
+Lỗi: 404 (không phải mẫu hoặc đã xóa), 403 (không thuộc workspace), 400 (trùng mã, mẫu có lỗi toàn vẹn, hạn chót trước ngày bắt đầu, dự án đích vi phạm ràng buộc).
 
 ### 6.4 `POST /projects/{projectId}/save-as-template` → 201
-`@RequireProjectPermission(PROJECT_ADMIN)`. Body `SaveAsTemplateRequest { name, key, description, templateCategory, teamId?, includeSprints, includeWorkItems, includeVersions }`. Nếu bỏ trống `teamId` thì dùng nhóm của nguồn. Dữ liệu trả về giống 6.3 với `cloneType = SAVE_AS_TEMPLATE`, `dateOffsetDays = 0`.
+`@RequireProjectPermission(PROJECT_ADMIN)`. Body `SaveAsTemplateRequest { name, key, description, templateCategory, includeSprints, includeWorkItems, includeVersions }`. Dữ liệu trả về giống 6.3 với `cloneType = SAVE_AS_TEMPLATE`, `dateOffsetDays = 0`.
 
 ### 6.5 `POST /projects/{projectId}/clone` → 201
 `@RequireProjectPermission(PROJECT_ADMIN)`. Body `CloneProjectRequest { name, key, startDate (bắt buộc), includeItems, includeSprints }`. Dự án đích giữ cờ `is_template` của nguồn.
@@ -318,7 +318,7 @@ sequenceDiagram
     S->>DB: INSERT projects (kiểm trùng key)
     S->>E: cloneInto(blueprint, target, options, actor)
     E->>DB: sequence + ~20 bảng theo thứ tự phụ thuộc
-    S->>DB: role_assignments (lead, người tạo) + đồng bộ team
+    S->>DB: role_assignments (lead, người tạo)
     S->>DB: INSERT project_clones
     S->>L: load(target)
     S->>V: validate(đích) — ERROR → rollback + 400

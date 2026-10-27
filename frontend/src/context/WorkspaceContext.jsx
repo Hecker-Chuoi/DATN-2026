@@ -8,7 +8,7 @@
  * ProjectListPage), prop-drilling sẽ thành hai chỗ phải nối dây.
  *
  * Outlet context cũ vẫn được giữ và forward nguyên để các trang hiện có
- * (ProjectListPage, TeamDetailPage) chạy không cần sửa.
+ * (ProjectListPage, ProjectDetailPage) chạy không cần sửa.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { authApi, userTokenStore } from '../api.js';
@@ -15,6 +15,14 @@ export default function UserLoginPage({ onLoginSuccess }) {
   const [error, setError] = useState(null);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resending, setResending] = useState(false);
+
+  useEffect(() => {
+    const expiredMsg = sessionStorage.getItem('session_expired_notice');
+    if (expiredMsg) {
+      toast.error(expiredMsg);
+      sessionStorage.removeItem('session_expired_notice');
+    }
+  }, []);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -39,7 +47,9 @@ export default function UserLoginPage({ onLoginSuccess }) {
       }
       toast.success('Đăng nhập thành công!');
       if (onLoginSuccess) onLoginSuccess();
-      navigate('/projects');
+      const redirectPath = sessionStorage.getItem('redirect_after_login') || '/projects';
+      sessionStorage.removeItem('redirect_after_login');
+      navigate(redirectPath);
     } catch (err) {
       setError(err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin!');
       setNeedsVerification(err?.status === 403); // 403 = tài khoản chưa xác thực email
@@ -123,7 +133,7 @@ export default function UserLoginPage({ onLoginSuccess }) {
             D
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: '0 0 6px 0' }}>
-            Không gian làm việc DATN
+            Không gian Làm việc Trực tuyến
           </h1>
           <p style={{ fontSize: 13, color: '#64748B', margin: 0 }}>
             Đăng nhập để vào không gian quản lý dự án & tác vụ
@@ -205,7 +215,7 @@ export default function UserLoginPage({ onLoginSuccess }) {
           }}
         >
           <div style={{ flex: 1, height: 1, backgroundColor: '#E2E8F0' }} />
-          <span style={{ padding: '0 12px', fontWeight: 500 }}>HOẶC DÙNG TÀI KHOẢN</span>
+          <span style={{ padding: '0 12px', fontWeight: 500 }}>HOẶC ĐĂNG NHẬP BẰNG TÀI KHOẢN</span>
           <div style={{ flex: 1, height: 1, backgroundColor: '#E2E8F0' }} />
         </div>
 
@@ -222,7 +232,7 @@ export default function UserLoginPage({ onLoginSuccess }) {
                 name="username"
                 value={form.username}
                 onChange={handleChange}
-                placeholder="VD: user_test"
+                placeholder="VD: nguyen.van.a"
                 required
                 style={{
                   width: '100%',

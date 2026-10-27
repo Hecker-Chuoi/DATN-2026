@@ -11,7 +11,7 @@ import { EmptyChart } from './BurndownChart.jsx';
  */
 export default function CumulativeFlowChart({ rows, buckets }) {
   if (!rows?.length) {
-    return <EmptyChart message="Chưa có dữ liệu lưu lượng tích lũy." />;
+    return <EmptyChart message="Chưa có dữ liệu phân bổ luồng trạng thái." />;
   }
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT}>

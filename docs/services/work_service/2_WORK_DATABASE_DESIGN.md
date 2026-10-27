@@ -25,15 +25,13 @@
 ```mermaid
 graph TD
     classDef ws fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#fff;
-    classDef team fill:#0f766e,stroke:#14b8a6,stroke-width:2px,color:#fff;
     classDef proj fill:#0369a1,stroke:#38bdf8,stroke-width:2px,color:#fff;
     classDef wi fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#fff;
     classDef epic fill:#581c87,stroke:#c084fc,stroke-width:2px,color:#fff;
     classDef std fill:#1e3a8a,stroke:#60a5fa,stroke-width:2px,color:#fff;
     classDef sub fill:#334155,stroke:#94a3b8,stroke-width:2px,color:#fff;
 
-    WS["🏢 WORKSPACE (Identity Service)<br/><i>Ranh giới tổ chức / Doanh nghiệp</i>"]:::ws
-    TEAM["👥 TEAMS (Work Service)<br/><i>Nhóm làm việc đa chức năng</i>"]:::team
+    WS["🏢 WORKSPACE (Workspace Service)<br/><i>Ranh giới tổ chức / Doanh nghiệp</i>"]:::ws
     PROJ["📁 PROJECTS (Work Service)<br/><i>Dự án Scrum / Kanban (Key: PROJ, SCRUM...)</i>"]:::proj
     WI["🗂️ BẢNG TRUNG TÂM work_items<br/><i>Single-Table Inheritance + JSONB custom_fields</i>"]:::wi
 
@@ -43,8 +41,7 @@ graph TD
     BUG["🔴 LEVEL 0: DEFECT / BUG<br/><i>Lỗi phát sinh (parent_id = Epic ID / NULL)</i>"]:::std
     SUB["⚪ LEVEL -1: SUB-TASK<br/><i>Nhiệm vụ phân rã nhỏ (parent_id = Story/Task/Bug ID)</i>"]:::sub
 
-    WS -->|1-to-N| TEAM
-    TEAM -->|1-to-N| PROJ
+    WS -->|1-to-N (Kiến trúc phẳng)| PROJ
     PROJ -->|Chứa tập hợp| WI
 
     WI -->|Hierarchy Level 1| L1
@@ -67,8 +64,6 @@ graph TD
 
 ```mermaid
 erDiagram
-    TEAMS ||--o{ TEAM_MEMBERS : "has members"
-    TEAMS ||--o{ PROJECTS : "owns"
     PROJECTS ||--o{ PROJECT_CLONES : "cloned from"
     PROJECTS ||--o{ PROJECT_ROLES : "defines roles"
     PROJECT_ROLES ||--o{ ROLE_ASSIGNMENTS : "assigned to user"
@@ -76,27 +71,9 @@ erDiagram
     PROJECT_ROLES ||--o{ PERMISSION_SCHEME_ENTRIES : "has permissions"
     PROJECTS ||--o{ PERMISSION_SCHEME_ENTRIES : "scoped in"
 
-    TEAMS {
-        uuid id PK
-        uuid workspace_id "FK -> Identity Workspace"
-        varchar name "Tên nhóm"
-        text description
-        uuid owner_id "FK -> Identity User"
-        timestamp created_at
-        timestamp updated_at
-    }
-
-    TEAM_MEMBERS {
-        uuid id PK
-        uuid team_id FK
-        uuid user_id "FK -> Identity User"
-        varchar role "LEADER, MEMBER, VIEWER"
-        timestamp joined_at
-    }
-
     PROJECTS {
         uuid id PK
-        uuid team_id FK
+        uuid workspace_id "FK -> Workspace"
         varchar name "Tên dự án"
         varchar key "Mã tiền tố (vd: DATN, SCRUM)"
         text description
@@ -512,8 +489,6 @@ CREATE INDEX idx_outbox_pending_events ON outbox_events(status, created_at) WHER
 
 | STT | Tên Bảng CSDL | JPA Entity Class tương ứng | Vai trò & Mục đích sử dụng |
 | :--- | :--- | :--- | :--- |
-| **1** | `teams` | `Team.java` | Quản lý đội nhóm làm việc đa chức năng trong Workspace |
-| **2** | `team_members` | `TeamMember.java` | Thành viên tham gia nhóm và vai trò cấp nhóm (Leader, Member, Viewer) |
 | **3** | `projects` | `Project.java` | Dự án Scrum / Kanban, quản lý Key mã hóa và bộ đếm tuần tự `current_issue_sequence` |
 | **4** | `project_clones` | `ProjectClone.java` | Nhật ký nhân bản dự án từ template mẫu kèm tùy chọn sao chép |
 | **5** | `project_roles` | `ProjectRole.java` | Định nghĩa vai trò nội bộ trong từng dự án (Admin, PM, Developer, QA...) |

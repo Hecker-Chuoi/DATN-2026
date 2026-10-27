@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Building2, Plus, Users, ArrowRight, Mail, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { workspaceInvitationApi } from '../api/workspaceServiceApi';
+import { workspaceApi, workspaceInvitationApi } from '../api/workspaceServiceApi';
 import { wsPath } from '../utils/workspacePath';
 import RoleBadge from '../components/workspace/RoleBadge';
+import { getRoleDisplayName } from '../constants/workConstants.js';
 
 const primaryBtn = {
   display: 'inline-flex',
@@ -39,7 +40,7 @@ const cardStyle = {
  * onboarding khi chưa thuộc workspace nào.
  *
  * Trang này nằm NGOÀI WorkspaceLayout: chưa chọn workspace thì chưa có sidebar,
- * vì sidebar cần workspaceId để render switcher và danh sách team.
+ * vì sidebar cần workspaceId để render switcher và danh sách dự án.
  */
 export default function WorkspaceListPage() {
   const { workspaces, loading, error, openCreateWorkspace, refreshWorkspaces } = useWorkspace();
@@ -47,8 +48,35 @@ export default function WorkspaceListPage() {
 
   // Lời mời workspace đang chờ: trang này là nơi duy nhất người CHƯA có workspace nào nhìn thấy được
   // (WorkspaceRedirect đẩy họ về đây, không vào được /w/:id/invitations của workspace chưa thuộc).
-  const [invites, setInvites] = useState([]);
+    const [invites, setInvites] = useState([]);
   const [busyId, setBusyId] = useState(null);
+  const [autoCreating, setAutoCreating] = useState(false);
+
+  // 1. Tự động chuyển thẳng vào workspace nếu người dùng chỉ có 1 workspace duy nhất và không có lời mời
+  useEffect(() => {
+    if (!loading && workspaces.length === 1 && invites.length === 0) {
+      navigate(wsPath(workspaces[0].id, '/projects'), { replace: true });
+    }
+  }, [loading, workspaces, invites, navigate]);
+
+  // 2. Chốt chặn an toàn: Tự động khởi tạo workspace đầu tiên nếu chưa có
+  useEffect(() => {
+    if (!loading && !error && workspaces.length === 0 && invites.length === 0 && !autoCreating) {
+      setAutoCreating(true);
+      workspaceApi
+        .create({ name: 'Không gian làm việc của tôi' })
+        .then(async (res) => {
+          await refreshWorkspaces();
+          const newId = res?.data?.id;
+          if (newId) {
+            navigate(wsPath(newId, '/projects'), { replace: true });
+          }
+        })
+        .catch(() => {
+          setAutoCreating(false);
+        });
+    }
+  }, [loading, error, workspaces, invites, autoCreating, refreshWorkspaces, navigate]);
   useEffect(() => {
     workspaceInvitationApi
       .my()
@@ -121,14 +149,14 @@ export default function WorkspaceListPage() {
         {invites.length > 0 && (
           <div style={{ marginBottom: 24, padding: '14px 16px', border: '1px dashed #FCD34D', background: '#FFFBEB', borderRadius: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#92400E', marginBottom: 10 }}>
-              <Mail size={14} /> Lời mời workspace đang chờ ({invites.length})
+              <Mail size={14} /> Lời mời không gian làm việc đang chờ ({invites.length})
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {invites.map((inv) => (
                 <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#1F2937' }}>
                   <span style={{ flex: 1 }}>
                     <b>{inv.workspaceName || '(không rõ tên)'}</b>
-                    {' · '}{inv.inviterName || 'Ai đó'} mời bạn với vai trò <b>{inv.role || 'MEMBER'}</b>
+                    {' · '}{inv.inviterName || 'Ai đó'} mời bạn với vai trò <b>{getRoleDisplayName(inv.role) || 'Thành viên'}</b>
                   </span>
                   <button type="button" onClick={() => respond(inv, true)} disabled={busyId === inv.id} style={{ ...primaryBtn, padding: '6px 12px' }}>
                     <Check size={13} /> Chấp nhận

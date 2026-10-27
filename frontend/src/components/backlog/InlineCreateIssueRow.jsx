@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { SURFACE } from '../../constants/jiraTokens.js';
+import { getTypeDisplayName } from '../../constants/workConstants.js';
 
 /**
  * Tao nhanh cong viec ngay trong danh sach: chon loai, go tieu de, Enter la xong.
@@ -57,7 +58,7 @@ export default function InlineCreateIssueRow({ types = [], defaultTypeId, onSubm
         }}
       >
         {usable.map((t) => (
-          <option key={t.id} value={t.id}>{t.name}</option>
+          <option key={t.id} value={t.id}>{getTypeDisplayName(t.name || t.code)}</option>
         ))}
       </select>
 

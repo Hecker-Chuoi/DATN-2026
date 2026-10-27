@@ -108,7 +108,7 @@ KC_URL=http://localhost:8088 bash infrastructure/delete-test-user.sh <username|e
 | Log notification `Connection timed out` tới smtp.gmail.com:587 | Mạng chặn cổng 587, dùng Mailpit hoặc đổi mạng. |
 | Frontend gọi `/workspace/...` bị "No static resource ..." | Gateway thiếu route `/workspace/**`. File nhóm `api-gateway/application.yml` đã có; nếu dùng profile cá nhân thì profile đó phải khai lại đủ route vì `routes` bị ghi đè toàn bộ. |
 | Mời thành viên báo 400 "Đã có lời mời đang chờ" | Người đó đang có lời mời PENDING. Hủy ở block "Lời mời đang chờ" rồi mời lại. |
-| Chấp nhận lời mời workspace xong vẫn không vào được team/project | work-service cache role workspace 10 phút. Chờ hoặc restart work-service. Xem `docs/services/workspace_service/WORKSPACE_AUTHZ_REVIEW.md`. |
+| Chấp nhận lời mời workspace xong vẫn không vào được project | work-service cache role workspace 10 phút. Chờ hoặc restart work-service. Xem `docs/services/workspace_service/WORKSPACE_AUTHZ_REVIEW.md`. |
 
 ## 7. Thêm template email mới
 

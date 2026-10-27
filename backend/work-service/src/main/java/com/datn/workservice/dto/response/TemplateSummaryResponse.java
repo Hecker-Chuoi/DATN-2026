@@ -23,7 +23,6 @@ public class TemplateSummaryResponse {
 
     private UUID id;
     private UUID workspaceId;
-    private UUID teamId;
     private String name;
     private String key;
     private String description;

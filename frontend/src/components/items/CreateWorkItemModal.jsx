@@ -30,10 +30,10 @@ import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 const TYPE_CONFIGS = {
   EPIC: { label: 'Hạng mục lớn', icon: Zap, color: '#9333EA', bgColor: '#F5F3FF', level: 1 },
-  STORY: { label: 'Câu chuyện người dùng', icon: Bookmark, color: '#10B981', bgColor: '#ECFDF5', level: 0 },
-  TASK: { label: 'Nhiệm vụ', icon: CheckSquare, color: '#3B82F6', bgColor: '#EFF6FF', level: 0 },
-  BUG: { label: 'Lỗi phần mềm', icon: AlertCircle, color: '#EF4444', bgColor: '#FEF2F2', level: 0 },
-  SUBTASK: { label: 'Nhiệm vụ con', icon: GitCommit, color: '#06B6D4', bgColor: '#ECFEFF', level: -1 },
+  STORY: { label: 'Yêu cầu', icon: Bookmark, color: '#10B981', bgColor: '#ECFDF5', level: 0 },
+  TASK: { label: 'Công việc', icon: CheckSquare, color: '#3B82F6', bgColor: '#EFF6FF', level: 0 },
+  BUG: { label: 'Sự cố', icon: AlertCircle, color: '#EF4444', bgColor: '#FEF2F2', level: 0 },
+  SUBTASK: { label: 'Công việc con', icon: GitCommit, color: '#06B6D4', bgColor: '#ECFEFF', level: -1 },
 };
 
 const renderTypeIcon = (iconName, color = '#2563EB', size = 14) => {
@@ -233,7 +233,7 @@ export default function CreateWorkItemModal({
       errs.typeId = 'Vui lòng chọn loại công việc';
     }
     if (isSubtask && !parentId) {
-      errs.parentId = 'Nhiệm vụ con bắt buộc phải có công việc cha';
+      errs.parentId = 'Công việc con bắt buộc phải có công việc cha';
     }
     if (isEpic && parentId) {
       errs.parentId = 'Hạng mục lớn không thể có công việc cha';
@@ -481,7 +481,7 @@ export default function CreateWorkItemModal({
                         gap: 4,
                       }}
                     >
-                      <GitCommit size={10} /> Cấp -1 • Nhiệm vụ con
+                      <GitCommit size={10} /> Cấp -1 • Công việc con
                     </span>
                     <span style={{ fontSize: 11, color: '#94A3B8' }}>Phụ thuộc, bắt buộc có cha Cấp 0</span>
                   </div>
@@ -522,7 +522,7 @@ export default function CreateWorkItemModal({
                       color: '#FFFFFF',
                     }}
                   >
-                    {isEpic ? 'Cấp 1 (Hạng mục lớn)' : isSubtask ? 'Cấp -1 (Nhiệm vụ con)' : 'Cấp 0 (Tiêu chuẩn)'}
+                    {isEpic ? 'Cấp 1 (Hạng mục lớn)' : isSubtask ? 'Cấp -1 (Công việc con)' : 'Cấp 0 (Tiêu chuẩn)'}
                   </span>
                 </div>
                 <span style={{ color: '#64748B', fontSize: 11, fontStyle: 'italic' }}>
@@ -550,7 +550,7 @@ export default function CreateWorkItemModal({
             </label>
             <input
               type="text"
-              placeholder="VD: Khách hàng quét mã QR VNPay để thanh toán..."
+              placeholder="VD: Triển khai kế hoạch khảo sát, chuẩn bị báo cáo tiến độ..."
               value={summary}
               onChange={(e) => {
                 setSummary(e.target.value);
@@ -615,7 +615,7 @@ export default function CreateWorkItemModal({
                 }}
               >
                 <option value="">
-                  {isSubtask ? '-- Bắt buộc chọn công việc cha --' : '-- Không có (Độc lập / Danh sách tồn đọng) --'}
+                  {isSubtask ? '-- Bắt buộc chọn công việc cha --' : '-- Không có (Độc lập / Kho việc) --'}
                 </option>
                 {availableParents.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -721,10 +721,10 @@ export default function CreateWorkItemModal({
                       cursor: 'not-allowed',
                       boxSizing: 'border-box',
                     }}
-                    title={isEpic ? "Hạng mục lớn tự động tính điểm từ các công việc con" : "Nhiệm vụ con không tính điểm trực tiếp"}
+                    title={isEpic ? "Hạng mục lớn tự động tính điểm từ các công việc con" : "Công việc con không tính điểm trực tiếp"}
                   />
                   <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                    {isEpic ? 'Hạng mục lớn tự động tính điểm từ các công việc con' : 'Nhiệm vụ con không tính điểm trực tiếp'}
+                    {isEpic ? 'Hạng mục lớn tự động tính điểm từ các công việc con' : 'Công việc con không tính điểm trực tiếp'}
                   </div>
                 </div>
               ) : (
@@ -782,7 +782,7 @@ export default function CreateWorkItemModal({
                 </label>
                 {isSubtask ? (
                   <div
-                    title="Nhiệm vụ con đi theo chu kỳ của công việc cha"
+                    title="Công việc con đi theo chu kỳ của công việc cha"
                     style={{
                       padding: '7px 10px', borderRadius: 8, border: '1px solid #CBD5E1',
                       fontSize: 13, color: '#94A3B8', backgroundColor: '#F8FAFC',
@@ -800,7 +800,7 @@ export default function CreateWorkItemModal({
                       color: '#0F172A', cursor: 'pointer',
                     }}
                   >
-                    <option value="">Danh sách tồn đọng</option>
+                    <option value="">Kho việc chờ phân bổ</option>
                     {sprints
                       .filter((sp) => sp.state !== 'CLOSED')
                       .map((sp) => (

@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sơ Đồ Cơ Sở Dữ Liệu Sau Refactor (DATN-2026)</title>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <!-- Mermaid.js for ER Diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <!-- SVG Pan Zoom -->
+  <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+  
+  <style>
+    :root {
+      --bg-page: #F8FAFC;
+      --bg-card: #FFFFFF;
+      --border-color: #E2E8F0;
+      --border-light: #F1F5F9;
+      --text-main: #0F172A;
+      --text-muted: #64748B;
+      --text-light: #94A3B8;
+      
+      --color-identity: #3B82F6;
+      --color-identity-bg: #EFF6FF;
+      --color-identity-border: #BFDBFE;
+
+      --color-workspace: #8B5CF6;
+      --color-workspace-bg: #F5F3FF;
+      --color-workspace-border: #DDD6FE;
+
+      --color-work: #10B981;
+      --color-work-bg: #ECFDF5;
+      --color-work-border: #A7F3D0;
+
+      --color-danger: #EF4444;
+      --color-danger-bg: #FEF2F2;
+      --color-danger-border: #FECACA;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Navigation Header */
+    header {
+      background: #FFFFFF;
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+    }
+
+    .header-container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #2563EB, #7C3AED);
+      color: #FFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+    }
+
+    .brand-title h1 {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge-refactor {
+      background: #DCFCE7;
+      color: #15803D;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 700;
+      border: 1px solid #BBF7D0;
+    }
+
+    .brand-title p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      background: #FFF;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-btn:hover {
+      background: #F1F5F9;
+      color: var(--text-main);
+    }
+
+    .nav-btn.active {
+      background: #0F172A;
+      color: #FFFFFF;
+      border-color: #0F172A;
+    }
+
+    /* Main Container */
+    main {
+      max-width: 1440px;
+      margin: 24px auto;
+      padding: 0 24px 80px;
+    }
+
+    /* Stat Cards Banner */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    }
+
+    .stat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .stat-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+
+    .stat-count {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .stat-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Service specific styling */
+    .card-identity { border-top: 4px solid var(--color-identity); }
+    .card-workspace { border-top: 4px solid var(--color-workspace); }
+    .card-work { border-top: 4px solid var(--color-work); }
+    .card-drop { border-top: 4px solid var(--color-danger); }
+
+    /* Interactive ERD Canvas Box */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 32px;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02);
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .section-header h2 {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .erd-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .ctrl-btn {
+      padding: 6px 12px;
+      background: #F8FAFC;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text-main);
+    }
+
+    .ctrl-btn:hover {
+      background: #E2E8F0;
+    }
+
+    .erd-wrapper {
+      position: relative;
+      background: #FAFBFD;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      height: 650px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #mermaid-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .erd-hint {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(4px);
+      border: 1px solid var(--border-color);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    /* Comparison Table Box */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .comp-col {
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid var(--border-color);
+    }
+
+    .comp-old {
+      background: #FFFDFD;
+      border-color: #FECACA;
+    }
+
+    .comp-new {
+      background: #F8FEFA;
+      border-color: #A7F3D0;
+    }
+
+    .comp-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .comp-old .comp-title { color: #DC2626; }
+    .comp-new .comp-title { color: #16A34A; }
+
+    .comp-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    .comp-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    /* Data Dictionary & Tables Explorer */
+    .filter-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 240px;
+      padding: 9px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      font-size: 13px;
+      background: #FFF;
+      outline: none;
+    }
+
+    .search-input:focus {
+      border-color: #2563EB;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .filter-chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .chip-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      background: #FFF;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .chip-btn.active {
+      background: #2563EB;
+      color: #FFF;
+      border-color: #2563EB;
+    }
+
+    .tables-accordion {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .table-item {
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: #FFF;
+      overflow: hidden;
+      transition: border-color 0.15s ease;
+    }
+
+    .table-item:hover {
+      border-color: #CBD5E1;
+    }
+
+    .table-header {
+      padding: 14px 18px;
+      background: #FAFBFD;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+
+    .table-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .table-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      color: #0F172A;
+    }
+
+    .service-tag {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .tag-identity { background: var(--color-identity-bg); color: #1D4ED8; border: 1px solid var(--color-identity-border); }
+    .tag-workspace { background: var(--color-workspace-bg); color: #6D28D9; border: 1px solid var(--color-workspace-border); }
+    .tag-work { background: var(--color-work-bg); color: #047857; border: 1px solid var(--color-work-border); }
+
+    .table-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-left: 8px;
+    }
+
+    .table-body {
+      padding: 16px 18px;
+      display: none;
+      border-top: 1px solid var(--border-color);
+      background: #FFFFFF;
+    }
+
+    .table-body.open {
+      display: block;
+    }
+
+    .columns-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .columns-table th {
+      text-align: left;
+      padding: 8px 12px;
+      background: #F8FAFC;
+      color: var(--text-muted);
+      font-weight: 700;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .columns-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-light);
+      font-family: 'Inter', sans-serif;
+    }
+
+    .col-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: #0F172A;
+    }
+
+    .col-type {
+      font-family: 'JetBrains Mono', monospace;
+      color: #2563EB;
+      font-size: 11px;
+    }
+
+    .col-key {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+      margin-right: 4px;
+    }
+
+    .key-pk { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+    .key-fk { background: #E0E7FF; color: #3730A3; border: 1px solid #C7D2FE; }
+    .key-uq { background: #F3E8FF; color: #6B21A8; border: 1px solid #E9D5FF; }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 12px;
+      color: var(--text-light);
+      border-top: 1px solid var(--border-color);
+      background: #FFF;
+      margin-top: 60px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header>
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-icon">DB</div>
+        <div class="brand-title">
+          <h1>
+            DATN-2026 Database Architecture
+            <span class="badge-refactor">Post-Refactor (No Team)</span>
+          </h1>
+          <p>Mô hình dữ liệu hợp nhất: Identity Service + Workspace Service + Work Service (Jira-Grade)</p>
+        </div>
+      </div>
+      <div class="nav-tabs">
+        <button class="nav-btn active" onclick="scrollToSection('erd-section')">Sơ Đồ ERD</button>
+        <button class="nav-btn" onclick="scrollToSection('comparison-section')">So Sánh Trước/Sau</button>
+        <button class="nav-btn" onclick="scrollToSection('dictionary-section')">Từ Điển Bảng Dữ Liệu</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Top Statistics Overview -->
+    <div class="summary-grid">
+      <div class="stat-card card-identity">
+        <div class="stat-header">
+          <span class="stat-title" style="color: var(--color-identity);">Identity Service</span>
+          <span class="stat-badge" style="background: var(--color-identity-bg); color: var(--color-identity);">Port 8082</span>
+        </div>
+        <div class="stat-count">3 Bảng</div>
+        <div class="stat-desc">Xác thực người dùng (Keycloak sync), phân quyền Realm, token xác thực email / đổi mật khẩu.</div>
+      </div>
+
+      <div class="stat-card card-workspace">
+        <div class="stat-header">
+          <span class="stat-title" style="color: var(--color-workspace);">Workspace Service</span>
+          <span class="stat-badge" style="background: var(--color-workspace-bg); color: var(--color-workspace);">Port 8087</span>
+        </div>
+        <div class="stat-count">3 Bảng</div>
+        <div class="stat-desc">Đơn vị Tenant cấp cao nhất. Quản lý Không gian làm việc, thành viên (OWNER, ADMIN, MEMBER) & lời mời.</div>
+      </div>
+
+      <div class="stat-card card-work">
+        <div class="stat-header">
+          <span class="stat-title" style="color: var(--color-work);">Work Service</span>
+          <span class="stat-badge" style="background: var(--color-work-bg); color: var(--color-work);">Port 8083</span>
+        </div>
+        <div class="stat-count">21 Bảng</div>
+        <div class="stat-desc">Work Engine chuẩn Jira: Project trực thuộc Workspace, RBAC, Sprint, Backlog, Kanban Board, LexoRank, Outbox.</div>
+      </div>
+
+      <div class="stat-card card-drop">
+        <div class="stat-header">
+          <span class="stat-title" style="color: var(--color-danger);">Refactor Cleanup</span>
+          <span class="stat-badge" style="background: var(--color-danger-bg); color: var(--color-danger);">Flyway V8</span>
+        </div>
+        <div class="stat-count">Đã Xóa Bỏ</div>
+        <div class="stat-desc">Xóa sổ <code>teams</code>, <code>team_members</code>, <code>projects.team_id</code>, <code>invitations.team_role</code>. Gộp phân quyền vào <code>role_assignments</code>.</div>
+      </div>
+    </div>
+
+    <!-- Section 1: Interactive ERD Diagram -->
+    <div class="section-card" id="erd-section">
+      <div class="section-header">
+        <div>
+          <h2>📊 Sơ Đồ Thực Thể Liên Kết (ERD Toàn Hệ Thống)</h2>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+            Sơ đồ thể hiện luồng liên kết giữa 3 Service. Kéo chuột để di chuyển (Pan) và dùng nút hoặc lăn chuột để phóng to/thu nhỏ (Zoom).
+          </p>
+        </div>
+        <div class="erd-controls">
+          <button class="ctrl-btn" onclick="zoomIn()">Zoom In (+)</button>
+          <button class="ctrl-btn" onclick="zoomOut()">Zoom Out (-)</button>
+          <button class="ctrl-btn" onclick="resetZoom()">Reset</button>
+        </div>
+      </div>
+
+      <div class="erd-wrapper">
+        <div id="mermaid-container">
+          <pre class="mermaid" id="erd-mermaid">
+erDiagram
+    %% ──────────────────────────────────────────
+    %% 1. IDENTITY SERVICE DOMAIN
+    %% ──────────────────────────────────────────
+    users {
+        uuid id PK "users.id (Canonical UUID)"
+        string keycloak_id UK "Keycloak Sub (36 chars)"
+        string username UK
+        string email UK
+        string first_name
+        string last_name
+        string status "ACTIVE, INACTIVE, SUSPENDED"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    user_roles {
+        uuid user_id FK "users.id"
+        string role "ROLE_USER, ROLE_ADMIN"
+    }
+
+    verification_tokens {
+        uuid id PK
+        uuid user_id FK "users.id"
+        string token UK
+        string type "EMAIL_VERIFY, PASSWORD_RESET"
+        timestamp expires_at
+        timestamp used_at
+    }
+
+    users ||--o{ user_roles : "has"
+    users ||--o{ verification_tokens : "owns"
+
+    %% ──────────────────────────────────────────
+    %% 2. WORKSPACE SERVICE DOMAIN (ROOT TENANT)
+    %% ──────────────────────────────────────────
+    workspaces {
+        uuid id PK "Gốc Tenant duy nhất"
+        string name "Tên không gian"
+        string slug UK "Đường dẫn định danh"
+        text description
+        string avatar_url
+        uuid created_by "FK logic -> users.id"
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at "Soft Delete support"
+    }
+
+    workspace_members {
+        uuid id PK
+        uuid workspace_id FK "workspaces.id"
+        uuid user_id "FK logic -> users.id"
+        string role "OWNER, ADMIN, MEMBER, GUEST"
+        uuid invited_by
+        timestamp joined_at
+    }
+
+    workspace_invitations {
+        uuid id PK
+        uuid workspace_id FK "workspaces.id"
+        uuid invitee_user_id "FK logic -> users.id"
+        uuid invited_by "FK logic -> users.id"
+        string role "OWNER, ADMIN, MEMBER, GUEST"
+        string status "PENDING, ACCEPTED, DECLINED, CANCELLED"
+        timestamp created_at
+        timestamp responded_at
+    }
+
+    workspaces ||--o{ workspace_members : "contains"
+    workspaces ||--o{ workspace_invitations : "invites"
+
+    %% ──────────────────────────────────────────
+    %% 3. WORK SERVICE: PROJECT & RBAC CORE
+    %% ──────────────────────────────────────────
+    projects {
+        uuid id PK
+        uuid workspace_id "FK logic -> workspaces.id"
+        string name
+        string key UK "Mã tiền tố (Jira Key)"
+        text description
+        string icon_url
+        uuid lead_user_id "FK logic -> users.id"
+        string project_type "SOFTWARE_SCRUM, KANBAN"
+        boolean is_template
+        string template_category
+        date start_date
+        date end_date
+        uuid created_by
+        timestamp created_at
+        timestamp deleted_at
+    }
+
+    project_roles {
+        uuid id PK
+        uuid project_id FK "projects.id"
+        string name "ADMINISTRATOR, MEMBER, VIEWER"
+        text description
+    }
+
+    role_assignments {
+        uuid id PK
+        uuid project_id FK "projects.id"
+        uuid user_id "FK logic -> users.id"
+        uuid role_id FK "project_roles.id"
+        timestamp assigned_at
+    }
+
+    permission_scheme_entries {
+        uuid id PK
+        uuid project_id FK "projects.id"
+        uuid role_id FK "project_roles.id"
+        string permission_key "ISSUE_CREATE, SPRINT_MANAGE..."
+    }
+
+    invitations {
+        uuid id PK
+        string type "PROJECT (Loại bỏ TEAM)"
+        uuid target_id "projects.id"
+        uuid invitee_user_id "users.id"
+        uuid invited_by "users.id"
+        uuid project_role_id FK "project_roles.id"
+        string status "PENDING, ACCEPTED, DECLINED"
+    }
+
+    project_clones {
+        uuid id PK
+        uuid source_project_id FK "projects.id"
+        uuid cloned_project_id FK "projects.id"
+        string clone_type "FROM_TEMPLATE, DUPLICATE"
+        uuid cloned_by
+    }
+
+    projects ||--o{ project_roles : "defines"
+    projects ||--o{ role_assignments : "assigns"
+    project_roles ||--o{ role_assignments : "has"
+    projects ||--o{ permission_scheme_entries : "configures"
+    project_roles ||--o{ permission_scheme_entries : "grants"
+    projects ||--o{ invitations : "receives"
+    projects ||--o{ project_clones : "clones"
+
+    %% ──────────────────────────────────────────
+    %% 4. WORK SERVICE: WORK ITEMS & AGILE ENGINE
+    %% ──────────────────────────────────────────
+    work_item_types {
+        uuid id PK
+        uuid project_id FK "projects.id"
+        string name "Epic, Story, Task, Bug, Subtask"
+        string code UK
+        int hierarchy_level "1=Epic, 0=Standard, -1=Subtask"
+        boolean is_subtask
+    }
+
+    statuses {
+        uuid id PK
+        uuid project_id FK "projects.id"
+        string name "To Do, In Progress, Done..."
+        string category "TODO, IN_PROGRESS, DONE"
+        string color_hex
+    }
+
+    sprints {
+        uuid id PK
+        uuid project_id FK "projects.id"
+        string name
+        text goal
+        string state "FUTURE, ACTIVE, CLOSED"
+        timestamp start_date
+        timestamp end_date
+        timestamp completed_date
+    }
+
+    work_items {
+        uuid id PK
+        uuid project_id FK "projects.id"
+        uuid type_id FK "work_item_types.id"
+        uuid status_id FK "statuses.id"
+        uuid parent_id FK "work_items.id"
+        uuid sprint_id FK "sprints.id"
+        string code "KEY-123"
+        string summary
+        text description
+        string priority "LOW, MEDIUM, HIGH, URGENT"
+        uuid reporter_id "users.id"
+        uuid assignee_id "users.id"
+        decimal story_points
+        string rank "LexoRank ordering"
+        jsonb custom_fields
+        date due_date
+        int version "Optimistic Locking"
+    }
+
+    boards {
+        uuid id PK
+        uuid project_id FK "projects.id"
+        string name "Scrum Board / Kanban Board"
+        string type "SCRUM, KANBAN"
+        text filter_jql
+    }
+
+    board_columns {
+        uuid id PK
+        uuid board_id FK "boards.id"
+        string name "To Do, Doing, Review, Done"
+        int column_order
+        int min_wip_limit
+        int max_wip_limit
+    }
+
+    board_column_statuses {
+        uuid column_id PK,FK "board_columns.id"
+        uuid status_id PK,FK "statuses.id"
+    }
+
+    projects ||--o{ work_items : "owns"
+    work_item_types ||--o{ work_items : "types"
+    statuses ||--o{ work_items : "states"
+    sprints ||--o{ work_items : "contains"
+    work_items ||--o{ work_items : "parent_of"
+
+    projects ||--o{ boards : "has"
+    boards ||--o{ board_columns : "structures"
+    board_columns ||--o{ board_column_statuses : "maps"
+    statuses ||--o{ board_column_statuses : "mapped_in"
+
+    %% ──────────────────────────────────────────
+    %% 5. CROSS-SERVICE LOGICAL TIES
+    %% ──────────────────────────────────────────
+    workspaces ||--o{ projects : "contains directly (team_id dropped)"
+    users ||--o{ workspaces : "creates"
+    users ||--o{ projects : "leads / creates"
+          </pre>
+        </div>
+        <div class="erd-hint">💡 Giữ chuột để kéo xem các bảng, lăn con trỏ để phóng to/thu nhỏ</div>
+      </div>
+    </div>
+
+    <!-- Section 2: Comparison (Before vs After) -->
+    <div class="section-card" id="comparison-section">
+      <div class="section-header">
+        <h2>⚖️ So Sánh Kiến Trúc Dữ Liệu (Trước vs Sau Refactor)</h2>
+      </div>
+
+      <div class="comparison-grid">
+        <div class="comp-col comp-old">
+          <div class="comp-title">
+            <span>❌ Mô Hình Cũ (Có Khái Niệm Team)</span>
+          </div>
+          <ul class="comp-list">
+            <li>
+              <b>Cấu trúc 3 cấp cồng kềnh:</b> <code>Workspace ➔ Team ➔ Project ➔ Issue</code>. Người dùng bắt buộc phải tạo Team trước khi được tạo bất kỳ Dự án nào.
+            </li>
+            <li>
+              <b>Xung đột nguồn sự thật quyền hạn:</b> Tồn tại đồng thời <code>teams.owner_id</code>, <code>team_members.role (LEADER)</code> và <code>role_assignments</code> gây ra ~6 helper phân xử phức tạp và dễ phát sinh lỗ hổng bảo mật.
+            </li>
+            <li>
+              <b>Khóa ngoại gián tiếp:</b> Bảng <code>projects</code> mang <code>team_id REFERENCES teams(id)</code>. Khi cần lọc dự án theo Workspace, hệ thống phải JOIN qua bảng <code>teams</code> (N+1 query nguy hiểm).
+            </li>
+            <li>
+              <b>Dư thừa bảng:</b> Tồn tại bảng <code>teams</code> và <code>team_members</code> với chi phí bảo trì cao nhưng không đem lại giá trị thực tế cho quy trình Agile.
+            </li>
+          </ul>
+        </div>
+
+        <div class="comp-col comp-new">
+          <div class="comp-title">
+            <span>✅ Mô Hình Mới (Phẳng - Jira Cloud Standard)</span>
+          </div>
+          <ul class="comp-list">
+            <li>
+              <b>Cấu trúc 2 cấp tinh gọn:</b> <code>Workspace ➔ Project ➔ Work Items</code>. Người dùng tạo Dự án tức thì ngay trong Workspace mà không cần bước đệm Team.
+            </li>
+            <li>
+              <b>Nguồn sự thật phân quyền duy nhất:</b> Toàn bộ thành viên và quyền hạn dự án được tập trung tại <code>role_assignments</code> + <code>project_roles</code> + <code>permission_scheme_entries</code>.
+            </li>
+            <li>
+              <b>Truy vấn tốc độ cao (Index-backed):</b> Bảng <code>projects</code> mang trực tiếp <code>workspace_id</code> kèm chỉ mục <code>idx_projects_workspace</code>. Lấy danh sách dự án trong 1 câu SELECT, zero JOIN thừa.
+            </li>
+            <li>
+              <b>Tự động Onboarding:</b> Người dùng mới đăng ký luôn được tự động khởi tạo sẵn một Workspace mặc định và chuyển thẳng vào làm việc, không còn màn hình trống.
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Data Dictionary Explorer -->
+    <div class="section-card" id="dictionary-section">
+      <div class="section-header">
+        <h2>📖 Từ Điển Bảng Dữ Liệu Chi Tiết (Data Dictionary)</h2>
+      </div>
+
+      <div class="filter-bar">
+        <input type="text" id="tableSearch" class="search-input" placeholder="Tìm kiếm bảng hoặc tên cột (VD: projects, workspace_id, story_points)..." oninput="filterTables()">
+        <div class="filter-chips">
+          <button class="chip-btn active" onclick="setServiceFilter('ALL', this)">Tất cả (27)</button>
+          <button class="chip-btn" onclick="setServiceFilter('IDENTITY', this)">Identity Service (3)</button>
+          <button class="chip-btn" onclick="setServiceFilter('WORKSPACE', this)">Workspace Service (3)</button>
+          <button class="chip-btn" onclick="setServiceFilter('WORK', this)">Work Service (21)</button>
+        </div>
+      </div>
+
+      <div class="tables-accordion" id="tablesList">
+        
+        <!-- Table 1: users -->
+        <div class="table-item" data-service="IDENTITY" data-name="users">
+          <div class="table-header" onclick="toggleTable(this)">
+            <div class="table-header-left">
+              <span class="table-name">users</span>
+              <span class="service-tag tag-identity">Identity Service</span>
+              <span class="table-desc">Thông tin tài khoản người dùng, đồng bộ với Keycloak IAM</span>
+            </div>
+            <span>▼</span>
+          </div>
+          <div class="table-body">
+            <table class="columns-table">
+              <thead>
+                <tr><th>Cột</th><th>Kiểu Dữ Liệu</th><th>Ràng Buộc</th><th>Ý Nghĩa / Mô Tả Nghiệp Vụ</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="col-name">id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-pk">PK</span> NOT NULL</td><td>ID nội bộ chuẩn của người dùng trong hệ thống (Canonical ID)</td></tr>
+                <tr><td><span class="col-name">keycloak_id</span></td><td><span class="col-type">VARCHAR(36)</span></td><td><span class="col-key key-uq">UQ</span> NOT NULL</td><td>Mã định danh User Sub phát từ Keycloak OpenID Connect</td></tr>
+                <tr><td><span class="col-name">username</span></td><td><span class="col-type">VARCHAR(100)</span></td><td><span class="col-key key-uq">UQ</span> NOT NULL</td><td>Tên đăng nhập tài khoản</td></tr>
+                <tr><td><span class="col-name">email</span></td><td><span class="col-type">VARCHAR(255)</span></td><td><span class="col-key key-uq">UQ</span> NOT NULL</td><td>Email đăng ký và nhận thông báo</td></tr>
+                <tr><td><span class="col-name">first_name</span></td><td><span class="col-type">VARCHAR(100)</span></td><td>NULL</td><td>Tên người dùng</td></tr>
+                <tr><td><span class="col-name">last_name</span></td><td><span class="col-type">VARCHAR(100)</span></td><td>NULL</td><td>Họ và tên đệm</td></tr>
+                <tr><td><span class="col-name">status</span></td><td><span class="col-type">VARCHAR(20)</span></td><td>NOT NULL</td><td>Trạng thái: ACTIVE (hoạt động), INACTIVE (chờ xác thực email), SUSPENDED (khóa)</td></tr>
+                <tr><td><span class="col-name">created_at</span></td><td><span class="col-type">TIMESTAMPTZ</span></td><td>NOT NULL</td><td>Thời điểm khởi tạo tài khoản</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Table 2: workspaces -->
+        <div class="table-item" data-service="WORKSPACE" data-name="workspaces">
+          <div class="table-header" onclick="toggleTable(this)">
+            <div class="table-header-left">
+              <span class="table-name">workspaces</span>
+              <span class="service-tag tag-workspace">Workspace Service</span>
+              <span class="table-desc">Gốc Tenant cấp cao nhất. Chứa trực tiếp các Dự án sau Refactor</span>
+            </div>
+            <span>▼</span>
+          </div>
+          <div class="table-body">
+            <table class="columns-table">
+              <thead>
+                <tr><th>Cột</th><th>Kiểu Dữ Liệu</th><th>Ràng Buộc</th><th>Ý Nghĩa / Mô Tả Nghiệp Vụ</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="col-name">id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-pk">PK</span> NOT NULL</td><td>Mã định danh Không gian làm việc</td></tr>
+                <tr><td><span class="col-name">name</span></td><td><span class="col-type">VARCHAR(255)</span></td><td>NOT NULL</td><td>Tên Không gian (VD: "Không gian của Sơn")</td></tr>
+                <tr><td><span class="col-name">slug</span></td><td><span class="col-type">VARCHAR(100)</span></td><td><span class="col-key key-uq">UQ</span> NOT NULL</td><td>Đường dẫn URL thân thiện (VD: "ws-sontx")</td></tr>
+                <tr><td><span class="col-name">description</span></td><td><span class="col-type">TEXT</span></td><td>NULL</td><td>Mô tả mục đích của Workspace</td></tr>
+                <tr><td><span class="col-name">avatar_url</span></td><td><span class="col-type">VARCHAR(500)</span></td><td>NULL</td><td>Ảnh đại diện Workspace</td></tr>
+                <tr><td><span class="col-name">created_by</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK logic</span> NOT NULL</td><td>Tham chiếu tới <code>users.id</code> của người tạo</td></tr>
+                <tr><td><span class="col-name">deleted_at</span></td><td><span class="col-type">TIMESTAMPTZ</span></td><td>NULL</td><td>Thời điểm soft delete (hỗ trợ tính năng Thùng rác / Phục hồi)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Table 3: workspace_members -->
+        <div class="table-item" data-service="WORKSPACE" data-name="workspace_members">
+          <div class="table-header" onclick="toggleTable(this)">
+            <div class="table-header-left">
+              <span class="table-name">workspace_members</span>
+              <span class="service-tag tag-workspace">Workspace Service</span>
+              <span class="table-desc">Thành viên và vai trò cấp Không gian làm việc</span>
+            </div>
+            <span>▼</span>
+          </div>
+          <div class="table-body">
+            <table class="columns-table">
+              <thead>
+                <tr><th>Cột</th><th>Kiểu Dữ Liệu</th><th>Ràng Buộc</th><th>Ý Nghĩa / Mô Tả Nghiệp Vụ</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="col-name">id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-pk">PK</span> NOT NULL</td><td>Mã hàng thành viên</td></tr>
+                <tr><td><span class="col-name">workspace_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK</span> NOT NULL</td><td>Tham chiếu <code>workspaces.id</code> (ON DELETE CASCADE)</td></tr>
+                <tr><td><span class="col-name">user_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK logic</span> NOT NULL</td><td>Tham chiếu <code>users.id</code></td></tr>
+                <tr><td><span class="col-name">role</span></td><td><span class="col-type">VARCHAR(50)</span></td><td>NOT NULL</td><td>Vai trò trong Workspace: OWNER, ADMIN, MEMBER, GUEST</td></tr>
+                <tr><td><span class="col-name">joined_at</span></td><td><span class="col-type">TIMESTAMPTZ</span></td><td>NOT NULL</td><td>Thời điểm gia nhập</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Table 4: projects -->
+        <div class="table-item" data-service="WORK" data-name="projects">
+          <div class="table-header" onclick="toggleTable(this)">
+            <div class="table-header-left">
+              <span class="table-name">projects</span>
+              <span class="service-tag tag-work">Work Service</span>
+              <span class="table-desc">Dự án trung tâm (Đã gỡ team_id, liên kết trực tiếp vào workspace_id)</span>
+            </div>
+            <span>▼</span>
+          </div>
+          <div class="table-body">
+            <table class="columns-table">
+              <thead>
+                <tr><th>Cột</th><th>Kiểu Dữ Liệu</th><th>Ràng Buộc</th><th>Ý Nghĩa / Mô Tả Nghiệp Vụ</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="col-name">id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-pk">PK</span> NOT NULL</td><td>Mã định danh dự án</td></tr>
+                <tr><td><span class="col-name">workspace_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK logic</span> NOT NULL</td><td><b>LIÊN KẾT TRỰC TIẾP</b> tới <code>workspaces.id</code> (Đã có index)</td></tr>
+                <tr><td><span class="col-name">name</span></td><td><span class="col-type">VARCHAR(255)</span></td><td>NOT NULL</td><td>Tên dự án</td></tr>
+                <tr><td><span class="col-name">key</span></td><td><span class="col-type">VARCHAR(20)</span></td><td><span class="col-key key-uq">UQ</span> NOT NULL</td><td>Mã tiền tố dự án (VD: "DATN", "PROJ") sinh mã Issue</td></tr>
+                <tr><td><span class="col-name">lead_user_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK logic</span> NOT NULL</td><td>Trưởng dự án (Project Lead) tham chiếu <code>users.id</code></td></tr>
+                <tr><td><span class="col-name">project_type</span></td><td><span class="col-type">VARCHAR(50)</span></td><td>NOT NULL</td><td>Kiểu dự án: SOFTWARE_SCRUM, SOFTWARE_KANBAN, BUSINESS...</td></tr>
+                <tr><td><span class="col-name">is_template</span></td><td><span class="col-type">BOOLEAN</span></td><td>NOT NULL</td><td>Cờ đánh dấu Dự án mẫu (Template)</td></tr>
+                <tr><td><span class="col-name">created_by</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK logic</span> NOT NULL</td><td>Người tạo dự án</td></tr>
+                <tr><td><span class="col-name">deleted_at</span></td><td><span class="col-type">TIMESTAMPTZ</span></td><td>NULL</td><td>Thời điểm soft-delete</td></tr>
+                <tr style="background: #FEF2F2;"><td colspan="4" style="color: #DC2626; font-weight: 600;">🔥 <i>Cột <code>team_id</code> và khóa ngoại <code>fk_projects_team</code> đã bị xóa bỏ hoàn toàn trong Flyway Migration V8.</i></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Table 5: role_assignments -->
+        <div class="table-item" data-service="WORK" data-name="role_assignments">
+          <div class="table-header" onclick="toggleTable(this)">
+            <div class="table-header-left">
+              <span class="table-name">role_assignments</span>
+              <span class="service-tag tag-work">Work Service</span>
+              <span class="table-desc">Nguồn sự thật phân quyền thành viên dự án (Thay thế cho team_members)</span>
+            </div>
+            <span>▼</span>
+          </div>
+          <div class="table-body">
+            <table class="columns-table">
+              <thead>
+                <tr><th>Cột</th><th>Kiểu Dữ Liệu</th><th>Ràng Buộc</th><th>Ý Nghĩa / Mô Tả Nghiệp Vụ</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="col-name">id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-pk">PK</span> NOT NULL</td><td>Mã phân quyền</td></tr>
+                <tr><td><span class="col-name">project_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK</span> NOT NULL</td><td>Tham chiếu <code>projects.id</code> (ON DELETE CASCADE)</td></tr>
+                <tr><td><span class="col-name">user_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK logic</span> NOT NULL</td><td>Tham chiếu <code>users.id</code></td></tr>
+                <tr><td><span class="col-name">role_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK</span> NOT NULL</td><td>Tham chiếu <code>project_roles.id</code> (ADMINISTRATOR, MEMBER, VIEWER...)</td></tr>
+                <tr><td><span class="col-name">assigned_at</span></td><td><span class="col-type">TIMESTAMPTZ</span></td><td>NOT NULL</td><td>Thời điểm phân quyền</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Table 6: work_items -->
+        <div class="table-item" data-service="WORK" data-name="work_items">
+          <div class="table-header" onclick="toggleTable(this)">
+            <div class="table-header-left">
+              <span class="table-name">work_items</span>
+              <span class="service-tag tag-work">Work Service</span>
+              <span class="table-desc">Thực thể công việc trung tâm (Hợp nhất Epic, Story, Task, Bug, Subtask)</span>
+            </div>
+            <span>▼</span>
+          </div>
+          <div class="table-body">
+            <table class="columns-table">
+              <thead>
+                <tr><th>Cột</th><th>Kiểu Dữ Liệu</th><th>Ràng Buộc</th><th>Ý Nghĩa / Mô Tả Nghiệp Vụ</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="col-name">id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-pk">PK</span> NOT NULL</td><td>Mã định danh công việc</td></tr>
+                <tr><td><span class="col-name">project_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK</span> NOT NULL</td><td>Tham chiếu <code>projects.id</code></td></tr>
+                <tr><td><span class="col-name">type_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK</span> NOT NULL</td><td>Tham chiếu <code>work_item_types.id</code> (Epic, Story, Task, Bug...)</td></tr>
+                <tr><td><span class="col-name">status_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK</span> NOT NULL</td><td>Tham chiếu <code>statuses.id</code></td></tr>
+                <tr><td><span class="col-name">parent_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK</span> NULL</td><td>Quan hệ phân cấp (Epic -> Story -> Subtask)</td></tr>
+                <tr><td><span class="col-name">sprint_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK</span> NULL</td><td>Sprint mà item đang thuộc về (NULL = Backlog)</td></tr>
+                <tr><td><span class="col-name">code</span></td><td><span class="col-type">VARCHAR(50)</span></td><td>NOT NULL</td><td>Mã issue hiển thị (VD: "DATN-42")</td></tr>
+                <tr><td><span class="col-name">summary</span></td><td><span class="col-type">VARCHAR(500)</span></td><td>NOT NULL</td><td>Tiêu đề công việc tóm tắt</td></tr>
+                <tr><td><span class="col-name">rank</span></td><td><span class="col-type">VARCHAR(255)</span></td><td>NOT NULL</td><td>Thứ tự LexoRank phục vụ kéo thả sắp xếp trên Kanban / Backlog</td></tr>
+                <tr><td><span class="col-name">story_points</span></td><td><span class="col-type">DECIMAL(6,2)</span></td><td>NULL</td><td>Điểm ước lượng Story Points (Scrum)</td></tr>
+                <tr><td><span class="col-name">custom_fields</span></td><td><span class="col-type">JSONB</span></td><td>DEFAULT '{}'</td><td>Trường động JSONB có chỉ mục GIN</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Table 7: boards & sprints -->
+        <div class="table-item" data-service="WORK" data-name="boards">
+          <div class="table-header" onclick="toggleTable(this)">
+            <div class="table-header-left">
+              <span class="table-name">boards & board_columns</span>
+              <span class="service-tag tag-work">Work Service</span>
+              <span class="table-desc">Cấu trúc Bảng Kanban / Scrum Board, Giới hạn WIP và Cột làm việc</span>
+            </div>
+            <span>▼</span>
+          </div>
+          <div class="table-body">
+            <table class="columns-table">
+              <thead>
+                <tr><th>Cột</th><th>Kiểu Dữ Liệu</th><th>Ràng Buộc</th><th>Ý Nghĩa / Mô Tả Nghiệp Vụ</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><span class="col-name">boards.id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-pk">PK</span></td><td>Mã bảng Agile</td></tr>
+                <tr><td><span class="col-name">boards.project_id</span></td><td><span class="col-type">UUID</span></td><td><span class="col-key key-fk">FK</span></td><td>Thuộc dự án <code>projects.id</code></td></tr>
+                <tr><td><span class="col-name">boards.type</span></td><td><span class="col-type">VARCHAR(50)</span></td><td>NOT NULL</td><td>Kiểu bảng: SCRUM hoặc KANBAN</td></tr>
+                <tr><td><span class="col-name">board_columns.min_wip_limit</span></td><td><span class="col-type">INT</span></td><td>NULL</td><td>Giới hạn công việc tối thiểu trong cột</td></tr>
+                <tr><td><span class="col-name">board_columns.max_wip_limit</span></td><td><span class="col-type">INT</span></td><td>NULL</td><td>Giới hạn công việc tối đa (chống tắc nghẽn Kanban)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <p>DATN-2026 Work Management System • Tài liệu Kiến trúc Cơ sở Dữ liệu Microservices</p>
+    <p style="margin-top: 4px;">Tự động cập nhật sau đợt Refactor Loại Bỏ Team (Flyway Migration V8)</p>
+  </footer>
+
+  <script>
+    // Initialize Mermaid
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      fontFamily: 'Inter',
+      er: {
+        useMaxWidth: false,
+        layoutDirection: 'TB',
+        minEntityWidth: 160,
+        minEntityHeight: 80,
+      }
+    });
+
+    let panZoomInstance = null;
+
+    document.addEventListener("DOMContentLoaded", async function() {
+      await mermaid.run();
+      
+      const svg = document.querySelector("#mermaid-container svg");
+      if (svg) {
+        svg.style.width = "100%";
+        svg.style.height = "100%";
+        panZoomInstance = svgPanZoom(svg, {
+          zoomEnabled: true,
+          controlIconsEnabled: false,
+          fit: true,
+          center: true,
+          minZoom: 0.2,
+          maxZoom: 8
+        });
+      }
+    });
+
+    function zoomIn() {
+      if (panZoomInstance) panZoomInstance.zoomIn();
+    }
+
+    function zoomOut() {
+      if (panZoomInstance) panZoomInstance.zoomOut();
+    }
+
+    function resetZoom() {
+      if (panZoomInstance) {
+        panZoomInstance.resetZoom();
+        panZoomInstance.center();
+      }
+    }
+
+    function toggleTable(header) {
+      const body = header.nextElementSibling;
+      const arrow = header.querySelector("span:last-child");
+      if (body.classList.contains("open")) {
+        body.classList.remove("open");
+        arrow.textContent = "▼";
+      } else {
+        body.classList.add("open");
+        arrow.textContent = "▲";
+      }
+    }
+
+    function setServiceFilter(service, btn) {
+      document.querySelectorAll(".chip-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      const items = document.querySelectorAll(".table-item");
+      items.forEach(item => {
+        if (service === 'ALL' || item.getAttribute('data-service') === service) {
+          item.style.display = "block";
+        } else {
+          item.style.display = "none";
+        }
+      });
+    }
+
+    function filterTables() {
+      const q = document.getElementById("tableSearch").value.toLowerCase().trim();
+      const items = document.querySelectorAll(".table-item");
+      items.forEach(item => {
+        const text = item.innerText.toLowerCase();
+        if (text.includes(q)) {
+          item.style.display = "block";
+          if (q.length > 2) {
+            item.querySelector(".table-body")?.classList.add("open");
+          }
+        } else {
+          item.style.display = "none";
+        }
+      });
+    }
+
+    function scrollToSection(id) {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+    }
+  </script>
+</body>
+</html>

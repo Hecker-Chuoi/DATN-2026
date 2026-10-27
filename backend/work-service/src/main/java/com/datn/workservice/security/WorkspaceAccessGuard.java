@@ -134,7 +134,7 @@ public class WorkspaceAccessGuard {
             }
         }
 
-        // 4. Khớp qua DTO Body có hàm getWorkspaceId() (VD: CreateTeamRequest, CreateProjectRequest)
+        // 4. Khớp qua DTO Body có hàm getWorkspaceId() (VD: CreateProjectRequest)
         for (Object arg : args) {
             if (arg != null && !(arg instanceof UUID)) {
                 try {

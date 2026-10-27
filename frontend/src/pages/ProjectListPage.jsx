@@ -23,16 +23,16 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi } from '../api.js';
+import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import CreateProjectModal from '../components/project/CreateProjectModal.jsx';
 import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
 
 export default function ProjectListPage() {
-  const { teams, currentUser, leaderTeams = teams, canCreateProject = true, isSystemAdmin = false } = useOutletContext() || {};
+  const { currentUser, canCreateProject = true, isSystemAdmin = false } = useOutletContext() || {};
+  const { currentWorkspace } = useWorkspace();
   const { workspaceId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const teamIdFilter = searchParams.get('teamId') || '';
-
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,7 +63,6 @@ export default function ProjectListPage() {
         // Scope theo workspace đang xem. Không truyền thì backend sẽ trả về
         // project của TẤT CẢ workspace mà người dùng thuộc.
         workspaceId,
-        teamId: teamIdFilter || undefined,
         search: searchTerm || undefined,
         isTemplate: false,
       });
@@ -81,7 +80,7 @@ export default function ProjectListPage() {
 
   useEffect(() => {
     fetchProjects();
-  }, [teamIdFilter, workspaceId]);
+  }, [workspaceId]);
 
   const handleProjectCreated = (newProject) => {
     fetchProjects();
@@ -107,8 +106,6 @@ export default function ProjectListPage() {
       return true;
     });
   }, [projects, activeTab, searchTerm]);
-
-  const currentTeam = teams?.find((t) => t.id === teamIdFilter);
 
   return (
     <div
@@ -151,9 +148,9 @@ export default function ProjectListPage() {
             <FolderKanban size={14} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
-            {currentTeam ? (
+            {currentWorkspace ? (
               <>
-                <span style={{ color: '#64748B', fontWeight: 500 }}>{currentTeam.name}</span>
+                <span style={{ color: '#64748B', fontWeight: 500 }}>{currentWorkspace.name}</span>
                 <span style={{ color: '#CBD5E1' }}>/</span>
                 <span>Dự án</span>
               </>
@@ -229,8 +226,8 @@ export default function ProjectListPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {[
             { id: 'ALL', label: 'Tất cả dự án' },
-            { id: 'SCRUM', label: 'Dự án Scrum' },
-            { id: 'KANBAN', label: 'Dự án Kanban' },
+            { id: 'SCRUM', label: 'Theo chu kỳ / giai đoạn' },
+            { id: 'KANBAN', label: 'Bảng công việc liên tục' },
           ].map((tab) => {
             const active = activeTab === tab.id;
             return (
@@ -361,7 +358,7 @@ export default function ProjectListPage() {
               Chưa có dự án nào
             </h3>
             <p style={{ fontSize: 13, color: '#64748B', maxWidth: 420, margin: '0 auto 20px auto', lineHeight: 1.5 }}>
-              Bắt đầu tạo dự án Scrum hoặc Kanban đầu tiên để tự động khởi tạo Quy trình làm việc, Bảng tiến độ và quản lý công việc.
+              Bắt đầu tạo dự án đầu tiên (Theo chu kỳ / Theo giai đoạn hoặc Bảng công việc liên tục) để tự động khởi tạo Quy trình làm việc, Bảng tiến độ và quản lý công việc.
             </p>
             {canCreateProject ? (
             <button
@@ -457,7 +454,7 @@ export default function ProjectListPage() {
                           }}
                         >
                           {isScrum ? <Zap size={11} /> : <Kanban size={11} />}
-                          <span>{isScrum ? 'Quy trình Scrum' : 'Bảng Kanban'}</span>
+                          <span>{isScrum ? 'Theo chu kỳ / Theo giai đoạn' : 'Bảng công việc liên tục'}</span>
                         </span>
 
                         {canDeleteProject && (
@@ -601,14 +598,7 @@ export default function ProjectListPage() {
       </div>
 
       {/* Create Project Modal */}
-      <CreateProjectModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        teams={leaderTeams}
-        allowPersonal={isSystemAdmin}
-        defaultTeamId={teamIdFilter || undefined}
-        onProjectCreated={handleProjectCreated}
-      />
+      <CreateProjectModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onProjectCreated={handleProjectCreated} />
 
       {/* Delete Project Modal */}
       <DeleteProjectModal

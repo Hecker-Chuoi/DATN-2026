@@ -69,7 +69,7 @@ export default function ProjectBacklogPage() {
   }, [data]);
 
   const visibleGroups = useMemo(
-    () => groups.map((g) => ({ ...g, items: (g.items || []).filter((i) => matches(i, filters, currentUserId)) })),
+    () => groups.map((g) => ({ ...g, items: (g.items || []).filter((i) => i.hierarchyLevel !== 1).filter((i) => matches(i, filters, currentUserId)) })),
     [groups, filters, currentUserId]
   );
 
@@ -119,7 +119,7 @@ export default function ProjectBacklogPage() {
 
     // Sub-task luon di theo Sprint cua cong viec cha - chan ngay tren UI.
     if (dragged.isSubtask || dragged.hierarchyLevel === -1) {
-      toast.error('Nhiệm vụ con đi theo chu kỳ của công việc cha, không thể kéo riêng.');
+      toast.error('Công việc con đi theo chu kỳ của công việc cha, không thể kéo riêng.');
       return;
     }
     if (!canManage) {
@@ -161,7 +161,7 @@ export default function ProjectBacklogPage() {
       applyGroups(revertMove(result.containers, result.snapshot, keyOf));
       console.warn('Không di chuyển được công việc:', err);
       if (err?.status === 409) {
-        toast.error('Dữ liệu vừa được người khác thay đổi. Đang tải lại danh sách tồn đọng.');
+        toast.error('Dữ liệu vừa được người khác thay đổi. Đang tải lại kho công việc.');
         reload({ silent: true });
       }
     }
@@ -189,12 +189,12 @@ export default function ProjectBacklogPage() {
   // ───────────────────────── Render ─────────────────────────
 
   if (loading) {
-    return <div style={centered}>Đang tải danh sách tồn đọng...</div>;
+    return <div style={centered}>Đang tải kho công việc & kế hoạch...</div>;
   }
   if (error) {
     return (
       <div style={centered}>
-        Không tải được danh sách tồn đọng.{' '}
+        Không tải được kho công việc & kế hoạch.{' '}
         <button onClick={() => reload()} style={linkBtn}>Thử lại</button>
       </div>
     );
@@ -253,8 +253,8 @@ export default function ProjectBacklogPage() {
                 onStart={(g) => setStartTarget(g)}
                 onComplete={(g) => setCompleteTarget(g)}
                 onQuickCreate={handleQuickCreate}
-                renderRow={(item) => (
-                  <SortableRow key={item.id} item={item} onSelect={openItemDetail} />
+                renderRow={(item, _g, isChild) => (
+                  <SortableRow key={item.id} item={item} onSelect={openItemDetail} isChild={isChild} />
                 )}
               />
             )}
@@ -329,7 +329,7 @@ function DroppableGroup({ group, children }) {
 }
 
 /** Boc useSortable quanh hang trinh bay, giu logic keo tha tach khoi phan hien thi. */
-function SortableRow({ item, onSelect }) {
+function SortableRow({ item, onSelect, isChild }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
   });
@@ -344,6 +344,7 @@ function SortableRow({ item, onSelect }) {
       <BacklogIssueRow
         item={item}
         onSelect={onSelect}
+        isChild={isChild}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
     </div>

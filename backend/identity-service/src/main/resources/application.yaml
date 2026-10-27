@@ -52,6 +52,8 @@ app:
   services:
     notification:
       url: ${APP_SERVICES_NOTIFICATION_URL:http://localhost:9994}
+    workspace:
+      url: ${APP_SERVICES_WORKSPACE_URL:http://localhost:8087}
   verification:
     email-ttl-hours: 24
     reset-ttl-minutes: 30

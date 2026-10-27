@@ -32,8 +32,7 @@ import { useWorkspace } from '../../context/WorkspaceContext.jsx';
 import { wsPath } from '../../utils/workspacePath.js';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
-// teams: chỉ những nhóm mà user là trưởng nhóm (hoặc mọi nhóm với Global ADMIN); allowPersonal: cho phép dự án không gắn nhóm (chỉ ADMIN)
-export default function CreateProjectModal({ isOpen, onClose, teams = [], defaultTeamId = null, allowPersonal = false, onProjectCreated }) {
+export default function CreateProjectModal({ isOpen, onClose, onProjectCreated }) {
   const navigate = useNavigate();
   const { currentWorkspaceId, currentWorkspace } = useWorkspace();
   const backdropProps = useModalBackdrop(onClose);
@@ -42,12 +41,10 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
   // không phải state của form. Trước đây nó là hằng số hardcode
   // 'a0000000-0000-0000-0000-000000000001' ở cả hai chỗ (khởi tạo và re-init).
   const [formData, setFormData] = useState({
-    teamId: defaultTeamId || (teams[0]?.id || ''),
     name: '',
     key: '',
     description: '',
     projectType: 'SOFTWARE_SCRUM',
-    isTemplate: false,
     startDate: new Date().toISOString().split('T')[0],
     endDate: '',
   });
@@ -78,12 +75,10 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
       setIsEndDateManuallyEdited(false);
       setCloneOptions({ includeSprints: true, includeWorkItems: true, includeVersions: true });
       setFormData({
-        teamId: defaultTeamId || (teams && teams[0]?.id ? teams[0].id : ''),
         name: '',
         key: '',
         description: '',
         projectType: 'SOFTWARE_SCRUM',
-        isTemplate: false,
         startDate: new Date().toISOString().split('T')[0],
         endDate: '',
       });
@@ -91,16 +86,8 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
       setIsKeyManuallyEdited(false);
     }
     prevIsOpenRef.current = isOpen;
-  }, [isOpen, defaultTeamId, teams]);
+  }, [isOpen]);
 
-  useEffect(() => {
-    if (isOpen && !formData.teamId && teams && teams.length > 0) {
-      setFormData((prev) => ({
-        ...prev,
-        teamId: defaultTeamId || teams[0].id,
-      }));
-    }
-  }, [isOpen, defaultTeamId, teams, formData.teamId]);
 
   if (!isOpen) return null;
 
@@ -125,7 +112,6 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
       key: prev.key || (preview.name ? generateProjectKey(preview.name) : ''),
       projectType: preview.projectType,
       description: prev.description || preview.description || '',
-      isTemplate: false,
       endDate: suggestedEndDate(prev.startDate, preview) || prev.endDate,
     }));
   };
@@ -173,10 +159,6 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
       setErrors(validation.errors);
       return;
     }
-    if (!allowPersonal && !formData.teamId) {
-      setErrors({ teamId: 'Chỉ trưởng nhóm mới được tạo dự án. Hãy chọn nhóm mà bạn là trưởng nhóm.' });
-      return;
-    }
 
     // validateProjectForm chỉ kiểm name/key/endDate nên sẽ để lọt trường hợp
     // workspace chưa tải xong; không guard ở đây thì POST đi với
@@ -196,7 +178,6 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
         setSubmitting(true);
         const res = await templateApi.createProject(selectedTemplate.id, {
           workspaceId: currentWorkspaceId,
-          teamId: formData.teamId || undefined,
           name: formData.name.trim(),
           key: formData.key.trim().toUpperCase(),
           description: formData.description?.trim() || undefined,
@@ -229,12 +210,11 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
       setSubmitting(true);
       const payload = {
         workspaceId: currentWorkspaceId,
-        teamId: formData.teamId || undefined,
         name: formData.name.trim(),
         key: formData.key.trim().toUpperCase(),
         description: formData.description?.trim() || undefined,
         projectType: formData.projectType,
-        isTemplate: formData.isTemplate,
+        isTemplate: false,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
       };
@@ -432,7 +412,7 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
             </label>
             <input
               type="text"
-              placeholder="VD: Core Banking Platform, E-Commerce App..."
+              placeholder="VD: Chiến dịch Marketing 2026, Xây dựng Văn phòng..."
               value={formData.name}
               onChange={handleNameChange}
               style={{
@@ -456,80 +436,41 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
             )}
           </div>
 
-          {/* Project Key & Team Selection */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {/* Project Key */}
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                Mã dự án (Tiền tố viết tắt) <span style={{ color: '#EF4444' }}>*</span>
-              </label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  placeholder="VD: CBE, PRJ"
-                  value={formData.key}
-                  onChange={handleKeyChange}
-                  maxLength={10}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: 8,
-                    border: `1px solid ${errors.key ? '#EF4444' : '#CBD5E1'}`,
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: '#2563EB',
-                    letterSpacing: '0.05em',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-              <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-                Tiền tố cho mã thẻ công việc (VD: <strong>{formData.key || 'PRJ'}-101</strong>)
-              </div>
-              {errors.key && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#EF4444', fontSize: 12, marginTop: 4 }}>
-                  <AlertCircle size={13} />
-                  <span>{errors.key}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Team Selector */}
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                Nhóm trực thuộc
-              </label>
-              <select
-                value={formData.teamId}
-                onChange={(e) => setFormData({ ...formData, teamId: e.target.value })}
+          {/* Project Key */}
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+              Mã dự án (Tiền tố viết tắt) <span style={{ color: '#EF4444' }}>*</span>
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                placeholder="VD: MKT, XD, KH"
+                value={formData.key}
+                onChange={handleKeyChange}
+                maxLength={10}
                 style={{
                   width: '100%',
                   padding: '9px 12px',
                   borderRadius: 8,
-                  border: '1px solid #CBD5E1',
+                  border: `1px solid ${errors.key ? '#EF4444' : '#CBD5E1'}`,
                   fontSize: 14,
-                  color: '#0F172A',
-                  backgroundColor: '#FFFFFF',
+                  fontWeight: 700,
+                  color: '#2563EB',
+                  letterSpacing: '0.05em',
                   outline: 'none',
                   boxSizing: 'border-box',
                 }}
-              >
-                {allowPersonal ? (
-                  <option value="">-- Cá nhân (Không thuộc nhóm) --</option>
-                ) : (
-                  teams.length === 0 && <option value="">-- Bạn chưa là trưởng nhóm nào --</option>
-                )}
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-              {errors.teamId && (
-                <div style={{ fontSize: 12, color: '#EF4444', marginTop: 4 }}>{errors.teamId}</div>
-              )}
+              />
             </div>
+            <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+              Tiền tố cho mã thẻ công việc (VD: <strong>{formData.key || 'PRJ'}-101</strong>)
+            </div>
+            {errors.key && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#EF4444', fontSize: 12, marginTop: 4 }}>
+                <AlertCircle size={13} />
+                <span>{errors.key}</span>
+              </div>
+            )}
           </div>
 
           {/* Project Type Card Selector (dự án từ mẫu kế thừa mô hình của mẫu) */}
@@ -573,10 +514,10 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1D4ED8', fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
                   <Zap size={16} />
-                  <span>Quy trình Scrum</span>
+                  <span>Theo chu kỳ / Theo giai đoạn</span>
                 </div>
                 <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.4 }}>
-                  Phát triển lặp theo chu kỳ, quản lý danh sách công việc tồn đọng và biểu đồ tiến độ.
+                  Quản lý theo từng chu kỳ hoặc giai đoạn định kỳ, lập kế hoạch và theo dõi tiến độ.
                 </p>
               </div>
 
@@ -614,10 +555,10 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1D4ED8', fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
                   <Kanban size={16} />
-                  <span>Bảng Kanban</span>
+                  <span>Bảng công việc liên tục</span>
                 </div>
                 <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.4 }}>
-                  Luồng công việc liên tục, trực quan hóa trạng thái và giới hạn số lượng công việc đang làm.
+                  Luồng công việc liên tục, trực quan hóa trạng thái với giới hạn việc đang làm.
                 </p>
               </div>
             </div>
@@ -710,8 +651,8 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
                 Trạng thái, quy trình làm việc, bảng làm việc, loại công việc, phân quyền, nhãn, hợp phần luôn được sao chép.
               </div>
               {[
-                ['includeSprints', `Chu kỳ làm việc (${selectedTemplate.stats?.sprintCount || 0})`, 'Bỏ chọn: công việc nằm hết trong Danh sách tồn đọng'],
-                ['includeWorkItems', `Công việc (${selectedTemplate.stats?.workItemCount || 0})`, 'Hạng mục lớn, câu chuyện, nhiệm vụ, nhiệm vụ con kèm liên kết & nhãn'],
+                ['includeSprints', `Chu kỳ làm việc (${selectedTemplate.stats?.sprintCount || 0})`, 'Bỏ chọn: công việc nằm hết trong Kho việc chờ phân bổ'],
+                ['includeWorkItems', `Công việc (${selectedTemplate.stats?.workItemCount || 0})`, 'Hạng mục lớn, yêu cầu, nhiệm vụ, nhiệm vụ con kèm liên kết & nhãn'],
                 ['includeVersions', `Phiên bản (${selectedTemplate.versions?.length || 0})`, 'Ngày phát hành được dời theo lịch mới'],
               ].map(([key, label, hint]) => (
                 <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer' }}>
@@ -726,22 +667,6 @@ export default function CreateProjectModal({ isOpen, onClose, teams = [], defaul
                 </label>
               ))}
             </div>
-          )}
-
-          {/* Template Checkbox */}
-          {!isTemplateMode && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', backgroundColor: '#F8FAFC', borderRadius: 8 }}>
-            <input
-              type="checkbox"
-              id="isTemplate"
-              checked={formData.isTemplate}
-              onChange={(e) => setFormData({ ...formData, isTemplate: e.target.checked })}
-              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#2563EB' }}
-            />
-            <label htmlFor="isTemplate" style={{ fontSize: 13, color: '#334155', cursor: 'pointer', userSelect: 'none' }}>
-              Đặt làm <strong>Dự án mẫu</strong> để tái sử dụng cấu hình cho các dự án sau
-            </label>
-          </div>
           )}
 
           {/* ─── Footer Buttons ─── */}

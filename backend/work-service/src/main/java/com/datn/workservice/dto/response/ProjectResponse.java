@@ -20,7 +20,6 @@ public class ProjectResponse {
 
     private UUID id;
     private UUID workspaceId;
-    private UUID teamId;
     private String name;
     private String key;
     private String description;

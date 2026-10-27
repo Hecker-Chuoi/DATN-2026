@@ -34,7 +34,7 @@ public class InternalUserController {
     }
 
     /**
-     * Tìm kiếm User theo Email (dùng khi mời thành viên vào Team/Project)
+     * Tìm kiếm User theo Email (dùng khi mời thành viên vào Workspace/Project)
      */
     @GetMapping("/by-email")
     public ResponseEntity<ApiResponse<UserResponse>> getUserByEmail(@RequestParam("email") String email) {
@@ -44,7 +44,7 @@ public class InternalUserController {
     }
 
     /**
-     * Tìm kiếm User theo Username (dùng khi mời thành viên vào Team/Project)
+     * Tìm kiếm User theo Username (dùng khi mời thành viên vào Workspace/Project)
      */
     @GetMapping("/by-username")
     public ResponseEntity<ApiResponse<UserResponse>> getUserByUsername(@RequestParam("username") String username) {
@@ -54,7 +54,7 @@ public class InternalUserController {
     }
 
     /**
-     * Tìm kiếm User theo Email hoặc Username (dùng khi mời thành viên vào Team/Project)
+     * Tìm kiếm User theo Email hoặc Username (dùng khi mời thành viên vào Workspace/Project)
      */
     @GetMapping("/by-identifier")
     public ResponseEntity<ApiResponse<UserResponse>> getUserByIdentifier(@RequestParam("identifier") String identifier) {

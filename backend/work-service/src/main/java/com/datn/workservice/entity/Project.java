@@ -29,9 +29,6 @@ public class Project {
     @Column(name = "workspace_id", nullable = false)
     private UUID workspaceId;
 
-    @Column(name = "team_id")
-    private UUID teamId;
-
     @Column(nullable = false, length = 255)
     private String name;
 

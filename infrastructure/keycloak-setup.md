@@ -26,7 +26,7 @@ Nếu container Keycloak đã chạy (`docker compose -f docker-compose.infra.ym
 3. Ở góc trên cùng bên trái màn hình, nhấn vào dropdown chọn Realm (mặc định đang là `master`) ➔ Chọn **Create Realm**.
 4. Tại ô **Resource file**, bấm **Browse** và tìm chọn file:
    ```text
-   d:\DATN-2026\backend\environment\keycloak\realm-export_08082026.json
+   d:\DATN-2026\infrastructure\keycloak\realm-export_08082026.json
    ```
 5. Keycloak sẽ tự động nhận diện Realm name là **`datn-realm`**.
 6. Nhấn nút **Create**. Toàn bộ Roles, Clients, và cấu hình sẽ được import thành công.

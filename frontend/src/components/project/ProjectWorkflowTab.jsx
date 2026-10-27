@@ -68,9 +68,9 @@ const COLOR_PRESETS = [
 const ICON_PRESETS = [
   { name: 'Zap', label: 'Tia chớp (Hạng mục lớn)' },
   { name: 'CheckSquare', label: 'Ô kiểm (Nhiệm vụ)' },
-  { name: 'Bookmark', label: 'Thẻ đánh dấu (Câu chuyện)' },
-  { name: 'Bug', label: 'Con bọ (Lỗi phần mềm)' },
-  { name: 'GitCommit', label: 'Điểm nhánh (Nhiệm vụ con)' },
+  { name: 'Bookmark', label: 'Thẻ đánh dấu (Yêu cầu)' },
+  { name: 'Bug', label: 'Cảnh báo (Sự cố)' },
+  { name: 'GitCommit', label: 'Nhánh việc (Nhiệm vụ con)' },
   { name: 'Layers', label: 'Phân tầng (Giai đoạn)' },
   { name: 'FileCheck', label: 'Kiểm định (Nghiệm thu)' },
   { name: 'Sparkles', label: 'Ngôi sao (Chiến dịch)' },
@@ -1656,7 +1656,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             gap: 4,
                           }}
                         >
-                          <GitCommit size={12} /> Cấp -1 • Nhiệm vụ con
+                          <GitCommit size={12} /> Cấp -1 • Công việc con
                         </span>
                       )}
                     </div>
@@ -2904,7 +2904,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE' }}>
                       <CheckSquare size={16} color="#2563EB" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8' }}>Cấp 0: Tiêu chuẩn (Nhiệm vụ / Câu chuyện / Lỗi)</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8' }}>Cấp 0: Tiêu chuẩn (Nhiệm vụ / Yêu cầu / Sự cố)</span>
                     </div>
 
                     <ArrowRight size={18} color="#94A3B8" />
@@ -2939,7 +2939,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       </p>
                       <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#4A044E', lineHeight: 1.6 }}>
                         <li><strong>Vị trí cây phân cấp:</strong> Là cấp cao nhất trong dự án (Tuyệt đối <strong>không được phép có công việc cha</strong>).</li>
-                        <li><strong>Quan hệ con:</strong> Chỉ chứa trực tiếp các công việc con thuộc <strong>Cấp 0</strong>. Không được chứa trực tiếp Nhiệm vụ con Cấp -1.</li>
+                        <li><strong>Quan hệ con:</strong> Chỉ chứa trực tiếp các công việc con thuộc <strong>Cấp 0</strong>. Không được chứa trực tiếp Công việc con Cấp -1.</li>
                         <li><strong>Ví dụ:</strong> <em>Hệ thống Cổng Thanh Toán Trực Tuyến</em>, <em>Thi công hạng mục Cọc & Móng Tòa nhà</em>, <em>Chiến dịch Marketing Tết 2026</em>.</li>
                       </ul>
                     </div>
@@ -2958,7 +2958,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                           Cấp 0
                         </span>
                         <h4 style={{ fontSize: 15, fontWeight: 700, color: '#1E3A8A', margin: 0 }}>
-                          Công Việc Tiêu Chuẩn (Nhiệm vụ, Câu chuyện, Lỗi...) — Tầng Thực Thi Cốt Lõi
+                          Công Việc Tiêu Chuẩn (Công việc, Yêu cầu, Sự cố...) — Tầng Thực Thi Cốt Lõi
                         </h4>
                       </div>
                       <p style={{ fontSize: 13, color: '#1E40AF', margin: '0 0 10px 0', lineHeight: 1.5 }}>
@@ -2967,7 +2967,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#172554', lineHeight: 1.6 }}>
                         <li><strong>Vị trí cây phân cấp:</strong> Có thể trực thuộc một Hạng mục lớn (Cấp 1) hoặc có thể đứng độc lập không cần cha.</li>
                         <li><strong>Phân công & Ước lượng:</strong> Được gán trực tiếp cho người phụ trách, có điểm ước lượng, ngày bắt đầu và hạn chót hoàn thành.</li>
-                        <li><strong>Quan hệ con:</strong> Có thể chứa nhiều Nhiệm vụ con (**Cấp -1**) bên dưới để phân rã kỹ thuật.</li>
+                        <li><strong>Quan hệ con:</strong> Có thể chứa nhiều Công việc con (**Cấp -1**) bên dưới để phân rã kỹ thuật.</li>
                         <li><strong>Ví dụ:</strong> <em>Tích hợp cổng thanh toán</em>, <em>Sửa lỗi ứng dụng khi tải tệp</em>, <em>Đổ bê tông dầm sàn tầng 1</em>.</li>
                       </ul>
                     </div>
@@ -2986,7 +2986,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                           Cấp -1
                         </span>
                         <h4 style={{ fontSize: 15, fontWeight: 700, color: '#0369A1', margin: 0 }}>
-                          Nhiệm Vụ Con — Tầng Tác Vụ Vi Mô Chi Tiết
+                          Công Việc Con — Tầng Tác Vụ Vi Mô Chi Tiết
                         </h4>
                       </div>
                       <p style={{ fontSize: 13, color: '#0284C7', margin: '0 0 10px 0', lineHeight: 1.5 }}>
@@ -3044,7 +3044,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     <div style={{ padding: 14, borderRadius: 8, border: '1px solid #BFDBFE', backgroundColor: '#EFF6FF' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: '#2563EB', fontWeight: 700, fontSize: 13 }}>
                         <CheckSquare size={16} />
-                        <span>Quy trình Nhiệm vụ / Câu chuyện</span>
+                        <span>Quy trình Công việc / Yêu cầu</span>
                       </div>
                       <div style={{ fontSize: 12, color: '#1E40AF', lineHeight: 1.5 }}>
                         Dòng chảy công việc linh hoạt tinh gọn:
@@ -3079,7 +3079,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                         <CheckCircle2 size={16} color="#059669" style={{ marginTop: 2, flexShrink: 0 }} />
                         <div>
-                          <strong>Toàn bộ việc con phải hoàn thành trước:</strong> Công việc cha (Cấp 0) chỉ được phép kéo sang <code>Hoàn thành</code> khi tất cả các Nhiệm vụ con (Cấp -1) trực thuộc đã hoàn thành. Ngăn chặn việc đóng việc khi chưa hoàn tất.
+                          <strong>Toàn bộ việc con phải hoàn thành trước:</strong> Công việc cha (Cấp 0) chỉ được phép kéo sang <code>Hoàn thành</code> khi tất cả các Công việc con (Cấp -1) trực thuộc đã hoàn thành. Ngăn chặn việc đóng việc khi chưa hoàn tất.
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
@@ -3123,16 +3123,16 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       </h4>
                     </div>
                     <p style={{ fontSize: 13, color: '#15803D', margin: '0 0 12px 0', lineHeight: 1.5 }}>
-                      Hệ thống tự động đồng bộ thời gian từ cấp nhiệm vụ con lên cấp cha và hạng mục lớn theo thời gian thực:
+                      Hệ thống tự động đồng bộ thời gian từ cấp công việc con lên cấp cha và hạng mục lớn theo thời gian thực:
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, color: '#14532D' }}>
                       <div style={{ padding: 10, backgroundColor: '#FFFFFF', borderRadius: 8, border: '1px solid #86EFAC' }}>
-                        <strong>1. Ghi nhận thời gian tại Nhiệm vụ con (Cấp -1):</strong> Thành viên trực tiếp ghi nhận thời gian làm việc thực tế và thời gian ước lượng chi tiết tại từng nhiệm vụ con cụ thể.
+                        <strong>1. Ghi nhận thời gian tại Công việc con (Cấp -1):</strong> Thành viên trực tiếp ghi nhận thời gian làm việc thực tế và thời gian ước lượng chi tiết tại từng công việc con cụ thể.
                       </div>
                       <div style={{ padding: 10, backgroundColor: '#FFFFFF', borderRadius: 8, border: '1px solid #86EFAC' }}>
-                        <strong>2. Tự động lũy kế lên Công việc cha (Cấp 0):</strong> Tổng thời gian thực tế và ước lượng của công việc cha sẽ tự động cộng dồn từ toàn bộ các nhiệm vụ con bên dưới:
+                        <strong>2. Tự động lũy kế lên Công việc cha (Cấp 0):</strong> Tổng thời gian thực tế và ước lượng của công việc cha sẽ tự động cộng dồn từ toàn bộ các công việc con bên dưới:
                         <div style={{ marginTop: 4, fontFamily: 'monospace', color: '#15803D', fontWeight: 600 }}>
-                          Tổng thời gian = Thời gian ghi nhận trực tiếp + ∑(Thời gian của các nhiệm vụ con)
+                          Tổng thời gian = Thời gian ghi nhận trực tiếp + ∑(Thời gian của các công việc con)
                         </div>
                       </div>
                       <div style={{ padding: 10, backgroundColor: '#FFFFFF', borderRadius: 8, border: '1px solid #86EFAC' }}>
@@ -3157,7 +3157,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       </h4>
                     </div>
                     <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#1E3A8A', lineHeight: 1.6 }}>
-                      <li><strong>Thời hạn Nhiệm vụ con (Cấp -1):</strong> Ngày bắt đầu và hạn chót của nhiệm vụ con <strong>phải nằm trọn vẹn</strong> trong khoảng thời gian diễn ra của công việc cha. Hệ thống tự động chặn không cho nhiệm vụ con kết thúc sau công việc cha.</li>
+                      <li><strong>Thời hạn Công việc con (Cấp -1):</strong> Ngày bắt đầu và hạn chót của công việc con <strong>phải nằm trọn vẹn</strong> trong khoảng thời gian diễn ra của công việc cha. Hệ thống tự động chặn không cho công việc con kết thúc sau công việc cha.</li>
                       <li><strong>Thời hạn Công việc cha (Cấp 0):</strong> Phải nằm trong chu kỳ làm việc đang chạy hoặc nằm trong khung thời gian tổng thể của Hạng mục lớn (Cấp 1).</li>
                       <li><strong>Biểu đồ tiến độ & Dòng thời gian:</strong> Thanh thời gian của Hạng mục lớn sẽ tự động co giãn bao trùm từ ngày bắt đầu sớm nhất đến ngày kết thúc muộn nhất của các công việc trực thuộc bên dưới.</li>
                     </ul>

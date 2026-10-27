@@ -410,8 +410,8 @@ export default function ProjectDetailPage() {
         {/* Navigation Pills - dieu huong bang nested route de deep-link va nut Back hoat dong */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {[
-            { to: 'board', label: 'Bảng làm việc', icon: Kanban, visible: true },
-            { to: 'backlog', label: 'Danh sách tồn đọng', icon: ListTodo, visible: isScrumProject(project) },
+            { to: 'board', label: 'Bảng tiến độ', icon: Kanban, visible: true },
+            { to: 'backlog', label: 'Kho việc & Kế hoạch', icon: ListTodo, visible: isScrumProject(project) },
             { to: 'reports', label: 'Báo cáo', icon: BarChart3, visible: true },
             { to: 'members', label: 'Thành viên & Vai trò', icon: Users, visible: true },
             { to: 'workflow', label: 'Cấu hình Dự án', icon: Settings, visible: true },

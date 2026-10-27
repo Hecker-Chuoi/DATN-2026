@@ -15,7 +15,7 @@ spring:
   # ─── Flyway ───
   # Dùng chung datn_main_db với work-service nên PHẢI có history table riêng:
   # work-service dùng flyway_work_schema_history, hai history không thấy hàng của nhau.
-  # baseline-on-migrate: DB đã có dữ liệu sẵn (teams/projects/users) trước khi service này ra đời.
+  # baseline-on-migrate: DB đã có dữ liệu sẵn (projects/users) trước khi service này ra đời.
   flyway:
     enabled: true
     baseline-on-migrate: true

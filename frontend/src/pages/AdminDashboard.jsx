@@ -225,7 +225,7 @@ export default function AdminDashboard({ onLogout }) {
     setConfirmConfig({
       isOpen: true,
       title: 'Xóa tài khoản',
-      message: `Bạn có chắc chắn muốn xóa tài khoản "${user.username}"? Hành động này sẽ khóa tài khoản hệ thống và thu hồi quyền thành viên nhóm/nhiệm vụ liên quan.`,
+      message: `Bạn có chắc chắn muốn xóa tài khoản "${user.username}"? Hành động này sẽ khóa tài khoản hệ thống và thu hồi quyền thành viên dự án/công việc liên quan.`,
       confirmText: 'Xóa tài khoản',
       cancelText: 'Hủy',
       type: 'danger',
@@ -316,11 +316,11 @@ export default function AdminDashboard({ onLogout }) {
             <span>Quản Lý Người Dùng</span>
           </button>
 
-          <a href="#keycloak" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang cấu hình Keycloak IAM'); }}>
+          <a href="#keycloak" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang cấu hình xác thực tập trung'); }}>
             <KeyRound size={18} />
-            <span>Xác thực Keycloak</span>
+            <span>Bảo mật & Xác thực</span>
           </a>
-          <a href="#gateway" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang thông số API Gateway'); }}>
+          <a href="#gateway" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang thông số cổng điều phối'); }}>
             <Server size={18} />
             <span>Nhật ký Cổng kết nối</span>
           </a>
@@ -470,7 +470,7 @@ export default function AdminDashboard({ onLogout }) {
 
                 {loading ? (
                   <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
-                    Đang tải dữ liệu từ Identity Service...
+                    Đang tải danh sách tài khoản người dùng...
                   </div>
                 ) : users.length === 0 ? (
                   <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>

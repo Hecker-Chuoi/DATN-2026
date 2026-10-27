@@ -3,13 +3,14 @@ import { Mail, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { invitationApi } from '../../api.js';
 import { workspaceInvitationApi } from '../../api/workspaceServiceApi';
+import { getRoleDisplayName } from '../../constants/workConstants.js';
 
 /**
- * Danh sách lời mời đang chờ của một workspace (workspaceId), nhóm (teamId) hoặc dự án (projectId), kèm nút hủy.
+ * Danh sách lời mời đang chờ của một workspace (workspaceId) hoặc dự án (projectId), kèm nút hủy.
  * Chỉ người quản trị gọi được API này, nên chỉ render khi canManage.
  * refreshKey: đổi giá trị để tải lại (vd. sau khi gửi lời mời mới).
  */
-export default function PendingInvitations({ workspaceId, teamId, projectId, canManage = false, refreshKey = 0 }) {
+export default function PendingInvitations({ workspaceId, projectId, canManage = false, refreshKey = 0 }) {
   const [items, setItems] = useState([]);
   const [busyId, setBusyId] = useState(null);
   const api = workspaceId ? workspaceInvitationApi : invitationApi;
@@ -18,7 +19,7 @@ export default function PendingInvitations({ workspaceId, teamId, projectId, can
     try {
       const res = workspaceId
         ? await workspaceInvitationApi.forWorkspace(workspaceId)
-        : teamId ? await invitationApi.forTeam(teamId) : await invitationApi.forProject(projectId);
+        : await invitationApi.forProject(projectId);
       setItems(Array.isArray(res?.data) ? res.data : []);
     } catch {
       setItems([]);
@@ -26,9 +27,9 @@ export default function PendingInvitations({ workspaceId, teamId, projectId, can
   };
 
   useEffect(() => {
-    if (canManage && (workspaceId || teamId || projectId)) load();
+    if (canManage && (workspaceId || projectId)) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, teamId, projectId, canManage, refreshKey]);
+  }, [workspaceId, projectId, canManage, refreshKey]);
 
   const cancel = async (inv) => {
     try {
@@ -56,7 +57,7 @@ export default function PendingInvitations({ workspaceId, teamId, projectId, can
             <span style={{ flex: 1 }}>
               <b>{inv.inviteeName || inv.inviteeEmail || inv.inviteeUserId}</b>
               {inv.inviteeEmail && inv.inviteeName ? ` (${inv.inviteeEmail})` : ''}
-              {' · '}vai trò <b>{inv.roleName || inv.role || 'MEMBER'}</b>
+              {' · '}vai trò <b>{inv.roleName || getRoleDisplayName(inv.role) || 'Thành viên'}</b>
               {inv.inviterName ? ` · mời bởi ${inv.inviterName}` : ''}
             </span>
             <button

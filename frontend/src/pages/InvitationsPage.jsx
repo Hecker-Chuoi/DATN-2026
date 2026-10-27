@@ -1,27 +1,27 @@
 import { useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { Mail, Users, FolderKanban, Building2, Check, X } from 'lucide-react';
+import { Mail, FolderKanban, Building2, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { invitationApi } from '../api.js';
 import { workspaceInvitationApi } from '../api/workspaceServiceApi';
+import { getRoleDisplayName } from '../constants/workConstants.js';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { wsPath } from '../utils/workspacePath';
 
 const KIND = {
-  TEAM: { label: 'Nhóm', Icon: Users, bg: '#EFF6FF', color: '#2563EB' },
   PROJECT: { label: 'Dự án', Icon: FolderKanban, bg: '#F0FDF4', color: '#16A34A' },
-  WORKSPACE: { label: 'Workspace', Icon: Building2, bg: '#FEF3C7', color: '#D97706' },
+  WORKSPACE: { label: 'Không gian làm việc', Icon: Building2, bg: '#FEF3C7', color: '#D97706' },
 };
 
 /**
- * Lời mời tham gia workspace / nhóm / dự án đang chờ người dùng hiện tại trả lời.
+ * Lời mời tham gia workspace / dự án đang chờ người dùng hiện tại trả lời.
  * Danh sách lấy từ WorkspaceLayout (context) để badge trên sidebar và trang này dùng chung một nguồn.
  */
 export default function InvitationsPage() {
   const navigate = useNavigate();
   const { workspaceId } = useParams();
   const { refreshWorkspaces } = useWorkspace();
-  const { invitations = [], refreshInvitations, refreshTeams } = useOutletContext() || {};
+  const { invitations = [], refreshInvitations, refreshProjects } = useOutletContext() || {};
   const [busyId, setBusyId] = useState(null);
 
   const respond = async (inv, accept) => {
@@ -36,8 +36,8 @@ export default function InvitationsPage() {
         await refreshWorkspaces();
         navigate(wsPath(inv.targetId, '/projects'));
       } else {
-        await refreshTeams?.();
-        navigate(wsPath(workspaceId, inv.type === 'TEAM' ? `/teams/${inv.targetId}` : `/projects/${inv.targetId}`));
+        await refreshProjects?.();
+        navigate(wsPath(workspaceId, `/projects/${inv.targetId}`));
       }
     } catch {
       // interceptor đã hiện toast lỗi
@@ -92,13 +92,13 @@ export default function InvitationsPage() {
                 Bạn không có lời mời nào đang chờ
               </div>
               <div style={{ fontSize: 13, color: '#64748B', maxWidth: 440, lineHeight: 1.5 }}>
-                Khi được mời vào không gian làm việc, nhóm hoặc dự án, lời mời sẽ hiển thị tại đây để bạn phản hồi.
+                Khi được mời vào không gian làm việc hoặc dự án, lời mời sẽ hiển thị tại đây để bạn phản hồi.
               </div>
             </div>
           </div>
         ) : (
           invitations.map((inv) => {
-            const kind = KIND[inv.type] || KIND.TEAM;
+            const kind = KIND[inv.type] || KIND.PROJECT;
             const Icon = kind.Icon;
             const busy = busyId === inv.id;
             return (
@@ -130,55 +130,80 @@ export default function InvitationsPage() {
                 >
                   <Icon size={20} />
                 </div>
+
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
-                    {kind.label} <span style={{ color: '#2563EB' }}>{inv.targetName || '(không rõ tên)'}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        padding: '2px 8px',
+                        borderRadius: 4,
+                        backgroundColor: kind.bg,
+                        color: kind.color,
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      {kind.label}
+                    </span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>
+                      {inv.targetName || 'Mục tiêu'}
+                    </span>
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
-                    {inv.inviterName || 'Ai đó'} mời bạn với vai trò <b>{inv.roleName || 'MEMBER'}</b>
-                    {inv.createdAt ? ` · ${new Date(inv.createdAt).toLocaleString('vi-VN')}` : ''}
+
+                  <div style={{ fontSize: 13, color: '#475569' }}>
+                    {inv.inviterName ? (
+                      <>
+                        <b style={{ color: '#0F172A' }}>{inv.inviterName}</b> đã mời bạn tham gia với vai trò{' '}
+                      </>
+                    ) : (
+                      'Bạn được mời tham gia với vai trò '
+                    )}
+                    <b style={{ color: '#0F172A' }}>{inv.roleName || getRoleDisplayName(inv.role) || 'Thành viên'}</b>
                   </div>
                 </div>
+
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button
-                    onClick={() => respond(inv, true)}
-                    disabled={busy}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      backgroundColor: '#2563EB',
-                      color: '#FFF',
-                      border: 'none',
-                      borderRadius: 8,
-                      padding: '8px 16px',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: busy ? 'not-allowed' : 'pointer',
-                      transition: 'background-color 0.15s ease',
-                    }}
-                  >
-                    <Check size={14} /> Chấp nhận
-                  </button>
                   <button
                     onClick={() => respond(inv, false)}
                     disabled={busy}
                     style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      backgroundColor: '#FFF',
-                      color: '#475569',
-                      border: '1px solid #CBD5E1',
+                      height: 36,
+                      padding: '0 14px',
                       borderRadius: 8,
-                      padding: '8px 16px',
+                      border: '1px solid #E2E8F0',
+                      backgroundColor: '#FFFFFF',
+                      color: '#64748B',
                       fontSize: 13,
                       fontWeight: 600,
                       cursor: busy ? 'not-allowed' : 'pointer',
-                      transition: 'background-color 0.15s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
                     }}
                   >
-                    <X size={14} /> Từ chối
+                    <X size={15} /> Từ chối
+                  </button>
+                  <button
+                    onClick={() => respond(inv, true)}
+                    disabled={busy}
+                    style={{
+                      height: 36,
+                      padding: '0 16px',
+                      borderRadius: 8,
+                      border: 'none',
+                      backgroundColor: '#2563EB',
+                      color: '#FFFFFF',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: busy ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Check size={15} /> Chấp nhận
                   </button>
                 </div>
               </div>

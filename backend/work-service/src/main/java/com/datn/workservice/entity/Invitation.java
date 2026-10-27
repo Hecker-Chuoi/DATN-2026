@@ -2,7 +2,6 @@ package com.datn.workservice.entity;
 
 import com.datn.workservice.enums.InvitationStatus;
 import com.datn.workservice.enums.InvitationType;
-import com.datn.workservice.enums.TeamRole;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -11,8 +10,8 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Lời mời tham gia nhóm (TEAM) hoặc dự án (PROJECT). Người được mời phải chấp nhận thì mới trở thành thành viên.
- * user id luôn là Keycloak sub (giống team_members / role_assignments).
+ * Lời mời tham gia dự án (PROJECT). Người được mời phải chấp nhận thì mới trở thành thành viên.
+ * user id luôn là Keycloak sub (giống role_assignments).
  */
 @Entity
 @Table(name = "invitations")
@@ -30,9 +29,10 @@ public class Invitation {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private InvitationType type;
+    @Builder.Default
+    private InvitationType type = InvitationType.PROJECT;
 
-    /** teams.id hoặc projects.id tùy type */
+    /** projects.id */
     @Column(name = "target_id", nullable = false)
     private UUID targetId;
 
@@ -41,11 +41,6 @@ public class Invitation {
 
     @Column(name = "invited_by", nullable = false)
     private UUID invitedBy;
-
-    /** Vai trò trong nhóm khi type = TEAM */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "team_role", length = 50)
-    private TeamRole teamRole;
 
     /** project_roles.id khi type = PROJECT */
     @Column(name = "project_role_id")

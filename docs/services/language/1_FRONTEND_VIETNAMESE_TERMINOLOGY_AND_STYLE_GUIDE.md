@@ -17,7 +17,7 @@
    - [3.2. Nhóm Trạng thái & Vòng đời Quy trình FSM (Status & Workflow)](#32-nhóm-trạng-thái--vòng-đời-quy-trình-fsm-status--workflow)
    - [3.3. Mức độ Ưu tiên (Priorities)](#33-mức-độ-ưu-tiên-priorities)
    - [3.4. Chu kỳ Sprint, Danh sách chờ & Bảng điều khiển (Sprint, Backlog & Board)](#34-chu-kỳ-sprint-danh-sách-chờ--bảng-điều-khiển-sprint-backlog--board)
-   - [3.5. Không gian làm việc, Nhóm & Phân quyền (Workspace, Team & Identity)](#35-không-gian-làm-việc-nhóm--phân-quyền-workspace-team--identity)
+   - [3.5. Không gian làm việc & Phân quyền (Workspace & Identity)](#35-không-gian-làm-việc--phân-quyền-workspace--identity)
    - [3.6. Thư viện Mẫu & Nhân bản Dự án (Template & Cloning)](#36-thư-viện-mẫu--nhân-bản-dự-án-template--cloning)
    - [3.7. Mối quan hệ & Liên kết Phụ thuộc (Issue Links)](#37-mối-quan-hệ--liên-kết-phụ-thuộc-issue-links)
 4. [Từ điển Nhãn Giao diện, Nút bấm & Biểu mẫu (UI Actions, Forms & Placeholders)](#4-từ-điển-nhãn-giao-diện-nút-bấm--biểu-mẫu-ui-actions-forms--placeholders)
@@ -60,7 +60,7 @@ Trong quá trình phát triển hệ thống **DATN-2026** (một nền tảng q
 
 2. **Nguyên tắc 2: Chiến lược Song ngữ (Bilingual Strategy)**
    - **Giữ nguyên thuật ngữ chuyên ngành toàn cầu**: `Scrum`, `Kanban`, `Markdown`, `Keycloak`, `OAuth2`, `JQL`, `REST API`, `UUID`.
-   - **Việt hóa toàn diện thực thể người dùng tương tác**: `Workspace` $\to$ Không gian làm việc, `Team` $\to$ Nhóm làm việc, `Issue / Work Item` $\to$ Công việc / Nhiệm vụ, `Priority` $\to$ Mức độ ưu tiên.
+   - **Việt hóa toàn diện thực thể người dùng tương tác**: `Workspace` $\to$ Không gian làm việc, `Issue / Work Item` $\to$ Công việc / Nhiệm vụ, `Priority` $\to$ Mức độ ưu tiên.
 
 3. **Nguyên tắc 3: Quy chuẩn Chính tả Tiếng Việt**
    - **Quy tắc bỏ dấu mới**: Ưu tiên chuẩn chính tả tiếng Việt hiện đại: Dùng **Hủy** (thay vì *Huỷ*), **Quy trình** (thay vì *Qui trình*), **Dịch vụ**, **Ký tự**.
@@ -79,9 +79,9 @@ Hệ thống phân cấp công việc tuân thủ cấu trúc 3 tầng chuẩn J
 | **Work Item / Issue** | **Công việc / Hạng mục** | — | `WORK_ITEM` | Thực thể đơn vị công việc trong dự án |
 | **Epic** | **Hạng mục lớn** | Cấp 1 (`1`) | `EPIC` | Mục tiêu lớn hoặc tập hợp tính năng phức tạp kéo dài qua nhiều chu kỳ |
 | **User Story** | **Câu chuyện người dùng** | Cấp 0 (`0`) | `STORY` | Yêu cầu nghiệp vụ hoặc tính năng nhìn từ góc độ người dùng cuối |
-| **Task** | **Nhiệm vụ** | Cấp 0 (`0`) | `TASK` | Công việc kỹ thuật hoặc tác vụ phát triển tiêu chuẩn |
+| **Task** | **Công việc** | Cấp 0 (`0`) | `TASK` | Công việc hoặc tác vụ thực thi tiêu chuẩn |
 | **Bug** | **Lỗi phần mềm** | Cấp 0 (`0`) | `BUG` | Lỗi phát sinh hoặc sự cố kỹ thuật cần khắc phục |
-| **Sub-task / Subtask** | **Nhiệm vụ con** | Cấp -1 (`-1`)| `SUB_TASK` | Tác vụ chi tiết được chia nhỏ từ công việc cấp cha (Level 0) |
+| **Sub-task / Subtask** | **Công việc con** | Cấp -1 (`-1`)| `SUB_TASK` | Tác vụ chi tiết được chia nhỏ từ công việc cấp cha (Level 0) |
 | **Parent Item** | **Công việc cha** | — | `parentItemId` | Công việc cấp trên sở hữu nhiệm vụ con |
 | **Hierarchy Level** | **Cấp bậc phân cấp** | — | `hierarchyLevel` | Bậc phân cấp: 1 (Lớn), 0 (Tiêu chuẩn), -1 (Con) |
 | **Summary** | **Tiêu đề công việc** | — | `summary` | Tóm tắt ngắn gọn nội dung công việc |
@@ -150,13 +150,13 @@ Hệ sinh thái trạng thái được nhóm thành 3 Category chuẩn Jira Clou
 
 ---
 
-### 3.5. Không gian làm việc, Nhóm & Phân quyền (Workspace, Team & Identity)
+### 3.5. Không gian làm việc & Phân quyền (Workspace & Identity)
 
 | Thuật ngữ Gốc (En) | Thuật ngữ Tiếng Việt | Ghi chú & Định vị |
 |---|---|---|
-| **Workspace** | **Không gian làm việc** | Tầng cao nhất chứa các nhóm và dự án |
+| **Workspace** | **Không gian làm việc** | Tầng cao nhất bao bọc các dự án |
 | **Workspace Switcher** | **Chuyển đổi không gian làm việc** | Hộp menu chọn chuyển nhanh giữa các workspace |
-| **Team** | **Nhóm làm việc** | Đội ngũ thành viên phụ trách một hoặc nhiều dự án |
+| **Team** | ~~Nhóm làm việc~~ | *(Đã loại bỏ trong kiến trúc phẳng 2 cấp Workspace -> Project)* |
 | **Project** | **Dự án** | Đơn vị quản lý công việc cụ thể theo Scrum hoặc Kanban |
 | **Project Key / Prefix** | **Mã dự án / Tiền tố viết tắt** | Mã định danh viết hoa (VD: `DATN`, `TCP`, `SHOP`) |
 | **Admin Portal** | **Cổng Quản trị** | Cổng giao diện dành riêng cho Quản trị viên hệ thống |
@@ -253,10 +253,10 @@ Hệ sinh thái trạng thái được nhóm thành 3 Category chuẩn Jira Clou
 - **Tên nhóm làm việc \*** (`teamName`): Bắt buộc.
 - **Tên dự án \*** (`projectName`): Bắt buộc.
 - **Mã dự án (Tiền tố viết tắt) \*** (`projectKey`): Viết hoa, từ 2 đến 10 ký tự (VD: `PROJ`).
-- **Mô hình quản lý công việc**: Lựa chọn giữa Quy trình Scrum hoặc Bảng Kanban.
+- **Mô hình quản lý công việc**: Lựa chọn giữa Theo chu kỳ / Theo giai đoạn (Scrum) hoặc Bảng công việc liên tục (Kanban).
 - **Tiêu đề công việc \*** (`summary`): Tiêu đề ngắn gọn mô tả tác vụ.
-- **Loại công việc \*** (`workItemType`): Danh sách Hạng mục lớn, Câu chuyện, Nhiệm vụ, Lỗi, Nhiệm vụ con.
-- **Công việc cha \*** (`parentItem`): Bắt buộc khi tạo Nhiệm vụ con (Subtask).
+- **Loại công việc \*** (`workItemType`): Danh sách Hạng mục lớn, Yêu cầu, Công việc, Sự cố, Công việc con.
+- **Công việc cha \*** (`parentItem`): Bắt buộc khi tạo Công việc con (Subtask).
 - **Mức độ ưu tiên** (`priority`): Khẩn cấp, Cao, Trung bình, Thấp, Rất thấp.
 - **Điểm ước lượng** (`storyPoints`): Điểm Fibonacci (1, 2, 3, 5, 8, 13...).
 - **Người thực hiện** (`assignee`): Thành viên được chỉ định chịu trách nhiệm chính.
@@ -348,7 +348,7 @@ flowchart TD
         W1["WorkspaceListPage: Danh Sách Không Gian Làm Việc"]
         W2["WorkspaceMembersPage: Thành Viên & Phân Quyền"]
         W3["WorkspaceSettingsPage: Cài Đặt Không Gian Làm Việc"]
-        W4["CreateWorkspaceModal & CreateTeamModal"]
+        W4["CreateWorkspaceModal & CreateProjectModal"]
     end
 
     subgraph ProjectCore ["3. Dự án & Vận hành Agile"]

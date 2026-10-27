@@ -246,7 +246,7 @@ function EmptyState({ hasTemplates }) {
       </div>
       {!hasTemplates && (
         <div style={{ marginTop: 4 }}>
-          Tạo một dự án với tùy chọn “Đặt làm Dự án mẫu”, hoặc dùng “Lưu thành mẫu” trong menu của một dự án có sẵn.
+          Dùng tùy chọn “Lưu thành mẫu” trong menu của một dự án có sẵn để tạo dự án mẫu.
         </div>
       )}
     </div>

@@ -14,7 +14,7 @@ Khi muốn reset toàn bộ môi trường về trạng thái trắng (sạch ho
 ### Cách 1: Xóa nhanh theo file `docker-compose.infra.yml` (Khuyên dùng)
 Dừng toàn bộ container, xóa mạng, xóa sạch các volume chứa data cũ và gỡ images:
 ```powershell
-cd d:\DATN-2026\backend\environment
+cd d:\DATN-2026\infrastructure
 docker compose -f docker-compose.infra.yml down -v --rmi all
 ```
 
@@ -68,7 +68,7 @@ docker system prune -a --volumes -f
 ### Bước 1: Khởi động các Service Hạ tầng
 Mở PowerShell tại thư mục `infrastructure`:
 ```powershell
-cd d:\DATN-2026\backend\environment
+cd d:\DATN-2026\infrastructure
 docker compose -f docker-compose.infra.yml up -d
 ```
 
@@ -97,7 +97,7 @@ Sau khi Keycloak chạy, import file [`realm-export_08082026.json`](file:///d:/D
 2. Menu góc trái bấm chọn dropdown Realm (mặc định là `master`) ➔ Bấm **Create Realm**.
 3. Tại phần **Resource file**, bấm **Browse** và chọn file:
    ```text
-   d:\DATN-2026\backend\environment\keycloak\realm-export_08082026.json
+   d:\DATN-2026\infrastructure\keycloak\realm-export_08082026.json
    ```
 4. Bấm nút **Create**. Toàn bộ Roles, Client `datn-backend`, và Google Provider sẽ được nạp hoàn chỉnh.
 
