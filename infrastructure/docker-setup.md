@@ -107,8 +107,57 @@ Sau khi Keycloak chạy, import file [`realm-export_08082026.json`](file:///d:/D
 
 ## 💻 III. Khởi chạy Ứng dụng (Chạy trực tiếp trên máy qua Maven & NPM)
 
-### 1. Khởi chạy Backend Services:
-Mở 3 terminal riêng biệt tại thư mục `backend/`:
+Bạn có thể chọn **1 trong 3 cách** dưới đây để khởi chạy các dịch vụ:
+
+---
+
+### ⚡ Cách 1: Khởi chạy "1 Chạm" bằng Script (Khuyên dùng - Nhanh nhất)
+
+Tại thư mục gốc `d:\DATN-2026\`:
+
+- **Khởi chạy toàn bộ 5 Backend Services cùng lúc:**
+  ```powershell
+  .\start-dev.ps1
+  ```
+  *(Tự động mở các cửa sổ PowerShell riêng biệt cho từng service. Bạn cũng có thể double click vào file `start-dev.bat`)*.
+
+- **Khởi chạy cả Backend lẫn Frontend:**
+  ```powershell
+  .\start-dev.ps1 -WithFrontend
+  ```
+
+- **Dừng / Tắt toàn bộ các Service cùng lúc:**
+  ```powershell
+  .\stop-dev.ps1
+  ```
+  *(Hoặc double click file `stop-dev.bat` để tự động giải phóng sạch các cổng 8081, 8082, 8083, 8087, 9994, 5173)*.
+
+---
+
+### 🛠️ Cách 2: Khởi chạy bằng IntelliJ IDEA (Compound Run Configuration)
+
+Dành cho bạn nào thích dùng giao diện của IntelliJ IDEA để debug và xem log từng service riêng biệt:
+
+1. Trên thanh menu của IntelliJ: Vào **Run** ➔ **Edit Configurations...**
+2. Bấm nút dấu **`+`** (Add New Configuration) ở góc trên bên trái ➔ Chọn **Compound**.
+3. Đặt tên: `All Backend Services`.
+4. Tại phần danh sách cấu hình con bên dưới, bấm nút **`+`** và thêm lần lượt 5 Spring Boot Applications:
+   - `ApiGatewayApplication` (Module `api-gateway`, cổng 8081)
+   - `IdentityServiceApplication` (Module `identity-service`, cổng 8082)
+   - `WorkServiceApplication` (Module `work-service`, cổng 8083)
+   - `WorkspaceServiceApplication` (Module `workspace-service`, cổng 8087)
+   - `NotificationServiceApplication` (Module `notification-service`, cổng 9994)
+5. Bấm **Apply** ➔ **OK**.
+6. Lúc này trên thanh công cụ của IntelliJ, chỉ cần chọn cấu hình `All Backend Services` và bấm nút **▶️ Run** (hoặc **Debug**). Toàn bộ 5 services sẽ khởi động trong tab **Services / Run Dashboard** của IntelliJ.
+
+---
+
+### 🖥️ Cách 3: Khởi chạy thủ công từng Terminal riêng biệt
+
+Nếu muốn bật riêng từng service để tiện theo dõi log:
+
+#### 1. Khởi chạy Backend Services:
+Mở 5 terminal riêng biệt tại thư mục `backend/`:
 
 - **Terminal 1 - API Gateway (Cổng 8081)**:
   ```powershell
@@ -127,12 +176,21 @@ Mở 3 terminal riêng biệt tại thư mục `backend/`:
   cd d:\DATN-2026\backend
   ./mvnw spring-boot:run -pl work-service
   ```
+
 - **Terminal 4 - Workspace Service (Cổng 8087)**:
   ```powershell
   cd d:\DATN-2026\backend
   ./mvnw spring-boot:run -pl workspace-service
   ```
-### 2. Khởi chạy Frontend:
+
+- **Terminal 5 - Notification Service (Cổng 9994)**:
+  ```powershell
+  cd d:\DATN-2026\backend
+  ./mvnw spring-boot:run -pl notification-service
+  ```
+  *(Dịch vụ gửi email xác thực tài khoản, đặt lại mật khẩu, lời mời thành viên. Mặc định gửi vào Mailpit xem tại [http://localhost:8025](http://localhost:8025))*.
+
+#### 2. Khởi chạy Frontend:
 Mở terminal tại thư mục `frontend/`:
 ```powershell
 cd d:\DATN-2026\frontend
