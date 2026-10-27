@@ -97,18 +97,23 @@ function App() {
   };
 
   const handleUserLogout = async () => {
-    toast.success('Đã đăng xuất thành công!');
+    const refreshToken = userTokenStore.getRefreshToken();
     try {
-      await authApi.logout();
+      if (refreshToken) {
+        await authApi.logout(refreshToken);
+      } else {
+        await authApi.logout();
+      }
     } catch (err) {
       console.warn('Backend logout error:', err);
     }
     userTokenStore.clear();
     setIsUserAuth(false);
     setCurrentUser(null);
+    toast.success('Đã đăng xuất thành công!');
 
-    const keycloakLogoutUrl = `${KEYCLOAK_URL}/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/login')}`;
-    window.location.href = keycloakLogoutUrl;
+    // Điều hướng thẳng về trang /login mà không cần chuyển hướng sang Keycloak
+    window.location.replace('/login');
   };
 
   // ─── Handlers for Admin ───
@@ -118,20 +123,21 @@ function App() {
 
   const handleAdminLogout = async () => {
     const refreshToken = adminTokenStore.getRefreshToken();
-    adminTokenStore.clear();
-    setIsAdminAuth(false);
-    toast.success('Đã đăng xuất tài khoản Quản trị viên!');
-
     try {
       if (refreshToken) {
         await authApi.logout(refreshToken);
+      } else {
+        await authApi.logout();
       }
     } catch (err) {
       console.warn('Backend logout error:', err);
     }
+    adminTokenStore.clear();
+    setIsAdminAuth(false);
+    toast.success('Đã đăng xuất tài khoản Quản trị viên!');
 
-    const keycloakLogoutUrl = `${KEYCLOAK_URL}/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/admin/login')}`;
-    window.location.href = keycloakLogoutUrl;
+    // Điều hướng thẳng về trang /admin/login mà không cần chuyển hướng sang Keycloak
+    window.location.replace('/admin/login');
   };
 
   return (
