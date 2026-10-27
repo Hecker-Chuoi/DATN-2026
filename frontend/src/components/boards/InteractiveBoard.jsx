@@ -233,17 +233,20 @@ function BoardGrid({ columns, laneKey, forbidden, onSelectItem, renderCard }) {
 
 /** Boc useSortable quanh the trinh bay. */
 function SortableCard({ item, onSelect }) {
+  const isEpic = item.hierarchyLevel === 1 || item.typeCode === 'EPIC' || item.typeName?.toLowerCase()?.includes('hạng mục');
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
+    disabled: isEpic,
   });
   const style = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     transition,
     opacity: isDragging ? 0 : 1,
+    cursor: isEpic ? 'default' : undefined,
   };
   return (
     <div ref={setNodeRef} style={style}>
-      <BoardCard item={item} onSelect={onSelect} dragHandleProps={{ ...attributes, ...listeners }} />
+      <BoardCard item={item} onSelect={onSelect} dragHandleProps={isEpic ? {} : { ...attributes, ...listeners }} />
     </div>
   );
 }

@@ -1354,27 +1354,27 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
               {/* ─── Epic Child Stories & Progress (Step 5.5) ─── */}
               {(item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC') && (
-                <div style={{ border: '1px solid #E9D5FF', backgroundColor: '#FAF5FF', borderRadius: 8, padding: 16 }}>
+                <div style={{ border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', borderRadius: 8, padding: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Bookmark size={16} color="#6554C0" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#581C87' }}>
+                      <Bookmark size={16} color="#7C3AED" />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
                         Công việc trực thuộc Hạng mục lớn ({item?.childStories?.length || 0})
                       </span>
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#6554C0' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#7C3AED' }}>
                       {item?.doneStoryPoints || 0} / {item?.totalStoryPoints || 0} điểm ước lượng hoàn thành
                     </div>
                   </div>
 
                   {/* Epic Progress Bar */}
                   {item?.totalStoryPoints > 0 && (
-                    <div style={{ width: '100%', height: 6, backgroundColor: '#E9D5FF', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
+                    <div style={{ width: '100%', height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
                       <div
                         style={{
                           width: `${Math.min(100, Math.round(((item.doneStoryPoints || 0) / item.totalStoryPoints) * 100))}%`,
                           height: '100%',
-                          backgroundColor: '#6554C0',
+                          backgroundColor: '#10B981',
                           transition: 'width 0.3s ease',
                         }}
                       />
@@ -1396,14 +1396,28 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                               padding: '8px 12px',
                               backgroundColor: '#FFFFFF',
                               borderRadius: 6,
-                              border: '1px solid #E9D5FF',
+                              border: '1px solid #E2E8F0',
                               fontSize: 13,
+                              transition: 'border-color 0.15s ease',
                             }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {/* Icon loại công việc: Màu xanh dương tiêu chuẩn của Task */}
+                              <span
+                                style={{
+                                  width: 14,
+                                  height: 14,
+                                  borderRadius: 3,
+                                  backgroundColor: cs.typeColor || '#3B82F6',
+                                  flexShrink: 0,
+                                  display: 'inline-block',
+                                }}
+                                title={cs.typeName || 'Công việc'}
+                              />
                               <span
                                 onClick={() => setCurrentId(cs.id)}
-                                style={{ fontSize: 12, fontWeight: 700, color: '#6554C0', cursor: 'pointer' }}
+                                style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', cursor: 'pointer' }}
+                                title="Bấm để xem chi tiết công việc này"
                               >
                                 {cs.code}
                               </span>
@@ -1413,7 +1427,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               {cs.storyPoints != null && (
-                                <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4, backgroundColor: '#F3F0FF', color: '#6554C0' }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 999, backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
                                   {cs.storyPoints} điểm
                                 </span>
                               )}
@@ -1423,8 +1437,8 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                   fontWeight: 600,
                                   padding: '2px 8px',
                                   borderRadius: 4,
-                                  backgroundColor: cs.statusColorHex ? `${cs.statusColorHex}15` : '#EFF6FF',
-                                  color: cs.statusColorHex || '#2563EB',
+                                  backgroundColor: cs.statusColorHex ? `${cs.statusColorHex}15` : '#F1F5F9',
+                                  color: cs.statusColorHex || '#475569',
                                 }}
                               >
                                 {getStatusDisplayName(cs.statusName || 'Cần làm')}
@@ -1434,7 +1448,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         );
                       })
                     ) : (
-                      <div style={{ fontSize: 12, color: '#7E22CE', fontStyle: 'italic' }}>
+                      <div style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>
                         Chưa có công việc con nào được gắn vào Hạng mục lớn này.
                       </div>
                     )}

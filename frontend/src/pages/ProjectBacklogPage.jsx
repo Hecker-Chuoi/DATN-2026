@@ -69,7 +69,7 @@ export default function ProjectBacklogPage() {
   }, [data]);
 
   const visibleGroups = useMemo(
-    () => groups.map((g) => ({ ...g, items: (g.items || []).filter((i) => matches(i, filters, currentUserId)) })),
+    () => groups.map((g) => ({ ...g, items: (g.items || []).filter((i) => i.hierarchyLevel !== 1).filter((i) => matches(i, filters, currentUserId)) })),
     [groups, filters, currentUserId]
   );
 
@@ -253,8 +253,8 @@ export default function ProjectBacklogPage() {
                 onStart={(g) => setStartTarget(g)}
                 onComplete={(g) => setCompleteTarget(g)}
                 onQuickCreate={handleQuickCreate}
-                renderRow={(item) => (
-                  <SortableRow key={item.id} item={item} onSelect={openItemDetail} />
+                renderRow={(item, _g, isChild) => (
+                  <SortableRow key={item.id} item={item} onSelect={openItemDetail} isChild={isChild} />
                 )}
               />
             )}
@@ -329,7 +329,7 @@ function DroppableGroup({ group, children }) {
 }
 
 /** Boc useSortable quanh hang trinh bay, giu logic keo tha tach khoi phan hien thi. */
-function SortableRow({ item, onSelect }) {
+function SortableRow({ item, onSelect, isChild }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
   });
@@ -344,6 +344,7 @@ function SortableRow({ item, onSelect }) {
       <BacklogIssueRow
         item={item}
         onSelect={onSelect}
+        isChild={isChild}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
     </div>

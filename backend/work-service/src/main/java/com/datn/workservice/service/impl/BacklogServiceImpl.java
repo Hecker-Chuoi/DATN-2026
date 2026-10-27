@@ -85,6 +85,7 @@ public class BacklogServiceImpl implements BacklogService {
         // Sub-task khong dung thanh hang rieng tren Backlog - chung cuon theo cong viec cha.
         List<BoardCardResponse> rows = cards.stream()
                 .filter(c -> !Boolean.TRUE.equals(c.getIsSubtask()))
+                .filter(c -> c.getHierarchyLevel() == null || c.getHierarchyLevel() != 1)
                 .filter(c -> matches(c, filter))
                 .sorted(Comparator.comparing(BoardCardResponse::getRank,
                         Comparator.nullsLast(Comparator.naturalOrder())))

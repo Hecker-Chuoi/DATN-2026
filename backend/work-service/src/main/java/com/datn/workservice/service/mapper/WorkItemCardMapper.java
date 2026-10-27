@@ -91,13 +91,7 @@ public class WorkItemCardMapper {
 
         List<UUID> itemIds = items.stream().map(WorkItem::getId).toList();
 
-        // 2. Loai cong viec
-        Set<UUID> typeIds = collect(items, WorkItem::getTypeId);
-        Map<UUID, WorkItemType> typeById = typeIds.isEmpty() ? Collections.emptyMap()
-                : workItemTypeRepository.findAllById(typeIds).stream()
-                        .collect(Collectors.toMap(WorkItemType::getId, Function.identity(), (a, b) -> a));
-
-        // 3. Cha truc tiep (de hien parentCode va truy nguoc Epic)
+        // 2. Cha truc tiep (de hien parentCode va truy nguoc Epic)
         Set<UUID> parentIds = collect(items, WorkItem::getParentId);
         Map<UUID, WorkItem> parentById = new HashMap<>();
         if (!parentIds.isEmpty()) {
@@ -114,6 +108,13 @@ public class WorkItemCardMapper {
                         .forEach(p -> parentById.put(p.getId(), p));
             }
         }
+
+        // 3. Loai cong viec (nap ca cua the chinh va cua cha/ong de nhan dien duoc Epic)
+        Set<UUID> typeIds = collect(items, WorkItem::getTypeId);
+        typeIds.addAll(collect(new ArrayList<>(parentById.values()), WorkItem::getTypeId));
+        Map<UUID, WorkItemType> typeById = typeIds.isEmpty() ? Collections.emptyMap()
+                : workItemTypeRepository.findAllById(typeIds).stream()
+                        .collect(Collectors.toMap(WorkItemType::getId, Function.identity(), (a, b) -> a));
 
         // 4. Cong viec con - phuc vu dem subtask va cuon thoi gian
         Map<UUID, List<WorkItem>> childrenByParentId = workItemRepository
