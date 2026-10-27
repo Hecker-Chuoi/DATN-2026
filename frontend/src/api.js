@@ -330,7 +330,10 @@ export const authApi = {
 // ─── User API ─────────────────────────────────────────────────────────────────
 export const userApi = {
   listAll: (params) => apiClient.get('/identity/api/v1/admin/users', { params }),
-  search: (query) => apiClient.get('/identity/api/v1/users/search', { params: { query } }),
+  search: (query, config = {}) =>
+    apiClient.get('/identity/api/v1/users/search', { params: { query }, ...config }),
+  getByEmail: (email, config = {}) =>
+    apiClient.get('/identity/api/v1/users/by-email', { params: { email }, ...config }),
   me: () => apiClient.get('/identity/api/v1/users/me'),
   updateRoles: (id, roles) =>
     apiClient.put(`/identity/api/v1/admin/users/${id}/roles`, { roles }),

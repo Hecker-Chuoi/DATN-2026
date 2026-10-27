@@ -11,7 +11,10 @@ import {
   Sparkles,
   Info,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Mail,
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi, userApi } from '../../api.js';
@@ -113,8 +116,10 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
 
   // Add Member Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [systemUsers, setSystemUsers] = useState([]);
-  const [selectedUserId, setSelectedUserId] = useState('');
+  const [searchEmail, setSearchEmail] = useState('');
+  const [searchingUser, setSearchingUser] = useState(false);
+  const [foundUser, setFoundUser] = useState(null);
+  const [searchError, setSearchError] = useState('');
   const [selectedRoleId, setSelectedRoleId] = useState('');
   const [addingMember, setAddingMember] = useState(false);
 
@@ -145,25 +150,86 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
     }
   }, [projectId]);
 
-  const openAddMemberModal = async () => {
+  const openAddMemberModal = () => {
     setIsAddModalOpen(true);
-    setSelectedUserId('');
+    setSearchEmail('');
+    setSearchingUser(false);
+    setFoundUser(null);
+    setSearchError('');
     setSelectedRoleId(roles[1]?.id || roles[0]?.id || '');
+  };
+
+  const handleSearchUser = async (e) => {
+    if (e) e.preventDefault();
+    const cleanEmail = searchEmail.trim();
+    if (!cleanEmail) {
+      setSearchError('Vui lòng nhập địa chỉ email của người dùng');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      setSearchError('Định dạng email không hợp lệ. Vui lòng nhập đúng email (ví dụ: user@example.com)');
+      return;
+    }
+
+    setSearchingUser(true);
+    setSearchError('');
+    setFoundUser(null);
 
     try {
-      const res = await userApi.listAll();
-      if (res && res.data) {
-        setSystemUsers(Array.isArray(res.data) ? res.data : (res.data.content || []));
+      let matchedUser = null;
+      try {
+        const res = await userApi.getByEmail(cleanEmail, { skipErrorToast: true });
+        if (res && res.data) {
+          matchedUser = res.data;
+        }
+      } catch (err) {
+        // Fallback sang API search
+        try {
+          const searchRes = await userApi.search(cleanEmail, { skipErrorToast: true });
+          const userList = searchRes?.data || [];
+          if (Array.isArray(userList)) {
+            matchedUser = userList.find(
+              (u) => u.email && u.email.trim().toLowerCase() === cleanEmail.toLowerCase()
+            );
+          }
+        } catch (searchErr) {
+          // ignore fallback err
+        }
       }
+
+      if (!matchedUser) {
+        setSearchError('Không tìm thấy người dùng nào với email này. Vui lòng kiểm tra lại chính xác từng ký tự email.');
+        return;
+      }
+
+      // Đảm bảo 100% email phải khớp chính xác
+      if (!matchedUser.email || matchedUser.email.trim().toLowerCase() !== cleanEmail.toLowerCase()) {
+        setSearchError('Không tìm thấy người dùng nào khớp 100% email này.');
+        return;
+      }
+
+      // Kiểm tra xem đã là thành viên trong dự án chưa
+      const isAlreadyMember = members.some((m) => m.userId === matchedUser.id);
+      if (isAlreadyMember) {
+        setSearchError('Người dùng này đã là thành viên của dự án.');
+        return;
+      }
+
+      setFoundUser(matchedUser);
     } catch (err) {
-      console.warn('Could not fetch system users for picker:', err);
+      console.error('Lỗi khi tìm kiếm người dùng:', err);
+      setSearchError('Đã có lỗi xảy ra khi tìm kiếm người dùng. Vui lòng thử lại.');
+    } finally {
+      setSearchingUser(false);
     }
   };
 
   const handleAddMemberSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedUserId) {
-      toast.error('Vui lòng chọn người dùng muốn thêm vào dự án');
+    if (!foundUser) {
+      toast.error('Vui lòng tìm và xác nhận người dùng qua email trước');
       return;
     }
     if (!selectedRoleId) {
@@ -174,7 +240,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
     try {
       setAddingMember(true);
       await projectApi.addMember(projectId, {
-        userId: selectedUserId,
+        userId: foundUser.id,
         roleId: selectedRoleId,
       });
 
@@ -690,7 +756,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
               borderRadius: 12,
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
               width: '100%',
-              maxWidth: 480,
+              maxWidth: 520,
               overflow: 'hidden',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -718,33 +784,236 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
             </div>
 
             <form onSubmit={handleAddMemberSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Select User */}
+              {/* Search User by exact Email */}
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Chọn người dùng <span style={{ color: '#EF4444' }}>*</span>
+                  Email người dùng <span style={{ color: '#EF4444' }}>*</span>
                 </label>
-                <select
-                  value={selectedUserId}
-                  onChange={(e) => setSelectedUserId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: 8,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    color: '#0F172A',
-                    backgroundColor: '#FFFFFF',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <option value="">-- Chọn thành viên từ hệ thống --</option>
-                  {systemUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.fullName ? `${u.fullName} (@${u.username})` : u.username} ({u.email || 'Không có email'})
-                    </option>
-                  ))}
-                </select>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <Mail
+                      size={16}
+                      color="#94A3B8"
+                      style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }}
+                    />
+                    <input
+                      type="email"
+                      value={searchEmail}
+                      onChange={(e) => {
+                        setSearchEmail(e.target.value);
+                        setSearchError('');
+                        if (foundUser) setFoundUser(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSearchUser();
+                        }
+                      }}
+                      placeholder="Nhập chính xác email (ví dụ: user@example.com)"
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px 9px 34px',
+                        borderRadius: 8,
+                        border: searchError ? '1px solid #EF4444' : '1px solid #CBD5E1',
+                        fontSize: 13,
+                        color: '#0F172A',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSearchUser}
+                    disabled={searchingUser || !searchEmail.trim()}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '8px 14px',
+                      borderRadius: 8,
+                      border: 'none',
+                      backgroundColor: searchEmail.trim() ? '#2563EB' : '#94A3B8',
+                      color: '#FFFFFF',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: searchingUser || !searchEmail.trim() ? 'not-allowed' : 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {searchingUser ? (
+                      <>
+                        <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
+                        <span>Đang tìm...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Search size={15} />
+                        <span>Tìm kiếm</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                  Chỉ người dùng có địa chỉ email trùng khớp 100% trong hệ thống mới được hiển thị.
+                </div>
+
+                {/* Search Error Message */}
+                {searchError && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      backgroundColor: '#FEF2F2',
+                      border: '1px solid #FECACA',
+                      color: '#DC2626',
+                      fontSize: 12,
+                      marginTop: 8,
+                    }}
+                  >
+                    <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                    <span>{searchError}</span>
+                  </div>
+                )}
+
+                {/* Found User Card */}
+                {foundUser && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: '14px 16px',
+                      borderRadius: 10,
+                      backgroundColor: '#F0FDF4',
+                      border: '1px solid #86EFAC',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, minWidth: 0, flex: 1 }}>
+                      {/* Avatar */}
+                      <div
+                        style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: '50%',
+                          backgroundColor: '#2563EB',
+                          color: '#FFFFFF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 700,
+                          fontSize: 16,
+                          flexShrink: 0,
+                          marginTop: 2,
+                          boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)',
+                        }}
+                      >
+                        {(foundUser.fullName || foundUser.username || foundUser.email || 'U')
+                          .charAt(0)
+                          .toUpperCase()}
+                      </div>
+
+                      {/* Info Column */}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        {/* Dòng 1: Tên hiển thị & Username */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 700,
+                              color: '#0F172A',
+                              wordBreak: 'break-all',
+                            }}
+                          >
+                            {foundUser.fullName || foundUser.username || foundUser.email}
+                          </span>
+                          {foundUser.username && foundUser.username !== foundUser.email && (
+                            <span style={{ fontSize: 12, color: '#64748B' }}>
+                              (@{foundUser.username})
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Dòng 2: Email */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontSize: 12,
+                            color: '#15803D',
+                            fontWeight: 500,
+                            marginBottom: 6,
+                            wordBreak: 'break-all',
+                          }}
+                        >
+                          <Mail size={13} style={{ flexShrink: 0 }} />
+                          <span>{foundUser.email}</span>
+                        </div>
+
+                        {/* Dòng 3: Badge xác nhận khớp 100% */}
+                        <div>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: '#166534',
+                              backgroundColor: '#DCFCE7',
+                              border: '1px solid #BBF7D0',
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                            }}
+                          >
+                            <CheckCircle2 size={12} color="#16A34A" /> Đã xác thực khớp 100% email
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Nút Đổi email bên phải */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFoundUser(null);
+                        setSearchEmail('');
+                      }}
+                      title="Nhập email khác"
+                      style={{
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                        backgroundColor: '#FFFFFF',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: 6,
+                        color: '#475569',
+                        cursor: 'pointer',
+                        padding: '6px 12px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        transition: 'all 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#F1F5F9';
+                        e.currentTarget.style.borderColor = '#94A3B8';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#FFFFFF';
+                        e.currentTarget.style.borderColor = '#CBD5E1';
+                      }}
+                    >
+                      Đổi email
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Select Role */}
@@ -795,19 +1064,23 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                 </button>
                 <button
                   type="submit"
-                  disabled={addingMember}
+                  disabled={addingMember || !foundUser}
+                  title={!foundUser ? 'Vui lòng tìm và chọn đúng người dùng qua email trước' : ''}
                   style={{
                     padding: '7px 18px',
                     borderRadius: 6,
                     border: 'none',
-                    backgroundColor: '#2563EB',
+                    backgroundColor: foundUser && !addingMember ? '#2563EB' : '#94A3B8',
                     color: '#FFFFFF',
                     fontSize: 13,
                     fontWeight: 600,
-                    cursor: addingMember ? 'not-allowed' : 'pointer',
+                    cursor: addingMember || !foundUser ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
                   }}
                 >
-                  {addingMember ? 'Đang thêm...' : 'Thêm vào dự án'}
+                  {addingMember ? 'Đang gửi lời mời...' : 'Thêm vào dự án'}
                 </button>
               </div>
             </form>

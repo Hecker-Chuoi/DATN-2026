@@ -302,11 +302,15 @@ public class UserService {
     }
 
     /**
-     * Finds a user by email (used by internal microservices)
+     * Finds a user by email (used by internal microservices and member search)
      */
     public UserResponse getUserByEmail(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+        if (email == null || email.isBlank()) {
+            throw new ResourceNotFoundException("Email cannot be blank");
+        }
+        String clean = email.trim();
+        User user = userRepository.findByEmailIgnoreCase(clean)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + clean));
         return UserResponse.from(user);
     }
 
