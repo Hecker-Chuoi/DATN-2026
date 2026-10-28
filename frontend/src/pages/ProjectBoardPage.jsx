@@ -6,8 +6,8 @@ import { useProjectContext } from '../context/ProjectContext.jsx';
 import { useBoardData } from '../hooks/useBoardData.js';
 import { boardApi, sprintApi } from '../api.js';
 import { SURFACE } from '../constants/jiraTokens.js';
-import { getTypeDisplayName, getStatusDisplayName } from '../constants/workConstants.js';
-import { boardTypeOf } from '../utils/projectType.js';
+import { getTypeDisplayName } from '../constants/workConstants.js';
+import { boardTypeOf, isBusinessProject } from '../utils/projectType.js';
 import InteractiveBoard from '../components/boards/InteractiveBoard.jsx';
 import BoardListView from '../components/boards/BoardListView.jsx';
 import SprintStateBadge from '../components/sprints/SprintStateBadge.jsx';
@@ -22,11 +22,12 @@ export default function ProjectBoardPage() {
   const { projectId, project, canTransitionIssue, canManageSprint, isAdmin, openItemDetail, refreshKey, bumpRefresh } =
     useProjectContext();
 
+  const isBusiness = isBusinessProject(project);
+
   const [boardId, setBoardId] = useState(null);
   const [boardsLoading, setBoardsLoading] = useState(true);
   const [q, setQ] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
   const [completeOpen, setCompleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [futureSprints, setFutureSprints] = useState([]);
@@ -77,16 +78,16 @@ export default function ProjectBoardPage() {
     () =>
       columns.map((c) => ({
         ...c,
-        items: c.items.filter((i) => matches(i, q, typeFilter, statusFilter)),
+        items: c.items.filter((i) => matches(i, q, typeFilter)),
       })),
-    [columns, q, typeFilter, statusFilter]
+    [columns, q, typeFilter]
   );
 
   const allFilteredCards = useMemo(() => {
     return (data?.cards || []).filter((i) =>
-      matches(i, q, typeFilter, statusFilter)
+      matches(i, q, typeFilter)
     );
-  }, [data?.cards, q, typeFilter, statusFilter]);
+  }, [data?.cards, q, typeFilter]);
 
   // Nhóm các loại công việc theo Cấp bậc (Hierarchy Level):
   // Cấp 1 (Hạng mục lớn: Epic, CTF...), Cấp 0 (Tiêu chuẩn: Task, Story, Bug...), Cấp -1 (Công việc con: Subtask...)
@@ -100,7 +101,7 @@ export default function ProjectBoardPage() {
       const code = String(t.code || t.name || '').toUpperCase().replace('-', '_');
       const item = {
         key: code,
-        label: getTypeDisplayName(t.name || t.code),
+        label: getTypeDisplayName(t.name || t.code, isBusiness),
         code: t.code,
         name: t.name,
         color: t.colorHex || '#3B82F6',
@@ -124,44 +125,6 @@ export default function ProjectBoardPage() {
     return { level1, level0, levelMinus1 };
   }, [project?.workItemTypes]);
 
-  // Số thẻ theo từng trạng thái
-  const statusCounts = useMemo(() => {
-    const counts = new Map();
-    for (const card of data?.cards || []) {
-      if (card.statusName) {
-        counts.set(card.statusName, (counts.get(card.statusName) || 0) + 1);
-      }
-    }
-    return counts;
-  }, [data?.cards]);
-
-  // Nhóm các trạng thái theo Category: Chuẩn bị / Cần làm (TODO), Đang triển khai (IN_PROGRESS), Hoàn thành / Nghiệm thu (DONE)
-  const groupedStatuses = useMemo(() => {
-    const categoryMap = new Map();
-    for (const card of data?.cards || []) {
-      if (card.statusName && card.statusCategory) {
-        categoryMap.set(card.statusName, card.statusCategory);
-      }
-    }
-    for (const col of data?.columns || []) {
-      for (const s of col.statuses || []) {
-        if (s.name && s.category) categoryMap.set(s.name, s.category);
-      }
-    }
-
-    const todo = [];
-    const inProgress = [];
-    const done = [];
-
-    for (const [name, count] of statusCounts.entries()) {
-      const cat = categoryMap.get(name) || 'TODO';
-      if (cat === 'DONE') done.push({ name, count });
-      else if (cat === 'IN_PROGRESS') inProgress.push({ name, count });
-      else todo.push({ name, count });
-    }
-
-    return { todo, inProgress, done };
-  }, [data?.cards, data?.columns, statusCounts]);
 
   /** InteractiveBoard trả về mảng cột đã cập nhật; ghi ngược vào `cards` phẳng. */
   const applyColumns = (nextColumns) => {
@@ -192,7 +155,7 @@ export default function ProjectBoardPage() {
     );
   }
 
-  const hasFilter = q || typeFilter !== 'ALL' || statusFilter !== 'ALL';
+  const hasFilter = Boolean(q || typeFilter !== 'ALL');
 
   const isScrum = boardTypeOf(project, data) === 'SCRUM' || data?.boardType === 'SCRUM';
   const sprint = data?.activeSprint;
@@ -218,7 +181,7 @@ export default function ProjectBoardPage() {
             )}
             {(canManageSprint || isAdmin) && (
               <button onClick={openComplete} disabled={busy} style={primaryBtn(busy)}>
-                Hoàn tất chu kỳ
+                {sprint?.name?.toLowerCase()?.includes('giai đoạn') ? 'Hoàn tất giai đoạn' : 'Hoàn tất chu kỳ'}
               </button>
             )}
           </div>
@@ -276,7 +239,7 @@ export default function ProjectBoardPage() {
             <button
               type="button"
               onClick={() => setTypeFilter(typeFilter === 'LEVEL_1' ? 'ALL' : 'LEVEL_1')}
-              title="Lọc tất cả công việc Cấp 1 (Hạng mục lớn)"
+              title={isBusiness ? "Lọc tất cả công việc Cấp 1 (Giai đoạn)" : "Lọc tất cả công việc Cấp 1 (Hạng mục lớn)"}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -446,53 +409,9 @@ export default function ProjectBoardPage() {
           </div>
         )}
 
-        {/* Dropdown Trạng thái được nhóm theo Category */}
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{
-            padding: '6px 10px',
-            borderRadius: 6,
-            border: `1px solid ${SURFACE.border}`,
-            fontSize: 12,
-            backgroundColor: '#FFFFFF',
-            color: SURFACE.text,
-            cursor: 'pointer',
-          }}
-        >
-          <option value="ALL">Mọi trạng thái ({data?.cards?.length || 0})</option>
-          {groupedStatuses.todo.length > 0 && (
-            <optgroup label="── Chuẩn bị / Cần làm ──">
-              {groupedStatuses.todo.map((s) => (
-                <option key={s.name} value={s.name}>
-                  {getStatusDisplayName(s.name)} ({s.count})
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {groupedStatuses.inProgress.length > 0 && (
-            <optgroup label="── Đang triển khai ──">
-              {groupedStatuses.inProgress.map((s) => (
-                <option key={s.name} value={s.name}>
-                  {getStatusDisplayName(s.name)} ({s.count})
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {groupedStatuses.done.length > 0 && (
-            <optgroup label="── Hoàn thành / Nghiệm thu ──">
-              {groupedStatuses.done.map((s) => (
-                <option key={s.name} value={s.name}>
-                  {getStatusDisplayName(s.name)} ({s.count})
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </select>
-
         {hasFilter && (
           <button
-            onClick={() => { setQ(''); setTypeFilter('ALL'); setStatusFilter('ALL'); }}
+            onClick={() => { setQ(''); setTypeFilter('ALL'); }}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               padding: '5px 10px', borderRadius: 6, border: `1px solid ${SURFACE.border}`,
@@ -507,7 +426,7 @@ export default function ProjectBoardPage() {
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           {data?.swimlaneStrategy && viewMode === 'board' && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: SURFACE.textMuted }}>
-              <Layers size={13} /> Phân làn: {data.swimlaneStrategy === 'BY_EPIC' ? 'Theo Hạng mục lớn' : data.swimlaneStrategy === 'BY_ASSIGNEE' ? 'Theo Người thực hiện' : data.swimlaneStrategy === 'BY_PRIORITY' ? 'Theo Mức độ ưu tiên' : data.swimlaneStrategy === 'NONE' ? 'Không phân làn' : data.swimlaneStrategy}
+              <Layers size={13} /> Phân làn: {data.swimlaneStrategy === 'BY_EPIC' ? (isBusiness ? 'Theo Giai đoạn' : 'Theo Hạng mục lớn') : data.swimlaneStrategy === 'BY_ASSIGNEE' ? 'Theo Người thực hiện' : data.swimlaneStrategy === 'BY_PRIORITY' ? 'Theo Mức độ ưu tiên' : data.swimlaneStrategy === 'NONE' ? 'Không phân làn' : data.swimlaneStrategy}
             </span>
           )}
 
@@ -562,7 +481,7 @@ export default function ProjectBoardPage() {
                 boxShadow: viewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
                 transition: 'all 0.15s ease',
               }}
-              title="Xem dạng Danh sách phân cấp (Hạng mục lớn -> Công việc -> Công việc con)"
+              title={isBusiness ? "Xem dạng Danh sách phân cấp (Giai đoạn -> Công việc -> Việc con)" : "Xem dạng Danh sách phân cấp (Hạng mục lớn -> Công việc -> Công việc con)"}
             >
               <ListTree size={13} />
               <span>Danh sách</span>
@@ -592,6 +511,7 @@ export default function ProjectBoardPage() {
           onSelectItem={openItemDetail}
           onReload={reload}
           projectId={projectId}
+          isBusiness={isBusiness}
         />
       )}
 
@@ -620,7 +540,7 @@ export default function ProjectBoardPage() {
   );
 }
 
-function matches(item, q, typeFilter, statusFilter) {
+function matches(item, q, typeFilter) {
   if (typeFilter !== 'ALL') {
     if (typeFilter === 'LEVEL_1') {
       const isLevel1 = item.hierarchyLevel === 1 || item.typeCode === 'EPIC' || item.typeCode === 'CTF' || item.typeName?.toLowerCase()?.includes('hạng mục');
@@ -635,9 +555,6 @@ function matches(item, q, typeFilter, statusFilter) {
       const code = String(item.typeCode || item.typeName || '').toUpperCase().replace('-', '_');
       if (code !== typeFilter && code.replace('_', '') !== typeFilter) return false;
     }
-  }
-  if (statusFilter && statusFilter !== 'ALL' && item.statusName !== statusFilter) {
-    return false;
   }
   if (q) {
     const n = q.trim().toLowerCase();

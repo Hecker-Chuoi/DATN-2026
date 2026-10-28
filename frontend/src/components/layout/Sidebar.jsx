@@ -17,6 +17,7 @@ import {
 import WorkspaceSwitcher from '../workspace/WorkspaceSwitcher.jsx';
 import { useWorkspaceRole } from '../../hooks/useWorkspaceRole.js';
 import { wsPath } from '../../utils/workspacePath.js';
+import { isScrumProject } from '../../utils/projectType.js';
 
 const PROJECT_COLORS = [
   '#2563EB', // Blue
@@ -276,12 +277,14 @@ export default function Sidebar({
                         label="Bảng làm việc"
                         active={location.pathname === ws(`/projects/${project.id}/board`)}
                       />
-                      <SubNavItem
-                        to={ws(`/projects/${project.id}/backlog`)}
-                        icon={<ListTodo size={13} />}
-                        label="Danh sách công việc"
-                        active={location.pathname === ws(`/projects/${project.id}/backlog`)}
-                      />
+                      {isScrumProject(project) && (
+                        <SubNavItem
+                          to={ws(`/projects/${project.id}/backlog`)}
+                          icon={<ListTodo size={13} />}
+                          label="Kho việc & Kế hoạch"
+                          active={location.pathname === ws(`/projects/${project.id}/backlog`)}
+                        />
+                      )}
                       <SubNavItem
                         to={ws(`/projects/${project.id}/members`)}
                         icon={<Users size={13} />}

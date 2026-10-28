@@ -93,7 +93,7 @@ export default function ProjectListPage() {
 
       // Type Tab Filter
       if (activeTab === 'SCRUM' && proj.projectType !== 'SOFTWARE_SCRUM') return false;
-      if (activeTab === 'KANBAN' && proj.projectType !== 'SOFTWARE_KANBAN') return false;
+      if (activeTab === 'KANBAN' && proj.projectType !== 'SOFTWARE_KANBAN' && proj.projectType !== 'BUSINESS') return false;
 
       // Keyword Search Filter
       if (searchTerm.trim()) {
@@ -226,7 +226,7 @@ export default function ProjectListPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {[
             { id: 'ALL', label: 'Tất cả dự án' },
-            { id: 'SCRUM', label: 'Theo chu kỳ / giai đoạn' },
+            { id: 'SCRUM', label: 'Theo chu kỳ, giai đoạn' },
             { id: 'KANBAN', label: 'Bảng công việc liên tục' },
           ].map((tab) => {
             const active = activeTab === tab.id;
@@ -454,7 +454,7 @@ export default function ProjectListPage() {
                           }}
                         >
                           {isScrum ? <Zap size={11} /> : <Kanban size={11} />}
-                          <span>{isScrum ? 'Theo chu kỳ / Theo giai đoạn' : 'Bảng công việc liên tục'}</span>
+                          <span>{isScrum ? 'Theo chu kỳ, giai đoạn' : 'Bảng công việc liên tục'}</span>
                         </span>
 
                         {canDeleteProject && (

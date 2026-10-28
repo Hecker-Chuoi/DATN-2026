@@ -330,7 +330,7 @@ public class ProjectServiceImpl implements ProjectService {
         ));
 
         // 6. Default Kanban / Scrum Board
-        BoardType boardType = project.getProjectType() == ProjectType.SOFTWARE_KANBAN ? BoardType.KANBAN : BoardType.SCRUM;
+        BoardType boardType = (project.getProjectType() == ProjectType.SOFTWARE_KANBAN || project.getProjectType() == ProjectType.BUSINESS) ? BoardType.KANBAN : BoardType.SCRUM;
         Board board = boardRepository.save(Board.builder()
                 .projectId(project.getId())
                 .name(project.getName() + " Board")

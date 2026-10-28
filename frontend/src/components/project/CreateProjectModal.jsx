@@ -480,7 +480,7 @@ export default function CreateProjectModal({ isOpen, onClose, onProjectCreated }
               Mô hình quản lý công việc
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              {/* Scrum Card */}
+              {/* Theo chu kỳ, giai đoạn */}
               <div
                 onClick={() => setFormData({ ...formData, projectType: 'SOFTWARE_SCRUM' })}
                 style={{
@@ -514,14 +514,14 @@ export default function CreateProjectModal({ isOpen, onClose, onProjectCreated }
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#1D4ED8', fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
                   <Zap size={16} />
-                  <span>Theo chu kỳ / Theo giai đoạn</span>
+                  <span>Theo chu kỳ, giai đoạn</span>
                 </div>
                 <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.4 }}>
-                  Quản lý theo từng chu kỳ hoặc giai đoạn định kỳ, lập kế hoạch và theo dõi tiến độ.
+                  Chia dự án thành các giai đoạn hoặc chu kỳ thực thi (mở quán cafe, phần mềm, thi công...). Lập kế hoạch và theo dõi tiến độ từng chặng.
                 </p>
               </div>
 
-              {/* Kanban Card */}
+              {/* Bảng công việc liên tục */}
               <div
                 onClick={() => setFormData({ ...formData, projectType: 'SOFTWARE_KANBAN' })}
                 style={{
@@ -558,7 +558,7 @@ export default function CreateProjectModal({ isOpen, onClose, onProjectCreated }
                   <span>Bảng công việc liên tục</span>
                 </div>
                 <p style={{ fontSize: 12, color: '#475569', margin: 0, lineHeight: 1.4 }}>
-                  Luồng công việc liên tục, trực quan hóa trạng thái với giới hạn việc đang làm.
+                  Luồng công việc phát sinh liên tục, không chia giai đoạn (vận hành hàng ngày, hỗ trợ, bảo trì...). Quản lý trực quan theo cột trạng thái.
                 </p>
               </div>
             </div>

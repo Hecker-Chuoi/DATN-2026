@@ -23,6 +23,8 @@ export default function BoardListView({
   onSelectItem,
   canTransition = false,
   onReload,
+  projectId,
+  isBusiness = false,
 }) {
   const [collapsedIds, setCollapsedIds] = useState(new Set());
 
@@ -54,7 +56,7 @@ export default function BoardListView({
 
     // 1. Phân loại các cards
     for (const card of cards) {
-      const isEpic = card.hierarchyLevel === 1 || card.typeCode === 'EPIC' || card.typeName?.toLowerCase()?.includes('hạng mục');
+      const isEpic = card.hierarchyLevel === 1 || card.typeCode === 'EPIC' || card.typeName?.toLowerCase()?.includes('hạng mục') || card.typeName?.toLowerCase()?.includes('giai đoạn');
       const isSub = Boolean(card.isSubtask || card.hierarchyLevel === 3);
 
       if (isEpic) {
@@ -77,10 +79,10 @@ export default function BoardListView({
         epicsMap.set(epicId, {
           id: epicId,
           code: epicCode || 'EPIC',
-          summary: epicSummary || 'Hạng mục lớn',
+          summary: epicSummary || (isBusiness ? 'Giai đoạn' : 'Hạng mục lớn'),
           typeColor: epicColor,
           typeCode: 'EPIC',
-          typeName: 'Hạng mục lớn',
+          typeName: isBusiness ? 'Giai đoạn' : 'Hạng mục lớn',
           hierarchyLevel: 1,
           isVirtual: true,
           tasks: [],
@@ -170,7 +172,7 @@ export default function BoardListView({
             Cấu trúc phân cấp công việc ({totalItemsCount} mục)
           </span>
           <span style={{ color: '#CBD5E1' }}>|</span>
-          <span>{epicTree.length} Hạng mục lớn</span>
+          <span>{epicTree.length} {isBusiness ? 'Giai đoạn' : 'Hạng mục lớn'}</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -206,7 +208,7 @@ export default function BoardListView({
           letterSpacing: '0.04em',
         }}
       >
-        <div>Công việc / Hạng mục</div>
+        <div>{isBusiness ? 'Công việc / Giai đoạn' : 'Công việc / Hạng mục'}</div>
         <div>Trạng thái</div>
         <div>Người thực hiện</div>
         <div>Thời gian đến hạn</div>
@@ -280,7 +282,7 @@ export default function BoardListView({
                       flexShrink: 0,
                     }}
                   >
-                    <Layers size={11} /> HẠNG MỤC LỚN
+                    <Layers size={11} /> {isBusiness ? 'GIAI ĐOẠN' : 'HẠNG MỤC LỚN'}
                   </span>
 
                   {/* Mã code */}
@@ -389,7 +391,7 @@ export default function BoardListView({
                         fontStyle: 'italic',
                       }}
                     >
-                      Chưa có công việc nào trong chu kỳ thuộc hạng mục lớn này.
+                      Chưa có công việc nào trong chu kỳ thuộc ${isBusiness ? 'giai đoạn' : 'hạng mục lớn'} này.
                     </div>
                   ) : (
                     tasks.map((task) => (

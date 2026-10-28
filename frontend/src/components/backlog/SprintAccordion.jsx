@@ -131,16 +131,16 @@ export default function SprintAccordion({
         {!isBacklog && canManageSprint && group.state === 'FUTURE' && (
           <button
             disabled={busy || !group.canStart}
-            title={group.canStart ? 'Bắt đầu chu kỳ' : 'Cần có công việc và không có chu kỳ nào đang chạy'}
+            title={group.canStart ? (group.name?.toLowerCase()?.includes('giai đoạn') ? 'Bắt đầu giai đoạn' : 'Bắt đầu chu kỳ') : 'Cần có công việc và không có chu kỳ nào đang chạy'}
             onClick={() => onStart?.(group)}
             style={primaryBtn(busy || !group.canStart)}
           >
-            Bắt đầu chu kỳ
+            {group.name?.toLowerCase()?.includes('giai đoạn') ? 'Bắt đầu giai đoạn' : 'Bắt đầu chu kỳ'}
           </button>
         )}
         {!isBacklog && canManageSprint && group.state === 'ACTIVE' && (
           <button disabled={busy} onClick={() => onComplete?.(group)} style={primaryBtn(busy)}>
-            Hoàn tất chu kỳ
+            {group.name?.toLowerCase()?.includes('giai đoạn') ? 'Hoàn tất giai đoạn' : 'Hoàn tất chu kỳ'}
           </button>
         )}
       </div>

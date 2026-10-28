@@ -46,6 +46,9 @@ if ($WithFrontend) {
 
 Write-Host "`n=======================================================" -ForegroundColor Yellow
 Write-Host "  Tất cả các cửa sổ Terminal đã được mở lên màn hình!" -ForegroundColor Yellow
-Write-Host "  Bạn có thể click vào từng cửa sổ để xem log chi tiết." -ForegroundColor Yellow
+Write-Host "  LƯU Ý:" -ForegroundColor Cyan
+Write-Host "  1. Các Backend Service cần khoảng 10-15 giây để khởi động xong." -ForegroundColor Gray
+Write-Host "     (Khi nào thấy dòng 'Started ...Application in X seconds' là xong)." -ForegroundColor Gray
+Write-Host "  2. Tránh click bôi đen chữ trong terminal vì Windows sẽ tạm dừng tiến trình (ấn Enter/Esc để nhả)." -ForegroundColor Gray
 Write-Host "  Để tắt tất cả cùng lúc, chỉ cần chạy: .\stop-dev.ps1" -ForegroundColor Yellow
 Write-Host "=======================================================`n" -ForegroundColor Yellow

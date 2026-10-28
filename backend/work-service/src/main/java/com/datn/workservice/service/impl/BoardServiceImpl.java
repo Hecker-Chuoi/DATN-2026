@@ -121,7 +121,7 @@ public class BoardServiceImpl implements BoardService {
 
         BoardType type = request.getType() != null
                 ? request.getType()
-                : (project.getProjectType() == ProjectType.SOFTWARE_KANBAN ? BoardType.KANBAN : BoardType.SCRUM);
+                : ((project.getProjectType() == ProjectType.SOFTWARE_KANBAN || project.getProjectType() == ProjectType.BUSINESS) ? BoardType.KANBAN : BoardType.SCRUM);
 
         Board board = boardRepository.save(Board.builder()
                 .projectId(projectId)

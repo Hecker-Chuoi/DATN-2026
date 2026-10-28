@@ -17,9 +17,9 @@ export function categoryToken(category) {
 }
 
 export const PROJECT_TYPE_LABELS = {
-  SOFTWARE_SCRUM: 'Theo chu kỳ / Theo giai đoạn',
+  SOFTWARE_SCRUM: 'Theo chu kỳ, giai đoạn',
   SOFTWARE_KANBAN: 'Bảng công việc liên tục',
-  BUSINESS: 'Nghiệp vụ doanh nghiệp',
+  BUSINESS: 'Theo chu kỳ, giai đoạn',
 };
 
 /** Cộng số ngày vào chuỗi yyyy-MM-dd, trả về yyyy-MM-dd (không lệch múi giờ). */

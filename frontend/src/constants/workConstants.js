@@ -78,11 +78,13 @@ export const WORK_ITEM_TYPE_CONFIG = {
 };
 
 // ─── Vietnamese Display Helpers ───────────────────────────────────────────────
-export const getTypeDisplayName = (typeCodeOrName) => {
+export const getTypeDisplayName = (typeCodeOrName, isBusiness = false) => {
   if (!typeCodeOrName) return 'Công việc';
   const raw = String(typeCodeOrName).trim();
   const t = raw.toUpperCase().replace(/[-\s]/g, '_');
-  if (t === 'EPIC' || t === 'HẠNG_MỤC_LỚN' || t === 'HANG_MUC_LON') return 'Hạng mục lớn';
+  if (t === 'EPIC' || t === 'HẠNG_MỤC_LỚN' || t === 'HANG_MUC_LON' || t === 'GIAI_ĐOẠN' || t === 'GIAI_DOAN') {
+    return isBusiness ? 'Giai đoạn' : 'Hạng mục lớn';
+  }
   if (t === 'STORY' || t === 'USER_STORY' || t === 'YÊU_CẦU' || t === 'YEU_CAU') return 'Yêu cầu';
   if (t === 'TASK' || t === 'NHIỆM_VỤ' || t === 'NHIEM_VU' || t === 'CÔNG_VIỆC' || t === 'CONG_VIEC') return 'Công việc';
   if (t === 'BUG' || t === 'SỰ_CỐ' || t === 'SU_CO' || t === 'LỖI' || t === 'LOI') return 'Sự cố';
