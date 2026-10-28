@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Slide Đào Tạo: Chu Kỳ / Giai Đoạn & Bảng Công Việc Liên Tục - DATN 2026</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    .slide { display: none; }
+    .slide.active { display: flex; }
+    .dot.active { background-color: var(--primary, #2563eb); width: 22px; }
+  </style>
+</head>
+<body class="bg-transparent text-[var(--foreground)] antialiased p-2 select-none">
+  <!-- Container Card: Tối ưu kích thước hiển thị inline, giao diện chuyên nghiệp chuẩn Jira/Asana -->
+  <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-2xl shadow-sm p-5 max-w-2xl mx-auto flex flex-col justify-between min-h-[460px]">
+    
+    <!-- ══════════════════════════════════════════════════════════════════
+         SLIDE 1: TỔNG QUAN & BẢN CHẤT NHỊP ĐIỆU CỦA "CHU KỲ"
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="slide-0" class="slide active flex-col gap-3">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-500/10 px-2.5 py-0.5 rounded">
+          Trang 1 / 5 • Khái niệm cốt lõi
+        </span>
+        <span class="text-xs text-[var(--muted-foreground)]">DATN-2026 Specification</span>
+      </div>
+
+      <div>
+        <h2 class="text-base font-bold text-[var(--foreground)]">Hai Mô Hình & Bản Chất Thực Sự Của "Chu Kỳ"</h2>
+        <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+          Quy tụ mọi nghiệp vụ quản lý dự án đa ngành về 2 trường phái vận hành:
+        </p>
+      </div>
+
+      <!-- So sánh nhanh 2 mô hình -->
+      <div class="grid grid-cols-12 gap-2.5">
+        <!-- 1. Bảng CV liên tục (Ngắn gọn 4 cột) -->
+        <div class="col-span-4 p-2.5 rounded-xl border border-[var(--border)] bg-[var(--card)] flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-1.5 text-emerald-600 font-bold text-xs mb-1">
+              <span>📊</span>
+              <span>Bảng CV liên tục</span>
+            </div>
+            <p class="text-[11px] text-[var(--muted-foreground)] leading-relaxed">
+              Việc phát sinh đều đặn mỗi ngày (vận hành bảo trì quán, IT Helpdesk). Không chia chặng, vào là làm ngay theo giới hạn WIP.
+            </p>
+          </div>
+          <span class="text-[10px] text-emerald-700 bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded w-fit font-medium">
+            Vào thẳng Kanban
+          </span>
+        </div>
+
+        <!-- 2. Theo chu kỳ, giai đoạn (Trọng tâm 8 cột) -->
+        <div class="col-span-8 p-3 rounded-xl border-2 border-blue-500/40 bg-blue-500/5 flex flex-col justify-between">
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-1.5 text-blue-600 font-bold text-xs">
+              <span>⚡</span>
+              <span>Theo chu kỳ, giai đoạn (Tâm điểm)</span>
+            </div>
+            <span class="text-[10px] font-bold text-blue-700 bg-blue-100 dark:bg-blue-900/50 px-2 py-0.5 rounded">
+              Có đích đến
+            </span>
+          </div>
+          <p class="text-xs text-[var(--foreground)] leading-relaxed">
+            Dành cho dự án có <b>ngày bắt đầu, ngày kết thúc và mục tiêu cụ thể</b> (Mở quán Cafe, Xây dựng văn phòng, Làm phần mềm, Mùa vụ nông nghiệp).
+          </p>
+          <div class="mt-1.5 text-[11px] text-[var(--muted-foreground)]">
+            Chia dự án thành từng chặng có kỷ luật: <b>Xong chặng này mới mở chặng sau!</b>
+          </div>
+        </div>
+      </div>
+
+      <!-- Khối giải thích "Bánh xe lăn về đích" -->
+      <div class="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-start gap-2.5">
+        <span class="text-amber-600 text-lg flex-shrink-0 mt-0.5">🚲</span>
+        <div class="text-xs leading-relaxed">
+          <span class="font-bold text-amber-700 dark:text-amber-400">Chu kỳ KHÔNG PHẢI là làm một việc rồi lặp đi lặp lại vô tận trong vòng tròn luẩn quẩn!</span>
+          <p class="text-[var(--foreground)] mt-1">
+            Bản chất của Chu kỳ là <b>NHỊP ĐIỆU LẶP LẠI ĐỀU ĐẶN</b>: Cứ mỗi 2 tuần (hoặc hết 1 giai đoạn), cả đội lại thực hiện nhịp:  
+            <span class="font-semibold text-blue-600">Lập kế hoạch ➔ Thực thi ➔ Nghiệm thu ➔ Bắt đầu chặng mới</span>.  
+            <i>Như bánh xe quay tròn nhưng chiếc xe luôn tiến về phía trước:</i> Nhịp làm việc lặp lại, nhưng khối lượng công việc hoàn thành và sản phẩm liên tục tích lũy và tịnh tiến tới đích (Khai trương quán / Golive).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SLIDE 2: BƯỚC 1 - LẬP KẾ HOẠCH TẠI KHO VIỆC (UI MOCKUP)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="slide-1" class="slide flex-col gap-3">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-500/10 px-2.5 py-0.5 rounded">
+          Trang 2 / 5 • Bước 1: Lập kế hoạch
+        </span>
+        <span class="text-xs text-[var(--muted-foreground)]">Kho việc & Kế hoạch (Backlog)</span>
+      </div>
+
+      <div>
+        <h2 class="text-base font-bold text-[var(--foreground)]">Gom Việc & Phân Bổ Vào Từng Giai Đoạn</h2>
+        <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+          Tại màn hình <b>Kho việc & Kế hoạch</b>, quản lý dự án kéo thả công việc vào từng hộp chặng:
+        </p>
+      </div>
+
+      <!-- UI Mockup: Màn hình Backlog Accordion -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-inner flex flex-col gap-2">
+        <!-- Khối Giai đoạn 1 (Chưa bắt đầu) -->
+        <div class="rounded-lg border-2 border-blue-500/50 bg-blue-500/5 p-2.5">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <span class="text-blue-600 font-bold text-xs">▼ Giai đoạn 1: Pháp lý, Mặt bằng & Thiết kế Concept</span>
+              <span class="text-[10px] font-semibold text-slate-500 bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                CHƯA BẮT ĐẦU
+              </span>
+              <span class="text-[11px] text-[var(--muted-foreground)]">(3 công việc • 20 ngày)</span>
+            </div>
+            <!-- Nút Bắt đầu giai đoạn nổi bật -->
+            <button class="px-2.5 py-1 text-[11px] font-bold rounded-md bg-blue-600 text-white shadow hover:bg-blue-700 flex items-center gap-1">
+              <span>▶</span> Bắt đầu giai đoạn
+            </button>
+          </div>
+
+          <!-- Danh sách công việc con bên trong -->
+          <div class="space-y-1.5 pl-3 border-l-2 border-blue-400/40 text-xs">
+            <div class="p-1.5 rounded bg-[var(--card)] border border-[var(--border)] flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 rounded">TPLFNB-2</span>
+                <span class="text-[var(--foreground)]">Khảo sát lưu lượng khách (foot traffic) tại 3 địa điểm</span>
+              </div>
+              <span class="text-[11px] text-[var(--muted-foreground)]">5 điểm • Tuấn Anh</span>
+            </div>
+            <div class="p-1.5 rounded bg-[var(--card)] border border-[var(--border)] flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 rounded">TPLFNB-5</span>
+                <span class="text-[var(--foreground)]">Thương lượng hợp đồng thuê và thủ tục đặt cọc mặt bằng</span>
+              </div>
+              <span class="text-[11px] text-[var(--muted-foreground)]">8 điểm • Hoàng Nam</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Khối Giai đoạn 2 (Dự kiến tương lai) -->
+        <div class="rounded-lg border border-dashed border-[var(--border)] p-2 bg-[var(--card)] flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+          <div class="flex items-center gap-2">
+            <span>▶ Giai đoạn 2: Thi công nội thất, Máy móc & Menu</span>
+            <span class="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 rounded">TƯƠNG LAI</span>
+          </div>
+          <span class="text-[11px]">8 công việc đang chờ</span>
+        </div>
+      </div>
+
+      <!-- Quy tắc phân cấp -->
+      <div class="text-[11px] text-[var(--muted-foreground)] flex items-center gap-2">
+        <span class="text-blue-600 font-bold">Quy tắc bảo vệ:</span>
+        <span>Kéo việc cha sang giai đoạn nào thì toàn bộ <b>việc con (sub-tasks) tự động đi theo</b>, không bị thất lạc!</span>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SLIDE 3: BƯỚC 2 - KHOANH VÙNG TRÊN BẢNG KANBAN (UI MOCKUP)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="slide-2" class="slide flex-col gap-3">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-purple-600 bg-purple-500/10 px-2.5 py-0.5 rounded">
+          Trang 3 / 5 • Bước 2: Thực thi tập trung
+        </span>
+        <span class="text-xs text-[var(--muted-foreground)]">Bảng làm việc (Board Scoped)</span>
+      </div>
+
+      <div>
+        <h2 class="text-base font-bold text-[var(--foreground)]">Khoanh Vùng Tập Trung & Giám Sát Tiến Độ</h2>
+        <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+          Khi bấm <b>"Bắt đầu giai đoạn"</b>, bảng Kanban tự động lọc đúng việc cần làm, không làm ngợp nhân viên:
+        </p>
+      </div>
+
+      <!-- UI Mockup: Bảng Kanban có thanh Sprint Header -->
+      <div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-inner flex flex-col gap-2">
+        <!-- Thanh trạng thái đỉnh bảng -->
+        <div class="p-2 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-between">
+          <div class="flex items-center gap-2 text-xs">
+            <span class="font-bold text-purple-700 dark:text-purple-300">Giai đoạn 1: Pháp lý & Mặt bằng</span>
+            <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded">
+              ĐANG CHẠY
+            </span>
+            <span class="text-xs text-[var(--muted-foreground)] flex items-center gap-1">
+              ⏱ <b>Còn 5 ngày</b> (Hạn chót: 15/11)
+            </span>
+          </div>
+          <!-- Nút Hoàn tất chặng -->
+          <button class="px-2.5 py-1 text-[11px] font-bold rounded-md bg-purple-600 text-white shadow hover:bg-purple-700">
+            ✓ Hoàn tất giai đoạn
+          </button>
+        </div>
+
+        <!-- 3 Cột trạng thái Kanban -->
+        <div class="grid grid-cols-3 gap-2 text-xs">
+          <!-- Cột CẦN LÀM -->
+          <div class="bg-[var(--border)]/20 p-2 rounded-lg">
+            <div class="font-bold text-slate-600 dark:text-slate-400 mb-1.5 flex justify-between">
+              <span>CẦN LÀM</span>
+              <span class="bg-slate-200 dark:bg-slate-700 px-1.5 rounded text-[10px]">1</span>
+            </div>
+            <div class="p-2 bg-[var(--card)] rounded border border-[var(--border)] shadow-xs">
+              <span class="text-[10px] text-blue-600 font-bold">TPLFNB-6</span>
+              <p class="text-[11px] mt-0.5 font-medium">Đàm phán thời gian sửa chữa miễn phí</p>
+            </div>
+          </div>
+
+          <!-- Cột ĐANG LÀM -->
+          <div class="bg-[var(--border)]/20 p-2 rounded-lg">
+            <div class="font-bold text-blue-600 mb-1.5 flex justify-between">
+              <span>ĐANG LÀM</span>
+              <span class="bg-blue-100 dark:bg-blue-900/50 px-1.5 rounded text-[10px]">1</span>
+            </div>
+            <div class="p-2 bg-[var(--card)] rounded border border-blue-400/40 shadow-xs">
+              <span class="text-[10px] text-blue-600 font-bold">TPLFNB-5</span>
+              <p class="text-[11px] mt-0.5 font-medium">Rà soát điều khoản hợp đồng thuê</p>
+            </div>
+          </div>
+
+          <!-- Cột HOÀN THÀNH -->
+          <div class="bg-[var(--border)]/20 p-2 rounded-lg">
+            <div class="font-bold text-emerald-600 mb-1.5 flex justify-between">
+              <span>HOÀN THÀNH</span>
+              <span class="bg-emerald-100 dark:bg-emerald-900/50 px-1.5 rounded text-[10px]">1</span>
+            </div>
+            <div class="p-2 bg-[var(--card)] rounded border border-emerald-400/40 shadow-xs opacity-75">
+              <span class="text-[10px] text-emerald-600 font-bold">TPLFNB-2</span>
+              <p class="text-[11px] mt-0.5 line-through">Khảo sát lưu lượng khách</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tác dụng -->
+      <div class="text-[11px] text-[var(--muted-foreground)] flex items-center gap-2">
+        <span class="text-purple-600 font-bold">Giá trị thực tiễn:</span>
+        <span>Thợ thi công và nhân viên chỉ nhìn đúng việc của giai đoạn trước mắt, không bị xao nhãng bởi việc tuyển dụng của Giai đoạn 3!</span>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SLIDE 4: BƯỚC 3 - HOÀN TẤT, ROLL-OVER & ĐÓNG BĂNG DỮ LIỆU
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="slide-3" class="slide flex-col gap-3">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-600 bg-emerald-500/10 px-2.5 py-0.5 rounded">
+          Trang 4 / 5 • Bước 3: Nghiệm thu & Chuyển giao
+        </span>
+        <span class="text-xs text-[var(--muted-foreground)]">Xử lý Roll-over & Snapshot</span>
+      </div>
+
+      <div>
+        <h2 class="text-base font-bold text-[var(--foreground)]">Xử Lý Việc Dở Dang & Đóng Băng Nghiệm Thu</h2>
+        <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+          Khi bấm <b>"Hoàn tất giai đoạn"</b>, hệ thống xử lý việc tồn và lưu vết báo cáo:
+        </p>
+      </div>
+
+      <!-- UI Mockup: Modal Hoàn tất Sprint/Giai đoạn -->
+      <div class="grid grid-cols-12 gap-3">
+        <!-- Hộp thoại Modal Roll-over (7/12 cột) -->
+        <div class="col-span-7 p-3 rounded-xl border-2 border-emerald-500/40 bg-[var(--card)] shadow-md flex flex-col justify-between">
+          <div>
+            <div class="font-bold text-xs text-[var(--foreground)] mb-1 flex items-center gap-1.5">
+              <span>📋</span> Hoàn tất Giai đoạn 1: Pháp lý & Mặt bằng
+            </div>
+            <div class="text-[11px] text-[var(--muted-foreground)] mb-2 space-y-0.5">
+              <div class="text-emerald-600 font-semibold">• <b>8 việc đã hoàn thành</b></div>
+              <div class="text-amber-600 font-semibold">• <b>2 việc chưa hoàn thành</b> (đang dở dang)</div>
+            </div>
+
+            <div class="p-2 rounded bg-slate-50 dark:bg-slate-800/60 border border-[var(--border)] text-xs">
+              <label class="block text-[11px] font-semibold text-[var(--foreground)] mb-1">
+                Chuyển các việc chưa hoàn thành sang:
+              </label>
+              <select class="w-full p-1.5 text-xs rounded border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]">
+                <option>Giai đoạn 2: Thi công nội thất & Máy móc</option>
+                <option>Kho việc chung (Backlog)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-2 mt-2 pt-2 border-t border-[var(--border)]">
+            <span class="text-[10px] text-[var(--muted-foreground)] flex items-center">Tự động chuyển giao ➔</span>
+            <button class="px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white">Xác nhận đóng</button>
+          </div>
+        </div>
+
+        <!-- Khối Đóng băng Snapshot & Báo cáo (5/12 cột) -->
+        <div class="col-span-5 p-3 rounded-xl border border-[var(--border)] bg-blue-500/5 flex flex-col justify-between">
+          <div>
+            <div class="font-bold text-xs text-blue-700 dark:text-blue-300 mb-1 flex items-center gap-1">
+              <span>📸</span> Đóng Băng Snapshot
+            </div>
+            <p class="text-[11px] text-[var(--muted-foreground)] leading-relaxed">
+              Hệ thống chụp lại ảnh nguyên trạng báo cáo của GĐ 1: tỷ lệ hoàn thành, thời gian thực tế.
+            </p>
+            <div class="mt-2 space-y-1 text-[11px]">
+              <div class="flex items-center gap-1.5 text-purple-600 font-semibold">📉 Biểu đồ Cháy (Burndown)</div>
+              <div class="flex items-center gap-1.5 text-blue-600 font-semibold">📈 Vận tốc (Velocity Chart)</div>
+            </div>
+          </div>
+          <div class="text-[10px] text-blue-600 font-medium">Bảo toàn 100% tính trung thực lịch sử!</div>
+        </div>
+      </div>
+
+      <!-- Tóm tắt -->
+      <div class="text-[11px] text-[var(--muted-foreground)] flex items-center gap-2">
+        <span class="text-emerald-600 font-bold">Kết quả:</span>
+        <span>Công việc tiếp tục chảy sang Giai đoạn 2 mà không mất một dòng dữ liệu nào!</span>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         SLIDE 5: NGUYÊN TẮC TUYẾN TÍNH & BÀI TOÁN "LÀM LẠI / QUAY LẠI"
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="slide-4" class="slide flex-col gap-3">
+      <div class="flex items-center justify-between border-b border-[var(--border)] pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-amber-600 bg-amber-500/10 px-2.5 py-0.5 rounded">
+          Trang 5 / 5 • Bài toán thực tế
+        </span>
+        <span class="text-xs text-[var(--muted-foreground)]">Nguyên lý thời gian tuyến tính</span>
+      </div>
+
+      <div>
+        <h2 class="text-base font-bold text-[var(--foreground)]">Nếu Cần "Làm Lại / Quay Lại" Thì Sao?</h2>
+        <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+          Trong quản trị dự án hiện đại, <b>thời gian là đường thẳng một chiều</b>, không quay lùi lại quá khứ:
+        </p>
+      </div>
+
+      <!-- 2 Kịch bản làm lại -->
+      <div class="grid grid-cols-2 gap-3">
+        <!-- Kịch bản 1: Hỏng hóc phát sinh sau đó -->
+        <div class="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 flex flex-col justify-between">
+          <div>
+            <div class="font-bold text-xs text-amber-700 dark:text-amber-400 mb-1 flex items-center gap-1.5">
+              <span>🔧</span> Kịch bản 1: Lỗi phát sinh từ việc cũ
+            </div>
+            <p class="text-[11px] text-[var(--foreground)] leading-relaxed">
+              <b>Ví dụ:</b> Xong Giai đoạn 1 thi công. Sang Giai đoạn 2 cắm máy pha cafe vào thì ống nước quầy bar bị bục rò rỉ!
+            </p>
+            <p class="text-[11px] text-[var(--muted-foreground)] mt-1.5 leading-relaxed">
+              👉 <b>Không mở lại GĐ 1.</b> Tạo việc mới: <i>"Sửa ống nước quầy bar"</i> đưa vào <b>Giai đoạn 2 (Hiện tại)</b>.
+            </p>
+          </div>
+          <div class="mt-2 text-[10px] text-amber-700 bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 rounded font-medium">
+            Vì tiền công thợ sửa phát sinh ở thời điểm hiện tại!
+          </div>
+        </div>
+
+        <!-- Kịch bản 2: Bể kế hoạch -->
+        <div class="p-3 rounded-xl border border-rose-500/30 bg-rose-500/5 flex flex-col justify-between">
+          <div>
+            <div class="font-bold text-xs text-rose-700 dark:text-rose-400 mb-1 flex items-center gap-1.5">
+              <span>⚠️</span> Kịch bản 2: Bể kế hoạch (Đổi hướng)
+            </div>
+            <p class="text-[11px] text-[var(--foreground)] leading-relaxed">
+              <b>Ví dụ:</b> Xong mặt bằng nhưng chủ nhà bẻ kèo, cả đội phải đi tìm đàm phán mặt bằng khác từ đầu!
+            </p>
+            <p class="text-[11px] text-[var(--muted-foreground)] mt-1.5 leading-relaxed">
+              👉 <b>Giữ nguyên GĐ 1 cũ</b> (đã tốn 20 ngày & cọc). Bấm <i>[+ Tạo chu kỳ]</i> đặt tên là <b>Giai đoạn 1.1</b>.
+            </p>
+          </div>
+          <div class="mt-2 text-[10px] text-rose-700 bg-rose-100 dark:bg-rose-900/40 px-2 py-0.5 rounded font-medium">
+            Báo cáo minh bạch 100% nguyên nhân dự án bị trễ!
+          </div>
+        </div>
+      </div>
+
+      <!-- Điểm nhấn bảo vệ Đồ án tốt nghiệp -->
+      <div class="p-2.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-xs text-[var(--foreground)] flex items-center gap-2">
+        <span class="text-indigo-600 text-base flex-shrink-0">🎓</span>
+        <span><b>Điểm sáng bảo vệ Đồ án:</b> Tái sử dụng bảng <code>sprints</code> làm <b>Khung thời gian (Timebox) trừu tượng</b>. Không đẻ thêm bảng <code>phases</code> thừa thãi, tối ưu hóa 100% tài nguyên và phục vụ mọi ngành nghề từ IT tới F&B!</span>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         FOOTER CONTROLS
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="flex items-center justify-between border-t border-[var(--border)] pt-2.5 mt-2">
+      <!-- Dots indicator (5 trang) -->
+      <div class="flex items-center gap-1.5">
+        <button onclick="goToSlide(0)" class="dot active h-2 w-5 rounded-full transition-all duration-200 bg-[var(--primary)]"></button>
+        <button onclick="goToSlide(1)" class="dot h-2 w-2 rounded-full transition-all duration-200 bg-[var(--muted-foreground)]/30 hover:bg-[var(--primary)]/60"></button>
+        <button onclick="goToSlide(2)" class="dot h-2 w-2 rounded-full transition-all duration-200 bg-[var(--muted-foreground)]/30 hover:bg-[var(--primary)]/60"></button>
+        <button onclick="goToSlide(3)" class="dot h-2 w-2 rounded-full transition-all duration-200 bg-[var(--muted-foreground)]/30 hover:bg-[var(--primary)]/60"></button>
+        <button onclick="goToSlide(4)" class="dot h-2 w-2 rounded-full transition-all duration-200 bg-[var(--muted-foreground)]/30 hover:bg-[var(--primary)]/60"></button>
+      </div>
+
+      <!-- Prev / Next buttons -->
+      <div class="flex items-center gap-2">
+        <button id="prevBtn" onclick="changeSlide(-1)" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:bg-[var(--border)]/30 transition disabled:opacity-40 disabled:cursor-not-allowed">
+          ← Trước
+        </button>
+        <button id="nextBtn" onclick="changeSlide(1)" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed">
+          Tiếp theo →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive JavaScript -->
+  <script>
+    let current = 0;
+    const total = 5;
+
+    function updateView() {
+      for (let i = 0; i < total; i++) {
+        const slide = document.getElementById('slide-' + i);
+        if (slide) {
+          if (i === current) {
+            slide.classList.add('active');
+          } else {
+            slide.classList.remove('active');
+          }
+        }
+      }
+
+      // Update dots
+      const dots = document.querySelectorAll('.dot');
+      dots.forEach((dot, idx) => {
+        if (idx === current) {
+          dot.className = 'dot active h-2 w-5 rounded-full transition-all duration-200 bg-[var(--primary)]';
+        } else {
+          dot.className = 'dot h-2 w-2 rounded-full transition-all duration-200 bg-[var(--muted-foreground)]/30 hover:bg-[var(--primary)]/60';
+        }
+      });
+
+      // Update buttons
+      document.getElementById('prevBtn').disabled = current === 0;
+      const nextBtn = document.getElementById('nextBtn');
+      if (current === total - 1) {
+        nextBtn.innerText = 'Hoàn tất ✓';
+      } else {
+        nextBtn.innerText = 'Tiếp theo →';
+      }
+    }
+
+    function changeSlide(delta) {
+      const next = current + delta;
+      if (next >= 0 && next < total) {
+        current = next;
+        updateView();
+      }
+    }
+
+    function goToSlide(idx) {
+      if (idx >= 0 && idx < total) {
+        current = idx;
+        updateView();
+      }
+    }
+
+    // Keyboard navigation (Arrow Left / Right / Space)
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') {
+        e.preventDefault();
+        changeSlide(1);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        changeSlide(-1);
+      }
+    });
+
+    updateView();
+  </script>
+</body>
+</html>
