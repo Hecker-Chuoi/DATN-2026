@@ -14,10 +14,13 @@ import {
   ChevronUp,
   Mail,
   CheckCircle2,
-  Loader2
+  Loader2,
+  Building2,
+  UserCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi, userApi } from '../../api.js';
+import { workspaceApi } from '../../api/workspaceServiceApi.js';
 import PendingInvitations from '../common/PendingInvitations.jsx';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
@@ -116,6 +119,10 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
 
   // Add Member Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [modalTab, setModalTab] = useState('workspace'); // 'workspace' | 'email'
+  const [workspaceMembers, setWorkspaceMembers] = useState([]);
+  const [loadingWorkspaceMembers, setLoadingWorkspaceMembers] = useState(false);
+  const [candidateSearch, setCandidateSearch] = useState('');
   const [searchEmail, setSearchEmail] = useState('');
   const [searchingUser, setSearchingUser] = useState(false);
   const [foundUser, setFoundUser] = useState(null);
@@ -156,7 +163,32 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
     setSearchingUser(false);
     setFoundUser(null);
     setSearchError('');
+    setCandidateSearch('');
     setSelectedRoleId(roles[1]?.id || roles[0]?.id || '');
+
+    // Nạp danh sách thành viên Không gian làm việc để chọn nhanh
+    const wsId = project?.workspaceId;
+    if (wsId) {
+      setLoadingWorkspaceMembers(true);
+      workspaceApi.getMembers(wsId, { size: 100 })
+        .then((res) => {
+          const list = res?.data?.content || res?.data || [];
+          const allWsMembers = Array.isArray(list) ? list : [];
+          setWorkspaceMembers(allWsMembers);
+          // Nếu còn thành viên trong workspace chưa vào project -> ưu tiên tab 'workspace'
+          const remaining = allWsMembers.filter((wm) => !members.some((m) => m.userId === wm.userId));
+          setModalTab(remaining.length > 0 ? 'workspace' : 'email');
+        })
+        .catch((err) => {
+          console.warn('Không thể nạp danh sách thành viên workspace:', err);
+          setModalTab('email');
+        })
+        .finally(() => {
+          setLoadingWorkspaceMembers(false);
+        });
+    } else {
+      setModalTab('email');
+    }
   };
 
   const handleSearchUser = async (e) => {
@@ -295,6 +327,28 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
     const matchRole = m.roleName?.toLowerCase().includes(term);
     return matchName || matchUsername || matchEmail || matchRole;
   });
+
+  // Tính toán danh sách thành viên trong Workspace chưa tham gia dự án
+  const availableCandidates = (workspaceMembers || []).filter(
+    (wm) => !(members || []).some((m) => m.userId === wm.userId)
+  );
+
+  const filteredCandidates = availableCandidates.filter((c) => {
+    if (!candidateSearch.trim()) return true;
+    const q = candidateSearch.toLowerCase();
+    return (
+      (c.fullName && c.fullName.toLowerCase().includes(q)) ||
+      (c.username && c.username.toLowerCase().includes(q)) ||
+      (c.email && c.email.toLowerCase().includes(q))
+    );
+  });
+
+  const isFoundUserInWorkspace = Boolean(
+    foundUser && (
+      foundUser.isInWorkspace ||
+      (workspaceMembers || []).some((wm) => wm.userId === foundUser.id)
+    )
+  );
 
   return (
     <div style={{ padding: '24px', maxWidth: 1000, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
@@ -783,238 +837,564 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
               </button>
             </div>
 
+            {/* ─── Tabs chuyển đổi: Thành viên Workspace vs Mời qua Email ─── */}
+            <div style={{ display: 'flex', borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalTab('workspace');
+                  setSearchError('');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '11px 16px',
+                  fontSize: 13,
+                  fontWeight: modalTab === 'workspace' ? 700 : 500,
+                  color: modalTab === 'workspace' ? '#2563EB' : '#64748B',
+                  backgroundColor: modalTab === 'workspace' ? '#FFFFFF' : 'transparent',
+                  border: 'none',
+                  borderBottom: modalTab === 'workspace' ? '2px solid #2563EB' : '2px solid transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <Building2 size={15} />
+                <span>Từ Không gian làm việc ({availableCandidates.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalTab('email');
+                  setSearchError('');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '11px 16px',
+                  fontSize: 13,
+                  fontWeight: modalTab === 'email' ? 700 : 500,
+                  color: modalTab === 'email' ? '#2563EB' : '#64748B',
+                  backgroundColor: modalTab === 'email' ? '#FFFFFF' : 'transparent',
+                  border: 'none',
+                  borderBottom: modalTab === 'email' ? '2px solid #2563EB' : '2px solid transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <Mail size={15} />
+                <span>Mời người mới qua Email</span>
+              </button>
+            </div>
+
             <form onSubmit={handleAddMemberSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Search User by exact Email */}
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Email người dùng <span style={{ color: '#EF4444' }}>*</span>
-                </label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <Mail
-                      size={16}
-                      color="#94A3B8"
-                      style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }}
-                    />
-                    <input
-                      type="email"
-                      value={searchEmail}
-                      onChange={(e) => {
-                        setSearchEmail(e.target.value);
-                        setSearchError('');
-                        if (foundUser) setFoundUser(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleSearchUser();
-                        }
-                      }}
-                      placeholder="Nhập chính xác email (ví dụ: user@example.com)"
-                      style={{
-                        width: '100%',
-                        padding: '9px 12px 9px 34px',
-                        borderRadius: 8,
-                        border: searchError ? '1px solid #EF4444' : '1px solid #CBD5E1',
-                        fontSize: 13,
-                        color: '#0F172A',
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                      }}
-                    />
+              {/* TAB 1: CHỌN NHANH TỪ WORKSPACE */}
+              {modalTab === 'workspace' && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>
+                      Chọn thành viên từ Không gian làm việc
+                    </label>
+                    <span style={{ fontSize: 11, color: '#64748B' }}>
+                      Chọn 1 người để thêm nhanh vào dự án
+                    </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSearchUser}
-                    disabled={searchingUser || !searchEmail.trim()}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '8px 14px',
-                      borderRadius: 8,
-                      border: 'none',
-                      backgroundColor: searchEmail.trim() ? '#2563EB' : '#94A3B8',
-                      color: '#FFFFFF',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: searchingUser || !searchEmail.trim() ? 'not-allowed' : 'pointer',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {searchingUser ? (
-                      <>
-                        <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
-                        <span>Đang tìm...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Search size={15} />
-                        <span>Tìm kiếm</span>
-                      </>
-                    )}
-                  </button>
-                </div>
 
-                <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-                  Chỉ người dùng có địa chỉ email trùng khớp 100% trong hệ thống mới được hiển thị.
-                </div>
-
-                {/* Search Error Message */}
-                {searchError && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 12px',
-                      borderRadius: 6,
-                      backgroundColor: '#FEF2F2',
-                      border: '1px solid #FECACA',
-                      color: '#DC2626',
-                      fontSize: 12,
-                      marginTop: 8,
-                    }}
-                  >
-                    <AlertCircle size={15} style={{ flexShrink: 0 }} />
-                    <span>{searchError}</span>
-                  </div>
-                )}
-
-                {/* Found User Card */}
-                {foundUser && (
-                  <div
-                    style={{
-                      marginTop: 12,
-                      padding: '14px 16px',
-                      borderRadius: 10,
-                      backgroundColor: '#F0FDF4',
-                      border: '1px solid #86EFAC',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, minWidth: 0, flex: 1 }}>
-                      {/* Avatar */}
-                      <div
+                  {/* Ô tìm kiếm nhanh trong danh sách ứng viên */}
+                  {availableCandidates.length > 5 && (
+                    <div style={{ position: 'relative', marginBottom: 10 }}>
+                      <Search
+                        size={15}
+                        color="#94A3B8"
+                        style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }}
+                      />
+                      <input
+                        type="text"
+                        value={candidateSearch}
+                        onChange={(e) => setCandidateSearch(e.target.value)}
+                        placeholder="Lọc theo tên hoặc email..."
                         style={{
-                          width: 42,
-                          height: 42,
-                          borderRadius: '50%',
-                          backgroundColor: '#2563EB',
-                          color: '#FFFFFF',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 700,
-                          fontSize: 16,
-                          flexShrink: 0,
-                          marginTop: 2,
-                          boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)',
+                          width: '100%',
+                          padding: '7px 10px 7px 32px',
+                          borderRadius: 6,
+                          border: '1px solid #CBD5E1',
+                          fontSize: 12,
+                          color: '#0F172A',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Danh sách ứng viên */}
+                  {loadingWorkspaceMembers ? (
+                    <div style={{ padding: 24, textAlign: 'center', color: '#64748B', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                      <span>Đang nạp thành viên Không gian làm việc...</span>
+                    </div>
+                  ) : availableCandidates.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '24px 16px',
+                        textAlign: 'center',
+                        borderRadius: 8,
+                        backgroundColor: '#F8FAFC',
+                        border: '1px dashed #CBD5E1',
+                      }}
+                    >
+                      <CheckCircle2 size={24} color="#16A34A" style={{ margin: '0 auto 8px' }} />
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 4 }}>
+                        Tất cả thành viên đã tham gia dự án
+                      </div>
+                      <div style={{ fontSize: 12, color: '#64748B', marginBottom: 12 }}>
+                        Không còn thành viên nào trong Không gian làm việc chưa thuộc dự án này.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setModalTab('email')}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: 6,
+                          border: '1px solid #2563EB',
+                          backgroundColor: '#EFF6FF',
+                          color: '#2563EB',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
                         }}
                       >
-                        {(foundUser.fullName || foundUser.username || foundUser.email || 'U')
-                          .charAt(0)
-                          .toUpperCase()}
-                      </div>
+                        Chuyển sang Mời người mới qua Email
+                      </button>
+                    </div>
+                  ) : filteredCandidates.length === 0 ? (
+                    <div style={{ padding: 16, textAlign: 'center', color: '#64748B', fontSize: 12 }}>
+                      Không tìm thấy thành viên nào khớp với "{candidateSearch}"
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        maxHeight: 220,
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                        paddingRight: 4,
+                      }}
+                    >
+                      {filteredCandidates.map((c) => {
+                        const isSelected = foundUser?.id === c.userId;
+                        const wsBadge = (() => {
+                          switch (c.role) {
+                            case 'OWNER':
+                              return { text: 'Chủ sở hữu', bg: '#FEF3C7', color: '#B45309' };
+                            case 'ADMIN':
+                              return { text: 'Quản trị WS', bg: '#FAF5FF', color: '#7E22CE' };
+                            case 'MEMBER':
+                              return { text: 'Thành viên WS', bg: '#EFF6FF', color: '#1D4ED8' };
+                            case 'GUEST':
+                              return { text: 'Khách', bg: '#F1F5F9', color: '#475569' };
+                            default:
+                              return { text: c.role || 'Thành viên', bg: '#F1F5F9', color: '#475569' };
+                          }
+                        })();
 
-                      {/* Info Column */}
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        {/* Dòng 1: Tên hiển thị & Username */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-                          <span
+                        return (
+                          <div
+                            key={c.userId}
+                            onClick={() => {
+                              if (isSelected) {
+                                setFoundUser(null);
+                              } else {
+                                setFoundUser({
+                                  id: c.userId,
+                                  username: c.username,
+                                  email: c.email,
+                                  fullName: c.fullName,
+                                  isInWorkspace: true,
+                                  workspaceRole: c.role,
+                                });
+                                setSearchError('');
+                              }
+                            }}
                             style={{
-                              fontSize: 14,
-                              fontWeight: 700,
-                              color: '#0F172A',
+                              padding: '10px 12px',
+                              borderRadius: 8,
+                              border: isSelected ? '2px solid #2563EB' : '1px solid #E2E8F0',
+                              backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 12,
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isSelected) e.currentTarget.style.backgroundColor = '#F8FAFC';
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isSelected) e.currentTarget.style.backgroundColor = '#FFFFFF';
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                              <div
+                                style={{
+                                  width: 34,
+                                  height: 34,
+                                  borderRadius: '50%',
+                                  backgroundColor: isSelected ? '#2563EB' : '#E2E8F0',
+                                  color: isSelected ? '#FFFFFF' : '#475569',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {(c.fullName || c.username || c.email || 'U').charAt(0).toUpperCase()}
+                              </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>
+                                    {c.fullName || c.username || c.email}
+                                  </span>
+                                  {c.username && c.username !== c.email && (
+                                    <span style={{ fontSize: 11, color: '#64748B' }}>
+                                      @{c.username}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: 11, color: '#64748B', wordBreak: 'break-all' }}>
+                                  {c.email}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                              <span
+                                style={{
+                                  fontSize: 10.5,
+                                  fontWeight: 600,
+                                  padding: '2px 7px',
+                                  borderRadius: 10,
+                                  backgroundColor: wsBadge.bg,
+                                  color: wsBadge.color,
+                                }}
+                              >
+                                {wsBadge.text}
+                              </span>
+                              <div
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: '50%',
+                                  border: isSelected ? '2px solid #2563EB' : '1px solid #CBD5E1',
+                                  backgroundColor: isSelected ? '#2563EB' : '#FFFFFF',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                {isSelected && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: MỜI NGƯỜI MỚI QUA EMAIL */}
+              {modalTab === 'email' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                    Email người dùng <span style={{ color: '#EF4444' }}>*</span>
+                  </label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <Mail
+                        size={16}
+                        color="#94A3B8"
+                        style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }}
+                      />
+                      <input
+                        type="email"
+                        value={searchEmail}
+                        onChange={(e) => {
+                          setSearchEmail(e.target.value);
+                          setSearchError('');
+                          if (foundUser) setFoundUser(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSearchUser();
+                          }
+                        }}
+                        placeholder="Nhập chính xác email (ví dụ: user@example.com)"
+                        style={{
+                          width: '100%',
+                          padding: '9px 12px 9px 34px',
+                          borderRadius: 8,
+                          border: searchError ? '1px solid #EF4444' : '1px solid #CBD5E1',
+                          fontSize: 13,
+                          color: '#0F172A',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSearchUser}
+                      disabled={searchingUser || !searchEmail.trim()}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '8px 14px',
+                        borderRadius: 8,
+                        border: 'none',
+                        backgroundColor: searchEmail.trim() ? '#2563EB' : '#94A3B8',
+                        color: '#FFFFFF',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: searchingUser || !searchEmail.trim() ? 'not-allowed' : 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {searchingUser ? (
+                        <>
+                          <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
+                          <span>Đang tìm...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Search size={15} />
+                          <span>Tìm kiếm</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                    Chỉ người dùng có địa chỉ email trùng khớp 100% trong hệ thống mới được hiển thị.
+                  </div>
+
+                  {/* Search Error Message */}
+                  {searchError && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        backgroundColor: '#FEF2F2',
+                        border: '1px solid #FECACA',
+                        color: '#DC2626',
+                        fontSize: 12,
+                        marginTop: 8,
+                      }}
+                    >
+                      <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                      <span>{searchError}</span>
+                    </div>
+                  )}
+
+                  {/* Found User Card */}
+                  {foundUser && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: '14px 16px',
+                        borderRadius: 10,
+                        backgroundColor: '#F0FDF4',
+                        border: '1px solid #86EFAC',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, minWidth: 0, flex: 1 }}>
+                        <div
+                          style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: '50%',
+                            backgroundColor: '#2563EB',
+                            color: '#FFFFFF',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                            fontSize: 16,
+                            flexShrink: 0,
+                            marginTop: 2,
+                            boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)',
+                          }}
+                        >
+                          {(foundUser.fullName || foundUser.username || foundUser.email || 'U')
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', wordBreak: 'break-all' }}>
+                              {foundUser.fullName || foundUser.username || foundUser.email}
+                            </span>
+                            {foundUser.username && foundUser.username !== foundUser.email && (
+                              <span style={{ fontSize: 12, color: '#64748B' }}>
+                                (@{foundUser.username})
+                              </span>
+                            )}
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              fontSize: 12,
+                              color: '#15803D',
+                              fontWeight: 500,
+                              marginBottom: 6,
                               wordBreak: 'break-all',
                             }}
                           >
-                            {foundUser.fullName || foundUser.username || foundUser.email}
-                          </span>
-                          {foundUser.username && foundUser.username !== foundUser.email && (
-                            <span style={{ fontSize: 12, color: '#64748B' }}>
-                              (@{foundUser.username})
+                            <Mail size={13} style={{ flexShrink: 0 }} />
+                            <span>{foundUser.email}</span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: '#166534',
+                                backgroundColor: '#DCFCE7',
+                                border: '1px solid #BBF7D0',
+                                padding: '2px 8px',
+                                borderRadius: 12,
+                              }}
+                            >
+                              <CheckCircle2 size={12} color="#16A34A" /> Đã xác thực email
                             </span>
-                          )}
-                        </div>
 
-                        {/* Dòng 2: Email */}
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            fontSize: 12,
-                            color: '#15803D',
-                            fontWeight: 500,
-                            marginBottom: 6,
-                            wordBreak: 'break-all',
-                          }}
-                        >
-                          <Mail size={13} style={{ flexShrink: 0 }} />
-                          <span>{foundUser.email}</span>
-                        </div>
-
-                        {/* Dòng 3: Badge xác nhận khớp 100% */}
-                        <div>
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                              fontSize: 11,
-                              fontWeight: 600,
-                              color: '#166534',
-                              backgroundColor: '#DCFCE7',
-                              border: '1px solid #BBF7D0',
-                              padding: '2px 8px',
-                              borderRadius: 12,
-                            }}
-                          >
-                            <CheckCircle2 size={12} color="#16A34A" /> Đã xác thực khớp 100% email
-                          </span>
+                            {isFoundUserInWorkspace ? (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: '#1D4ED8',
+                                  backgroundColor: '#EFF6FF',
+                                  border: '1px solid #BFDBFE',
+                                  padding: '2px 8px',
+                                  borderRadius: 12,
+                                }}
+                              >
+                                <Building2 size={12} color="#2563EB" /> Thành viên Không gian làm việc
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Nút Đổi email bên phải */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFoundUser(null);
-                        setSearchEmail('');
-                      }}
-                      title="Nhập email khác"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFoundUser(null);
+                          setSearchEmail('');
+                        }}
+                        title="Nhập email khác"
+                        style={{
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                          backgroundColor: '#FFFFFF',
+                          border: '1px solid #CBD5E1',
+                          borderRadius: 6,
+                          color: '#475569',
+                          cursor: 'pointer',
+                          padding: '6px 12px',
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Đổi email
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Smart Auto-Cascade: 1 dòng ngắn gọn */}
+                  {foundUser && !isFoundUserInWorkspace && (
+                    <div
                       style={{
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                        backgroundColor: '#FFFFFF',
-                        border: '1px solid #CBD5E1',
+                        marginTop: 10,
+                        padding: '8px 12px',
                         borderRadius: 6,
-                        color: '#475569',
-                        cursor: 'pointer',
-                        padding: '6px 12px',
+                        backgroundColor: '#FAF5FF',
+                        border: '1px solid #E9D5FF',
+                        color: '#7E22CE',
                         fontSize: 12,
-                        fontWeight: 600,
-                        transition: 'all 0.15s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#F1F5F9';
-                        e.currentTarget.style.borderColor = '#94A3B8';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#FFFFFF';
-                        e.currentTarget.style.borderColor = '#CBD5E1';
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
                       }}
                     >
-                      Đổi email
-                    </button>
+                      <Sparkles size={14} color="#9333EA" style={{ flexShrink: 0 }} />
+                      <span>
+                        Người này sẽ được <b>tự động thêm vào Không gian làm việc</b> khi chấp nhận lời mời.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tóm tắt người được chọn (áp dụng cho Tab Workspace) */}
+              {modalTab === 'workspace' && foundUser && (
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 6,
+                    backgroundColor: '#EFF6FF',
+                    border: '1px solid #BFDBFE',
+                    fontSize: 12,
+                    color: '#1E40AF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <UserCheck size={14} color="#2563EB" />
+                    <span>Đã chọn: <b>{foundUser.fullName || foundUser.username || foundUser.email}</b> ({foundUser.email})</span>
                   </div>
-                )}
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => setFoundUser(null)}
+                    style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}
+                  >
+                    Bỏ chọn
+                  </button>
+                </div>
+              )}
 
               {/* Select Role */}
               <div>
@@ -1065,7 +1445,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                 <button
                   type="submit"
                   disabled={addingMember || !foundUser}
-                  title={!foundUser ? 'Vui lòng tìm và chọn đúng người dùng qua email trước' : ''}
+                  title={!foundUser ? 'Vui lòng chọn hoặc tìm người dùng trước' : ''}
                   style={{
                     padding: '7px 18px',
                     borderRadius: 6,
@@ -1080,7 +1460,7 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                     gap: 6,
                   }}
                 >
-                  {addingMember ? 'Đang gửi lời mời...' : 'Thêm vào dự án'}
+                  {addingMember ? 'Đang gửi lời mời...' : 'Gửi lời mời tham gia'}
                 </button>
               </div>
             </form>

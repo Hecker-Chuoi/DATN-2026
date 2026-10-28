@@ -283,6 +283,28 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         log.info("User {} đã rời workspace {}", currentUserId, workspaceId);
     }
 
+    @Override
+    @Transactional
+    public void ensureMember(UUID workspaceId, UUID userId, WorkspaceRole role, UUID invitedBy) {
+        if (workspaceId == null || userId == null) return;
+
+        if (!workspaceRepository.existsByIdAndDeletedAtIsNull(workspaceId)) {
+            throw new ResourceNotFoundException("Workspace không tồn tại hoặc đã bị xóa");
+        }
+
+        if (!memberRepository.existsByWorkspaceIdAndUserId(workspaceId, userId)) {
+            WorkspaceRole finalRole = role != null ? role : WorkspaceRole.MEMBER;
+            memberRepository.save(WorkspaceMember.builder()
+                    .workspaceId(workspaceId)
+                    .userId(userId)
+                    .role(finalRole)
+                    .invitedBy(invitedBy)
+                    .build());
+            log.info("Auto-ensured member in workspace: ws={}, user={}, role={}, invitedBy={}",
+                    workspaceId, userId, finalRole, invitedBy);
+        }
+    }
+
     private void assertNotLeadingAnyProject(UUID workspaceId, UUID userId) {
         try {
             Integer count = jdbcTemplate.queryForObject(

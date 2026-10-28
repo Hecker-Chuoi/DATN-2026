@@ -1,9 +1,12 @@
 package com.datn.workservice.client;
 
 import com.datn.common.dto.ApiResponse;
+import com.datn.workservice.client.dto.EnsureWorkspaceMemberRequest;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 import java.util.UUID;
@@ -42,4 +45,9 @@ public interface WorkspaceClient {
 
     @GetMapping("/internal/workspaces/{workspaceId}/exists")
     ApiResponse<Boolean> exists(@PathVariable("workspaceId") UUID workspaceId);
+
+    /** Tự động đảm bảo user là thành viên của workspace (Smart Auto-Cascade) */
+    @PostMapping("/internal/workspaces/{workspaceId}/members/ensure")
+    ApiResponse<Void> ensureMember(@PathVariable("workspaceId") UUID workspaceId,
+                                   @RequestBody EnsureWorkspaceMemberRequest request);
 }

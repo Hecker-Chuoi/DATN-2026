@@ -3,6 +3,8 @@ package com.datn.workservice.service.impl;
 import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.client.IdentityClient;
+import com.datn.workservice.client.WorkspaceClient;
+import com.datn.workservice.client.dto.EnsureWorkspaceMemberRequest;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.response.InvitationResponse;
 import com.datn.workservice.entity.Invitation;
@@ -41,6 +43,7 @@ public class InvitationServiceImpl implements InvitationService {
     private final ProjectMemberService projectMemberService;
     private final IdentityClient identityClient;
     private final InvitationMailer mailer;
+    private final WorkspaceClient workspaceClient;
 
     @Override
     @Transactional
@@ -94,6 +97,26 @@ public class InvitationServiceImpl implements InvitationService {
             roleAssignmentRepository.save(RoleAssignment.builder()
                     .projectId(inv.getTargetId()).userId(userId).roleId(role.getId()).build());
         }
+
+        // Tự động liên đới thành viên vào Không gian làm việc (Smart Auto-Cascade)
+        try {
+            projectRepository.findById(inv.getTargetId()).ifPresent(project -> {
+                if (project.getWorkspaceId() != null) {
+                    workspaceClient.ensureMember(
+                            project.getWorkspaceId(),
+                            EnsureWorkspaceMemberRequest.builder()
+                                    .userId(userId)
+                                    .role("MEMBER")
+                                    .invitedBy(inv.getInvitedBy())
+                                    .build()
+                    );
+                    log.info("Smart auto-cascade: Đã đảm bảo user {} là thành viên workspace {}", userId, project.getWorkspaceId());
+                }
+            });
+        } catch (Exception e) {
+            log.warn("Không thể auto-cascade user {} vào workspace cho project {}: {}", userId, inv.getTargetId(), e.getMessage());
+        }
+
         inv.setStatus(InvitationStatus.ACCEPTED);
         inv.setRespondedAt(LocalDateTime.now());
         log.info("Invitation {} accepted by {}", invitationId, userId);

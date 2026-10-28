@@ -7,10 +7,10 @@ import ProjectMembersTab from '../components/project/ProjectMembersTab.jsx';
  * ma truoc day ProjectDetailPage bao quanh.
  */
 export default function ProjectMembersPage() {
-  const { projectId, isAdmin } = useProjectContext();
+  const { projectId, project, isAdmin } = useProjectContext();
   return (
     <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
-      <ProjectMembersTab projectId={projectId} isAdmin={isAdmin} />
+      <ProjectMembersTab projectId={projectId} project={project} isAdmin={isAdmin} />
     </div>
   );
 }

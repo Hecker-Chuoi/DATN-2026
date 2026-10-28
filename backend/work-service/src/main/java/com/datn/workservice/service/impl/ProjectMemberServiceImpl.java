@@ -41,6 +41,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     private final PermissionSchemeEntryRepository permissionSchemeEntryRepository;
     private final IdentityClient identityClient;
     private final WorkspaceAccessChecker workspaceAccessChecker;
+    private final com.datn.workservice.client.WorkspaceClient workspaceClient;
 
     // ─── Permission evaluation ───────────────────────────────────────────────
 
@@ -245,6 +246,23 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
 
         RoleAssignment saved = roleAssignmentRepository.save(assignment);
         log.info("Member added to project: user={}, role={}, project={} by {}", targetUserId, role.getName(), projectId, currentUserId);
+
+        // Smart Auto-Cascade: Đảm bảo user có mặt trong Workspace của dự án
+        if (project.getWorkspaceId() != null) {
+            try {
+                workspaceClient.ensureMember(
+                        project.getWorkspaceId(),
+                        com.datn.workservice.client.dto.EnsureWorkspaceMemberRequest.builder()
+                                .userId(targetUserId)
+                                .role("MEMBER")
+                                .invitedBy(currentUserId)
+                                .build()
+                );
+                log.info("Smart auto-cascade: Đã đảm bảo user {} là thành viên workspace {}", targetUserId, project.getWorkspaceId());
+            } catch (Exception e) {
+                log.warn("Không thể auto-cascade user {} vào workspace cho project {}: {}", targetUserId, projectId, e.getMessage());
+            }
+        }
 
         UserResponse user = fetchUser(targetUserId);
 
