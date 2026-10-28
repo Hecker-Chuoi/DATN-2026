@@ -3,10 +3,10 @@
 ### DỰ ÁN: DATN-2026 — HỆ THỐNG QUẢN LÝ DỰ ÁN & CÔNG VIỆC DOANH NGHIỆP
 
 > **Tài liệu tham chiếu:**  
-> - [`4_WORK_IMPLEMENTATION_PLAN.md`](file:///d:/DATN-2026/docs/services/work_service_new/4_WORK_IMPLEMENTATION_PLAN.md) (Kế hoạch triển khai)  
-> - [`2_WORK_DATABASE_DESIGN.md`](file:///d:/DATN-2026/docs/services/work_service_new/2_WORK_DATABASE_DESIGN.md) (Thiết kế CSDL bảng `work_item_changelogs`, `work_item_comments`, `work_item_attachments`, `work_item_links`)  
-> - [`3_WORK_SEQUENCE_DIAGRAMS.md`](file:///d:/DATN-2026/docs/services/work_service_new/3_WORK_SEQUENCE_DIAGRAMS.md) (Luồng 6: DFS Cycle Check & Luồng 7: Audit Trail)  
-> - [`5_WORK_FRONTEND_UI_JIRA_SPEC.md`](file:///d:/DATN-2026/docs/services/work_service_new/5_WORK_FRONTEND_UI_JIRA_SPEC.md) (Quy chuẩn giao diện Jira Cloud)  
+> - [`4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md`](file:///d:/DATN-2026/docs/services/work_service/4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md) (Kế hoạch triển khai)  
+> - [`2_THIET_KE_CO_SO_DU_LIEU.md`](file:///d:/DATN-2026/docs/services/work_service/2_THIET_KE_CO_SO_DU_LIEU.md) (Thiết kế CSDL bảng `work_item_changelogs`, `work_item_comments`, `work_item_attachments`, `work_item_links`)  
+> - [`3_SO_DO_TUAN_TU_NGHIEP_VU.md`](file:///d:/DATN-2026/docs/services/work_service/3_SO_DO_TUAN_TU_NGHIEP_VU.md) (Luồng 6: DFS Cycle Check & Luồng 7: Audit Trail)  
+> - [`5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md`](file:///d:/DATN-2026/docs/services/work_service/5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md) (Quy chuẩn giao diện Jira Cloud)  
 > 
 > **Mục tiêu:** Cung cấp bộ kịch bản kiểm thử (Test Cases / Test Scenarios) chi tiết từ **Backend API (REST/Postman/MockMvc)** đến **Frontend UI (Giao diện người dùng / E2E)** để nghiệm thu 100% tính năng của Bước 5.3 và Bước 5.4.
 
@@ -400,4 +400,4 @@
 | 10 | **Frontend Production Build** | Vite build thành công 0 lỗi cú pháp | 🟢 **PASS** (620ms) |
 
 ---
-> **Tài liệu được lưu trữ tại:** [`docs/services/work_service_new/6_WORK_TEST_SCENARIOS_AUDIT_COLLABORATION.md`](file:///d:/DATN-2026/docs/services/work_service_new/6_WORK_TEST_SCENARIOS_AUDIT_COLLABORATION.md)
+> **Tài liệu được lưu trữ tại:** [`docs/services/work_service/6_KICH_BAN_TEST_AUDIT_VA_CONG_TAC.md`](file:///d:/DATN-2026/docs/services/work_service/6_KICH_BAN_TEST_AUDIT_VA_CONG_TAC.md)

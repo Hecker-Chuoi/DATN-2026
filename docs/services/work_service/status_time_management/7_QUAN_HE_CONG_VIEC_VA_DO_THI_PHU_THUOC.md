@@ -3,10 +3,10 @@
 ### HỆ THỐNG QUẢN LÝ DỰ ÁN & CÔNG VIỆC DOANH NGHIỆP
 
 > **Tài liệu tham chiếu:**  
-> - [`2_WORK_DATABASE_DESIGN.md`](file:///d:/DATN-2026/docs/services/work_service_new/2_WORK_DATABASE_DESIGN.md) (Thiết kế bảng `work_item_links`)  
-> - [`3_WORK_SEQUENCE_DIAGRAMS.md`](file:///d:/DATN-2026/docs/services/work_service_new/3_WORK_SEQUENCE_DIAGRAMS.md) (Sequence Diagram Luồng 6: DFS Cycle Check)  
-> - [`4_WORK_IMPLEMENTATION_PLAN.md`](file:///d:/DATN-2026/docs/services/work_service_new/4_WORK_IMPLEMENTATION_PLAN.md) (Bước 5.4: Linked Issues)  
-> - [`5_WORK_FRONTEND_UI_JIRA_SPEC.md`](file:///d:/DATN-2026/docs/services/work_service_new/5_WORK_FRONTEND_UI_JIRA_SPEC.md) (Quy chuẩn giao diện Jira Cloud)
+> - [`2_THIET_KE_CO_SO_DU_LIEU.md`](file:///d:/DATN-2026/docs/services/work_service/2_THIET_KE_CO_SO_DU_LIEU.md) (Thiết kế bảng `work_item_links`)  
+> - [`3_SO_DO_TUAN_TU_NGHIEP_VU.md`](file:///d:/DATN-2026/docs/services/work_service/3_SO_DO_TUAN_TU_NGHIEP_VU.md) (Sequence Diagram Luồng 6: DFS Cycle Check)  
+> - [`4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md`](file:///d:/DATN-2026/docs/services/work_service/4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md) (Bước 5.4: Linked Issues)  
+> - [`5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md`](file:///d:/DATN-2026/docs/services/work_service/5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md) (Quy chuẩn giao diện Jira Cloud)
 
 ---
 
@@ -394,6 +394,6 @@ Trong component [`WorkItemDetailModal.jsx`](file:///d:/DATN-2026/frontend/src/co
   - Nếu công việc hiện tại là Epic, tự động ẩn / vô hiệu hóa các Sub-tasks khi chọn loại quan hệ `BLOCKS` (ngăn vi phạm Scale Mismatch).
 
 ---
-> **Tài liệu được lưu trữ tại:** [`docs/services/work_service/7_WORK_ISSUE_RELATIONSHIPS_AND_DEPENDENCY_GRAPH.md`](file:///d:/DATN-2026/docs/services/work_service/7_WORK_ISSUE_RELATIONSHIPS_AND_DEPENDENCY_GRAPH.md)  
+> **Tài liệu được lưu trữ tại:** [`docs/services/work_service/7_QUAN_HE_CONG_VIEC_VA_DO_THI_PHU_THUOC.md`](file:///d:/DATN-2026/docs/services/work_service/7_QUAN_HE_CONG_VIEC_VA_DO_THI_PHU_THUOC.md)  
 > **Tác giả:** Đội ngũ Kiến trúc Hệ thống DATN-2026  
 > **Trạng thái phê duyệt:** Đã đồng bộ toàn diện với Backend Java 21, Frontend React 19 và CSDL PostgreSQL 16.

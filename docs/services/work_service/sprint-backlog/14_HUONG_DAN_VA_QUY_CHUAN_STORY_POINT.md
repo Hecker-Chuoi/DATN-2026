@@ -99,7 +99,7 @@ DATN-2026 áp dụng dãy số **Fibonacci cải tiến**: `1, 2, 3, 5, 8, 13, 2
 
 ### 5.1. Quy tắc phân tầng phân cấp (Hierarchy Levels)
 
-Theo đặc tả [10_WORK_ITEM_FIELDS_AND_VALIDATION_SPEC.md](../work_type/10_WORK_ITEM_FIELDS_AND_VALIDATION_SPEC.md):
+Theo đặc tả [10_QUY_CHUAN_TRUONG_DU_LIEU_VA_RANG_BUOC_CONG_VIEC.md](../work_type/10_QUY_CHUAN_TRUONG_DU_LIEU_VA_RANG_BUOC_CONG_VIEC.md):
 
 ```
 Hierarchy Level 1: EPIC

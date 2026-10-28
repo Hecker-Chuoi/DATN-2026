@@ -5,11 +5,11 @@
 > **Phiên bản:** 2.0 (Jira-Grade Enterprise Refactoring)  
 > **Trạng thái:** Thiết kế & Lộ trình triển khai nâng cấp toàn diện  
 > **Tài liệu liên quan:**  
-> - [`2_WORK_DATABASE_DESIGN.md`](file:///d:/DATN-2026/docs/services/work_service_new/2_WORK_DATABASE_DESIGN.md) (Thiết kế CSDL 25 bảng & Indexing)  
-> - [`3_WORK_SEQUENCE_DIAGRAMS.md`](file:///d:/DATN-2026/docs/services/work_service_new/3_WORK_SEQUENCE_DIAGRAMS.md) (Sơ đồ tuần tự các luồng nghiệp vụ)  
-> - [`4_WORK_IMPLEMENTATION_PLAN.md`](file:///d:/DATN-2026/docs/services/work_service_new/4_WORK_IMPLEMENTATION_PLAN.md) (Lộ trình triển khai Fullstack 9 giai đoạn)  
-> - [`5_WORK_FRONTEND_UI_JIRA_SPEC.md`](file:///d:/DATN-2026/docs/services/work_service_new/5_WORK_FRONTEND_UI_JIRA_SPEC.md) (Quy chuẩn giao diện Frontend chuẩn Jira Cloud & Ảnh mẫu)  
-> - [`6_WORK_TESTING_GUIDE_PHASE1_TO_5.2.md`](file:///d:/DATN-2026/docs/services/work_service_new/6_WORK_TESTING_GUIDE_PHASE1_TO_5.2.md) (Hướng dẫn kiểm thử toàn diện từ Giai đoạn 1 đến Bước 5.2)
+> - [`2_THIET_KE_CO_SO_DU_LIEU.md`](file:///d:/DATN-2026/docs/services/work_service/2_THIET_KE_CO_SO_DU_LIEU.md) (Thiết kế CSDL 25 bảng & Indexing)  
+> - [`3_SO_DO_TUAN_TU_NGHIEP_VU.md`](file:///d:/DATN-2026/docs/services/work_service/3_SO_DO_TUAN_TU_NGHIEP_VU.md) (Sơ đồ tuần tự các luồng nghiệp vụ)  
+> - [`4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md`](file:///d:/DATN-2026/docs/services/work_service/4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md) (Lộ trình triển khai Fullstack 9 giai đoạn)  
+> - [`5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md`](file:///d:/DATN-2026/docs/services/work_service/5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md) (Quy chuẩn giao diện Frontend chuẩn Jira Cloud & Ảnh mẫu)  
+> - [`6_WORK_TESTING_GUIDE_PHASE1_TO_5.2.md`](file:///d:/DATN-2026/docs/services/work_service/6_WORK_TESTING_GUIDE_PHASE1_TO_5.2.md) (Hướng dẫn kiểm thử toàn diện từ Giai đoạn 1 đến Bước 5.2)
 
 ---
 
@@ -43,7 +43,7 @@ Trong giai đoạn đầu phát triển, `work-service` được xây dựng v�
 > - Đã có cấu trúc Microservices (API Gateway 8081, Identity Service 8082, Work Service 8083).
 > - Đã có hạ tầng đầy đủ trong `docker-compose.infra.yml` (PostgreSQL 16, Keycloak 24, Redis 7, Kafka 3.8).
 > - Backend sử dụng Java 21 + Spring Boot 3.x với Spring Data JPA, hỗ trợ rất mạnh cho việc triển khai Domain-Driven Design (DDD), Transactional Outbox và JPA Specification.
-> - Frontend sử dụng React 19 + Vite + TailwindCSS + Lucide, dễ dàng bổ sung các component Kanban DnD, Backlog Accordion và Modal chi tiết Issue chuẩn hiện đại.
+> - Frontend sử dụng React 19 + Vite + CSS thuần + Lucide, dễ dàng bổ sung các component Kanban DnD, Backlog Accordion và Modal chi tiết Issue chuẩn hiện đại.
 
 ---
 
@@ -202,4 +202,4 @@ graph LR
 3. **Optimistic Locking:** Sử dụng trường `@Version Long version` trên `work_items` và `sprints` để đảm bảo khi nhiều người dùng cùng chỉnh sửa hoặc kéo thả đồng thời trên Board, hệ thống tự động phát hiện xung đột và yêu cầu client refresh dữ liệu một cách an toàn.
 
 ---
-> **Tiếp theo:** Vui lòng tham khảo chi tiết thiết kế CSDL tại [`2_WORK_DATABASE_DESIGN.md`](file:///d:/DATN-2026/docs/services/work_service_new/2_WORK_DATABASE_DESIGN.md).
+> **Tiếp theo:** Vui lòng tham khảo chi tiết thiết kế CSDL tại [`2_THIET_KE_CO_SO_DU_LIEU.md`](file:///d:/DATN-2026/docs/services/work_service/2_THIET_KE_CO_SO_DU_LIEU.md).

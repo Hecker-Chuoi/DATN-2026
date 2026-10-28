@@ -1,6 +1,6 @@
 # DỰ ÁN MẪU (PROJECT TEMPLATE) — TÀI LIỆU TRIỂN KHAI & CSDL
 
-> Giới thiệu nghiệp vụ: [1_TEMPLATE_INTRODUCTION.md](1_TEMPLATE_INTRODUCTION.md).
+> Giới thiệu nghiệp vụ: [1_GIOI_THIEU_DU_AN_MAU.md](1_GIOI_THIEU_DU_AN_MAU.md).
 > Migration: `backend/work-service/src/main/resources/db/migration/V6__project_templates.sql`.
 
 ---

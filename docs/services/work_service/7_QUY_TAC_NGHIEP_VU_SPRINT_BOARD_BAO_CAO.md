@@ -3,11 +3,11 @@
 
 > **Phân hệ:** `work-service` (Agile Lifecycle & Board Engine)
 > **Tài liệu liên quan:**
-> - [`1_WORK_OVERVIEW_REFACTOR.md`](./1_WORK_OVERVIEW_REFACTOR.md) (Kiến trúc)
-> - [`2_WORK_DATABASE_DESIGN.md`](./2_WORK_DATABASE_DESIGN.md) (CSDL)
-> - [`3_WORK_SEQUENCE_DIAGRAMS.md`](./3_WORK_SEQUENCE_DIAGRAMS.md) (Sơ đồ tuần tự)
-> - [`4_WORK_IMPLEMENTATION_PLAN.md`](./4_WORK_IMPLEMENTATION_PLAN.md) (Lộ trình)
-> - [`5_WORK_FRONTEND_UI_JIRA_SPEC.md`](./5_WORK_FRONTEND_UI_JIRA_SPEC.md) (Giao diện)
+> - [`1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md`](./1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md) (Kiến trúc)
+> - [`2_THIET_KE_CO_SO_DU_LIEU.md`](./2_THIET_KE_CO_SO_DU_LIEU.md) (CSDL)
+> - [`3_SO_DO_TUAN_TU_NGHIEP_VU.md`](./3_SO_DO_TUAN_TU_NGHIEP_VU.md) (Sơ đồ tuần tự)
+> - [`4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md`](./4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md) (Lộ trình)
+> - [`5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md`](./5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md) (Giao diện)
 >
 > **Mục đích:** Mô tả **quy tắc nghiệp vụ** (business rules) của Giai đoạn 6 — cái *phải đúng*, độc lập với cách cài đặt. Dùng làm căn cứ nghiệm thu và viết kịch bản kiểm thử.
 

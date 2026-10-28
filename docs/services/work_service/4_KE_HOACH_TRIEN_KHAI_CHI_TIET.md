@@ -2,12 +2,12 @@
 ## DỰ ÁN: DATN-2026 — HỆ THỐNG QUẢN LÝ DỰ ÁN & CÔNG VIỆC DOANH NGHIỆP
 
 > **Tài liệu căn cứ:**  
-> - [`1_WORK_OVERVIEW_REFACTOR.md`](file:///d:/DATN-2026/docs/services/work_service_new/1_WORK_OVERVIEW_REFACTOR.md) (Kiến trúc & Chiến lược Refactor)  
-> - [`2_WORK_DATABASE_DESIGN.md`](file:///d:/DATN-2026/docs/services/work_service_new/2_WORK_DATABASE_DESIGN.md) (Thiết kế CSDL 25 bảng & Indexing)  
-> - [`3_WORK_SEQUENCE_DIAGRAMS.md`](file:///d:/DATN-2026/docs/services/work_service_new/3_WORK_SEQUENCE_DIAGRAMS.md) (Sơ đồ tuần tự các luồng nghiệp vụ)  
-> - [`5_WORK_FRONTEND_UI_JIRA_SPEC.md`](file:///d:/DATN-2026/docs/services/work_service_new/5_WORK_FRONTEND_UI_JIRA_SPEC.md) (Quy chuẩn giao diện Frontend chuẩn Jira Cloud & Ảnh mẫu)  
+> - [`1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md`](file:///d:/DATN-2026/docs/services/work_service/1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md) (Kiến trúc & Chiến lược Refactor)  
+> - [`2_THIET_KE_CO_SO_DU_LIEU.md`](file:///d:/DATN-2026/docs/services/work_service/2_THIET_KE_CO_SO_DU_LIEU.md) (Thiết kế CSDL 25 bảng & Indexing)  
+> - [`3_SO_DO_TUAN_TU_NGHIEP_VU.md`](file:///d:/DATN-2026/docs/services/work_service/3_SO_DO_TUAN_TU_NGHIEP_VU.md) (Sơ đồ tuần tự các luồng nghiệp vụ)  
+> - [`5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md`](file:///d:/DATN-2026/docs/services/work_service/5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md) (Quy chuẩn giao diện Frontend chuẩn Jira Cloud & Ảnh mẫu)  
 > 
-> **Phạm vi triển khai:** **Fullstack (Backend Java 21 / Spring Boot 3.x + Frontend React 19 / Vite / TailwindCSS / Lucide)**.  
+> **Phạm vi triển khai:** **Fullstack (Backend Java 21 / Spring Boot 3.x + Frontend React 19 / Vite / CSS thuần / Lucide)**.  
 > **Phương châm:** **Triển khai cuốn chiếu — Đảm bảo hệ thống luôn build và chạy được — Bảo toàn tính năng cũ**.
 
 ---

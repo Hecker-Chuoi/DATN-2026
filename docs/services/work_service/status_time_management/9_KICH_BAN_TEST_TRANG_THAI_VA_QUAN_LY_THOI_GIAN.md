@@ -3,12 +3,12 @@
 ### DỰ ÁN: DATN-2026 — HỆ THỐNG QUẢN LÝ DỰ ÁN & TIẾN ĐỘ DOANH NGHIỆP
 
 > **Tài liệu tham chiếu:**
-> - [`8_WORK_ITEM_TYPES_AND_HIERARCHY.md`](file:///d:/DATN-2026/docs/services/work_service/status_time_management/8_WORK_ITEM_TYPES_AND_HIERARCHY.md) (Quy chuẩn phân cấp 3 tầng, thời gian, trạng thái & Story Points)
-> - [`7_WORK_ISSUE_RELATIONSHIPS_AND_DEPENDENCY_GRAPH.md`](file:///d:/DATN-2026/docs/services/work_service/status_time_management/7_WORK_ISSUE_RELATIONSHIPS_AND_DEPENDENCY_GRAPH.md) (Quy chuẩn quan hệ liên kết, DFS cycle check & Blocker Guard)
-> - [`4_WORK_IMPLEMENTATION_PLAN.md`](file:///d:/DATN-2026/docs/services/work_service/4_WORK_IMPLEMENTATION_PLAN.md) (Lộ trình triển khai Bước 5.5)
-> - [`5_WORK_FRONTEND_UI_JIRA_SPEC.md`](file:///d:/DATN-2026/docs/services/work_service/5_WORK_FRONTEND_UI_JIRA_SPEC.md) (Chuẩn giao diện người dùng Jira Cloud)
+> - [`8_LOAI_CONG_VIEC_VA_MO_HINH_PHAN_CAP_3_CAP_DO.md`](file:///d:/DATN-2026/docs/services/work_service/status_time_management/8_LOAI_CONG_VIEC_VA_MO_HINH_PHAN_CAP_3_CAP_DO.md) (Quy chuẩn phân cấp 3 tầng, thời gian, trạng thái & Story Points)
+> - [`7_QUAN_HE_CONG_VIEC_VA_DO_THI_PHU_THUOC.md`](file:///d:/DATN-2026/docs/services/work_service/status_time_management/7_QUAN_HE_CONG_VIEC_VA_DO_THI_PHU_THUOC.md) (Quy chuẩn quan hệ liên kết, DFS cycle check & Blocker Guard)
+> - [`4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md`](file:///d:/DATN-2026/docs/services/work_service/4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md) (Lộ trình triển khai Bước 5.5)
+> - [`5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md`](file:///d:/DATN-2026/docs/services/work_service/5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md) (Chuẩn giao diện người dùng Jira Cloud)
 >
-> **Mục tiêu:** Cung cấp bộ kịch bản kiểm thử (Test Scenarios / Test Cases) chi tiết và chuyên sâu, bao phủ 100% các tính năng ĐÃ TRIỂN KHAI HOÀN CHỈNH giữa Backend (Spring Boot 3 / Java 21) và Frontend (React 19 / Vite / Tailwind / Lucide) nhằm đảm bảo hệ thống có thể chạy nghiệm thu E2E thực tế ngay lập tức.
+> **Mục tiêu:** Cung cấp bộ kịch bản kiểm thử (Test Scenarios / Test Cases) chi tiết và chuyên sâu, bao phủ 100% các tính năng ĐÃ TRIỂN KHAI HOÀN CHỈNH giữa Backend (Spring Boot 3 / Java 21) và Frontend (React 19 / Vite / CSS thuần / Lucide) nhằm đảm bảo hệ thống có thể chạy nghiệm thu E2E thực tế ngay lập tức.
 
 ---
 
@@ -52,7 +52,7 @@
 ## ⚙️ 2. MÔI TRƯỜNG & TIỀN ĐIỀU KIỆN KIỂM THỬ (PRECONDITIONS)
 
 ### 2.1 Hạ tầng Dịch vụ
-1. **PostgreSQL 16**: Chạy trên Docker Compose port 5432, cơ sở dữ liệu `work_service_db`.
+1. **PostgreSQL 16**: Chạy trên Docker Compose port 5433, cơ sở dữ liệu `datn_main_db`.
 2. **Keycloak / Identity Service**: Port 8082 cung cấp xác thực JWT Bearer Token.
 3. **API Gateway**: Port 8081 định tuyến `/work/**` sang `work-service` (Port 8083).
 4. **Work Service**: Port 8083 chạy Spring Boot 3.4.3 / Java 21.

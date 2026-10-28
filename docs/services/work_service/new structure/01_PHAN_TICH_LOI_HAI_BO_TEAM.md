@@ -8,7 +8,7 @@
 ## 1. Bối Cảnh Và Nguồn Gốc Kiến Trúc Cũ
 
 ### 1.1 Cấu trúc 3 tầng ban đầu
-Trong thiết kế ban đầu (`docs/services/work_service/1_WORK_OVERVIEW_REFACTOR.md` và `2_WORK_DATABASE_DESIGN.md`), hệ thống được định hình theo mô hình 3 tầng phân cấp:
+Trong thiết kế ban đầu (`docs/services/work_service/1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md` và `2_THIET_KE_CO_SO_DU_LIEU.md`), hệ thống được định hình theo mô hình 3 tầng phân cấp:
 
 ```
 [WORKSPACE] (Doanh nghiệp / Tổ chức)

@@ -2,12 +2,12 @@
 ## DỰ ÁN: DATN-2026 — QUẢN LÝ DỰ ÁN & CÔNG VIỆC DOANH NGHIỆP
 
 > **Phân hệ:** Frontend Web Application (`frontend/`)  
-> **Tech Stack:** React 19, Vite, TailwindCSS, Lucide Icons, DnD-Kit / React-Beautiful-Dnd, Recharts  
+> **Tech Stack:** React 19, Vite, CSS thuần (Design Tokens chuẩn Atlassian), Lucide Icons, @dnd-kit/core, Recharts  
 > **Mục tiêu cốt lõi:** **Tái hiện 100% ngôn ngữ thiết kế và trải nghiệm tương tác của Atlassian Jira Cloud** (Navigation, Backlog, Kanban/Scrum Board, Issue Detail Modal, Agile Reports).  
 > **Tài liệu tham chiếu:**  
-> - [`1_WORK_OVERVIEW_REFACTOR.md`](file:///d:/DATN-2026/docs/services/work_service_new/1_WORK_OVERVIEW_REFACTOR.md)  
-> - [`2_WORK_DATABASE_DESIGN.md`](file:///d:/DATN-2026/docs/services/work_service_new/2_WORK_DATABASE_DESIGN.md)  
-> - [`4_WORK_IMPLEMENTATION_PLAN.md`](file:///d:/DATN-2026/docs/services/work_service_new/4_WORK_IMPLEMENTATION_PLAN.md)
+> - [`1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md`](file:///d:/DATN-2026/docs/services/work_service/1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md)  
+> - [`2_THIET_KE_CO_SO_DU_LIEU.md`](file:///d:/DATN-2026/docs/services/work_service/2_THIET_KE_CO_SO_DU_LIEU.md)  
+> - [`4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md`](file:///d:/DATN-2026/docs/services/work_service/4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md)
 
 ---
 
@@ -71,7 +71,7 @@ Hệ thống giao diện sử dụng chuẩn màu sắc và độ bo góc của 
 
 ## 3. Màn Hình 1: Quản Lý Backlog & Kế Hoạch Sprint (Backlog Planning)
 
-> **File ảnh tham khảo UI:** [`1_jira_scrum_backlog.jpg`](file:///d:/DATN-2026/docs/services/work_service_new/images/1_jira_scrum_backlog.jpg)
+> **File ảnh tham khảo UI:** [`1_jira_scrum_backlog.jpg`](file:///d:/DATN-2026/docs/services/work_service/images/1_jira_scrum_backlog.jpg)
 
 ### Điểm nhấn thiết kế theo chuẩn Jira:
 1. **Thanh Header & Bộ lọc nhanh:**
@@ -91,7 +91,7 @@ Hệ thống giao diện sử dụng chuẩn màu sắc và độ bo góc của 
 
 ## 4. Màn Hình 2: Bảng Công Việc Tương Tác (Active Sprint / Kanban Board)
 
-> **File ảnh tham khảo UI:** [`2_jira_kanban_board.jpg`](file:///d:/DATN-2026/docs/services/work_service_new/images/2_jira_kanban_board.jpg)
+> **File ảnh tham khảo UI:** [`2_jira_kanban_board.jpg`](file:///d:/DATN-2026/docs/services/work_service/images/2_jira_kanban_board.jpg)
 
 ### Điểm nhấn thiết kế theo chuẩn Jira:
 1. **Các Cột Trạng Thái (Kanban Columns):**
@@ -111,7 +111,7 @@ Hệ thống giao diện sử dụng chuẩn màu sắc và độ bo góc của 
 
 ## 5. Màn Hình 3: Modal Chi Tiết Issue Chuẩn Jira (Issue Detail Modal)
 
-> **File ảnh tham khảo UI:** [`3_jira_issue_detail.jpg`](file:///d:/DATN-2026/docs/services/work_service_new/images/3_jira_issue_detail.jpg)
+> **File ảnh tham khảo UI:** [`3_jira_issue_detail.jpg`](file:///d:/DATN-2026/docs/services/work_service/images/3_jira_issue_detail.jpg)
 
 ### Bố cục 2 Cột Chuẩn Mực của Jira Cloud:
 
@@ -145,7 +145,7 @@ Hệ thống giao diện sử dụng chuẩn màu sắc và độ bo góc của 
 
 ## 6. Màn Hình 4: Báo Cáo Agile & Biểu Đồ Burndown (Agile Reports & Analytics)
 
-> **File ảnh tham khảo UI:** [`4_jira_agile_reports.jpg`](file:///d:/DATN-2026/docs/services/work_service_new/images/4_jira_agile_reports.jpg)
+> **File ảnh tham khảo UI:** [`4_jira_agile_reports.jpg`](file:///d:/DATN-2026/docs/services/work_service/images/4_jira_agile_reports.jpg)
 
 ### Điểm nhấn thiết kế theo chuẩn Jira:
 1. **Biểu đồ Sprint Burndown Chart:**
@@ -172,4 +172,4 @@ Hệ thống giao diện sử dụng chuẩn màu sắc và độ bo góc của 
 - **Click-to-edit:** Toàn bộ trường văn bản (Summary, Description, Story points) hỗ trợ click vào sửa trực tiếp và bấm ra ngoài (blur) để tự động lưu mà không cần nút Save cồng kềnh.
 
 ---
-> **Ảnh mẫu tham khảo đầy đủ đã được lưu trữ tại:** [`docs/services/work_service_new/images/`](file:///d:/DATN-2026/docs/services/work_service_new/images/)
+> **Ảnh mẫu tham khảo đầy đủ đã được lưu trữ tại:** [`docs/services/work_service/images/`](file:///d:/DATN-2026/docs/services/work_service/images/)

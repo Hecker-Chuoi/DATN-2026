@@ -14,7 +14,7 @@
    - Refactor code không dựa vào kết nối DB runtime (Unit tests backend dùng Mockito/JUnit 5 thuần, frontend kiểm tra build và lint).
 3. **Ghi chép nhật ký xuyên suốt:**
    - Cập nhật từng bước, từng file đã sửa/xóa và kết quả kiểm thử vào duy nhất một tài liệu log:
-     `D:\DATN-2026\docs\services\work_service\new structure\REFACTOR_EXECUTION_AND_TEST_LOG.md`.
+     `D:\DATN-2026\docs\services\work_service\new structure\NHAT_KY_THUC_THI_VA_KIEM_THU_REFACTOR.md`.
 
 ---
 
@@ -43,7 +43,7 @@
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │ GIAI ĐOẠN 4: Tổng kết & Cập nhật Nhật ký Refactor                      │
 │   • Rà soát toàn bộ hệ thống                                           │
-│   • Hoàn thiện REFACTOR_EXECUTION_AND_TEST_LOG.md                      │
+│   • Hoàn thiện NHAT_KY_THUC_THI_VA_KIEM_THU_REFACTOR.md                      │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -103,4 +103,4 @@
    - Chạy `npm run build` trong `frontend/`.
 
 ### Giai đoạn 4: Tổng kết & Cập nhật Nhật ký Log
-- Ghi nhận chi tiết kết quả từng bước vào `REFACTOR_EXECUTION_AND_TEST_LOG.md`.
+- Ghi nhận chi tiết kết quả từng bước vào `NHAT_KY_THUC_THI_VA_KIEM_THU_REFACTOR.md`.

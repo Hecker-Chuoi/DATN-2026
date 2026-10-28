@@ -5,24 +5,22 @@
 > **Module:** `work-service` (Core Project & Work Management Engine)  
 > **Phiên bản:** 2.0 (Jira-Grade Enterprise Specification)  
 > **Tài liệu tham chiếu:**  
-> - [`1_WORK_OVERVIEW_REFACTOR.md`](file:///d:/DATN-2026/docs/services/work_service/1_WORK_OVERVIEW_REFACTOR.md) (Kiến trúc tổng quan V2 & Triết lý Jira-Grade)  
-> - [`2_WORK_DATABASE_DESIGN.md`](file:///d:/DATN-2026/docs/services/work_service/2_WORK_DATABASE_DESIGN.md) (Thiết kế CSDL bảng `work_item_types` & `work_items`)  
-> - [`3_WORK_SEQUENCE_DIAGRAMS.md`](file:///d:/DATN-2026/docs/services/work_service/3_WORK_SEQUENCE_DIAGRAMS.md) (Sơ đồ tuần tự tạo việc & validate hierarchy)  
-> - [`4_WORK_IMPLEMENTATION_PLAN.md`](file:///d:/DATN-2026/docs/services/work_service/4_WORK_IMPLEMENTATION_PLAN.md) (Lộ trình triển khai phân cấp 3 tầng)  
-> - [`5_WORK_FRONTEND_UI_JIRA_SPEC.md`](file:///d:/DATN-2026/docs/services/work_service/5_WORK_FRONTEND_UI_JIRA_SPEC.md) (Quy chuẩn giao diện Kanban/Backlog/Modal)  
-> - [`7_WORK_ISSUE_RELATIONSHIPS_AND_DEPENDENCY_GRAPH.md`](file:///d:/DATN-2026/docs/services/work_service/7_WORK_ISSUE_RELATIONSHIPS_AND_DEPENDENCY_GRAPH.md) (Phân hệ Issue Links đồ thị ngang hàng)
+> - [`1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md`](file:///d:/DATN-2026/docs/services/work_service/1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md) (Kiến trúc tổng quan V2 & Triết lý Jira-Grade)  
+> - [`2_THIET_KE_CO_SO_DU_LIEU.md`](file:///d:/DATN-2026/docs/services/work_service/2_THIET_KE_CO_SO_DU_LIEU.md) (Thiết kế CSDL bảng `work_item_types` & `work_items`)  
+> - [`3_SO_DO_TUAN_TU_NGHIEP_VU.md`](file:///d:/DATN-2026/docs/services/work_service/3_SO_DO_TUAN_TU_NGHIEP_VU.md) (Sơ đồ tuần tự tạo việc & validate hierarchy)  
+> - [`4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md`](file:///d:/DATN-2026/docs/services/work_service/4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md) (Lộ trình triển khai phân cấp 3 tầng)  
+> - [`5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md`](file:///d:/DATN-2026/docs/services/work_service/5_QUY_CHUAN_GIAO_DIEN_FRONTEND.md) (Quy chuẩn giao diện Kanban/Backlog/Modal)  
+> - [`7_QUAN_HE_CONG_VIEC_VA_DO_THI_PHU_THUOC.md`](file:///d:/DATN-2026/docs/services/work_service/7_QUAN_HE_CONG_VIEC_VA_DO_THI_PHU_THUOC.md) (Phân hệ Issue Links đồ thị ngang hàng)
 
 ---
 
 ## 📑 MỤC LỤC
 
 1. [Tổng Quan Về Phân Loại Công Việc (Work Item Types Overview)](#1-tổng-quan-về-phân-loại-công-việc-work-item-types-overview)
-2. [Hệ Thống 5 Loại Công Việc Chuẩn Mặc Định (Default Work Item Types)](#2-hệ-thống-5-loại-công-việc-chuẩn-mặc-định-default-work-item-types)
-   - [2.1. Epic (Sáng Kiến Lớn / Module Bao Trùm)](#21-epic-sáng-kiến-lớn--module-bao-trùm)
-   - [2.2. User Story (Yêu Cầu Nghiệp Vụ Người Dùng)](#22-user-story-yêu-cầu-nghiệp-vụ-người-dùng)
-   - [2.3. Task (Nhiệm Vụ Kỹ Thuật Tiêu Chuẩn)](#23-task-nhiệm-vụ-kỹ-thuật-tiêu-chuẩn)
-   - [2.4. Bug (Lỗi / Sự Cố Phần Mềm)](#24-bug-lỗi--sự-cố-phần-mềm)
-   - [2.5. Sub-task (Nhiệm Vụ Thực Thi Con)](#25-sub-task-nhiệm-vụ-thực-thi-con)
+2. [Cơ Chế Phân Cấp 3 Cấp Độ Cốt Lõi & Cấu Hình Loại Công Việc (3-Level Hierarchy & Work Item Types)](#2-cơ-chế-phân-cấp-3-cấp-độ-cốt-lõi--cấu-hình-loại-công-việc-3-level-hierarchy--work-item-types)
+   - [2.1. Cấu hình Mặc định khi Khởi tạo Dự án mới (`ProjectServiceImpl`)](#21-cấu-hình-mặc-định-khi-khởi-tạo-dự-án-mới-projectserviceimpl)
+   - [2.2. Khả năng Mở rộng & Tùy biến Linh hoạt theo Nghiệp vụ (Extensibility)](#22-khả-năng-mở-rộng--tùy-biến-linh-hoạt-theo-nghiệp-vụ-extensibility)
+   - [2.3. Đặc tả Các Loại Công Việc Phổ Biến (Epic, Story, Task, Bug, Sub-task)](#23-đặc-tả-các-loại-công-việc-phổ-biến-epic-story-task-bug-sub-task)
 3. [Mô Hình Phân Cấp 3 Tầng Nghiêm Ngặt (Strict 3-Level Hierarchy)](#3-mô-hình-phân-cấp-3-tầng-nghiêm-ngặt-strict-3-level-hierarchy)
    - [3.1. Cấu Trúc Phân Cấp Trực Quan](#31-cấu-trúc-phân-cấp-trực-quan)
    - [3.2. Ma Trận Hợp Lệ Quan Hệ Cha - Con (Parent-Child Validation Matrix)](#32-ma-trận-hợp-lệ-quan-hệ-cha---con-parent-child-validation-matrix)
@@ -78,16 +76,35 @@ Trong các hệ thống quản lý dự án Agile/Scrum doanh nghiệp hiện đ
 
 ---
 
-## 2. HỆ THỐNG 5 LOẠI CÔNG VIỆC CHUẨN MẶC ĐỊNH (DEFAULT WORK ITEM TYPES)
+## 2. CƠ CHẾ PHÂN CẤP 3 CẤP ĐỘ CỐT LÕI & CẤU HÌNH LOẠI CÔNG VIỆC (3-LEVEL HIERARCHY & WORK ITEM TYPES)
 
-Hệ thống cung cấp sẵn 5 loại công việc cốt lõi được cấu hình tự động khi khởi tạo mỗi Dự án mới trong `ProjectServiceImpl`:
+Thay vì ràng buộc cố định hệ thống vào một danh mục 5 loại việc cứng nhắc như các tài liệu sơ khai, `work-service` của DATN-2026 chuẩn hóa toàn bộ dựa trên **Mô hình Phân cấp 3 Cấp độ Nghiêm ngặt (Strict 3-Level Hierarchy)**:
 
-| Thuộc tính | 🟣 Epic | 🟢 Story | 🔵 Task | 🔴 Bug | ⚪ Sub-task |
+- **Cấp độ 1 (`hierarchy_level = 1` - Epic)**: Sáng kiến lớn, mục tiêu vĩ mô, không có công việc cha (`parent_id = NULL`).
+- **Cấp độ 0 (`hierarchy_level = 0` - Standard Work Items)**: Công việc tiêu chuẩn (Task, User Story, Bug, Feature, Bài viết...). Có thể thuộc Epic hoặc đứng độc lập.
+- **Cấp độ -1 (`hierarchy_level = -1` - Sub-task)**: Nhiệm vụ phân rã con của công việc Cấp độ 0, bắt buộc có `parent_id` trỏ tới công việc Cấp độ 0.
+
+### 2.1. Cấu hình Mặc định khi Khởi tạo Dự án mới (`ProjectServiceImpl`)
+Khi người dùng tạo một Dự án mới, mã nguồn backend `ProjectServiceImpl.java` (dòng 275–300) tự động khởi tạo sẵn **3 loại công việc cơ bản đại diện cho đúng 3 cấp độ phân cấp**:
+
+1. **Epic** (`code = EPIC`, `hierarchyLevel = 1`, `isSubtask = false`): Đại diện Cấp độ 1.
+2. **Task** (`code = TASK`, `hierarchyLevel = 0`, `isSubtask = false`): Đại diện Cấp độ 0.
+3. **Sub-task** (`code = SUBTASK`, `hierarchyLevel = -1`, `isSubtask = true`): Đại diện Cấp độ -1.
+
+### 2.2. Khả năng Mở rộng & Tùy biến Linh hoạt theo Nghiệp vụ (Extensibility)
+Hệ thống cho phép Quản trị viên dự án hoặc các Bản mẫu Dự án (Project Templates) tự do bổ sung các Loại công việc khác theo đặc thù nghiệp vụ mà không bị gò bó:
+- Tại **Cấp độ 0 (Standard Items)**: Có thể tạo thêm `User Story` (cho nhóm phát triển Agile Scrum), `Bug / Defect` (cho kiểm thử phần mềm), `Spike` (nghiên cứu kỹ thuật), `Post` (cho dự án sáng tạo nội dung), `Improvement` (cải tiến)...
+- Tại **Cấp độ -1 (Sub-task)**: Có thể tạo thêm `Technical Sub-task`, `QA Sub-task`...
+
+Dưới đây là bảng tổng hợp các Loại công việc đại diện phổ biến trong các dự án mẫu của hệ thống:
+
+| Thuộc tính | 🟣 Epic (Mặc định) | 🟢 Story (Mở rộng) | 🔵 Task (Mặc định) | 🔴 Bug (Mở rộng) | ⚪ Sub-task (Mặc định) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Mã định danh (`code`)** | `EPIC` | `STORY` | `TASK` | `BUG` | `SUBTASK` |
 | **Tên hiển thị** | Epic | Story | Task | Bug | Sub-task |
 | **Cấp bậc (`hierarchy_level`)** | **`1` (Epic)** | **`0` (Standard)** | **`0` (Standard)** | **`0` (Standard)** | **`-1` (Sub-task)** |
 | **Cờ `is_subtask`** | `false` | `false` | `false` | `false` | **`true`** |
+| **Cấu hình khởi tạo** | Mặc định hệ thống | Mở rộng / Template | Mặc định hệ thống | Mở rộng / Template | Mặc định hệ thống |
 | **Icon đại diện** | `Zap` / `Layers` | `Bookmark` | `CheckSquare` | `Bug` / `AlertCircle` | `GitCommit` |
 | **Mã màu thương hiệu** | `#9333EA` (Tím) | `#10B981` (Xanh lá) | `#3B82F6` (Xanh dương) | `#EF4444` (Đỏ) | `#06B6D4` (Xanh lam nhạt) |
 | **Thời lượng ước lượng** | Quý / Tháng / Nhiều Sprint | 1 Sprint (1 - 13 Story Points) | 1 - 3 ngày | Vài giờ - 2 ngày | 1 - 8 giờ |
@@ -96,7 +113,11 @@ Hệ thống cung cấp sẵn 5 loại công việc cốt lõi được cấu h�
 
 ---
 
-### 2.1. Epic (Sáng Kiến Lớn / Module Bao Trùm)
+### 2.3. Đặc tả Các Loại Công Việc Phổ Biến (Epic, Story, Task, Bug, Sub-task)
+
+---
+
+#### 2.3.1. Epic (Sáng Kiến Lớn / Module Bao Trùm)
 * **Khái niệm:** Là một khối lượng công việc khổng lồ, bao hàm một tính năng cốt lõi hoặc một phân hệ lớn của dự án.
 * **Đặc điểm kiến trúc:**
   - Cấp bậc phân cấp: `hierarchy_level = 1`.
@@ -110,7 +131,7 @@ Hệ thống cung cấp sẵn 5 loại công việc cốt lõi được cấu h�
 
 ---
 
-### 2.2. User Story (Yêu Cầu Nghiệp Vụ Người Dùng)
+#### 2.3.2. User Story (Yêu Cầu Nghiệp Vụ Người Dùng)
 * **Khái niệm:** Diễn đạt một yêu cầu tính năng dưới góc nhìn và ngôn ngữ của người dùng cuối nhằm mang lại giá trị nghiệp vụ cụ thể.
 * **Khuôn mẫu mô tả chuẩn:**
   > *"Là một `[vai trò người dùng]`, tôi muốn `[hành động / tính năng]` để `[lợi ích đạt được]`."*
@@ -125,7 +146,7 @@ Hệ thống cung cấp sẵn 5 loại công việc cốt lõi được cấu h�
 
 ---
 
-### 2.3. Task (Nhiệm Vụ Kỹ Thuật Tiêu Chuẩn)
+#### 2.3.3. Task (Nhiệm Vụ Kỹ Thuật Tiêu Chuẩn)
 * **Khái niệm:** Công việc kỹ thuật thuần túy, nâng cấp hạ tầng, viết tài liệu hoặc tối ưu mã nguồn mà không nhất thiết xuất phát từ câu chuyện nghiệp vụ của người dùng cuối.
 * **Đặc điểm kiến trúc:**
   - Cấp bậc phân cấp: `hierarchy_level = 0`.
@@ -139,7 +160,7 @@ Hệ thống cung cấp sẵn 5 loại công việc cốt lõi được cấu h�
 
 ---
 
-### 2.4. Bug (Lỗi / Sự Cố Phần Mềm)
+#### 2.3.4. Bug (Lỗi / Sự Cố Phần Mềm)
 * **Khái niệm:** Khiếm khuyết, lỗi lập trình hoặc sai lệch hành vi so với tài liệu đặc tả yêu cầu xảy ra trên môi trường Development, Staging hoặc Production.
 * **Cấu trúc nội dung chuẩn:**
   1. *Các bước tái hiện lỗi (Steps to Reproduce)*.
@@ -156,7 +177,7 @@ Hệ thống cung cấp sẵn 5 loại công việc cốt lõi được cấu h�
 
 ---
 
-### 2.5. Sub-task (Nhiệm Vụ Thực Thi Con)
+#### 2.3.5. Sub-task (Nhiệm Vụ Thực Thi Con)
 * **Khái niệm:** Đơn vị công việc kỹ thuật nhỏ nhất trong hệ thống, đại diện cho một phần việc cụ thể được phân bổ cho một kỹ sư hoàn tất trong thời gian ngắn (thường từ 1 đến 8 giờ).
 * **Đặc điểm kiến trúc nghiêm ngặt:**
   - Cấp bậc phân cấp: `hierarchy_level = -1`.
@@ -1041,6 +1062,6 @@ Tại tiêu đề của modal chi tiết [`WorkItemDetailModal.jsx`](file:///d:/
   - Thanh tiến độ Story Points: `Đã xong 21 / 34 Points (61.8%)`.
   - Thanh phân bổ trạng thái 3 màu (Tri-color Bar): Xanh lam (`To Do`), Vàng (`In Progress`), Xanh lá (`Done`).
 
-> **Tài liệu được lưu trữ tại:** [`docs/services/work_service/8_WORK_ITEM_TYPES_AND_HIERARCHY.md`](file:///d:/DATN-2026/docs/services/work_service/8_WORK_ITEM_TYPES_AND_HIERARCHY.md)  
+> **Tài liệu được lưu trữ tại:** [`docs/services/work_service/8_LOAI_CONG_VIEC_VA_MO_HINH_PHAN_CAP_3_CAP_DO.md`](file:///d:/DATN-2026/docs/services/work_service/8_LOAI_CONG_VIEC_VA_MO_HINH_PHAN_CAP_3_CAP_DO.md)  
 > **Tác giả:** Đội ngũ Kiến trúc Hệ thống DATN-2026  
 > **Trạng thái phê duyệt:** Đã đồng bộ toàn diện với Backend Java 21, Frontend React 19 và CSDL PostgreSQL 16.

@@ -3,7 +3,7 @@
 
 > **Module:** `work-service` (Port: 8083)  
 > **Kiến trúc:** Jira-Grade Work Engine, Event-Driven Architecture, Realtime WebSocket STOMP, Transactional Outbox.  
-> **Tài liệu tham chiếu:** [`1_WORK_OVERVIEW_REFACTOR.md`](file:///d:/DATN-2026/docs/services/work_service_new/1_WORK_OVERVIEW_REFACTOR.md), [`2_WORK_DATABASE_DESIGN.md`](file:///d:/DATN-2026/docs/services/work_service_new/2_WORK_DATABASE_DESIGN.md), [`4_WORK_IMPLEMENTATION_PLAN.md`](file:///d:/DATN-2026/docs/services/work_service_new/4_WORK_IMPLEMENTATION_PLAN.md).
+> **Tài liệu tham chiếu:** [`1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md`](file:///d:/DATN-2026/docs/services/work_service/1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md), [`2_THIET_KE_CO_SO_DU_LIEU.md`](file:///d:/DATN-2026/docs/services/work_service/2_THIET_KE_CO_SO_DU_LIEU.md), [`4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md`](file:///d:/DATN-2026/docs/services/work_service/4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md).
 
 ---
 
@@ -334,4 +334,4 @@ sequenceDiagram
 ```
 
 ---
-> **Tiếp theo:** Vui lòng tham khảo kế hoạch triển khai chi tiết từng bước tại [`4_WORK_IMPLEMENTATION_PLAN.md`](file:///d:/DATN-2026/docs/services/work_service_new/4_WORK_IMPLEMENTATION_PLAN.md).
+> **Tiếp theo:** Vui lòng tham khảo kế hoạch triển khai chi tiết từng bước tại [`4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md`](file:///d:/DATN-2026/docs/services/work_service/4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md).

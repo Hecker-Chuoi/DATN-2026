@@ -1,9 +1,9 @@
 # DỰ ÁN MẪU (PROJECT TEMPLATE) — TÀI LIỆU GIỚI THIỆU
 
 > Phạm vi: `work-service` + màn hình tạo dự án ở `frontend`.
-> Tài liệu triển khai chi tiết & CSDL: [2_TEMPLATE_IMPLEMENTATION_DB.md](2_TEMPLATE_IMPLEMENTATION_DB.md).
+> Tài liệu triển khai chi tiết & CSDL: [2_TRIEN_KHAI_DU_AN_MAU_VA_CSDL.md](2_TRIEN_KHAI_DU_AN_MAU_VA_CSDL.md).
 > Kịch bản kiểm thử E2E Thực chiến (Quán Trà Chanh Phố từ Mẫu F&B): [4_KICH_BAN_TEST_CLONE_FNB_TRA_CHANH_PHO.md](4_KICH_BAN_TEST_CLONE_FNB_TRA_CHANH_PHO.md).
-> Hướng dẫn & Thiết kế Tùy chỉnh nhanh (Quick Customize): [5_QUICK_CUSTOMIZE_TEMPLATE_INSTANTIATION.md](5_QUICK_CUSTOMIZE_TEMPLATE_INSTANTIATION.md).
+> Hướng dẫn & Thiết kế Tùy chỉnh nhanh (Quick Customize): [5_TUY_BIEN_NHANH_KHOI_TAO_DU_AN_MAU.md](5_TUY_BIEN_NHANH_KHOI_TAO_DU_AN_MAU.md).
 
 ---
 

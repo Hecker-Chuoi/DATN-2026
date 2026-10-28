@@ -4,7 +4,7 @@
 
 > **Tài liệu tham chiếu:**
 > - [`V1__init_work_jira_schema.sql`](file:///d:/DATN-2026/backend/work-service/src/main/resources/db/migration/V1__init_work_jira_schema.sql) (Đặc tả 25 bảng CSDL & ràng buộc NOT NULL)
-> - [`8_WORK_ITEM_TYPES_AND_HIERARCHY.md`](file:///d:/DATN-2026/docs/services/work_service/status_time_management/8_WORK_ITEM_TYPES_AND_HIERARCHY.md) (Mô hình phân cấp 3 tầng nghiêm ngặt)
+> - [`8_LOAI_CONG_VIEC_VA_MO_HINH_PHAN_CAP_3_CAP_DO.md`](file:///d:/DATN-2026/docs/services/work_service/status_time_management/8_LOAI_CONG_VIEC_VA_MO_HINH_PHAN_CAP_3_CAP_DO.md) (Mô hình phân cấp 3 tầng nghiêm ngặt)
 > - [`CreateWorkItemRequest.java`](file:///d:/DATN-2026/backend/work-service/src/main/java/com/datn/workservice/dto/request/CreateWorkItemRequest.java) (Spring Boot DTO Validation Annotations)
 > - [`StrictHierarchyValidator.java`](file:///d:/DATN-2026/backend/work-service/src/main/java/com/datn/workservice/service/StrictHierarchyValidator.java) (Bộ thẩm định phân cấp nghiệp vụ Backend)
 > - [`CreateWorkItemModal.jsx`](file:///d:/DATN-2026/frontend/src/components/items/CreateWorkItemModal.jsx) (Giao diện Modal tạo công việc React 19)
@@ -51,16 +51,18 @@ Trong các công cụ quản lý dự án Agile chuyên nghiệp như Atlassian 
 
 ---
 
-## 📊 2. MA TRẬN TỔNG HỢP RÀNG BUỘC TRƯỜNG DỮ LIỆU THEO TỪNG TASK TYPE
+## 📊 2. MA TRẬN TỔNG HỢP RÀNG BUỘC THEO 3 CẤP ĐỘ PHÂN CẤP CỐT LÕI
 
-Bảng dưới đây tổng hợp quy chuẩn áp dụng cho 5 loại công việc mặc định của hệ thống:
+Hệ thống quản lý công việc của DATN-2026 áp dụng cơ chế validation dựa trên **3 Cấp độ Phân cấp (Strict 3-Level Hierarchy: Level 1 Epic, Level 0 Standard, Level -1 Subtask)** do `StrictHierarchyValidator.java` và `hierarchyLevel` điều phối.
 
-| Tên trường dữ liệu | Khóa DTO API | 🟣 Epic (Level 1) | 🟢 Story (Level 0) | 🔵 Task (Level 0) | 🔴 Bug (Level 0) | ⚪ Sub-task (Level -1) | Quy chuẩn hiển thị & Validate trên UI |
+Bảng dưới đây tổng hợp quy chuẩn áp dụng chi tiết theo 3 cấp độ phân cấp, minh họa qua các loại công việc đại diện (Epic, Story, Task, Bug, Sub-task):
+
+| Tên trường dữ liệu | Khóa DTO API | 🟣 Cấp 1 (Epic) | 🟢 Cấp 0 (Story) | 🔵 Cấp 0 (Task) | 🔴 Cấp 0 (Bug) | ⚪ Cấp -1 (Sub-task) | Quy chuẩn hiển thị & Validate trên UI |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | **Loại công việc** | `typeId` | 🔴 **Bắt buộc** | 🔴 **Bắt buộc** | 🔴 **Bắt buộc** | 🔴 **Bắt buộc** | 🔴 **Bắt buộc** | **Có dấu `*` đỏ**. Bắt buộc chọn 1 trong các nút bấm pill. |
 | **Tiêu đề công việc** | `summary` | 🔴 **Bắt buộc** | 🔴 **Bắt buộc** | 🔴 **Bắt buộc** | 🔴 **Bắt buộc** | 🔴 **Bắt buộc** | **Có dấu `*` đỏ**. Validate không để trống, độ dài từ 1 đến 500 ký tự. |
 | **Công việc cha** | `parentId` | ⛔ **CẤM** | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | 🔴 **BẮT BUỘC** | **Chỉ hiện dấu `*` đỏ khi chọn Subtask** (chặn submit nếu chưa chọn cha). Epic ẩn dropdown và hiện ghi chú xám. Story/Task/Bug không có `*`. |
-| **Story Points** | `storyPoints` | ⛔ **Khóa (N/A)** | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | ⛔ **Khóa (N/A)** | **Không có `*`**. Đã **khóa `N/A`** cho cả Subtask (dùng giờ) và Epic (Roll-up từ Story con). Chỉ mở cho Story/Task/Bug. |
+| **Story Points** | `storyPoints` | ⛔ **Khóa (N/A)** | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | ⛔ **Khóa (N/A)** | **Không có `*`**. Đã **khóa `N/A`** cho cả Subtask (dùng giờ) và Epic (Roll-up từ Story con). Mọi loại thuộc Cấp 0 đều được mở. |
 | **Mức độ ưu tiên** | `priority` | ⚪ *Có mặc định* | ⚪ *Có mặc định* | ⚪ *Có mặc định* | ⚪ *Có mặc định* | ⚪ *Có mặc định* | **Không có `*`**. Mặc định luôn là *"Trung bình (Medium)"*. Không cần bấm chọn nếu không muốn đổi. |
 | **Hạn chót** | `dueDate` | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | **Không có `*`**. Bỏ trống thoải mái. |
 | **Người thực hiện** | `assigneeId` | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | ⚪ *Tùy chọn* | **Không có `*`**. Mặc định là *"Chưa gán (Unassigned)"*. |
@@ -69,6 +71,9 @@ Bảng dưới đây tổng hợp quy chuẩn áp dụng cho 5 loại công vi�
 | **Trạng thái ban đầu** | `statusId` | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | Hệ thống tự gán trạng thái khởi đầu của dự án (thường là `To Do`). |
 | **Người báo cáo** | `reporterId` | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | Hệ thống tự trích xuất từ JWT Token của người dùng đang đăng nhập. |
 | **Thứ tự sắp xếp** | `rank` | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | ⚙️ *Tự sinh* | Hệ thống tự tính toán thuật toán LexoRank đặt ở cuối danh sách. |
+
+> [!NOTE]
+> **Nguyên tắc mở rộng theo cấp độ:** Dự án hoàn toàn có thể tự tạo thêm bất kỳ loại công việc mới nào (như Spike, Feature, Improvement, Bài viết SEO...). Khi được cấu hình ở **Cấp độ 0 (`hierarchyLevel = 0`)**, công việc đó tự động thừa hưởng 100% quy tắc: được chọn parent là Epic hoặc đứng độc lập, được nhập Story Points, được gán vào Sprint và hiển thị trên Board.
 
 ---
 

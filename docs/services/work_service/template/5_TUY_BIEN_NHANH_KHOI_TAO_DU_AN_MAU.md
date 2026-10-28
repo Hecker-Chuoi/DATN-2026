@@ -2,8 +2,8 @@
 
 > Phạm vi: `work-service` (Spring Boot 3.x / Java 21) + `frontend` (React 19 / Vite).  
 > Tài liệu liên quan:
-> - Giới thiệu tổng quan: [1_TEMPLATE_INTRODUCTION.md](1_TEMPLATE_INTRODUCTION.md)
-> - Thiết kế CSDL & Backend: [2_TEMPLATE_IMPLEMENTATION_DB.md](2_TEMPLATE_IMPLEMENTATION_DB.md)
+> - Giới thiệu tổng quan: [1_GIOI_THIEU_DU_AN_MAU.md](1_GIOI_THIEU_DU_AN_MAU.md)
+> - Thiết kế CSDL & Backend: [2_TRIEN_KHAI_DU_AN_MAU_VA_CSDL.md](2_TRIEN_KHAI_DU_AN_MAU_VA_CSDL.md)
 > - Kịch bản kiểm thử E2E Thực chiến: [4_KICH_BAN_TEST_CLONE_FNB_TRA_CHANH_PHO.md](4_KICH_BAN_TEST_CLONE_FNB_TRA_CHANH_PHO.md)
 
 ---

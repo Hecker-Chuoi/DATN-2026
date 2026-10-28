@@ -3,7 +3,7 @@
 
 > **Hệ quản trị CSDL:** PostgreSQL 16+  
 > **Schema Migration:** Flyway (`V1__init_work_jira_schema.sql`)  
-> **Tài liệu tham chiếu:** [`1_WORK_OVERVIEW_REFACTOR.md`](file:///d:/DATN-2026/docs/services/work_service_new/1_WORK_OVERVIEW_REFACTOR.md), [`3_WORK_SEQUENCE_DIAGRAMS.md`](file:///d:/DATN-2026/docs/services/work_service_new/3_WORK_SEQUENCE_DIAGRAMS.md), [`4_WORK_IMPLEMENTATION_PLAN.md`](file:///d:/DATN-2026/docs/services/work_service_new/4_WORK_IMPLEMENTATION_PLAN.md).
+> **Tài liệu tham chiếu:** [`1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md`](file:///d:/DATN-2026/docs/services/work_service/1_TONG_QUAN_KIEN_TRUC_WORK_SERVICE.md), [`3_SO_DO_TUAN_TU_NGHIEP_VU.md`](file:///d:/DATN-2026/docs/services/work_service/3_SO_DO_TUAN_TU_NGHIEP_VU.md), [`4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md`](file:///d:/DATN-2026/docs/services/work_service/4_KE_HOACH_TRIEN_KHAI_CHI_TIET.md).
 
 ---
 
@@ -494,7 +494,7 @@ CREATE INDEX idx_outbox_pending_events ON outbox_events(status, created_at) WHER
 | **5** | `project_roles` | `ProjectRole.java` | Định nghĩa vai trò nội bộ trong từng dự án (Admin, PM, Developer, QA...) |
 | **6** | `role_assignments` | `RoleAssignment.java` | Gán vai trò dự án cho tài khoản người dùng cụ thể |
 | **7** | `permission_scheme_entries` | `PermissionSchemeEntry.java` | Bảng phân quyền chi tiết (CREATE_ISSUE, TRANSITION_ISSUE, MANAGE_SPRINT...) |
-| **8** | `work_item_types` | `WorkItemType.java` | Loại công việc (Epic, Story, Task, Bug, Subtask) với `hierarchy_level` (-1, 0, 1) |
+| **8** | `work_item_types` | `WorkItemType.java` | Loại công việc phân theo 3 cấp độ: Epic (Level 1), Standard Items như Task/Story/Bug (Level 0), Subtask (Level -1) |
 | **9** | `statuses` | `Status.java` | Trạng thái công việc thuộc 3 nhóm phân loại chuẩn (`TODO`, `IN_PROGRESS`, `DONE`) |
 | **10** | `workflows` | `Workflow.java` | Quy trình trạng thái nghiệp vụ |
 | **11** | `workflow_transitions` | `WorkflowTransition.java` | Bước chuyển trạng thái kèm bộ lọc Conditions, Validators và Post-functions |
@@ -522,4 +522,4 @@ CREATE INDEX idx_outbox_pending_events ON outbox_events(status, created_at) WHER
 | **33** | `outbox_events` | `OutboxEvent.java` | Lưu sự kiện phát hành Kafka đảm bảo toàn vẹn giao dịch phân tán |
 
 ---
-> **Tiếp theo:** Vui lòng tham khảo các sơ đồ tuần tự chi tiết tại [`3_WORK_SEQUENCE_DIAGRAMS.md`](file:///d:/DATN-2026/docs/services/work_service_new/3_WORK_SEQUENCE_DIAGRAMS.md).
+> **Tiếp theo:** Vui lòng tham khảo các sơ đồ tuần tự chi tiết tại [`3_SO_DO_TUAN_TU_NGHIEP_VU.md`](file:///d:/DATN-2026/docs/services/work_service/3_SO_DO_TUAN_TU_NGHIEP_VU.md).
