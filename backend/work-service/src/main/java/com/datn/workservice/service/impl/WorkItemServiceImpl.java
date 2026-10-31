@@ -54,6 +54,7 @@ public class WorkItemServiceImpl implements WorkItemService {
     private final StrictHierarchyValidator strictHierarchyValidator;
     private final com.datn.workservice.service.WorkItemAuditService workItemAuditService;
     private final com.datn.workservice.service.ProjectAccessService projectAccessService;
+    private final WorkItemGitHubLinkRepository workItemGitHubLinkRepository;
 
     @Override
     @Transactional
@@ -687,6 +688,23 @@ public class WorkItemServiceImpl implements WorkItemService {
                 })
                 .collect(Collectors.toList());
 
+        List<com.datn.workservice.dto.github.WorkItemGitHubLinkDto> githubLinks = Collections.emptyList();
+        if (workItemGitHubLinkRepository != null) {
+            githubLinks = workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())
+                    .stream()
+                    .map(l -> com.datn.workservice.dto.github.WorkItemGitHubLinkDto.builder()
+                            .id(l.getId())
+                            .linkType(l.getLinkType())
+                            .githubNumber(l.getGithubNumber())
+                            .title(l.getTitle())
+                            .url(l.getUrl())
+                            .status(l.getStatus())
+                            .authorName(l.getAuthorName())
+                            .authorAvatarUrl(l.getAuthorAvatarUrl())
+                            .build())
+                    .collect(Collectors.toList());
+        }
+
         return WorkItemDetailResponse.builder()
                 .id(summary.getId())
                 .projectId(summary.getProjectId())
@@ -744,6 +762,7 @@ public class WorkItemServiceImpl implements WorkItemService {
                 .version(summary.getVersion())
                 .createdAt(summary.getCreatedAt())
                 .updatedAt(summary.getUpdatedAt())
+                .githubLinks(githubLinks)
                 .build();
     }
 }

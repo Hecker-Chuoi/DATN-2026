@@ -37,6 +37,15 @@ public class UserGitHubToken {
     @Column(name = "access_token_encrypted", nullable = false, columnDefinition = "TEXT")
     private String accessTokenEncrypted;
 
+    @Column(name = "refresh_token_encrypted", columnDefinition = "TEXT")
+    private String refreshTokenEncrypted;
+
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
+
+    @Column(name = "refresh_token_expires_at")
+    private LocalDateTime refreshTokenExpiresAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

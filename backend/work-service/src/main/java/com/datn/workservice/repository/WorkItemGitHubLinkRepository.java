@@ -20,5 +20,12 @@ public interface WorkItemGitHubLinkRepository extends JpaRepository<WorkItemGitH
 
     List<WorkItemGitHubLink> findByLinkTypeAndGithubNumber(GitHubLinkType linkType, Integer githubNumber);
 
+    @org.springframework.data.jpa.repository.Query("SELECT l FROM WorkItemGitHubLink l JOIN WorkItem w ON l.workItemId = w.id WHERE w.projectId = :projectId AND l.linkType = :linkType AND l.githubNumber = :githubNumber")
+    Optional<WorkItemGitHubLink> findByProjectIdAndLinkTypeAndGithubNumber(
+            @org.springframework.data.repository.query.Param("projectId") UUID projectId,
+            @org.springframework.data.repository.query.Param("linkType") GitHubLinkType linkType,
+            @org.springframework.data.repository.query.Param("githubNumber") Integer githubNumber
+    );
+
     void deleteByWorkItemId(UUID workItemId);
 }

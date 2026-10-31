@@ -15,10 +15,12 @@ import com.datn.workservice.enums.WorkItemResolution;
 import com.datn.workservice.repository.*;
 import com.datn.workservice.service.ProjectMemberService;
 import com.datn.workservice.service.WorkflowEngineService;
+import com.datn.workservice.event.WorkItemStatusChangedEvent;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
     private final WorkItemCommentRepository workItemCommentRepository;
     private final ProjectMemberService projectMemberService;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -249,6 +252,17 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
 
         // 8. Cascade Ancestor Status Transitions (Auto-reopen on active child & Auto-start on IN_PROGRESS)
         cascadeAncestorStatusTransitions(workItem, toStatus, currentUserId);
+
+        // 9. Publish Status Change Event (for GitHub 2-Way Sync & Other Integrations)
+        if (applicationEventPublisher != null) {
+            applicationEventPublisher.publishEvent(new WorkItemStatusChangedEvent(
+                    saved.getId(),
+                    saved.getProjectId(),
+                    oldStatus != null ? oldStatus.getCategory() : null,
+                    toStatus.getCategory(),
+                    currentUserId
+            ));
+        }
 
         return saved;
     }

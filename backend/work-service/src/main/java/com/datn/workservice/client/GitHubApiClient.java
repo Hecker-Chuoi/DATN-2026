@@ -1,6 +1,7 @@
 package com.datn.workservice.client;
 
 import com.datn.common.exception.BadRequestException;
+import com.datn.workservice.dto.github.GitHubIssueDto;
 import com.datn.workservice.dto.github.GitHubOAuthTokenResponse;
 import com.datn.workservice.dto.github.GitHubRepoDto;
 import com.datn.workservice.dto.github.GitHubUserResponse;
@@ -81,6 +82,41 @@ public class GitHubApiClient {
     }
 
     /**
+     * Làm mới Access Token từ GitHub bằng Refresh Token
+     */
+    public GitHubOAuthTokenResponse refreshAccessToken(String refreshToken) {
+        String tokenUrl = "https://github.com/login/oauth/access_token";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+        headers.set(HttpHeaders.USER_AGENT, "DATN-WorkService-2026");
+
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("client_id", clientId);
+        body.add("client_secret", clientSecret);
+        body.add("grant_type", "refresh_token");
+        body.add("refresh_token", refreshToken);
+
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+
+        try {
+            ResponseEntity<GitHubOAuthTokenResponse> response = restTemplate.exchange(
+                    tokenUrl, HttpMethod.POST, request, GitHubOAuthTokenResponse.class
+            );
+            GitHubOAuthTokenResponse tokenResponse = response.getBody();
+            if (tokenResponse != null && tokenResponse.getError() != null) {
+                log.error("GitHub OAuth refresh error: {} - {}", tokenResponse.getError(), tokenResponse.getErrorDescription());
+                throw new BadRequestException("Không thể làm mới token GitHub: " + tokenResponse.getErrorDescription());
+            }
+            return tokenResponse;
+        } catch (Exception e) {
+            log.error("Failed to refresh GitHub access token: {}", e.getMessage(), e);
+            throw new BadRequestException("Không thể làm mới token GitHub: " + e.getMessage());
+        }
+    }
+
+    /**
      * Lấy thông tin tài khoản GitHub của người dùng
      */
     public GitHubUserResponse getUserProfile(String accessToken) {
@@ -94,7 +130,13 @@ public class GitHubApiClient {
                     url, HttpMethod.GET, request, GitHubUserResponse.class
             );
             return response.getBody();
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
+            log.error("GitHub API 401 Unauthorized for user profile: {}", e.getMessage());
+            throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi (Bad credentials). Vui lòng kết nối lại tài khoản GitHub.");
         } catch (Exception e) {
+            if (e.getMessage() != null && (e.getMessage().contains("401") || e.getMessage().contains("Bad credentials"))) {
+                throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi (Bad credentials). Vui lòng kết nối lại tài khoản GitHub.");
+            }
             log.error("Failed to get GitHub user profile: {}", e.getMessage(), e);
             throw new BadRequestException("Không thể lấy thông tin tài khoản GitHub: " + e.getMessage());
         }
@@ -117,7 +159,13 @@ public class GitHubApiClient {
                     new ParameterizedTypeReference<List<GitHubRepoDto>>() {}
             );
             return response.getBody() != null ? response.getBody() : Collections.emptyList();
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
+            log.error("GitHub API 401 Unauthorized for user repos: {}", e.getMessage());
+            throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi (Bad credentials). Vui lòng kết nối lại tài khoản GitHub.");
         } catch (Exception e) {
+            if (e.getMessage() != null && (e.getMessage().contains("401") || e.getMessage().contains("Bad credentials"))) {
+                throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi (Bad credentials). Vui lòng kết nối lại tài khoản GitHub.");
+            }
             log.error("Failed to get GitHub repositories: {}", e.getMessage(), e);
             throw new BadRequestException("Không thể lấy danh sách kho mã nguồn từ GitHub: " + e.getMessage());
         }
@@ -175,10 +223,68 @@ public class GitHubApiClient {
         }
     }
 
+    /**
+     * Lấy danh sách Issues từ GitHub Repository (lọc bỏ các Pull Requests)
+     */
+    public List<GitHubIssueDto> getRepositoryIssues(String accessToken, String owner, String repo, String state) {
+        String queryState = (state != null && !state.isBlank()) ? state : "all";
+        String url = String.format("%s/repos/%s/%s/issues?state=%s&per_page=100&sort=updated", apiUrl, owner, repo, queryState);
+
+        HttpHeaders headers = createAuthHeaders(accessToken);
+        HttpEntity<Void> request = new HttpEntity<>(headers);
+
+        try {
+            ResponseEntity<List<GitHubIssueDto>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    request,
+                    new ParameterizedTypeReference<List<GitHubIssueDto>>() {}
+            );
+            List<GitHubIssueDto> list = response.getBody();
+            if (list == null) {
+                return Collections.emptyList();
+            }
+            return list.stream()
+                    .filter(issue -> !issue.isPullRequest())
+                    .toList();
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
+            log.error("GitHub API 401 Unauthorized for {}/{}: {}", owner, repo, e.getMessage());
+            throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi (Bad credentials). Vui lòng kết nối lại tài khoản GitHub.");
+        } catch (Exception e) {
+            if (e.getMessage() != null && (e.getMessage().contains("401") || e.getMessage().contains("Bad credentials"))) {
+                throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi (Bad credentials). Vui lòng kết nối lại tài khoản GitHub.");
+            }
+            log.error("Failed to get issues for {}/{}: {}", owner, repo, e.getMessage(), e);
+            throw new BadRequestException("Không thể lấy danh sách Issues từ GitHub: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Cập nhật trạng thái của GitHub Issue (ví dụ: open hoặc closed)
+     */
+    public void updateIssueState(String accessToken, String owner, String repo, int issueNumber, String state) {
+        String url = String.format("%s/repos/%s/%s/issues/%d", apiUrl, owner, repo, issueNumber);
+
+        HttpHeaders headers = createAuthHeaders(accessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        Map<String, String> body = Map.of("state", state);
+        HttpEntity<Map<String, String>> request = new HttpEntity<>(body, headers);
+
+        try {
+            restTemplate.exchange(url, HttpMethod.PATCH, request, Void.class);
+            log.info("Updated GitHub issue #{}: state={} on {}/{}", issueNumber, state, owner, repo);
+        } catch (Exception e) {
+            log.warn("Failed to update GitHub issue #{} state={} on {}/{}: {}", issueNumber, state, owner, repo, e.getMessage());
+            // Ghi nhận cảnh báo, không throw để không làm rollback transaction chính nếu GitHub API lỗi/rate-limit
+        }
+    }
+
     private HttpHeaders createAuthHeaders(String accessToken) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(accessToken);
         headers.setAccept(Collections.singletonList(MediaType.parseMediaType("application/vnd.github.v3+json")));
+        headers.set(HttpHeaders.USER_AGENT, "DATN-WorkService-2026");
         return headers;
     }
 }

@@ -56,6 +56,8 @@ class WorkflowEngineServiceTest {
     private WorkItemCommentRepository workItemCommentRepository;
     @Mock
     private ProjectMemberService projectMemberService;
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();

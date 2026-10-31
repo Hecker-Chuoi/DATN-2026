@@ -20,6 +20,15 @@ public class GitHubOAuthTokenResponse {
     @JsonProperty("scope")
     private String scope;
 
+    @JsonProperty("refresh_token")
+    private String refreshToken;
+
+    @JsonProperty("expires_in")
+    private Long expiresIn;
+
+    @JsonProperty("refresh_token_expires_in")
+    private Long refreshTokenExpiresIn;
+
     @JsonProperty("error")
     private String error;
 

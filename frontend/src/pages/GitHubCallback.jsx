@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -7,11 +7,15 @@ export default function GitHubCallback() {
   const code = searchParams.get('code');
   const error = searchParams.get('error');
   const errorDescription = searchParams.get('error_description');
+  const hasDispatchedRef = useRef(false);
 
   const status = error ? 'error' : (code ? 'success' : 'processing');
 
   useEffect(() => {
+    if (hasDispatchedRef.current) return;
+
     if (error) {
+      hasDispatchedRef.current = true;
       if (window.opener) {
         window.opener.postMessage(
           { type: 'GITHUB_OAUTH_ERROR', error: errorDescription || error },
@@ -23,13 +27,14 @@ export default function GitHubCallback() {
     }
 
     if (code) {
+      hasDispatchedRef.current = true;
       if (window.opener) {
         window.opener.postMessage(
           { type: 'GITHUB_OAUTH_CODE', code },
           window.location.origin
         );
         // Tự động đóng cửa sổ popup sau khi gửi message
-        setTimeout(() => window.close(), 1200);
+        setTimeout(() => window.close(), 800);
       }
     }
   }, [code, error, errorDescription]);

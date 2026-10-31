@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { X, Search, Lock, Globe, Star, Check, Loader2, GitBranch } from 'lucide-react';
+import { X, Search, Lock, Globe, Star, Check, Loader2, GitBranch, AlertCircle, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { githubIntegrationApi } from '../../api.js';
 
-export default function ConnectRepoModal({ isOpen, onClose, projectId, onConnected }) {
+export default function ConnectRepoModal({ isOpen, onClose, projectId, onConnected, onReauth }) {
   const [repos, setRepos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRepo, setSelectedRepo] = useState(null);
@@ -18,28 +19,27 @@ export default function ConnectRepoModal({ isOpen, onClose, projectId, onConnect
   const getRepoBranch = (r) => r?.default_branch || r?.defaultBranch || 'main';
   const getRepoStars = (r) => r?.stargazers_count ?? r?.stargazersCount ?? 0;
 
-  useEffect(() => {
-    let ignore = false;
-    if (isOpen && projectId) {
-      githubIntegrationApi.getRepositories(projectId)
-        .then((res) => {
-          if (!ignore) {
-            const data = res?.data;
-            setRepos(Array.isArray(data) ? data : []);
-          }
-        })
-        .catch((err) => {
-          if (!ignore) {
-            toast.error(err?.message || 'Không thể tải danh sách kho mã nguồn từ GitHub');
-          }
-        })
-        .finally(() => {
-          if (!ignore) setLoading(false);
-        });
+  const fetchRepos = async () => {
+    if (!projectId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await githubIntegrationApi.getRepositories(projectId, { skipErrorToast: true });
+      const data = res?.data;
+      setRepos(Array.isArray(data) ? data : []);
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || 'Không thể tải danh sách kho mã nguồn từ GitHub';
+      setError(msg);
+      // Giữ thông báo inline trong modal, không bắn toast gián đoạn buổi thuyết trình
+    } finally {
+      setLoading(false);
     }
-    return () => {
-      ignore = true;
-    };
+  };
+
+  useEffect(() => {
+    if (isOpen && projectId) {
+      fetchRepos();
+    }
   }, [isOpen, projectId]);
 
   const handleConnect = async () => {
@@ -57,13 +57,27 @@ export default function ConnectRepoModal({ isOpen, onClose, projectId, onConnect
         syncIssues: syncIssues,
       };
 
-      const res = await githubIntegrationApi.connect(projectId, payload);
+      const res = await githubIntegrationApi.connect(projectId, payload, { skipErrorToast: true });
       toast.success('Liên kết kho mã nguồn thành công!');
       if (onConnected) {
         onConnected(res?.data);
       }
       onClose();
     } catch (err) {
+      // Kiểm tra xem thực tế repo đã được liên kết chưa trước khi báo lỗi
+      try {
+        const checkRes = await githubIntegrationApi.getStatus(projectId, { skipErrorToast: true });
+        if (checkRes?.data?.projectLinked) {
+          toast.success('Liên kết kho mã nguồn thành công!');
+          if (onConnected) {
+            onConnected(checkRes.data);
+          }
+          onClose();
+          return;
+        }
+      } catch (_) {}
+
+      console.warn('Connect repo notice:', err);
       toast.error(err?.message || 'Liên kết repository thất bại');
     } finally {
       setSubmitting(false);
@@ -189,6 +203,65 @@ export default function ConnectRepoModal({ isOpen, onClose, projectId, onConnect
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748B' }}>
               <Loader2 size={28} className="animate-spin" style={{ margin: '0 auto 12px', color: '#2563EB' }} />
               <p style={{ fontSize: 13, margin: 0 }}>Đang tải danh sách kho từ GitHub...</p>
+            </div>
+          ) : error ? (
+            <div
+              style={{
+                padding: '24px 20px',
+                textAlign: 'center',
+                backgroundColor: '#FEF2F2',
+                borderRadius: 12,
+                border: '1px solid #FEE2E2',
+                margin: '12px 0',
+              }}
+            >
+              <AlertCircle size={32} color="#DC2626" style={{ margin: '0 auto 10px' }} />
+              <div style={{ fontSize: 13, color: '#991B1B', fontWeight: 600, marginBottom: 6 }}>
+                Không thể tải danh sách kho mã nguồn
+              </div>
+              <p style={{ fontSize: 12, color: '#B91C1C', margin: '0 0 16px', lineHeight: 1.4 }}>
+                {error}
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {onReauth && (
+                  <button
+                    onClick={onReauth}
+                    style={{
+                      height: 32,
+                      padding: '0 14px',
+                      backgroundColor: '#2563EB',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <RefreshCw size={13} />
+                    <span>Cấp quyền lại GitHub</span>
+                  </button>
+                )}
+                <button
+                  onClick={fetchRepos}
+                  style={{
+                    height: 32,
+                    padding: '0 14px',
+                    backgroundColor: '#FFFFFF',
+                    color: '#334155',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Thử lại
+                </button>
+              </div>
             </div>
           ) : filteredRepos.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 0', color: '#94A3B8', fontSize: 13 }}>

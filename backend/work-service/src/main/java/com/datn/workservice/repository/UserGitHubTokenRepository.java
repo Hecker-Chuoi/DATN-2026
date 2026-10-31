@@ -12,6 +12,8 @@ public interface UserGitHubTokenRepository extends JpaRepository<UserGitHubToken
 
     Optional<UserGitHubToken> findByUserId(UUID userId);
 
+    Optional<UserGitHubToken> findTopByOrderByCreatedAtDesc();
+
     boolean existsByUserId(UUID userId);
 
     void deleteByUserId(UUID userId);

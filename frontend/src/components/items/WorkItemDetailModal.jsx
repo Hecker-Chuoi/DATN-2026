@@ -635,6 +635,36 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               <span style={{ fontWeight: 700, color: '#2563EB', fontSize: 14 }}>{item?.code || '...'}</span>
             </div>
 
+            {item?.githubLinks && item.githubLinks.filter(l => l.linkType === 'ISSUE').map(gh => (
+              <a
+                key={gh.id || gh.githubNumber}
+                href={gh.url}
+                target="_blank"
+                rel="noreferrer"
+                title={`GitHub Issue #${gh.githubNumber}: ${gh.title || ''} (${gh.status})`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  backgroundColor: gh.status === 'CLOSED' ? '#F1F5F9' : '#ECFDF5',
+                  border: `1px solid ${gh.status === 'CLOSED' ? '#CBD5E1' : '#A7F3D0'}`,
+                  color: gh.status === 'CLOSED' ? '#64748B' : '#059669',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span>GitHub #{gh.githubNumber}</span>
+                <span style={{ fontSize: 10, padding: '1px 4px', borderRadius: 4, backgroundColor: gh.status === 'CLOSED' ? '#E2E8F0' : '#D1FAE5' }}>
+                  {gh.status}
+                </span>
+                <ExternalLink size={11} />
+              </a>
+            ))}
+
             {(() => {
               const displayColor = item?.typeColor || typeInfo.color || '#2563EB';
               const lvl = item?.hierarchyLevel;

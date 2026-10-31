@@ -107,4 +107,26 @@ public class GitHubIntegrationController {
         ProjectGitHubStatusResponse response = gitHubIntegrationService.updateSyncConfig(projectId, request, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật cấu hình tích hợp thành công"));
     }
+
+    /**
+     * Kéo toàn bộ danh sách Issues từ GitHub Repository về làm Task
+     */
+    @PostMapping("/sync-issues")
+    @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
+    public ResponseEntity<ApiResponse<GitHubSyncResultResponse>> syncIssues(@PathVariable UUID projectId) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        GitHubSyncResultResponse response = gitHubIntegrationService.syncIssues(projectId, currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(response, "Đồng bộ Issues từ GitHub thành công"));
+    }
+
+    /**
+     * Hủy liên kết tài khoản GitHub của người dùng (xóa token)
+     */
+    @DeleteMapping("/user-account")
+    @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
+    public ResponseEntity<ApiResponse<Void>> unlinkUserAccount(@PathVariable UUID projectId) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        gitHubIntegrationService.unlinkUserAccount(currentUserId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Đã hủy liên kết tài khoản GitHub"));
+    }
 }

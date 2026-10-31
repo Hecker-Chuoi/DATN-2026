@@ -17,7 +17,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Bean
     public RestTemplate restTemplate() {
-        return new RestTemplate();
+        return new RestTemplate(new org.springframework.http.client.JdkClientHttpRequestFactory());
     }
 
     @Override

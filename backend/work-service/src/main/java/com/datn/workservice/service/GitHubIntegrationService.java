@@ -41,4 +41,24 @@ public interface GitHubIntegrationService {
      * Cập nhật các thiết lập đồng bộ tự động hóa (Sync config rules)
      */
     ProjectGitHubStatusResponse updateSyncConfig(UUID projectId, UpdateGitHubSyncConfigRequest request, UUID currentUserId);
+
+    /**
+     * Đồng bộ Issues từ GitHub Repository về làm Task trên Board (Manual Sync / Pull)
+     */
+    GitHubSyncResultResponse syncIssues(UUID projectId, UUID currentUserId);
+
+    /**
+     * Tiếp nhận và xử lý sự kiện Webhook từ GitHub
+     */
+    void handleWebhook(String event, String signature, String rawPayload);
+
+    /**
+     * Đồng bộ thay đổi trạng thái WorkItem sang GitHub Issue (Reverse Sync)
+     */
+    void syncWorkItemStatusToGitHub(UUID workItemId, com.datn.workservice.enums.StatusCategory oldCategory, com.datn.workservice.enums.StatusCategory newCategory);
+
+    /**
+     * Hủy liên kết tài khoản GitHub của người dùng (xóa token)
+     */
+    void unlinkUserAccount(UUID currentUserId);
 }
