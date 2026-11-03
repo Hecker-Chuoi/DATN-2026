@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useProjectContext } from '../context/ProjectContext.jsx';
 import { sprintApi } from '../api.js';
 import { SURFACE } from '../constants/jiraTokens.js';
@@ -8,23 +9,33 @@ import BurndownChart from '../components/reports/BurndownChart.jsx';
 import VelocityChart from '../components/reports/VelocityChart.jsx';
 import CumulativeFlowChart from '../components/reports/CumulativeFlowChart.jsx';
 import SprintStateBadge from '../components/sprints/SprintStateBadge.jsx';
+import ContributionReportTab from '../components/reports/ContributionReportTab.jsx';
+import CustomSelect from '../components/common/CustomSelect.jsx';
 
 const TABS = [
   { id: 'burndown', label: 'Tiến độ chu kỳ' },
   { id: 'velocity', label: 'Năng suất làm việc' },
   { id: 'cfd', label: 'Phân bổ luồng trạng thái' },
+  { id: 'contributions', label: 'Đóng góp' },
 ];
 
 export default function ProjectReportsPage() {
-  const { projectId } = useProjectContext();
+  const { projectId, isAdmin } = useProjectContext();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'burndown';
 
-  const [tab, setTab] = useState('burndown');
+  const [tab, setTab] = useState(initialTab);
   const [sprints, setSprints] = useState([]);
   const [sprintId, setSprintId] = useState(null);
   const [burndown, setBurndown] = useState(null);
   const [velocity, setVelocity] = useState(null);
   const [cfd, setCfd] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const handleTabChange = (newTab) => {
+    setTab(newTab);
+    setSearchParams({ tab: newTab });
+  };
 
   // Danh sach Sprint cho o chon (uu tien Sprint dang chay).
   useEffect(() => {
@@ -85,9 +96,6 @@ export default function ProjectReportsPage() {
   const cfdRows = useMemo(() => toCfdRows(cfd), [cfd]);
 
   if (loading) return <div style={centered}>Đang tải báo cáo...</div>;
-  if (!sprints.length) {
-    return <div style={centered}>Dự án chưa có chu kỳ nào để lập báo cáo.</div>;
-  }
 
   const selected = sprints.find((s) => s.id === sprintId);
   const scopeChange = scopeChangeOf(burndownRows);
@@ -96,33 +104,36 @@ export default function ProjectReportsPage() {
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px 40px 24px' }}>
       {/* Chon Sprint + tab bieu do */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-        <select
-          value={sprintId || ''}
-          onChange={(e) => setSprintId(e.target.value)}
-          style={{
-            padding: '6px 10px', borderRadius: 6, border: `1px solid ${SURFACE.border}`,
-            fontSize: 13, backgroundColor: '#FFFFFF', color: SURFACE.text, maxWidth: 260,
-          }}
-        >
-          {sprints.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
-        {selected && <SprintStateBadge state={selected.state} />}
+        {tab !== 'contributions' && sprints.length > 0 && (
+          <>
+            <CustomSelect
+              value={sprintId || ''}
+              onChange={(val) => setSprintId(val)}
+              options={sprints.map((s) => ({
+                value: s.id,
+                label: s.name,
+              }))}
+              width={220}
+              placeholder="Chọn chu kỳ..."
+            />
+            {selected && <SprintStateBadge state={selected.state} />}
+          </>
+        )}
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+        <div style={{ marginLeft: tab === 'contributions' || !sprints.length ? '0' : 'auto', display: 'flex', gap: 6, width: tab === 'contributions' ? '100%' : 'auto', justifyContent: tab === 'contributions' ? 'flex-end' : 'flex-start' }}>
           {TABS.map((t) => {
             const active = tab === t.id;
             return (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => handleTabChange(t.id)}
                 style={{
                   padding: '6px 14px', borderRadius: 999, fontSize: 12,
                   fontWeight: active ? 600 : 500, cursor: 'pointer',
                   border: `1px solid ${active ? '#93C5FD' : SURFACE.border}`,
                   backgroundColor: active ? '#EFF6FF' : '#FFFFFF',
                   color: active ? '#1D4ED8' : SURFACE.textMuted,
+                  transition: 'all 0.15s ease',
                 }}
               >
                 {t.label}
@@ -132,69 +143,83 @@ export default function ProjectReportsPage() {
         </div>
       </div>
 
-      {/* The so lieu */}
-      {tab === 'burndown' && burndown && (
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-          <ReportMetricCard
-            label="Điểm ước lượng hoàn thành"
-            value={`${num(burndown.completedStoryPoints)} / ${num(burndown.committedStoryPoints)}`}
-            tone="positive"
-          />
-          <ReportMetricCard
-            label="Thay đổi phạm vi"
-            value={`${scopeChange > 0 ? '+' : ''}${scopeChange} điểm`}
-            tone={scopeChange > 0 ? 'warning' : 'neutral'}
-          />
-          <ReportMetricCard
-            label="Công việc hoàn thành"
-            value={`${num(burndown.completedItems)} / ${num(burndown.totalItems)}`}
-            tone="info"
-          />
-          <ReportMetricCard
-            label="Còn lại"
-            value={`${num(burndown.remainingStoryPoints)} điểm`}
-          />
-        </div>
-      )}
+      {/* Tab Dong gop */}
+      {tab === 'contributions' ? (
+        <ContributionReportTab
+          projectId={projectId}
+          sprintId={sprintId}
+          sprints={sprints}
+          isLeader={isAdmin}
+        />
+      ) : !sprints.length ? (
+        <div style={centered}>Dự án chưa có chu kỳ (Sprint) nào để lập báo cáo biểu đồ. Bạn có thể bấm vào tab <strong>"Đóng góp"</strong> ở góc trên bên phải để xem thống kê đóng góp của các thành viên.</div>
+      ) : (
+        <>
+          {/* The so lieu */}
+          {tab === 'burndown' && burndown && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+              <ReportMetricCard
+                label="Điểm ước lượng hoàn thành"
+                value={`${num(burndown.completedStoryPoints)} / ${num(burndown.committedStoryPoints)}`}
+                tone="positive"
+              />
+              <ReportMetricCard
+                label="Thay đổi phạm vi"
+                value={`${scopeChange > 0 ? '+' : ''}${scopeChange} điểm`}
+                tone={scopeChange > 0 ? 'warning' : 'neutral'}
+              />
+              <ReportMetricCard
+                label="Công việc hoàn thành"
+                value={`${num(burndown.completedItems)} / ${num(burndown.totalItems)}`}
+                tone="info"
+              />
+              <ReportMetricCard
+                label="Còn lại"
+                value={`${num(burndown.remainingStoryPoints)} điểm`}
+              />
+            </div>
+          )}
 
-      {tab === 'velocity' && velocity && (
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-          <ReportMetricCard label="Năng suất trung bình" value={`${num(velocity.averageVelocity)} điểm`} tone="positive" />
-          <ReportMetricCard label="Cam kết trung bình" value={`${num(velocity.averageCommitment)} điểm`} />
-          <ReportMetricCard
-            label="Độ tin cậy cam kết"
-            value={`${num(velocity.commitmentReliabilityPercent)}%`}
-            tone="info"
-            sub="Hoàn thành / Cam kết"
-          />
-          <ReportMetricCard label="Số chu kỳ đã hoàn tất" value={num(velocity.sprintCount)} />
-        </div>
-      )}
+          {tab === 'velocity' && velocity && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+              <ReportMetricCard label="Năng suất trung bình" value={`${num(velocity.averageVelocity)} điểm`} tone="positive" />
+              <ReportMetricCard label="Cam kết trung bình" value={`${num(velocity.averageCommitment)} điểm`} />
+              <ReportMetricCard
+                label="Độ tin cậy cam kết"
+                value={`${num(velocity.commitmentReliabilityPercent)}%`}
+                tone="info"
+                sub="Hoàn thành / Cam kết"
+              />
+              <ReportMetricCard label="Số chu kỳ đã hoàn tất" value={num(velocity.sprintCount)} />
+            </div>
+          )}
 
-      {/* Bieu do */}
-      <div style={chartBox}>
-        {tab === 'burndown' && (
-          <>
-            <ChartTitle
-              title={`Tiến độ — ${selected?.name || ''}`}
-              note={sourceNote(burndown?.source)}
-            />
-            <BurndownChart rows={burndownRows} />
-          </>
-        )}
-        {tab === 'velocity' && (
-          <>
-            <ChartTitle title="Năng suất qua các chu kỳ đã hoàn tất" />
-            <VelocityChart rows={velocityRows} average={num(velocity?.averageVelocity)} />
-          </>
-        )}
-        {tab === 'cfd' && (
-          <>
-            <ChartTitle title={`Phân bổ luồng trạng thái — ${selected?.name || ''}`} />
-            <CumulativeFlowChart rows={cfdRows} buckets={cfd?.buckets || []} />
-          </>
-        )}
-      </div>
+          {/* Bieu do */}
+          <div style={chartBox}>
+            {tab === 'burndown' && (
+              <>
+                <ChartTitle
+                  title={`Tiến độ — ${selected?.name || ''}`}
+                  note={sourceNote(burndown?.source)}
+                />
+                <BurndownChart rows={burndownRows} />
+              </>
+            )}
+            {tab === 'velocity' && (
+              <>
+                <ChartTitle title="Năng suất qua các chu kỳ đã hoàn tất" />
+                <VelocityChart rows={velocityRows} average={num(velocity?.averageVelocity)} />
+              </>
+            )}
+            {tab === 'cfd' && (
+              <>
+                <ChartTitle title={`Phân bổ luồng trạng thái — ${selected?.name || ''}`} />
+                <CumulativeFlowChart rows={cfdRows} buckets={cfd?.buckets || []} />
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

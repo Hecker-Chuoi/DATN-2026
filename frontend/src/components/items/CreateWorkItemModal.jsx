@@ -23,6 +23,8 @@ import {
 import toast from 'react-hot-toast';
 import { workItemApi, projectApi } from '../../api.js';
 import MemberSelect from '../common/MemberSelect.jsx';
+import CustomSelect from '../common/CustomSelect.jsx';
+import StoryPointsPicker from '../common/StoryPointsPicker.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import { PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 import { getTypeDisplayName } from '../../constants/workConstants.js';
@@ -238,7 +240,7 @@ export default function CreateWorkItemModal({
     if (isEpic && parentId) {
       errs.parentId = 'Hạng mục lớn không thể có công việc cha';
     }
-    if (storyPoints && !isSubtask && !isEpic) {
+    if (storyPoints && !isEpic) {
       const spNum = parseFloat(storyPoints);
       if (isNaN(spNum) || spNum < 0) {
         errs.storyPoints = 'Điểm ước lượng không thể âm';
@@ -262,7 +264,7 @@ export default function CreateWorkItemModal({
         priority,
         parentId: isEpic ? null : (parentId || null),
         assigneeId: assigneeId || null,
-        storyPoints: isSubtask || isEpic ? null : (storyPoints ? parseFloat(storyPoints) : null),
+        storyPoints: isEpic ? null : (storyPoints ? parseFloat(storyPoints) : null),
         dueDate: dueDate || null,
         // Sub-task di theo Sprint cua cong viec cha, khong gan rieng.
         sprintId: isSubtask ? null : (sprintId || null),
@@ -596,33 +598,24 @@ export default function CreateWorkItemModal({
                 ℹ️ Hạng mục lớn là cấp cao nhất (Cấp 1) và không thể trực thuộc công việc khác.
               </div>
             ) : (
-              <select
+              <CustomSelect
                 value={parentId}
-                onChange={(e) => {
-                  setParentId(e.target.value);
+                onChange={(val) => {
+                  setParentId(val);
                   if (errors.parentId) setErrors((prev) => ({ ...prev, parentId: undefined }));
                 }}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: 8,
-                  border: `1px solid ${errors.parentId ? '#EF4444' : '#CBD5E1'}`,
-                  fontSize: 13,
-                  color: '#0F172A',
-                  backgroundColor: '#FFFFFF',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <option value="">
-                  {isSubtask ? '-- Bắt buộc chọn công việc cha --' : '-- Không có (Độc lập / Kho việc) --'}
-                </option>
-                {availableParents.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    [{p.code}] {p.summary} ({getTypeDisplayName(p.typeName || p.typeCode)})
-                  </option>
-                ))}
-              </select>
+                options={[
+                  {
+                    value: '',
+                    label: isSubtask ? '-- Bắt buộc chọn công việc cha --' : '-- Không có (Độc lập / Kho việc) --',
+                  },
+                  ...availableParents.map((p) => ({
+                    value: p.id,
+                    label: `[${p.code}] ${p.summary} (${getTypeDisplayName(p.typeName || p.typeCode)})`,
+                  })),
+                ]}
+                placeholder={isSubtask ? 'Chọn công việc cha...' : 'Không có (Độc lập)'}
+              />
             )}
             {errors.parentId && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#EF4444', fontSize: 12, marginTop: 4 }}>
@@ -704,7 +697,7 @@ export default function CreateWorkItemModal({
                 </label>
                 <StoryPointsHelpTooltip align="center" />
               </div>
-              {isSubtask || isEpic ? (
+              {isEpic ? (
                 <div>
                   <input
                     type="text"
@@ -721,35 +714,21 @@ export default function CreateWorkItemModal({
                       cursor: 'not-allowed',
                       boxSizing: 'border-box',
                     }}
-                    title={isEpic ? "Hạng mục lớn tự động tính điểm từ các công việc con" : "Công việc con không tính điểm trực tiếp"}
+                    title="Hạng mục lớn tự động tính điểm từ các công việc con"
                   />
                   <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                    {isEpic ? 'Hạng mục lớn tự động tính điểm từ các công việc con' : 'Công việc con không tính điểm trực tiếp'}
+                    Hạng mục lớn tự động tính điểm từ các công việc con
                   </div>
                 </div>
               ) : (
-                <div>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="100"
-                    placeholder="VD: 5.0"
+                <div style={{ marginTop: 2 }}>
+                  <StoryPointsPicker
                     value={storyPoints}
-                    onChange={(e) => {
-                      setStoryPoints(e.target.value);
+                    onChange={(val) => {
+                      setStoryPoints(val);
                       if (errors.storyPoints) setErrors((prev) => ({ ...prev, storyPoints: undefined }));
                     }}
-                    style={{
-                      width: '100%',
-                      padding: '7px 10px',
-                      borderRadius: 8,
-                      border: `1px solid ${errors.storyPoints ? '#EF4444' : '#CBD5E1'}`,
-                      fontSize: 13,
-                      color: '#0F172A',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                    }}
+                    align="left"
                   />
                   {errors.storyPoints && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#EF4444', fontSize: 11, marginTop: 4 }}>
@@ -791,22 +770,34 @@ export default function CreateWorkItemModal({
                     Theo công việc cha
                   </div>
                 ) : (
-                  <select
+                  <CustomSelect
                     value={sprintId || ''}
-                    onChange={(e) => setSprintId(e.target.value)}
-                    style={{
-                      width: '100%', padding: '7px 10px', borderRadius: 8,
-                      border: '1px solid #CBD5E1', fontSize: 13, backgroundColor: '#FFFFFF',
-                      color: '#0F172A', cursor: 'pointer',
-                    }}
-                  >
-                    <option value="">Kho việc chờ phân bổ</option>
-                    {sprints
-                      .filter((sp) => sp.state !== 'CLOSED')
-                      .map((sp) => (
-                        <option key={sp.id} value={sp.id}>{sp.name}</option>
-                      ))}
-                  </select>
+                    onChange={(val) => setSprintId(val)}
+                    options={[
+                      { value: '', label: 'Kho việc chờ phân bổ' },
+                      ...sprints
+                        .filter((sp) => sp.state !== 'CLOSED')
+                        .map((sp) => ({
+                          value: sp.id,
+                          label: sp.name,
+                          badge: (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 600,
+                                padding: '1px 6px',
+                                borderRadius: 999,
+                                backgroundColor: sp.state === 'ACTIVE' ? '#DCFCE7' : '#FEF3C7',
+                                color: sp.state === 'ACTIVE' ? '#15803D' : '#B45309',
+                              }}
+                            >
+                              {sp.state === 'ACTIVE' ? 'Đang chạy' : 'Kế hoạch'}
+                            </span>
+                          ),
+                        })),
+                    ]}
+                    placeholder="Kho việc chờ phân bổ"
+                  />
                 )}
               </div>
             )}

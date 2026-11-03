@@ -28,6 +28,7 @@ import {
   ListFilter
 } from 'lucide-react';
 import { projectApi } from '../../api.js';
+import CustomSelect from '../common/CustomSelect.jsx';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 export default function AdminProjectManagement() {
@@ -574,30 +575,21 @@ export default function AdminProjectManagement() {
               {/* Status Filter */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Trạng thái:</span>
-                <select
+                <CustomSelect
                   value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
+                  onChange={(val) => {
+                    setStatusFilter(val);
                     setPage(0);
                   }}
-                  style={{
-                    height: 38,
-                    padding: '0 12px',
-                    borderRadius: 8,
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: '#ffffff',
-                    fontSize: 13,
-                    color: '#0f172a',
-                    outline: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="ALL">Tất cả trạng thái</option>
-                  <option value="ACTIVE">Đang hoạt động</option>
-                  <option value="PLANNING">Lập kế hoạch</option>
-                  <option value="COMPLETED">Đã hoàn thành</option>
-                  <option value="ON_HOLD">Tạm dừng</option>
-                </select>
+                  options={[
+                    { value: 'ALL', label: 'Tất cả trạng thái' },
+                    { value: 'ACTIVE', label: 'Đang hoạt động' },
+                    { value: 'PLANNING', label: 'Lập kế hoạch' },
+                    { value: 'COMPLETED', label: 'Đã hoàn thành' },
+                    { value: 'ON_HOLD', label: 'Tạm dừng' },
+                  ]}
+                  width={170}
+                />
               </div>
 
               {/* Reset Filter Button */}
@@ -1006,30 +998,22 @@ export default function AdminProjectManagement() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span>Số dòng:</span>
-              <select
+              <CustomSelect
                 value={pageSize}
-                onChange={(e) => {
-                  const newSize = Number(e.target.value);
+                onChange={(val) => {
+                  const newSize = Number(val);
                   setPageSize(newSize);
                   setPage(0);
                   fetchProjects(0, newSize);
                 }}
-                style={{
-                  height: 28,
-                  padding: '0 6px',
-                  borderRadius: 4,
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#ffffff',
-                  fontSize: 12,
-                  color: '#0f172a',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
+                options={[
+                  { value: 5, label: '5' },
+                  { value: 10, label: '10' },
+                  { value: 20, label: '20' },
+                  { value: 50, label: '50' },
+                ]}
+                width={80}
+              />
             </div>
           </div>
 
@@ -1260,23 +1244,16 @@ export default function AdminProjectManagement() {
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
                     Trạng Thái
                   </label>
-                  <select
+                  <CustomSelect
                     value={editingProject.status || 'ACTIVE'}
-                    onChange={(e) => setEditingProject({ ...editingProject, status: e.target.value })}
-                    style={{
-                      width: '100%',
-                      height: 40,
-                      padding: '0 12px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  >
-                    <option value="PLANNING">Lập kế hoạch</option>
-                    <option value="ACTIVE">Đang hoạt động</option>
-                    <option value="COMPLETED">Đã hoàn thành</option>
-                    <option value="ON_HOLD">Tạm dừng</option>
-                  </select>
+                    onChange={(val) => setEditingProject({ ...editingProject, status: val })}
+                    options={[
+                      { value: 'PLANNING', label: 'Lập kế hoạch' },
+                      { value: 'ACTIVE', label: 'Đang hoạt động' },
+                      { value: 'COMPLETED', label: 'Đã hoàn thành' },
+                      { value: 'ON_HOLD', label: 'Tạm dừng' },
+                    ]}
+                  />
                 </div>
               </div>
 

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import AdminProjectManagement from '../components/admin/AdminProjectManagement.jsx';
 import ConfirmModal from '../components/modals/ConfirmModal.jsx';
+import CustomSelect from '../components/common/CustomSelect.jsx';
 import { useModalBackdrop } from '../hooks/useModalBackdrop.js';
 
 export default function AdminDashboard({ onLogout }) {
@@ -649,28 +650,19 @@ export default function AdminDashboard({ onLogout }) {
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#64748b' }}>
                           <span>Hiển thị:</span>
-                          <select
+                          <CustomSelect
                             value={size}
-                            onChange={(e) => {
-                              setSize(Number(e.target.value));
-                              setPage(0); // Reset to first page
+                            onChange={(val) => {
+                              setSize(Number(val));
+                              setPage(0);
                             }}
-                            style={{
-                              padding: '4px 8px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              backgroundColor: '#fff',
-                              color: '#334155',
-                              fontSize: '13px',
-                              fontWeight: '500',
-                              outline: 'none',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <option value={10}>10 dòng</option>
-                            <option value={25}>25 dòng</option>
-                            <option value={50}>50 dòng</option>
-                          </select>
+                            options={[
+                              { value: 10, label: '10 dòng' },
+                              { value: 25, label: '25 dòng' },
+                              { value: 50, label: '50 dòng' },
+                            ]}
+                            width={110}
+                          />
                         </div>
                       </div>
 

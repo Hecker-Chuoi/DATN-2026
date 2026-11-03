@@ -9,6 +9,7 @@ import { useWorkspaceRole } from '../hooks/useWorkspaceRole';
 import { ALL_ROLES, roleLabel } from '../utils/workspaceRole';
 import RoleBadge from '../components/workspace/RoleBadge';
 import PendingInvitations from '../components/common/PendingInvitations';
+import CustomSelect from '../components/common/CustomSelect';
 
 const inputStyle = {
   padding: '8px 12px',
@@ -237,18 +238,16 @@ export default function WorkspaceMembersPage() {
                 placeholder="Email hoặc tên đăng nhập"
                 style={{ ...inputStyle, flex: 1, minWidth: 220 }}
               />
-              <select
+              <CustomSelect
                 value={newRole}
-                onChange={(e) => setNewRole(e.target.value)}
-                style={{ ...inputStyle, minWidth: 140 }}
-              >
-                {ALL_ROLES.map((r) => (
-                  // Chỉ OWNER được cấp vai trò OWNER (backend cũng chặn).
-                  <option key={r} value={r} disabled={r === 'OWNER' && !isOwner}>
-                    {roleLabel(r)}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setNewRole(val)}
+                options={ALL_ROLES.map((r) => ({
+                  value: r,
+                  label: roleLabel(r),
+                  disabled: r === 'OWNER' && !isOwner,
+                }))}
+                width={150}
+              />
               <button
                 type="submit"
                 disabled={adding || !identifier.trim()}
@@ -326,27 +325,16 @@ export default function WorkspaceMembersPage() {
                         <td style={{ ...tdStyle, color: '#64748B' }}>{m.email || '—'}</td>
                         <td style={tdStyle}>
                           {canManageMembers && !isMe ? (
-                            <select
+                            <CustomSelect
                               value={m.role}
-                              onChange={(e) => handleRoleChange(m.userId, e.target.value)}
-                              style={{ ...inputStyle, padding: '5px 8px', fontSize: 12 }}
-                            >
-                              {ALL_ROLES.map((r) => (
-                                <option
-                                  key={r}
-                                  value={r}
-                                  // Hạ OWNER cuối cùng là bất khả: để nguyên OWNER
-                                  // là lựa chọn duy nhất còn bật, thay vì disable cả
-                                  // select (giá trị hiện tại vẫn cần đọc được).
-                                  disabled={
-                                    (isThisLastOwner && r !== 'OWNER') ||
-                                    ((r === 'OWNER' || m.role === 'OWNER') && !isOwner)
-                                  }
-                                >
-                                  {roleLabel(r)}
-                                </option>
-                              ))}
-                            </select>
+                              onChange={(val) => handleRoleChange(m.userId, val)}
+                              options={ALL_ROLES.map((r) => ({
+                                value: r,
+                                label: roleLabel(r),
+                                disabled: (isThisLastOwner && r !== 'OWNER') || ((r === 'OWNER' || m.role === 'OWNER') && !isOwner),
+                              }))}
+                              width={140}
+                            />
                           ) : (
                             <RoleBadge role={m.role} size="md" />
                           )}

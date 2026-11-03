@@ -13,6 +13,7 @@ import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.enums.StatusCategory;
 import com.datn.workservice.enums.WorkItemResolution;
 import com.datn.workservice.repository.*;
+import com.datn.workservice.service.ContributionReportService;
 import com.datn.workservice.service.ProjectMemberService;
 import com.datn.workservice.service.WorkflowEngineService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -41,6 +42,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
     private final WorkItemChangelogRepository workItemChangelogRepository;
     private final WorkItemCommentRepository workItemCommentRepository;
     private final ProjectMemberService projectMemberService;
+    private final ContributionReportService contributionReportService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -249,6 +251,13 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
 
         // 8. Cascade Ancestor Status Transitions (Auto-reopen on active child & Auto-start on IN_PROGRESS)
         cascadeAncestorStatusTransitions(workItem, toStatus, currentUserId);
+
+        // 9. Contribution Ledger Recording (Append-only)
+        try {
+            contributionReportService.handleWorkItemStatusTransition(saved, oldStatus, toStatus, currentUserId);
+        } catch (Exception e) {
+            log.warn("Không thể ghi nhận Sổ ghi công cho WorkItem '{}': {}", saved.getCode(), e.getMessage());
+        }
 
         return saved;
     }

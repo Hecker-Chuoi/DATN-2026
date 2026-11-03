@@ -42,6 +42,8 @@ import toast from 'react-hot-toast';
 import { workItemApi, sprintApi, getUserKeycloakId } from '../../api.js';
 import { useProjectPermission } from '../../hooks/useProjectPermission.js';
 import MemberSelect from '../common/MemberSelect.jsx';
+import CustomSelect from '../common/CustomSelect.jsx';
+import StoryPointsPicker from '../common/StoryPointsPicker.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import ResolveSubtasksModal from '../modals/ResolveSubtasksModal.jsx';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
@@ -2269,32 +2271,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Điểm ước lượng</span>
                   <StoryPointsHelpTooltip size={12} align="sidebar" />
                 </div>
-                {item?.hierarchyLevel === -1 || item?.isSubtask || item?.typeCode === 'SUBTASK' ? (
-                  <div>
-                    <input
-                      type="text"
-                      disabled
-                      value="Không áp dụng"
-                      title="Công việc con không tính điểm trực tiếp"
-                      style={{
-                        width: '100%',
-                        marginTop: 6,
-                        padding: '8px 12px',
-                        borderRadius: 6,
-                        border: '1px solid #E2E8F0',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: '#94A3B8',
-                        backgroundColor: '#F1F5F9',
-                        cursor: 'not-allowed',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                      Công việc con không tính điểm trực tiếp
-                    </div>
-                  </div>
-                ) : item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC' ? (
+                {item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC' ? (
                   <div>
                     <input
                       type="text"
@@ -2320,27 +2297,14 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     </div>
                   </div>
                 ) : (
-                  <input
-                    type="number"
-                    step="0.5"
-                    defaultValue={item?.storyPoints || ''}
-                    disabled={!canEdit}
-                    onBlur={(e) => handleUpdateStoryPoints(e.target.value)}
-                    placeholder="0"
-                    style={{
-                      width: '100%',
-                      marginTop: 6,
-                      padding: '8px 12px',
-                      borderRadius: 6,
-                      border: '1px solid #CBD5E1',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: '#0F172A',
-                      outline: 'none',
-                      backgroundColor: '#FFFFFF',
-                      boxSizing: 'border-box',
-                    }}
-                  />
+                  <div style={{ marginTop: 6 }}>
+                    <StoryPointsPicker
+                      value={item?.storyPoints}
+                      onChange={(val) => handleUpdateStoryPoints(val)}
+                      disabled={!canEdit}
+                      align="right"
+                    />
+                  </div>
                 )}
               </div>
 
@@ -2396,31 +2360,36 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     {item?.sprintName || 'Kho việc chờ phân bổ'}
                   </div>
                 ) : (
-                  <select
-                    value={item?.sprintId || ''}
-                    onChange={(e) => handleUpdateSprint(e.target.value || null)}
-                    style={{
-                      marginTop: 6,
-                      width: '100%',
-                      padding: '8px 12px',
-                      backgroundColor: '#EFF6FF',
-                      borderRadius: 6,
-                      border: '1px solid #BFDBFE',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: '#2563EB',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <option value="">Kho việc chờ phân bổ</option>
-                    {sprints
-                      .filter((sp) => sp.state !== 'CLOSED')
-                      .map((sp) => (
-                        <option key={sp.id} value={sp.id}>
-                          {sp.name}
-                        </option>
-                      ))}
-                  </select>
+                  <div style={{ marginTop: 6 }}>
+                    <CustomSelect
+                      value={item?.sprintId || ''}
+                      onChange={(val) => handleUpdateSprint(val || null)}
+                      options={[
+                        { value: '', label: 'Kho việc chờ phân bổ' },
+                        ...sprints
+                          .filter((sp) => sp.state !== 'CLOSED')
+                          .map((sp) => ({
+                            value: sp.id,
+                            label: sp.name,
+                            badge: (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  padding: '1px 6px',
+                                  borderRadius: 999,
+                                  backgroundColor: sp.state === 'ACTIVE' ? '#DCFCE7' : '#FEF3C7',
+                                  color: sp.state === 'ACTIVE' ? '#15803D' : '#B45309',
+                                }}
+                              >
+                                {sp.state === 'ACTIVE' ? 'Đang chạy' : 'Kế hoạch'}
+                              </span>
+                            ),
+                          })),
+                      ]}
+                      placeholder="Kho việc chờ phân bổ"
+                    />
+                  </div>
                 )}
               </div>
 
@@ -2485,24 +2454,16 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>
                   Loại quan hệ
                 </label>
-                <select
+                <CustomSelect
                   value={linkRelationType}
-                  onChange={(e) => setLinkRelationType(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    outline: 'none',
-                    fontWeight: 600,
-                  }}
-                >
-                  <option value="BLOCKS">Cản trở / Chặn tiến độ</option>
-                  <option value="RELATES_TO">Có liên quan đến</option>
-                  <option value="DUPLICATES">Trùng lặp với</option>
-                  <option value="CAUSES">Gây ra / Nguyên nhân của</option>
-                </select>
+                  onChange={(val) => setLinkRelationType(val)}
+                  options={[
+                    { value: 'BLOCKS', label: 'Cản trở / Chặn tiến độ' },
+                    { value: 'RELATES_TO', label: 'Có liên quan đến' },
+                    { value: 'DUPLICATES', label: 'Trùng lặp với' },
+                    { value: 'CAUSES', label: 'Gây ra / Nguyên nhân của' },
+                  ]}
+                />
               </div>
 
               <div>
