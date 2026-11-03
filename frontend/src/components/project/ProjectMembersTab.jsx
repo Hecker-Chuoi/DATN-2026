@@ -22,6 +22,7 @@ import toast from 'react-hot-toast';
 import { projectApi, userApi } from '../../api.js';
 import { workspaceApi } from '../../api/workspaceServiceApi.js';
 import PendingInvitations from '../common/PendingInvitations.jsx';
+import CustomSelect from '../common/CustomSelect.jsx';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 const ROLE_COLORS = {
@@ -518,27 +519,15 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                   {/* Role Selector / Badge */}
                   <div>
                     {isAdmin && !isLead ? (
-                      <select
+                      <CustomSelect
                         value={m.roleId}
-                        onChange={(e) => handleRoleChange(m.userId, e.target.value)}
-                        style={{
-                          padding: '4px 8px',
-                          borderRadius: 6,
-                          border: '1px solid #CBD5E1',
-                          fontSize: 12,
-                          fontWeight: 600,
-                          backgroundColor: roleStyle.bg,
-                          color: roleStyle.text,
-                          cursor: 'pointer',
-                          outline: 'none',
-                        }}
-                      >
-                        {roles.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => handleRoleChange(m.userId, val)}
+                        options={roles.map((r) => ({
+                          value: r.id,
+                          label: r.name,
+                        }))}
+                        width={130}
+                      />
                     ) : (
                       <span
                         style={{
@@ -1401,27 +1390,16 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
                   Vai trò trong dự án <span style={{ color: '#EF4444' }}>*</span>
                 </label>
-                <select
+                <CustomSelect
                   value={selectedRoleId}
-                  onChange={(e) => setSelectedRoleId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: 8,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    color: '#0F172A',
-                    backgroundColor: '#FFFFFF',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} - {r.description || ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setSelectedRoleId(val)}
+                  options={roles.map((r) => ({
+                    value: r.id,
+                    label: r.name,
+                    sublabel: r.description || '',
+                  }))}
+                  placeholder="Chọn vai trò..."
+                />
               </div>
 
               {/* Submit Buttons */}

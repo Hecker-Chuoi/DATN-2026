@@ -76,6 +76,7 @@ public class SprintServiceImpl implements SprintService {
     private final WorkItemStateReplayer stateReplayer;
     private final BurndownCalculator burndownCalculator;
     private final OutboxRecorder outboxRecorder;
+    private final com.datn.workservice.service.ContributionReportService contributionReportService;
 
     // ───────────────────────────── CRUD ─────────────────────────────
 
@@ -329,6 +330,13 @@ public class SprintServiceImpl implements SprintService {
         payload.put("movedToSprintId", targetSprintId);
         payload.put("closedBy", userId);
         outboxRecorder.record("SPRINT", sprint.getId(), "SPRINT_COMPLETED", payload);
+
+        // Đóng băng số liệu đóng góp của Sprint vào snapshot
+        try {
+            contributionReportService.freezeSprintContributionSnapshot(sprint.getId(), sprint.getProjectId());
+        } catch (Exception e) {
+            log.warn("Không thể đóng băng snapshot đóng góp cho Sprint '{}': {}", sprint.getId(), e.getMessage());
+        }
 
         log.info("Dong Sprint '{}': {} xong / {} chua xong -> {}",
                 sprint.getName(), completed.size(), incomplete.size(), targetSprintName);

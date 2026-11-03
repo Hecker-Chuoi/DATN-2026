@@ -59,6 +59,7 @@ class SprintServiceTest {
     @Mock private WorkItemCardMapper cardMapper;
     @Mock private SprintReportSnapshotEngine snapshotEngine;
     @Mock private OutboxRecorder outboxRecorder;
+    @Mock private ContributionReportService contributionReportService;
 
     @Spy private LexoRankService lexoRankService = new LexoRankService();
 

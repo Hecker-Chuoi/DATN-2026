@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workflowApi, workItemTypeApi } from '../../api.js';
+import CustomSelect from '../common/CustomSelect.jsx';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 import {
   STATUS_CATEGORY_CONFIG,
@@ -1793,51 +1794,38 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
                   Trạng thái xuất phát
                 </label>
-                <select
+                <CustomSelect
                   value={fromStatusId}
-                  onChange={(e) => setFromStatusId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    outline: 'none',
-                  }}
-                >
-                  <option value="">-- Bất kỳ trạng thái nào (Khởi tạo / Tự do) --</option>
-                  {allStatuses.map((st) => (
-                    <option key={st.id} value={st.id} disabled={toStatusId && st.id === toStatusId}>
-                      {getStatusDisplayName(st.name)} ({getStatusCategoryDisplayName(st.category)}){toStatusId && st.id === toStatusId ? ' (Trùng trạng thái đích)' : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setFromStatusId(val)}
+                  options={[
+                    { value: '', label: '-- Bất kỳ trạng thái nào (Khởi tạo / Tự do) --' },
+                    ...allStatuses.map((st) => ({
+                      value: st.id,
+                      label: `${getStatusDisplayName(st.name)} (${getStatusCategoryDisplayName(st.category)})${toStatusId && st.id === toStatusId ? ' (Trùng trạng thái đích)' : ''}`,
+                      disabled: toStatusId && st.id === toStatusId,
+                    })),
+                  ]}
+                  placeholder="-- Bất kỳ trạng thái nào --"
+                />
               </div>
 
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
                   Trạng thái đích *
                 </label>
-                <select
+                <CustomSelect
                   value={toStatusId}
-                  onChange={(e) => setToStatusId(e.target.value)}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    outline: 'none',
-                  }}
-                >
-                  <option value="">-- Chọn trạng thái đích --</option>
-                  {allStatuses.map((st) => (
-                    <option key={st.id} value={st.id} disabled={fromStatusId && st.id === fromStatusId}>
-                      {getStatusDisplayName(st.name)} ({getStatusCategoryDisplayName(st.category)}){fromStatusId && st.id === fromStatusId ? ' (Trùng trạng thái bắt đầu)' : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setToStatusId(val)}
+                  options={[
+                    { value: '', label: '-- Chọn trạng thái đích --' },
+                    ...allStatuses.map((st) => ({
+                      value: st.id,
+                      label: `${getStatusDisplayName(st.name)} (${getStatusCategoryDisplayName(st.category)})${fromStatusId && st.id === fromStatusId ? ' (Trùng trạng thái bắt đầu)' : ''}`,
+                      disabled: fromStatusId && st.id === fromStatusId,
+                    })),
+                  ]}
+                  placeholder="-- Chọn trạng thái đích --"
+                />
               </div>
 
               <div style={{ marginBottom: 14 }}>
@@ -2003,22 +1991,15 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
                   Nhóm trạng thái chuẩn *
                 </label>
-                <select
+                <CustomSelect
                   value={newStatusCategory}
-                  onChange={(e) => setNewStatusCategory(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    outline: 'none',
-                  }}
-                >
-                  <option value="TODO">Cần làm</option>
-                  <option value="IN_PROGRESS">Đang thực hiện</option>
-                  <option value="DONE">Hoàn thành</option>
-                </select>
+                  onChange={(val) => setNewStatusCategory(val)}
+                  options={[
+                    { value: 'TODO', label: 'Cần làm' },
+                    { value: 'IN_PROGRESS', label: 'Đang thực hiện' },
+                    { value: 'DONE', label: 'Hoàn thành' },
+                  ]}
+                />
               </div>
 
               <div style={{ marginBottom: 14 }}>

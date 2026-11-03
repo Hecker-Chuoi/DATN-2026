@@ -10,6 +10,7 @@ import ProjectDetailPage from './pages/ProjectDetailPage.jsx';
 import ProjectBoardPage from './pages/ProjectBoardPage.jsx';
 import ProjectBacklogPage from './pages/ProjectBacklogPage.jsx';
 import ProjectReportsPage from './pages/ProjectReportsPage.jsx';
+import ProjectContributionsPage from './pages/ProjectContributionsPage.jsx';
 import ProjectMembersPage from './pages/ProjectMembersPage.jsx';
 import ProjectWorkflowPage from './pages/ProjectWorkflowPage.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
@@ -234,6 +235,7 @@ function App() {
               <Route index element={<Navigate to="board" replace />} />
               <Route path="board" element={<ProjectBoardPage />} />
               <Route path="backlog" element={<ProjectBacklogPage />} />
+              <Route path="contributions" element={<ProjectContributionsPage />} />
               <Route path="reports" element={<ProjectReportsPage />} />
               <Route path="members" element={<ProjectMembersPage />} />
               <Route path="workflow" element={<ProjectWorkflowPage />} />

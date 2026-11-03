@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SURFACE } from '../../constants/jiraTokens.js';
 import { getTypeDisplayName } from '../../constants/workConstants.js';
+import CustomSelect from '../common/CustomSelect.jsx';
 
 /**
  * Tao nhanh cong viec ngay trong danh sach: chon loai, go tieu de, Enter la xong.
@@ -45,22 +46,15 @@ export default function InlineCreateIssueRow({ types = [], defaultTypeId, onSubm
         borderTop: `1px solid ${SURFACE.border}`,
       }}
     >
-      <select
+      <CustomSelect
         value={typeId}
-        onChange={(e) => setTypeId(e.target.value)}
-        style={{
-          padding: '5px 8px',
-          borderRadius: 6,
-          border: `1px solid ${SURFACE.border}`,
-          fontSize: 12,
-          backgroundColor: '#FFFFFF',
-          color: SURFACE.text,
-        }}
-      >
-        {usable.map((t) => (
-          <option key={t.id} value={t.id}>{getTypeDisplayName(t.name || t.code)}</option>
-        ))}
-      </select>
+        onChange={(val) => setTypeId(val)}
+        options={usable.map((t) => ({
+          value: t.id,
+          label: getTypeDisplayName(t.name || t.code),
+        }))}
+        width={130}
+      />
 
       <input
         ref={inputRef}

@@ -54,6 +54,7 @@ public class WorkItemServiceImpl implements WorkItemService {
     private final StrictHierarchyValidator strictHierarchyValidator;
     private final com.datn.workservice.service.WorkItemAuditService workItemAuditService;
     private final com.datn.workservice.service.ProjectAccessService projectAccessService;
+    private final com.datn.workservice.service.ContributionReportService contributionReportService;
 
     @Override
     @Transactional
@@ -394,6 +395,12 @@ public class WorkItemServiceImpl implements WorkItemService {
         // Soft delete
         item.setDeletedAt(LocalDateTime.now());
         workItemRepository.save(item);
+
+        try {
+            contributionReportService.handleWorkItemDeleted(item, userId);
+        } catch (Exception e) {
+            log.warn("Không thể ghi sổ hủy điểm khi xóa WorkItem '{}': {}", item.getCode(), e.getMessage());
+        }
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

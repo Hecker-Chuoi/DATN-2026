@@ -12,4 +12,5 @@ public interface WorkItemCommentRepository extends JpaRepository<WorkItemComment
     List<WorkItemComment> findByWorkItemId(UUID workItemId);
     List<WorkItemComment> findByWorkItemIdOrderByCreatedAtDesc(UUID workItemId);
     List<WorkItemComment> findByWorkItemIdAndDeletedAtIsNullOrderByCreatedAtAsc(UUID workItemId);
+    List<WorkItemComment> findByWorkItemIdInAndDeletedAtIsNull(List<UUID> workItemIds);
 }

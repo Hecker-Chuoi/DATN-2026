@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { templateApi } from '../../api.js';
 import { generateProjectKey, sanitizeProjectKey, validateProjectForm } from '../../utils/projectValidation.js';
 import { TEMPLATE_CATEGORIES } from '../../constants/templateConstants.js';
+import CustomSelect from '../common/CustomSelect.jsx';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 /**
@@ -133,17 +134,14 @@ export default function SaveAsTemplateModal({ isOpen, onClose, project, onSaved 
               />
             </Field>
             <Field label="Phân loại">
-              <select
+              <CustomSelect
                 value={form.templateCategory}
-                onChange={(e) => setForm({ ...form, templateCategory: e.target.value })}
-                style={input()}
-              >
-                {Object.entries(TEMPLATE_CATEGORIES).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setForm({ ...form, templateCategory: val })}
+                options={Object.entries(TEMPLATE_CATEGORIES).map(([k, v]) => ({
+                  value: k,
+                  label: v.label,
+                }))}
+              />
             </Field>
           </div>
           <Field label="Mô tả">
