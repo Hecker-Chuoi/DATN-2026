@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, SlidersHorizontal, Download } from 'lucide-react';
+import { BookOpen, SlidersHorizontal, Download, Users, BarChart3 } from 'lucide-react';
 import { SURFACE } from '../../constants/jiraTokens.js';
 import { contributionApi } from '../../api.js';
 import CustomSelect from '../common/CustomSelect.jsx';
 import ContributionLedgerModal from './ContributionLedgerModal.jsx';
 import MemberContributionDrawer from './MemberContributionDrawer.jsx';
 import ManualAdjustmentModal from './ManualAdjustmentModal.jsx';
+import ContributionChartsView from './ContributionChartsView.jsx';
 
 export default function ContributionReportTab({ projectId, sprintId, sprints, isLeader }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedSprintId, setSelectedSprintId] = useState(sprintId || '');
+  const [selectedSprintId, setSelectedSprintId] = useState(sprintId ?? '');
   const [selectedMemberId, setSelectedMemberId] = useState(null);
   const [showLedger, setShowLedger] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
   const [sortBy, setSortBy] = useState('points'); // 'points' or 'name'
+  const [activeSubTab, setActiveSubTab] = useState('members'); // 'members' | 'charts'
+  const [hasInitializedSprint, setHasInitializedSprint] = useState(false);
 
   const loadReport = async () => {
     setLoading(true);
@@ -31,14 +34,13 @@ export default function ContributionReportTab({ projectId, sprintId, sprints, is
   };
 
   useEffect(() => {
-    if (!isLeader) {
-      const active = sprints?.find((s) => s.state === 'ACTIVE');
-      const defaultSprint = sprintId || active?.id || sprints?.[0]?.id || '';
+    if (!hasInitializedSprint && sprints && sprints.length > 0) {
+      const active = sprints.find((s) => s.state === 'ACTIVE');
+      const defaultSprint = sprintId || active?.id || sprints[0]?.id || '';
       setSelectedSprintId(defaultSprint);
-    } else {
-      setSelectedSprintId(sprintId || '');
+      setHasInitializedSprint(true);
     }
-  }, [sprintId, sprints, isLeader]);
+  }, [sprintId, sprints, hasInitializedSprint]);
 
   useEffect(() => {
     loadReport();
@@ -50,7 +52,7 @@ export default function ContributionReportTab({ projectId, sprintId, sprints, is
   };
 
   const sprintOptions = [
-    ...(isLeader ? [{ value: '', label: 'Tất cả chu kỳ' }] : []),
+    { value: '', label: 'Toàn bộ quá trình (Tất cả chu kỳ)' },
     ...(sprints || []).map((s) => ({
       value: s.id,
       label: s.name,
@@ -96,7 +98,7 @@ export default function ContributionReportTab({ projectId, sprintId, sprints, is
             value={selectedSprintId}
             onChange={(val) => setSelectedSprintId(val)}
             options={sprintOptions}
-            width={260}
+            width={280}
             placeholder="Chọn chu kỳ..."
           />
           {data?.isFrozen && (
@@ -140,7 +142,8 @@ export default function ContributionReportTab({ projectId, sprintId, sprints, is
             <BookOpen size={16} />
           </button>
 
-          {isLeader && (
+          {/* Nút Điều chỉnh điểm thủ công (tạm ẩn theo yêu cầu) */}
+          {/* {isLeader && (
             <button
               onClick={() => setShowAdjust(true)}
               title="Điều chỉnh điểm"
@@ -163,7 +166,7 @@ export default function ContributionReportTab({ projectId, sprintId, sprints, is
             >
               <SlidersHorizontal size={16} />
             </button>
-          )}
+          )} */}
 
           <button
             onClick={handleExport}
@@ -196,7 +199,7 @@ export default function ContributionReportTab({ projectId, sprintId, sprints, is
         <div style={{ padding: 60, textAlign: 'center', color: SURFACE.textMuted }}>Chưa có dữ liệu đóng góp.</div>
       ) : (
         <>
-          {/* 2. 4 KPI Cards (As shown in Screenshot 1) */}
+          {/* 2. 4 KPI Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
             <div style={{ padding: '16px 20px', borderRadius: 10, backgroundColor: '#FFFFFF', border: `1px solid ${SURFACE.border}` }}>
               <div style={{ fontSize: 28, fontWeight: 800, color: '#0F172A' }}>{data.totalPoints}</div>
@@ -219,111 +222,180 @@ export default function ContributionReportTab({ projectId, sprintId, sprints, is
             </div>
           </div>
 
-          {/* 4. Members Table (As shown in Screenshot 1) */}
+          {/* 3. Sub-tabs Navigation: Danh sách thành viên | Biểu đồ trực quan */}
           <div
             style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: 10,
-              border: `1px solid ${SURFACE.border}`,
-              overflow: 'hidden',
+              display: 'flex',
+              gap: 4,
+              backgroundColor: '#E2E8F0',
+              padding: 3,
+              borderRadius: 8,
+              width: 'fit-content',
             }}
           >
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ borderBottom: `2px solid ${SURFACE.border}`, backgroundColor: '#F8FAFC', color: SURFACE.textMuted }}>
-                    <th
-                      onClick={() => setSortBy(sortBy === 'name' ? 'points' : 'name')}
-                      style={{ padding: '12px 16px', fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
-                    >
-                      THÀNH VIÊN {sortBy === 'name' ? '▲' : '▾'}
-                    </th>
-                    <th
-                      onClick={() => setSortBy('points')}
-                      style={{ padding: '12px 16px', fontWeight: 700, cursor: 'pointer', textAlign: 'right', userSelect: 'none' }}
-                    >
-                      ĐIỂM
-                    </th>
-                    <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>TỈ LỆ</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>VIỆC XONG</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>THẢO LUẬN</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>BÁO LỖI</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>ĐÚNG HẠN</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>BỊ MỞ LẠI</th>
-                    <th style={{ padding: '12px 16px', width: 40 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {members.map((m) => (
-                    <tr
-                      key={m.userId}
-                      onClick={() => setSelectedMemberId(m.userId)}
-                      style={{
-                        borderBottom: `1px solid ${SURFACE.border}`,
-                        cursor: 'pointer',
-                        transition: 'background-color 0.15s ease',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                    >
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: SURFACE.text }}>
-                        {m.name}
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: '#2563EB' }}>
-                        {m.points}
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right', color: SURFACE.text }}>
-                        {m.percentage}%
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right', color: SURFACE.text }}>
-                        {m.completedTasks}
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right', color: SURFACE.text }}>
-                        {m.discussionCount}
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right', color: SURFACE.text }}>
-                        {m.bugsReported}
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 600, color: Number(m.onTimeRatePercent) >= 80 ? '#16A34A' : '#D97706' }}>
-                        {m.onTimeRatePercent}%
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right', color: Number(m.reopenedCount) > 0 ? '#DC2626' : SURFACE.textMuted, fontWeight: Number(m.reopenedCount) > 0 ? 700 : 400 }}>
-                        {m.reopenedCount}
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center', color: SURFACE.textMuted, fontSize: 16 }}>
-                        ›
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* 5. Alerts Banner (As shown in Screenshot 1) */}
-          {data.alerts && data.alerts.length > 0 && (
-            <div
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('members')}
               style={{
-                padding: '12px 18px',
-                borderRadius: 8,
-                backgroundColor: '#FFFBEB',
-                border: '1px solid #FCD34D',
-                color: '#92400E',
-                fontSize: 13,
-                fontWeight: 500,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: 6,
+                padding: '6px 14px',
+                borderRadius: 6,
+                fontSize: 13,
+                fontWeight: activeSubTab === 'members' ? 700 : 500,
+                color: activeSubTab === 'members' ? '#0F172A' : SURFACE.textMuted,
+                backgroundColor: activeSubTab === 'members' ? '#FFFFFF' : 'transparent',
+                border: 'none',
+                boxShadow: activeSubTab === 'members' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
               }}
             >
-              <span>⚠️</span>
-              <span>{data.alerts.join(' ')}</span>
-            </div>
+              <Users size={15} />
+              <span>Danh sách thành viên</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('charts')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 14px',
+                borderRadius: 6,
+                fontSize: 13,
+                fontWeight: activeSubTab === 'charts' ? 700 : 500,
+                color: activeSubTab === 'charts' ? '#0F172A' : SURFACE.textMuted,
+                backgroundColor: activeSubTab === 'charts' ? '#FFFFFF' : 'transparent',
+                border: 'none',
+                boxShadow: activeSubTab === 'charts' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <BarChart3 size={15} />
+              <span>Biểu đồ trực quan</span>
+            </button>
+          </div>
+
+          {/* 4. Tab Content */}
+          {activeSubTab === 'charts' ? (
+            <ContributionChartsView
+              members={members}
+              totalPoints={data.totalPoints}
+              isLeader={isLeader}
+            />
+          ) : (
+            <>
+              {/* 4a. Members Table */}
+              <div
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 10,
+                  border: `1px solid ${SURFACE.border}`,
+                  overflow: 'hidden',
+                }}
+              >
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${SURFACE.border}`, backgroundColor: '#F8FAFC', color: SURFACE.textMuted }}>
+                        <th
+                          onClick={() => setSortBy(sortBy === 'name' ? 'points' : 'name')}
+                          style={{ padding: '12px 16px', fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
+                        >
+                          THÀNH VIÊN {sortBy === 'name' ? '▲' : '▾'}
+                        </th>
+                        <th
+                          onClick={() => setSortBy('points')}
+                          style={{ padding: '12px 16px', fontWeight: 700, cursor: 'pointer', textAlign: 'right', userSelect: 'none' }}
+                        >
+                          ĐIỂM
+                        </th>
+                        <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>TỈ LỆ</th>
+                        <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>VIỆC XONG</th>
+                        <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>THẢO LUẬN</th>
+                        <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>BÁO LỖI</th>
+                        <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>ĐÚNG HẠN</th>
+                        <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>BỊ MỞ LẠI</th>
+                        <th style={{ padding: '12px 16px', width: 40 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {members.map((m) => (
+                        <tr
+                          key={m.userId}
+                          onClick={() => setSelectedMemberId(m.userId)}
+                          style={{
+                            borderBottom: `1px solid ${SURFACE.border}`,
+                            cursor: 'pointer',
+                            transition: 'background-color 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                        >
+                          <td style={{ padding: '14px 16px', fontWeight: 700, color: SURFACE.text }}>
+                            {m.name}
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: '#2563EB' }}>
+                            {m.points}
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', color: SURFACE.text }}>
+                            {m.percentage}%
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', color: SURFACE.text }}>
+                            {m.completedTasks}
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', color: SURFACE.text }}>
+                            {m.discussionCount}
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', color: SURFACE.text }}>
+                            {m.bugsReported}
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 600, color: Number(m.onTimeRatePercent) >= 80 ? '#16A34A' : '#D97706' }}>
+                            {m.onTimeRatePercent}%
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', color: Number(m.reopenedCount) > 0 ? '#DC2626' : SURFACE.textMuted, fontWeight: Number(m.reopenedCount) > 0 ? 700 : 400 }}>
+                            {m.reopenedCount}
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'center', color: SURFACE.textMuted, fontSize: 16 }}>
+                            ›
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 4b. Alerts Banner */}
+              {data.alerts && data.alerts.length > 0 && (
+                <div
+                  style={{
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    backgroundColor: '#FFFBEB',
+                    border: '1px solid #FCD34D',
+                    color: '#92400E',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <span>⚠️</span>
+                  <span>{data.alerts.join(' ')}</span>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
 
-      {/* Sổ ghi công Modal (Screenshot 2) */}
+      {/* Sổ ghi công Modal */}
       {showLedger && (
         <ContributionLedgerModal
           projectId={projectId}
@@ -345,7 +417,7 @@ export default function ContributionReportTab({ projectId, sprintId, sprints, is
         />
       )}
 
-      {/* Chi tiết thành viên Drawer (Screenshot 3) */}
+      {/* Chi tiết thành viên Drawer */}
       {selectedMemberId && (
         <MemberContributionDrawer
           projectId={projectId}
