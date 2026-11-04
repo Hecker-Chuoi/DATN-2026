@@ -70,23 +70,35 @@ public class ContributionReportServiceImpl implements ContributionReportService 
                 return;
             }
 
-            // Xác định ghi chú: Hoàn thành lại, Đúng hạn hay Trễ hạn
+            // Xác định ghi chú và áp dụng Cơ chế Phạt trễ hạn theo ngày (Deadline Penalty)
             String note;
+            BigDecimal awardedPoints = points;
             List<ContributionLedgerEntry> previousReopens = ledgerRepository.findByWorkItemIdOrderByCreatedAtAsc(item.getId())
                     .stream()
                     .filter(e -> "REOPENED".equals(e.getEntryType()))
                     .toList();
 
-            if (!previousReopens.isEmpty()) {
-                note = "Hoàn thành lại";
-            } else if (item.getDueDate() != null) {
-                LocalDate today = LocalDate.now();
-                if (today.isAfter(item.getDueDate())) {
-                    long daysLate = ChronoUnit.DAYS.between(item.getDueDate(), today);
-                    note = "Trễ " + daysLate + " ngày";
-                } else {
-                    note = "Đúng hạn";
+            LocalDate today = LocalDate.now();
+            boolean isLate = item.getDueDate() != null && today.isAfter(item.getDueDate());
+
+            if (isLate) {
+                long daysLate = ChronoUnit.DAYS.between(item.getDueDate(), today);
+                // Cơ chế phạt trễ hạn: Trừ 10% mỗi ngày trễ hạn, tối đa phạt 50%
+                long penaltyPct = Math.min(50L, daysLate * 10L);
+                BigDecimal penaltyFactor = BigDecimal.valueOf(100 - penaltyPct)
+                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                awardedPoints = points.multiply(penaltyFactor).setScale(1, RoundingMode.HALF_UP);
+                if (awardedPoints.compareTo(BigDecimal.ZERO) < 0) {
+                    awardedPoints = BigDecimal.ZERO;
                 }
+
+                if (!previousReopens.isEmpty()) {
+                    note = "Hoàn thành lại (Trễ " + daysLate + " ngày, -" + penaltyPct + "%)";
+                } else {
+                    note = "Trễ " + daysLate + " ngày (-" + penaltyPct + "%)";
+                }
+            } else if (!previousReopens.isEmpty()) {
+                note = "Hoàn thành lại (Đúng hạn)";
             } else {
                 note = "Đúng hạn";
             }
@@ -96,7 +108,7 @@ public class ContributionReportServiceImpl implements ContributionReportService 
                     .sprintId(item.getSprintId())
                     .workItemId(item.getId())
                     .userId(assigneeId)
-                    .points(points)
+                    .points(awardedPoints)
                     .entryType("COMPLETED")
                     .note(note)
                     .actorId(actorId != null ? actorId : assigneeId)
@@ -104,7 +116,7 @@ public class ContributionReportServiceImpl implements ContributionReportService 
 
             ledgerRepository.save(entry);
             log.info("Đã ghi công: User '{}' nhận +{} điểm cho việc '{}' (Ghi chú: {})",
-                    assigneeId, points, item.getCode(), note);
+                    assigneeId, awardedPoints, item.getCode(), note);
         }
 
         // 2. Chuyển ngược lại từ DONE sang trạng thái khác (BỊ MỞ LẠI / REOPENED)
@@ -170,13 +182,6 @@ public class ContributionReportServiceImpl implements ContributionReportService 
         projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án ID: " + projectId));
 
-        if (sprintId == null && currentUserId != null) {
-            boolean isLeader = projectMemberService.hasPermission(projectId, currentUserId, PermissionKey.PROJECT_ADMIN);
-            if (!isLeader) {
-                throw new AccessDeniedException("Chỉ Quản lý dự án mới có quyền xem báo cáo tổng hợp toàn bộ dự án. Vui lòng chọn chu kỳ cụ thể.");
-            }
-        }
-
         Sprint sprint = sprintId != null ? sprintRepository.findById(sprintId).orElse(null) : null;
         boolean isClosedSprint = sprint != null && sprint.getState() == SprintState.CLOSED;
 
@@ -212,7 +217,6 @@ public class ContributionReportServiceImpl implements ContributionReportService 
                         .reduce(BigDecimal.ZERO, BigDecimal::add)
                         .divide(BigDecimal.valueOf(snapshots.size()), 1, RoundingMode.HALF_UP);
 
-        boolean isLeader = projectMemberService.hasPermission(projectId, currentUserId, PermissionKey.PROJECT_ADMIN);
 
         List<MemberContributionResponse> members = snapshots.stream()
                 .sorted(Comparator.comparing(SprintContributionSnapshot::getTotalPoints).reversed())
@@ -236,7 +240,9 @@ public class ContributionReportServiceImpl implements ContributionReportService 
                 })
                 .toList();
 
-        // Nếu là Member thường, chỉ trả về phần của chính mình trong danh sách bảng so sánh chi tiết
+        // Phân quyền hiển thị: Leader xem được toàn bộ thành viên; Member chỉ xem được đóng góp của chính mình
+        boolean isLeader = currentUserId == null || projectMemberService.hasPermission(projectId, currentUserId, PermissionKey.PROJECT_ADMIN);
+
         List<MemberContributionResponse> visibleMembers = isLeader
                 ? members
                 : members.stream().filter(m -> m.getUserId().equals(currentUserId)).toList();
@@ -408,7 +414,8 @@ public class ContributionReportServiceImpl implements ContributionReportService 
                         .reduce(BigDecimal.ZERO, BigDecimal::add)
                         .divide(BigDecimal.valueOf(memberResponses.size()), 1, RoundingMode.HALF_UP);
 
-        boolean isLeader = projectMemberService.hasPermission(projectId, currentUserId, PermissionKey.PROJECT_ADMIN);
+        // Phân quyền hiển thị: Leader xem được toàn bộ thành viên; Member chỉ xem được đóng góp của chính mình
+        boolean isLeader = currentUserId == null || projectMemberService.hasPermission(projectId, currentUserId, PermissionKey.PROJECT_ADMIN);
 
         List<MemberContributionResponse> visibleMembers = isLeader
                 ? memberResponses
@@ -446,7 +453,7 @@ public class ContributionReportServiceImpl implements ContributionReportService 
     @Override
     @Transactional(readOnly = true)
     public List<ContributionLedgerEntryResponse> getLedgerEntries(UUID projectId, UUID sprintId, UUID currentUserId) {
-        boolean isLeader = projectMemberService.hasPermission(projectId, currentUserId, PermissionKey.PROJECT_ADMIN);
+        boolean isLeader = currentUserId == null || projectMemberService.hasPermission(projectId, currentUserId, PermissionKey.PROJECT_ADMIN);
 
         List<ContributionLedgerEntry> entries = sprintId != null
                 ? ledgerRepository.findByProjectIdAndSprintIdOrderByCreatedAtDesc(projectId, sprintId)
@@ -498,8 +505,8 @@ public class ContributionReportServiceImpl implements ContributionReportService 
     @Transactional(readOnly = true)
     public MemberContributionDetailResponse getMemberDetail(
             UUID projectId, UUID targetUserId, UUID sprintId, UUID currentUserId) {
+        boolean isLeader = currentUserId == null || projectMemberService.hasPermission(projectId, currentUserId, PermissionKey.PROJECT_ADMIN);
 
-        boolean isLeader = projectMemberService.hasPermission(projectId, currentUserId, PermissionKey.PROJECT_ADMIN);
         if (!isLeader && !targetUserId.equals(currentUserId)) {
             throw new AccessDeniedException("Thành viên chỉ được quyền xem chi tiết đóng góp của chính mình");
         }

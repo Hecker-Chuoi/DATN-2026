@@ -58,6 +58,8 @@ class WorkflowEngineServiceTest {
     private ProjectMemberService projectMemberService;
     @Mock
     private ContributionReportService contributionReportService;
+    @Mock
+    private SprintRepository sprintRepository;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -681,5 +683,48 @@ class WorkflowEngineServiceTest {
         assertThat(parentStory.getStatusId()).isEqualTo(inProgressStatusId);
         assertThat(parentStory.getResolution()).isNull();
         assertThat(parentStory.getResolvedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("Chặn mở lại (Reopen) công việc thuộc Sprint đã đóng")
+    void executeTransition_shouldThrowBadRequest_whenReopeningFromClosedSprint() {
+        UUID closedSprintId = UUID.randomUUID();
+        Sprint closedSprint = Sprint.builder()
+                .id(closedSprintId)
+                .name("Sprint 1 (Closed)")
+                .state(com.datn.workservice.enums.SprintState.CLOSED)
+                .build();
+
+        UUID reopenTransitionId = UUID.randomUUID();
+        WorkflowTransition reopenTransition = WorkflowTransition.builder()
+                .id(reopenTransitionId)
+                .workflowId(workflowId)
+                .fromStatusId(doneStatusId)
+                .toStatusId(inProgressStatusId)
+                .name("Reopen")
+                .build();
+
+        WorkItem doneItem = WorkItem.builder()
+                .id(workItemId)
+                .projectId(projectId)
+                .typeId(typeId)
+                .sprintId(closedSprintId)
+                .code("PRJ-105")
+                .statusId(doneStatusId)
+                .build();
+
+        when(workItemRepository.findById(workItemId)).thenReturn(Optional.of(doneItem));
+        when(workflowSchemeRepository.findByProjectId(projectId)).thenReturn(List.of());
+        when(workflowRepository.findByProjectIdAndIsDefaultTrue(projectId)).thenReturn(Optional.of(workflow));
+        when(workflowTransitionRepository.findById(reopenTransitionId)).thenReturn(Optional.of(reopenTransition));
+        when(statusRepository.findById(doneStatusId)).thenReturn(Optional.of(doneStatus));
+        when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
+        when(sprintRepository.findById(closedSprintId)).thenReturn(Optional.of(closedSprint));
+
+        ExecuteTransitionRequest request = ExecuteTransitionRequest.builder().transitionId(reopenTransitionId).build();
+
+        assertThatThrownBy(() -> workflowEngineService.executeTransition(workItemId, reopenTransitionId, request, currentUserId))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Không thể mở lại (Reopen) công việc thuộc Chu kỳ (Sprint) đã kết thúc");
     }
 }

@@ -71,7 +71,8 @@ export default function ContributionLedgerModal({ projectId, sprintId, isLeader,
               </p>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              {isLeader && (
+              {/* Nút Điều chỉnh điểm thủ công trong Ledger Modal (tạm ẩn theo yêu cầu) */}
+              {/* {isLeader && (
                 <button
                   onClick={() => {
                     onClose();
@@ -90,7 +91,7 @@ export default function ContributionLedgerModal({ projectId, sprintId, isLeader,
                 >
                   + Điều chỉnh điểm
                 </button>
-              )}
+              )} */}
               <button
                 onClick={onClose}
                 style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: SURFACE.textMuted }}

@@ -10,6 +10,7 @@ import com.datn.workservice.dto.response.AvailableTransitionResponse;
 import com.datn.workservice.entity.*;
 import com.datn.workservice.enums.LinkType;
 import com.datn.workservice.enums.PermissionKey;
+import com.datn.workservice.enums.SprintState;
 import com.datn.workservice.enums.StatusCategory;
 import com.datn.workservice.enums.WorkItemResolution;
 import com.datn.workservice.repository.*;
@@ -43,6 +44,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
     private final WorkItemCommentRepository workItemCommentRepository;
     private final ProjectMemberService projectMemberService;
     private final ContributionReportService contributionReportService;
+    private final SprintRepository sprintRepository;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -100,6 +102,18 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
 
             // Target Status info
             Status toStatus = statusRepository.findById(t.getToStatusId()).orElse(null);
+
+
+            // Chặn Reopen công việc thuộc Sprint đã đóng (CLOSED)
+            if (workItem.getSprintId() != null) {
+                Status curStatus = statusRepository.findById(workItem.getStatusId()).orElse(null);
+                if (curStatus != null && curStatus.getCategory() == StatusCategory.DONE && toStatus.getCategory() != StatusCategory.DONE) {
+                    Sprint sprint = sprintRepository.findById(workItem.getSprintId()).orElse(null);
+                    if (sprint != null && sprint.getState() == SprintState.CLOSED) {
+                        continue;
+                    }
+                }
+            }
             if (toStatus == null) {
                 continue;
             }
@@ -216,6 +230,18 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
         }
 
         executeValidators(transition.getValidatorsConfig(), workItem, request, toStatus);
+
+        // 4c. Reopen Guard: Không cho phép mở lại (Reopen) công việc thuộc Chu kỳ (Sprint) đã kết thúc
+        Status currentWorkItemStatus = statusRepository.findById(workItem.getStatusId()).orElse(null);
+        if (currentWorkItemStatus != null && currentWorkItemStatus.getCategory() == StatusCategory.DONE && toStatus.getCategory() != StatusCategory.DONE) {
+            if (workItem.getSprintId() != null) {
+                Sprint sprint = sprintRepository.findById(workItem.getSprintId()).orElse(null);
+                if (sprint != null && sprint.getState() == SprintState.CLOSED) {
+                    throw new BadRequestException("Không thể mở lại (Reopen) công việc thuộc Chu kỳ (Sprint) đã kết thúc '"
+                            + sprint.getName() + "'. Hãy tạo một công việc hoặc báo lỗi (Bug) mới trong chu kỳ hiện tại để xử lý.");
+                }
+            }
+        }
 
         // 5. Update Status & Resolution
         Status oldStatus = statusRepository.findById(workItem.getStatusId()).orElse(null);
