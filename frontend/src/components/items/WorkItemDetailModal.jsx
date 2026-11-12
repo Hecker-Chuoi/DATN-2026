@@ -36,7 +36,8 @@ import {
   Search,
   Check,
   AlertTriangle,
-  Lock
+  Lock,
+  HelpCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workItemApi, sprintApi, getUserKeycloakId } from '../../api.js';
@@ -57,6 +58,31 @@ const TYPE_ICONS = {
   BUG: { icon: CircleDot, color: '#E5493A', label: 'Sự cố' },
   SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Công việc con' },
 };
+
+// Loại liên kết + mô tả ngắn (khớp hành vi backend WorkItemLinkServiceImpl / WorkflowEngineServiceImpl)
+const LINK_TYPE_OPTIONS = [
+  {
+    value: 'BLOCKS',
+    label: 'Cản trở / Chặn tiến độ',
+    desc: 'Công việc được chọn phải chờ công việc này xong mới chuyển được sang Đang thực hiện / Hoàn thành.',
+  },
+  {
+    value: 'RELATES_TO',
+    label: 'Có liên quan đến',
+    desc: 'Chỉ để tham chiếu qua lại, không ràng buộc trạng thái.',
+  },
+  {
+    value: 'DUPLICATES',
+    label: 'Trùng lặp với',
+    desc: 'Công việc này trùng với công việc được chọn và sẽ được tự động đóng (kết quả: Trùng lặp).',
+    warning: true,
+  },
+  {
+    value: 'CAUSES',
+    label: 'Gây ra / Nguyên nhân của',
+    desc: 'Công việc này là nguyên nhân sinh ra công việc được chọn (vd: một thay đổi gây ra lỗi). Dùng để truy vết, không chặn trạng thái.',
+  },
+];
 
 export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [], sprints = [], canManageSprint = true }) {
   const { handleBackdropClick } = useModalBackdrop();
@@ -106,6 +132,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
   const [links, setLinks] = useState([]);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkRelationType, setLinkRelationType] = useState('RELATES_TO');
+  const [showLinkTypeHelp, setShowLinkTypeHelp] = useState(false);
   const [linkSearchQuery, setLinkSearchQuery] = useState('');
   const [linkSearchResults, setLinkSearchResults] = useState([]);
   const [selectedTargetItem, setSelectedTargetItem] = useState(null);
@@ -663,7 +690,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
             {(() => {
               const displayColor = item?.typeColor || typeInfo.color || '#2563EB';
               const lvl = item?.hierarchyLevel;
-              const lvlLabel = lvl === 1 ? 'Cấp 1 • Hạng mục lớn' : lvl === 0 ? 'Cấp 0 • Tiêu chuẩn' : lvl === -1 ? 'Cấp -1 • Công việc con' : null;
+              const lvlLabel = lvl === 1 ? 'Cấp 3 • Hạng mục lớn' : lvl === 0 ? 'Cấp 2 • Tiêu chuẩn' : lvl === -1 ? 'Cấp 1 • Công việc con' : null;
               return (
                 <div
                   style={{
@@ -1414,7 +1441,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                   flexShrink: 0,
                                   display: 'inline-block',
                                 }}
-                                title={cs.typeName || 'Công việc'}
+                                title={getTypeDisplayName(cs.typeName || cs.typeCode)}
                               />
                               <span
                                 onClick={() => setCurrentId(cs.id)}
@@ -2451,19 +2478,77 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               </div>
 
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>
-                  Loại quan hệ
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>
+                    Loại quan hệ
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowLinkTypeHelp((v) => !v)}
+                    aria-expanded={showLinkTypeHelp}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      padding: 0,
+                      cursor: 'pointer',
+                      color: showLinkTypeHelp ? '#2563EB' : '#64748B',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <HelpCircle size={13} />
+                    <span>{showLinkTypeHelp ? 'Ẩn giải thích' : 'Giải thích các loại'}</span>
+                  </button>
+                </div>
                 <CustomSelect
                   value={linkRelationType}
                   onChange={(val) => setLinkRelationType(val)}
-                  options={[
-                    { value: 'BLOCKS', label: 'Cản trở / Chặn tiến độ' },
-                    { value: 'RELATES_TO', label: 'Có liên quan đến' },
-                    { value: 'DUPLICATES', label: 'Trùng lặp với' },
-                    { value: 'CAUSES', label: 'Gây ra / Nguyên nhân của' },
-                  ]}
+                  options={LINK_TYPE_OPTIONS.map(({ value, label }) => ({ value, label }))}
                 />
+
+                {showLinkTypeHelp && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: 6,
+                      backgroundColor: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: 8,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                    }}
+                  >
+                    {LINK_TYPE_OPTIONS.map((opt) => {
+                      const active = opt.value === linkRelationType;
+                      return (
+                        <div
+                          key={opt.value}
+                          onClick={() => setLinkRelationType(opt.value)}
+                          title="Bấm để chọn loại này"
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            backgroundColor: active ? '#EFF6FF' : 'transparent',
+                            borderLeft: `3px solid ${active ? '#2563EB' : 'transparent'}`,
+                          }}
+                        >
+                          <div style={{ fontSize: 12, fontWeight: 700, color: active ? '#1D4ED8' : '#0F172A' }}>
+                            {opt.label}
+                          </div>
+                          <div style={{ fontSize: 11, lineHeight: 1.45, color: opt.warning ? '#B45309' : '#64748B', marginTop: 1 }}>
+                            {opt.warning && <AlertTriangle size={11} style={{ verticalAlign: '-1px', marginRight: 3 }} />}
+                            {opt.desc}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div>
