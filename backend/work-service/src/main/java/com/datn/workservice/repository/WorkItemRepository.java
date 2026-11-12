@@ -24,7 +24,10 @@ public interface WorkItemRepository extends JpaRepository<WorkItem, UUID>, JpaSp
     List<WorkItem> findBySprintIdOrderByRankAsc(UUID sprintId);
     List<WorkItem> findByProjectIdAndSprintIdIsNull(UUID projectId);
     List<WorkItem> findByParentId(UUID parentId);
+    boolean existsByParentIdAndDeletedAtIsNull(UUID parentId);
     List<WorkItem> findByParentIdIn(List<UUID> parentIds);
+    List<WorkItem> findByProjectIdAndDeletedAtIsNull(UUID projectId);
+    List<WorkItem> findBySprintIdAndDeletedAtIsNull(UUID sprintId);
     List<WorkItem> findByProjectIdAndStatusId(UUID projectId, UUID statusId);
     List<WorkItem> findByAssigneeId(UUID assigneeId);
     List<WorkItem> findByReporterId(UUID reporterId);

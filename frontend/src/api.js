@@ -538,6 +538,23 @@ export const sprintApi = {
   getCfd: (projectId, params) => apiClient.get(`${WORK_BASE}/projects/${projectId}/cfd`, { params }),
 };
 
+// ─── 5b. Contribution API (Sổ ghi công & Báo cáo đóng góp) ────────────────────
+export const contributionApi = {
+  getOverview: (projectId, params) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/reports/contributions`, { params }),
+  getLedger: (projectId, params) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/reports/contributions/ledger`, { params }),
+  getMemberDetail: (projectId, targetUserId, params) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/reports/contributions/members/${targetUserId}`, { params }),
+  adjustPoints: (projectId, data) =>
+    apiClient.post(`${WORK_BASE}/projects/${projectId}/reports/contributions/adjust`, data),
+  getExportUrl: (projectId, sprintId) => {
+    let url = `${WORK_BASE}/projects/${projectId}/reports/contributions/export`;
+    if (sprintId) url += `?sprintId=${sprintId}`;
+    return url;
+  },
+};
+
 // ─── 6. Components & Versions API ─────────────────────────────────────────────
 export const componentApi = {
   listByProject: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/components`),
