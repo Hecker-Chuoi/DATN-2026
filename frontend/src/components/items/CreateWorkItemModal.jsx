@@ -155,7 +155,7 @@ export default function CreateWorkItemModal({
 
     const isEp = t.hierarchyLevel === 1 || t.code === 'EPIC';
     const isSub = t.hierarchyLevel === -1 || t.code === 'SUBTASK' || Boolean(t.isSubtask);
-    const levelBadgeText = isEp ? 'Cấp 1' : isSub ? 'Cấp -1' : 'Cấp 0';
+    const levelBadgeText = isEp ? 'Cấp 3' : isSub ? 'Cấp 1' : 'Cấp 2';
 
     return (
       <button
@@ -388,7 +388,7 @@ export default function CreateWorkItemModal({
                 Loại công việc <span style={{ color: '#EF4444' }}>*</span>
               </label>
               <span style={{ fontSize: 11, color: '#64748B' }}>
-                Phân cấp 3 tầng (Cấp 1, Cấp 0, Cấp -1)
+                Phân cấp 3 tầng (Cấp 3, Cấp 2, Cấp 1)
               </span>
             </div>
 
@@ -423,7 +423,7 @@ export default function CreateWorkItemModal({
                         gap: 4,
                       }}
                     >
-                      <Zap size={10} /> Cấp 1 • Hạng mục lớn
+                      <Zap size={10} /> Cấp 3 • Hạng mục lớn
                     </span>
                     <span style={{ fontSize: 11, color: '#94A3B8' }}>Cấp cao nhất, không có cha</span>
                   </div>
@@ -453,7 +453,7 @@ export default function CreateWorkItemModal({
                         gap: 4,
                       }}
                     >
-                      <CheckSquare size={10} /> Cấp 0 • Tiêu chuẩn
+                      <CheckSquare size={10} /> Cấp 2 • Tiêu chuẩn
                     </span>
                     <span style={{ fontSize: 11, color: '#94A3B8' }}>Công việc chính, có thể gắn vào Hạng mục lớn</span>
                   </div>
@@ -483,9 +483,9 @@ export default function CreateWorkItemModal({
                         gap: 4,
                       }}
                     >
-                      <GitCommit size={10} /> Cấp -1 • Công việc con
+                      <GitCommit size={10} /> Cấp 1 • Công việc con
                     </span>
-                    <span style={{ fontSize: 11, color: '#94A3B8' }}>Phụ thuộc, bắt buộc có cha Cấp 0</span>
+                    <span style={{ fontSize: 11, color: '#94A3B8' }}>Phụ thuộc, bắt buộc có cha Cấp 2</span>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {subtaskTypes.map(renderTypeButton)}
@@ -524,14 +524,14 @@ export default function CreateWorkItemModal({
                       color: '#FFFFFF',
                     }}
                   >
-                    {isEpic ? 'Cấp 1 (Hạng mục lớn)' : isSubtask ? 'Cấp -1 (Công việc con)' : 'Cấp 0 (Tiêu chuẩn)'}
+                    {isEpic ? 'Cấp 3 (Hạng mục lớn)' : isSubtask ? 'Cấp 1 (Công việc con)' : 'Cấp 2 (Tiêu chuẩn)'}
                   </span>
                 </div>
                 <span style={{ color: '#64748B', fontSize: 11, fontStyle: 'italic' }}>
                   {isEpic
                     ? 'Không có công việc cha'
                     : isSubtask
-                    ? 'Bắt buộc chọn công việc cha (Cấp 0)'
+                    ? 'Bắt buộc chọn công việc cha (Cấp 2)'
                     : 'Tùy chọn gắn vào Hạng mục lớn cha'}
                 </span>
               </div>
@@ -595,7 +595,7 @@ export default function CreateWorkItemModal({
                   border: '1px dashed #CBD5E1',
                 }}
               >
-                ℹ️ Hạng mục lớn là cấp cao nhất (Cấp 1) và không thể trực thuộc công việc khác.
+                ℹ️ Hạng mục lớn là cấp cao nhất (Cấp 3) và không thể trực thuộc công việc khác.
               </div>
             ) : (
               <CustomSelect

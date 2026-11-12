@@ -22,7 +22,7 @@ export default function BoardSwimlane({ lane, children }) {
         }}
       >
         {open ? <ChevronDown size={15} color={SURFACE.textMuted} /> : <ChevronRight size={15} color={SURFACE.textMuted} />}
-        <span style={{ fontSize: 13, fontWeight: 700, color: SURFACE.text }}>{lane.name === 'Không thuộc Epic nào' ? 'Không thuộc hạng mục lớn nào' : lane.name}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: SURFACE.text }}>{lane.name === 'Không thuộc Epic nào' ? 'Không thuộc hạng mục lớn nào' : lane.name === 'Epic' ? 'Hạng mục lớn' : lane.name}</span>
         <span style={{ fontSize: 11, color: SURFACE.textMuted }}>({lane.cardCount ?? 0})</span>
         {lane.unsupported && (
           <span

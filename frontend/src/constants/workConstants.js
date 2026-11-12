@@ -122,10 +122,19 @@ export const getPriorityDisplayName = (priority) => {
   return priority;
 };
 
+// Chỉ dùng để HIỂN THỊ: BE lưu hierarchyLevel 1 / 0 / -1 (Hạng mục lớn / Tiêu chuẩn / Công việc con),
+// FE hiển thị Cấp 3 / Cấp 2 / Cấp 1. Mọi so sánh/logic vẫn dùng giá trị gốc của BE.
+export const toDisplayHierarchyLevel = (level) => {
+  if (level === 1) return 3;
+  if (level === 0) return 2;
+  if (level === -1) return 1;
+  return level;
+};
+
 export const getHierarchyDisplayName = (level) => {
-  if (level === 1) return 'Cấp 1 • Hạng mục lớn';
-  if (level === -1) return 'Cấp -1 • Công việc con';
-  return 'Cấp 0 • Tiêu chuẩn';
+  if (level === 1) return 'Cấp 3 • Hạng mục lớn';
+  if (level === -1) return 'Cấp 1 • Công việc con';
+  return 'Cấp 2 • Tiêu chuẩn';
 };
 
 export const getRoleDisplayName = (role) => {

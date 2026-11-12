@@ -239,7 +239,7 @@ export default function ProjectBoardPage() {
             <button
               type="button"
               onClick={() => setTypeFilter(typeFilter === 'LEVEL_1' ? 'ALL' : 'LEVEL_1')}
-              title={isBusiness ? "Lọc tất cả công việc Cấp 1 (Giai đoạn)" : "Lọc tất cả công việc Cấp 1 (Hạng mục lớn)"}
+              title={isBusiness ? "Lọc tất cả công việc Cấp 3 (Giai đoạn)" : "Lọc tất cả công việc Cấp 3 (Hạng mục lớn)"}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -255,7 +255,7 @@ export default function ProjectBoardPage() {
                 transition: 'all 0.15s ease',
               }}
             >
-              <Zap size={11} /> Cấp 1
+              <Zap size={11} /> Cấp 3
             </button>
 
             {groupedTypes.level1.map((t) => {
@@ -301,7 +301,7 @@ export default function ProjectBoardPage() {
             <button
               type="button"
               onClick={() => setTypeFilter(typeFilter === 'LEVEL_0' ? 'ALL' : 'LEVEL_0')}
-              title="Lọc tất cả công việc Cấp 0 (Tiêu chuẩn)"
+              title="Lọc tất cả công việc Cấp 2 (Tiêu chuẩn)"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -317,7 +317,7 @@ export default function ProjectBoardPage() {
                 transition: 'all 0.15s ease',
               }}
             >
-              <CheckSquare size={11} /> Cấp 0
+              <CheckSquare size={11} /> Cấp 2
             </button>
 
             {groupedTypes.level0.map((t) => {
@@ -363,7 +363,7 @@ export default function ProjectBoardPage() {
             <button
               type="button"
               onClick={() => setTypeFilter(typeFilter === 'LEVEL_-1' ? 'ALL' : 'LEVEL_-1')}
-              title="Lọc tất cả công việc Cấp -1 (Công việc con)"
+              title="Lọc tất cả công việc Cấp 1 (Công việc con)"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -379,7 +379,7 @@ export default function ProjectBoardPage() {
                 transition: 'all 0.15s ease',
               }}
             >
-              <Layers size={11} /> Cấp -1
+              <Layers size={11} /> Cấp 1
             </button>
 
             {groupedTypes.levelMinus1.map((t) => {
