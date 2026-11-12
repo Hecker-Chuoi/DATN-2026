@@ -210,6 +210,40 @@ sequenceDiagram
 
 Quy trình quản lý Sprint Scrum chuẩn: Kích hoạt Sprint, theo dõi tiến độ và khi Đóng Sprint (Complete Sprint), tự động chụp Snapshot số liệu báo cáo và chuyển các Issue chưa hoàn thành (Incomplete Issues) sang Backlog hoặc Sprint tiếp theo.
 
+### 5.1. Bắt đầu Sprint / Giai đoạn
+
+Các Sprint (giai đoạn) được bắt đầu **lần lượt**: chỉ Sprint `FUTURE` đứng đầu thứ tự kế hoạch (ngày bắt đầu dự kiến sớm nhất) mới được bắt đầu, và chỉ khi dự án chưa có Sprint `ACTIVE` (BR-S11, BR-S15 trong [`7_QUY_TAC_NGHIEP_VU_SPRINT_BOARD_BAO_CAO.md`](./7_QUY_TAC_NGHIEP_VU_SPRINT_BOARD_BAO_CAO.md)).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor PM as 👤 Quản lý dự án
+    participant SprintCtrl as 🎮 SprintController
+    participant SprintService as ⚙️ SprintService
+    participant Repo as 💾 SprintRepository
+    participant Outbox as 📤 OutboxService
+
+    PM->>SprintCtrl: POST /api/v1/work/sprints/{sprintId}/start<br/>{startDate, endDate, goal}
+    SprintCtrl->>SprintService: startSprint(sprintId, request, userId)
+    SprintService->>Repo: findById(sprintId)
+    Note over SprintService: Sprint phải ở FUTURE (400); dự án không phải mẫu (400)
+    SprintService->>Repo: findFirstByProjectIdAndState(projectId, ACTIVE)
+    alt Đã có Sprint ACTIVE
+        SprintService-->>PM: 409 "Dự án đã có Sprint đang chạy: '<tên>'…"
+    end
+    SprintService->>Repo: findByProjectIdAndState(projectId, FUTURE)
+    Note over SprintService: Sắp theo SprintSequence.PLAN_ORDER<br/>(startDate tăng dần, null cuối, rồi createdAt)
+    alt Sprint này không đứng đầu kế hoạch
+        SprintService-->>PM: 409 "…hãy bắt đầu '<Sprint đứng đầu>' trước…"
+    end
+    Note over SprintService: Bắt buộc ngày kết thúc, ≤ 8 tuần, không rỗng (trừ allowEmpty)
+    SprintService->>Repo: save(state = ACTIVE, startDate, endDate)
+    SprintService->>Outbox: record("SPRINT_STARTED")
+    SprintService-->>PM: 200 SprintResponse
+```
+
+### 5.2. Hoàn tất Sprint & chụp Snapshot
+
 ```mermaid
 sequenceDiagram
     autonumber

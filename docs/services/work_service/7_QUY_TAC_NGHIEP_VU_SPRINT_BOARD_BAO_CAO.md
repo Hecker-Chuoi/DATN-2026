@@ -79,6 +79,7 @@
 | **BR-S12** | **Ngày kết thúc là bắt buộc** khi bắt đầu — không có nó thì không vẽ được Burndown. Ngày bắt đầu mặc định là thời điểm hiện tại. |
 | **BR-S13** | Không được bắt đầu **Sprint rỗng**, trừ khi người dùng xác nhận rõ ràng (cờ `allowEmpty`). |
 | **BR-S14** | Sprint không nên kéo dài quá **8 tuần**. |
+| **BR-S15** | **Các Sprint/Giai đoạn được bắt đầu lần lượt theo kế hoạch.** Chỉ Sprint `FUTURE` **đứng đầu thứ tự kế hoạch** mới được bắt đầu; các Sprint `FUTURE` phía sau bị khoá cho tới lượt. Thứ tự kế hoạch = **ngày bắt đầu dự kiến tăng dần**, Sprint chưa có ngày xếp cuối, trùng ngày thì Sprint tạo trước đứng trước (trùng với thứ tự hiển thị BR-B02). Vi phạm → **409 Conflict** kèm tên Sprint cần bắt đầu trước. Muốn đổi thứ tự (ví dụ chèn "Giai đoạn 1.1" lên trước Giai đoạn 2) thì **sửa ngày bắt đầu dự kiến**. Nếu Sprint đứng đầu còn rỗng, nó vẫn chặn các Sprint sau (BR-S13): phải thêm việc vào, dời ngày của nó ra sau, hoặc xoá nó. |
 
 ### 3.4. Quy tắc hoàn tất Sprint — *phần tinh tế nhất*
 
@@ -120,7 +121,7 @@
 | Mã | Quy tắc |
 | :--- | :--- |
 | **BR-B01** | Backlog gồm công việc của dự án **chưa thuộc Sprint nào**. |
-| **BR-B02** | Màn hình Backlog hiển thị: Sprint `ACTIVE` (nếu có) → các Sprint `FUTURE` theo ngày bắt đầu → khối Backlog. **Sprint đã đóng không xuất hiện** (chúng thuộc màn hình Báo cáo). |
+| **BR-B02** | Màn hình Backlog hiển thị: Sprint `ACTIVE` (nếu có) → các Sprint `FUTURE` theo thứ tự kế hoạch (ngày bắt đầu dự kiến tăng dần, chưa có ngày xếp cuối, trùng ngày thì tạo trước đứng trước) → khối Backlog. **Sprint đã đóng không xuất hiện** (chúng thuộc màn hình Báo cáo). Vì vậy nút *Bắt đầu* chỉ sáng ở khối `FUTURE` **trên cùng** (BR-S15); các khối khác hiện nút bị khoá kèm lý do. |
 | **BR-B03** | **Sub-task không đứng thành hàng riêng** trên Backlog — chúng cuộn theo công việc cha (xem BR-S33). |
 | **BR-B04** | Thứ tự công việc do người dùng quyết định bằng kéo thả, và **kéo một thẻ chỉ được cập nhật đúng thẻ đó** — không đụng tới các thẻ xung quanh. |
 | **BR-B05** | Bộ lọc (tìm kiếm, Epic, người thực hiện, việc của tôi, mới cập nhật) chỉ **thu hẹp hiển thị**, không làm thay đổi dữ liệu. |
@@ -208,7 +209,7 @@
 | :--- | :--- | :---: | :--- |
 | Quyền | BR-P01 → BR-P04 | 🟢 Đã xong | Đã kiểm thử thật: truy cập Sprint trả 200, Sprint không tồn tại trả 404 |
 | Sprint — tạo/sửa/xoá | BR-S01 → BR-S05 | 🟢 Đã xong | Có unit test |
-| Sprint — bắt đầu | BR-S10 → BR-S14 | 🟢 Đã xong | Đã kiểm thử thật quy tắc 409 một-Sprint-ACTIVE và chặn Sprint rỗng |
+| Sprint — bắt đầu | BR-S10 → BR-S15 | 🟢 Đã xong | Đã kiểm thử thật quy tắc 409 một-Sprint-ACTIVE và chặn Sprint rỗng; BR-S15 (bắt đầu lần lượt) có unit test `SprintServiceTest`, `SprintSequenceTest` (bổ sung 13/11/2026) |
 | Sprint — hoàn tất | BR-S20 → BR-S28 | 🟢 Đã xong | Đã kiểm thử thật: việc DONE ở lại, việc dở sang Sprint 2, snapshot ghi đúng |
 | Sprint — liên tầng | BR-S30 → BR-S34 | 🟢 Đã xong | Có unit test cascade Sub-task |
 | Sprint — thêm/bớt việc | BR-S40 → BR-S43 | 🟢 Đã xong | Đã kiểm thử thật nhật ký hai lớp |
@@ -229,6 +230,7 @@
 | Tình huống | Mã HTTP | Thông điệp |
 | :--- | :---: | :--- |
 | Bắt đầu Sprint khi đã có Sprint chạy | 409 | *Dự án đã có Sprint đang chạy: '<tên>'. Hãy đóng Sprint đó trước khi bắt đầu Sprint mới.* |
+| Bắt đầu Sprint chưa tới lượt | 409 | *Các Sprint phải được bắt đầu lần lượt theo kế hoạch: hãy bắt đầu '<tên>' trước. Muốn đổi thứ tự, hãy sửa ngày bắt đầu dự kiến của các Sprint.* |
 | Bắt đầu Sprint rỗng | 400 | *Không thể bắt đầu một Sprint rỗng. Hãy kéo công việc vào Sprint trước.* |
 | Bắt đầu Sprint thiếu ngày kết thúc | 400 | *Ngày kết thúc Sprint là bắt buộc để theo dõi tiến độ Burndown.* |
 | Hoàn tất Sprint chưa chạy | 400 | *Chỉ Sprint đang chạy mới có thể đóng.* |
@@ -249,5 +251,6 @@
 1. **Sprint không mở lại được.** Jira cho phép; ở đây thì không, vì snapshot đã chốt. Nếu nghiệp vụ cần, phải bổ sung quy tắc xử lý snapshot cũ.
 2. **Quản trị Sprint mặc định chỉ dành cho Project Administrator.** Nếu muốn có vai trò *Scrum Master* riêng thì cần thêm vai trò mới, không nên nới quyền của Member.
 3. **Một dự án một Sprint ACTIVE.** Mô hình đa nhóm (nhiều nhóm chạy Sprint song song trong một dự án) chưa được hỗ trợ.
-4. **Board chưa gắn với Sprint cụ thể.** Board SCRUM luôn lấy Sprint đang chạy; muốn xem Sprint khác phải chỉ định rõ khi truy vấn.
-5. **Phân luồng theo truy vấn tuỳ biến (JQL)** phụ thuộc Giai đoạn 8, hiện hạ cấp về một luồng.
+4. **Thứ tự Sprint suy ra từ ngày bắt đầu dự kiến**, chưa có cột thứ tự riêng hay thao tác "Di chuyển lên/xuống" như Jira. Muốn đổi thứ tự thì sửa ngày (nút bút chì trên khối Sprint). Nếu sau này cần sắp xếp thủ công độc lập với ngày, phải thêm cột thứ tự vào `sprints` (migration mới) và bổ sung vào bộ nhân bản dự án mẫu.
+5. **Board chưa gắn với Sprint cụ thể.** Board SCRUM luôn lấy Sprint đang chạy; muốn xem Sprint khác phải chỉ định rõ khi truy vấn.
+6. **Phân luồng theo truy vấn tuỳ biến (JQL)** phụ thuộc Giai đoạn 8, hiện hạ cấp về một luồng.

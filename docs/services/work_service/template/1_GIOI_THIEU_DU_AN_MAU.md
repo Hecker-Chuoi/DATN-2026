@@ -94,7 +94,7 @@ Mẫu:     mốc gốc 05/01 ── Sprint 1 [05/01 → 19/01] ── Sprint 2 [
 Dự án:   bắt đầu 01/10 ── Sprint 1 [01/10 → 15/10] ── Sprint 2 [15/10 → 29/10] ── hạn 30/11
 ```
 
-Mọi ngày (sprint, hạn công việc, ngày phát hành version, hạn dự án) cùng cộng một offset, nên **độ dài sprint và khoảng cách giữa các mốc được giữ nguyên**. Nếu người dùng tự nhập hạn chót sớm hơn mốc cuối của kế hoạch sau khi dời, việc tạo dự án bị từ chối với thông báo cụ thể (ví dụ *"Sprint 'Sprint 4' kết thúc sau hạn chót dự án"*). Form trên FE tự gợi ý hạn chót = ngày bắt đầu + độ dài timeline của mẫu.
+Mọi ngày (sprint, hạn công việc, ngày phát hành version, hạn dự án) cùng cộng một offset, nên **độ dài sprint và khoảng cách giữa các mốc được giữ nguyên**. Thứ tự các sprint cũng giữ nguyên, nên ở dự án mới các sprint được bắt đầu lần lượt đúng như kế hoạch của mẫu: Sprint 1 trước, rồi Sprint 2… (luật BR-S15, xếp theo ngày bắt đầu dự kiến). Nếu người dùng tự nhập hạn chót sớm hơn mốc cuối của kế hoạch sau khi dời, việc tạo dự án bị từ chối với thông báo cụ thể (ví dụ *"Sprint 'Sprint 4' kết thúc sau hạn chót dự án"*). Form trên FE tự gợi ý hạn chót = ngày bắt đầu + độ dài timeline của mẫu.
 
 ---
 

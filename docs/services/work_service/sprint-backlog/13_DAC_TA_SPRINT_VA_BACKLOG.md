@@ -80,11 +80,13 @@ Logic nằm ở `backend/work-service/src/main/java/com/datn/workservice/service
 ### 3.1 Tạo Sprint — `create()`
 - Luôn tạo ở trạng thái `FUTURE`, ngày bắt đầu/kết thúc là tuỳ chọn.
 - Nếu có cả hai ngày thì `endDate` phải sau `startDate`.
-- Frontend gợi ý tên `Sprint N` (N = số Sprint đang hiển thị + 1).
+- Frontend gợi ý tên `Chu kỳ N` (N = số Sprint đang hiển thị + 1) và **ngày bắt đầu mặc định = ngày sau mốc cuối cùng** (ngày kết thúc, hoặc ngày bắt đầu nếu chưa có ngày kết thúc) của các Sprint đang có, hoặc hôm nay nếu mốc đó đã qua. Lý do: ngày bắt đầu quyết định thứ tự bắt đầu (BR-S15, xem §3.4), mặc định "hôm nay" sẽ khiến Sprint mới chen lên trước các Sprint đã lên lịch.
 
 ### 3.2 Sửa Sprint — `update()`
 - Mọi trường tuỳ chọn, `null` = giữ nguyên.
 - **Không sửa được Sprint `CLOSED`.**
+- Giao diện: nút bút chì trên khối Sprint `FUTURE` (chỉ người có `SPRINT_MANAGE`) mở `SprintFormModal mode="edit"`. Đây là cách **đổi thứ tự** các Sprint: sửa ngày bắt đầu dự kiến.
+- Response tính lại `canStart` theo thứ tự mới (trước đây luôn trả `false`).
 
 ### 3.3 Xoá Sprint — `delete()`
 - **Chỉ xoá được Sprint `FUTURE`.** Sprint ACTIVE phải đóng; Sprint CLOSED phải giữ để lưu vết báo cáo.
@@ -97,11 +99,12 @@ Kiểm tra theo thứ tự:
 1. Sprint đang ở `FUTURE`, nếu không → 400.
 2. Dự án chưa bị lưu trữ (`deletedAt == null`).
 3. Dự án **chưa có Sprint ACTIVE nào** → nếu có thì 409 `ConflictException` (“Hãy đóng Sprint đó trước…”). Unique index ở V5 là lớp chặn thứ hai.
-4. Xác định ngày:
+4. **Sprint này phải đứng đầu thứ tự kế hoạch trong các Sprint `FUTURE`** (BR-S15) → nếu không thì 409 `ConflictException` (“Các Sprint phải được bắt đầu lần lượt theo kế hoạch: hãy bắt đầu '<tên>' trước…”). Thứ tự kế hoạch do `service/SprintSequence.PLAN_ORDER` định nghĩa: `startDate` tăng dần, `null` xếp cuối, rồi `createdAt`, rồi `id`.
+5. Xác định ngày:
    - `start` = `request.startDate` → `sprint.startDate` → `now()`.
    - `end` = `request.endDate` → `sprint.endDate`; **bắt buộc có** (để vẽ Burndown).
    - `end > start`, và độ dài **không quá 56 ngày (8 tuần)**.
-5. Sprint phải có ít nhất 1 item, trừ khi gửi `allowEmpty: true`.
+6. Sprint phải có ít nhất 1 item, trừ khi gửi `allowEmpty: true`.
 
 Sau đó: `state = ACTIVE`, lưu ngày và `goal` (nếu gửi), ghi sự kiện outbox `SPRINT_STARTED`.
 
@@ -175,13 +178,13 @@ Cả hai đều đi qua hàm dùng chung `moveItemsToSprint()`:
 Mục đích: trả mọi thứ màn hình cần trong **một lần gọi** để không bị nháy khi tải.
 
 Các bước:
-1. Lấy Sprint `ACTIVE` + `FUTURE` (**không lấy CLOSED** — chúng thuộc màn hình Báo cáo), sắp ACTIVE trước, rồi FUTURE theo `startDate`.
+1. Lấy Sprint `ACTIVE` + `FUTURE` (**không lấy CLOSED** — chúng thuộc màn hình Báo cáo), sắp theo `SprintSequence.DISPLAY_ORDER`: ACTIVE trước, rồi FUTURE theo thứ tự kế hoạch (`startDate` tăng dần, `null` cuối, rồi `createdAt`).
 2. Hai truy vấn: item của các Sprint đó, và item Backlog (`sprint_id IS NULL`, theo rank).
 3. Ánh xạ sang `BoardCardResponse` bằng `WorkItemCardMapper` (dùng chung với Board).
 4. **Loại Sub-task khỏi danh sách hàng** (chúng đi theo cha), áp bộ lọc, sắp theo rank.
 5. Nhóm theo Sprint, tính cho mỗi nhóm: số item và story point theo 3 nhóm trạng thái TODO / IN_PROGRESS / DONE.
 6. Cờ UI:
-   - `canStart` = Sprint FUTURE **và** có item **và** dự án chưa có Sprint ACTIVE.
+   - `canStart` = Sprint FUTURE **và** có item **và** dự án chưa có Sprint ACTIVE **và** là Sprint FUTURE đứng đầu kế hoạch (`SprintSequence.startableSprintId`). Hệ quả: nút *Bắt đầu* chỉ sáng ở khối FUTURE trên cùng; frontend (`ProjectBacklogPage.startBlockedReason`) chỉ diễn giải lý do khoá thành tooltip, không tự quyết định.
    - `canComplete` = Sprint ACTIVE.
 7. Trả kèm `activeSprint`, danh sách `epics` (suy ra từ chính các thẻ, kèm tiến độ điểm), `statuses` của dự án, `totalBacklogItems`.
 
@@ -204,9 +207,9 @@ BacklogResponse
 |---|---|
 | `frontend/src/pages/ProjectBacklogPage.jsx` | Trang chính, kéo thả bằng `@dnd-kit`, mở các modal. |
 | `frontend/src/hooks/useProjectBacklog.js` | Nạp dữ liệu, bọc các thao tác ghi (`run` = khoá nút + reload im lặng). |
-| `frontend/src/components/backlog/SprintAccordion.jsx` | Một khối Sprint/Backlog có thể thu gọn, nút Bắt đầu/Hoàn tất. |
+| `frontend/src/components/backlog/SprintAccordion.jsx` | Một khối Sprint/Backlog có thể thu gọn, nút Sửa (bút chì) / Bắt đầu / Hoàn tất; tooltip nêu lý do khi nút Bắt đầu bị khoá. |
 | `frontend/src/components/backlog/BacklogIssueRow.jsx`, `InlineCreateIssueRow.jsx`, `BacklogToolbar.jsx` | Hàng công việc, tạo nhanh, thanh lọc. |
-| `frontend/src/components/sprints/SprintFormModal.jsx` | Dùng cho cả `mode="create"` và `mode="start"`. |
+| `frontend/src/components/sprints/SprintFormModal.jsx` | Dùng cho `mode="create"`, `mode="edit"` và `mode="start"`. |
 | `frontend/src/components/sprints/CompleteSprintModal.jsx` | Chọn đích cho việc chưa xong (`BACKLOG` hoặc một Sprint FUTURE). |
 | `frontend/src/utils/optimisticMove.js` | Hàm thuần `computeMove` / `revertMove`, dùng chung cho Backlog và Board. |
 | `frontend/src/api.js` → `sprintApi`, `boardApi.getBacklog`, `workItemApi.updateRank` | Gọi API. |
@@ -262,6 +265,7 @@ flowchart TD
 1. Mỗi dự án tối đa **1 Sprint ACTIVE** (service + unique index).
 2. Chỉ Sprint **FUTURE** được xoá hoặc bắt đầu; chỉ Sprint **ACTIVE** được đóng; Sprint **CLOSED** không được sửa hay thêm/bớt item.
 3. Bắt đầu Sprint cần **ngày kết thúc**, dài **≤ 8 tuần** và **không rỗng** (trừ khi `allowEmpty`).
+3a. Các Sprint được bắt đầu **lần lượt**: chỉ Sprint FUTURE đứng đầu thứ tự kế hoạch (ngày bắt đầu dự kiến) mới được bắt đầu (BR-S15).
 4. Xoá Sprint → item về Backlog, không bị xoá.
 5. Đóng Sprint → item DONE ở lại Sprint cũ; item chưa xong sang Backlog hoặc Sprint khác; snapshot chụp trước khi di chuyển.
 6. **Sub-task luôn cùng Sprint với cha**, không kéo riêng được và không cộng story point.
@@ -277,8 +281,8 @@ Các điểm dưới đây là quan sát từ code, **chưa được sửa**:
 1. **Gọi API rank sai định dạng body.** `ProjectBacklogPage.jsx` gọi `workItemApi.updateRank(active.id, result.newRank)` — truyền **chuỗi**, trong khi backend nhận `Map` và đọc `body.get("rank")`. Với header `Content-Type: application/json`, chuỗi rank thô không phải JSON hợp lệ nên yêu cầu sẽ lỗi. Hệ quả: sắp xếp lại trong Backlog không lưu được; khi kéo sang nhóm khác, `addItems`/`removeItems` đã thành công nhưng UI vẫn hoàn tác vì lỗi ở bước rank. Nên gọi `updateRank(id, { rank: result.newRank })`.
 2. **Đổi Sprint qua `updateWorkItem` bị lỏng.** Không kiểm tra Sprint cùng dự án hay đã CLOSED, không tính lại rank, không đưa về Backlog được (`sprintId = null` bị bỏ qua), và chỉ cascade một tầng Sub-task. Đường chuẩn vẫn là API `/sprints/{id}/items`.
 3. **Đóng Sprint có thể phá bất biến cha–con.** Việc chia completed/incomplete xét từng item độc lập: Sub-task chưa xong của một cha DONE sẽ bị chuyển đi một mình, còn Sub-task DONE của một cha chưa xong bị cascade kéo ra khỏi Sprint đã đóng.
-4. **`update()` luôn truyền `projectHasActiveSprint = true`** vào `toResponse`, nên `canStart` trong response sau khi sửa luôn là `false` (chỉ ảnh hưởng response đó; màn hình Backlog đọc lại từ `/backlog` nên không sai).
-5. **Hook có `updateSprint` / `deleteSprint` nhưng UI chưa dùng** — chưa có nút sửa/xoá Sprint trên màn hình Backlog.
+4. ~~`update()` luôn truyền `projectHasActiveSprint = true` vào `toResponse`~~ — **đã sửa 13/11/2026** khi bổ sung BR-S15: `update()` tính lại Sprint được phép bắt đầu.
+5. **Hook có `deleteSprint` nhưng UI chưa dùng** — chưa có nút xoá Sprint trên màn hình Backlog. (Nút **sửa** đã có từ 13/11/2026.)
 6. **`sprintApi.getReport` gọi `/sprints/{id}/report`**, nhưng backend chưa có endpoint này.
 7. Tập status DONE khi đóng Sprint lấy bằng `statusRepository.findByCategory(DONE)` trên **toàn hệ thống**, không lọc theo dự án. Kết quả vẫn đúng vì chỉ dùng để so khớp `statusId`, nhưng truy vấn thừa.
 
@@ -292,14 +296,15 @@ backend/work-service/src/main/
 │   ├── controller/  SprintController, BacklogController, BoardController, AgileReportController
 │   ├── service/impl/ SprintServiceImpl, BacklogServiceImpl, BoardServiceImpl, WorkItemServiceImpl
 │   ├── service/report/ SprintReportSnapshotEngine, BurndownCalculator, WorkItemStateReplayer
-│   ├── service/LexoRankService.java, service/mapper/WorkItemCardMapper.java
+│   ├── service/LexoRankService.java, service/SprintSequence.java (thứ tự kế hoạch, BR-S15), service/mapper/WorkItemCardMapper.java
 │   ├── entity/  Sprint, SprintReportSnapshot, WorkItem
 │   ├── enums/SprintState.java
 │   └── dto/  CreateSprint/UpdateSprint/StartSprint/CompleteSprint/SprintItems Request,
 │             SprintResponse, SprintCompletionResponse, BacklogResponse, BacklogGroupResponse
 └── resources/db/migration/ V1__init_work_jira_schema.sql, V5__phase6_sprint_board_agile.sql
 
-backend/work-service/src/test/.../service/SprintServiceTest.java   (start/complete, cascade, snapshot)
+backend/work-service/src/test/.../service/SprintServiceTest.java   (start/complete, cascade, snapshot, bắt đầu lần lượt)
+backend/work-service/src/test/.../service/SprintSequenceTest.java  (thứ tự kế hoạch & Sprint được phép bắt đầu)
 
 frontend/src/
 ├── pages/ProjectBacklogPage.jsx

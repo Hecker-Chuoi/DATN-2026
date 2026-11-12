@@ -81,7 +81,8 @@ Hệ thống giao diện sử dụng chuẩn màu sắc và độ bo góc của 
    - Nút *Quick Filters* (ví dụ: *Only My Issues*, *Recently Updated*).
 2. **Khối Sprint Accordion (Collapsible Sprint Card):**
    - Header hiển thị: Tên Sprint (ví dụ: `Sprint 1 (Active)`), nhãn trạng thái `ACTIVE`, ngày bắt đầu - kết thúc, mục tiêu (Sprint Goal).
-   - Nút bấm hành động phía góc phải: **`Complete sprint`** (hoặc `Start sprint` nếu ở trạng thái Future).
+   - Nút bấm hành động phía góc phải: **`Complete sprint`** (hoặc `Start sprint` nếu ở trạng thái Future). Giống Jira, `Start sprint` **chỉ bấm được ở khối Future trên cùng** (Sprint đứng đầu kế hoạch, BR-S15); các khối Future phía dưới hiện nút bị khoá, rê chuột thấy lý do (đang có Sprint chạy / chưa tới lượt / chưa có việc).
+   - Khối Future có nút bút chì để sửa tên, mục tiêu, ngày dự kiến. Đổi ngày bắt đầu dự kiến chính là cách đổi thứ tự các Sprint.
    - Danh sách Issue dạng Card/Row nằm ngang hiển thị: Icon loại, Mã Key (`DATN-101`), Độ ưu tiên, Tóm tắt tiêu đề, Điểm Story Points, và Avatar người được gán.
 3. **Khối Backlog Container:**
    - Danh sách các Issue chưa đưa vào Sprint.

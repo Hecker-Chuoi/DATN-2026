@@ -145,7 +145,13 @@
             <span>▶ Giai đoạn 2: Thi công nội thất, Máy móc & Menu</span>
             <span class="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 rounded">TƯƠNG LAI</span>
           </div>
-          <span class="text-[11px]">8 công việc đang chờ</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px]">8 công việc đang chờ</span>
+            <!-- Nút bị khoá: chỉ giai đoạn đứng đầu kế hoạch mới bắt đầu được (BR-S15) -->
+            <button disabled title="Cần bắt đầu Giai đoạn 1 trước" class="px-2 py-0.5 text-[10px] font-semibold rounded-md bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed">
+              🔒 Bắt đầu giai đoạn
+            </button>
+          </div>
         </div>
       </div>
 
@@ -153,6 +159,10 @@
       <div class="text-[11px] text-[var(--muted-foreground)] flex items-center gap-2">
         <span class="text-blue-600 font-bold">Quy tắc bảo vệ:</span>
         <span>Kéo việc cha sang giai đoạn nào thì toàn bộ <b>việc con (sub-tasks) tự động đi theo</b>, không bị thất lạc!</span>
+      </div>
+      <div class="text-[11px] text-[var(--muted-foreground)] flex items-center gap-2">
+        <span class="text-blue-600 font-bold">Bắt đầu lần lượt:</span>
+        <span>Chỉ giai đoạn <b>đứng đầu kế hoạch</b> (ngày bắt đầu dự kiến sớm nhất) mới bấm được <b>Bắt đầu</b>; Giai đoạn 2, 3 khoá cho tới lượt.</span>
       </div>
     </div>
 

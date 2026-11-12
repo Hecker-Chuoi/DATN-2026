@@ -44,6 +44,9 @@ flowchart TD
   >   $$\text{Lập kế hoạch} \longrightarrow \text{Thực thi} \longrightarrow \text{Nghiệm thu / Đánh giá} \longrightarrow \text{Bắt đầu chu kỳ mới}$$
   > - **Hình tượng chiếc xe đạp:** Bánh xe quay tròn theo từng vòng (chu kỳ lặp lại), nhưng **chiếc xe đạp thì luôn tiến về phía trước trên đường thẳng**. Nhịp làm việc lặp lại đều đặn, nhưng khối lượng công việc hoàn thành và giá trị sản phẩm thì **liên tục tăng lên và tịnh tiến tới đích** (Khai trương quán Cafe / Golive phần mềm).
 * **Quy tắc vàng:** Tại một thời điểm, đội ngũ chỉ tập trung toàn lực vào **MỘT giai đoạn/chu kỳ đang chạy (ACTIVE)**. Giai đoạn nào kết thúc thì mới nghiệm thu và mở tiếp giai đoạn sau.
+  Hệ thống cưỡng chế quy tắc này bằng hai luật (chi tiết ở [`7_QUY_TAC_NGHIEP_VU_SPRINT_BOARD_BAO_CAO.md`](../7_QUY_TAC_NGHIEP_VU_SPRINT_BOARD_BAO_CAO.md)):
+  - **BR-S11 — Một giai đoạn chạy:** đang có giai đoạn ACTIVE thì mọi nút `[Bắt đầu]` đều khoá.
+  - **BR-S15 — Bắt đầu lần lượt:** kể cả khi chưa có giai đoạn nào chạy, **chỉ giai đoạn đứng đầu kế hoạch** (ngày bắt đầu dự kiến sớm nhất) mới bắt đầu được. Giai đoạn 2, 3 hiện nút `[Bắt đầu]` bị khoá kèm lý do *"Cần bắt đầu 'Giai đoạn 1…' trước"*. Gọi thẳng API cũng bị từ chối (409).
 
 ### 2.2. Áp dụng thực tế đa ngành
 * **Đội Phần mềm (Software Team):** Chia thành các **Chu kỳ (Sprint)** kéo dài 1 - 2 tuần. Đặt mục tiêu điểm số (Story Points) và vẽ biểu đồ Cháy (Burndown).
@@ -68,7 +71,7 @@ sequenceDiagram
     participant Engine as Bộ máy Snapshot & Báo cáo
 
     PM->>BL: 1. Gom việc vào Giai đoạn & Ước lượng
-    PM->>BL: 2. Bấm [Bắt đầu giai đoạn]
+    PM->>BL: 2. Bấm [Bắt đầu giai đoạn] ở giai đoạn đứng đầu kế hoạch
     BL->>Board: Kích hoạt Giai đoạn ACTIVE
     Note over Board: Bảng tự động KHOANH VÙNG<br/>chỉ hiển thị việc thuộc giai đoạn này
     Team->>Board: 3. Kéo thả Cần làm ➔ Đang làm ➔ Hoàn thành
@@ -79,7 +82,7 @@ sequenceDiagram
     Engine->>Engine: 6. Vẽ Biểu đồ Burndown & Vận tốc (Velocity)
 ```
 
-1. **Lập kế hoạch (Planning):** Kéo thả việc từ Kho việc chung (Backlog) vào các khối Giai đoạn 1, 2, 3. Việc con (Subtask) tự động đi theo việc cha.
+1. **Lập kế hoạch (Planning):** Kéo thả việc từ Kho việc chung (Backlog) vào các khối Giai đoạn 1, 2, 3. Việc con (Subtask) tự động đi theo việc cha. Các khối được xếp theo **ngày bắt đầu dự kiến**, và đây cũng là **thứ tự bắt buộc khi bắt đầu** (BR-S15): chỉ khối "Dự kiến" trên cùng có nút `[Bắt đầu giai đoạn]` sáng.
 2. **Khoanh vùng tập trung (Scoped Board):** Khi bấm **`[Bắt đầu giai đoạn]`**, bảng Kanban chỉ tải đúng các việc của giai đoạn đó. Tránh tình trạng thợ thi công nhìn thấy việc của đội tuyển dụng gây rối mắt.
 3. **Giám sát thời gian thực (Countdown Monitor):** Trên đỉnh bảng có thanh đếm ngược: `Còn 5 ngày` (bình thường) hoặc `Quá hạn 3 ngày` (chuyển đỏ cảnh báo).
 4. **Xử lý việc dở dang (Roll-over Incomplete Items):** Khi bấm **`[Hoàn tất giai đoạn]`**, hệ thống nhận diện các việc chưa xong và hỏi người dùng:
@@ -148,8 +151,9 @@ Trong quản trị dự án hiện đại (chuẩn Agile Alliance & PMI):
 #### Kịch bản B: Bể kế hoạch toàn diện (Ví dụ: Chủ nhà đòi lại mặt bằng quán cafe)
 * **Thực tế:** Đã xong Giai đoạn 1 (Thuê mặt bằng), chuẩn bị thi công thì chủ nhà huỷ hợp đồng.
 * **Cách xử lý:**
-  * Bấm **`[+ Tạo chu kỳ]`** mới ngay dưới Giai đoạn 1, đặt tên là:  
-    `Giai đoạn 1.1: Tìm kiếm & Đàm phán mặt bằng thay thế`.
+  * Bấm **`[+ Tạo chu kỳ]`**, đặt tên là:  
+    `Giai đoạn 1.1: Tìm kiếm & Đàm phán mặt bằng thay thế`,  
+    và đặt **ngày bắt đầu dự kiến sớm hơn Giai đoạn 2**. Nếu ngày của Giai đoạn 2 đã qua (kế hoạch bị trễ), bấm nút bút chì trên khối Giai đoạn 2 (và các giai đoạn sau) để **dời ngày** ra sau Giai đoạn 1.1. Vì các giai đoạn bắt đầu lần lượt theo ngày dự kiến (BR-S15), Giai đoạn 1.1 sẽ đứng đầu kế hoạch và là giai đoạn duy nhất bắt đầu được.
   * **Lý do:** Khi trình báo cáo lên nhà đầu tư, họ thấy rõ: Giai đoạn 1 cũ tốn 20 ngày và 50 triệu tiền cọc, Giai đoạn 1.1 tốn thêm 15 ngày ➔ Giải thích minh bạch 100% nguyên nhân dự án bị chậm.
 
 #### Kịch bản C: Lỡ tay bấm nhầm nút "Hoàn tất giai đoạn"
