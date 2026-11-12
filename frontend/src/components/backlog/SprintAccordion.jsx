@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Plus, Calendar, Bookmark } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Calendar, Bookmark, Pencil } from 'lucide-react';
 import SprintStateBadge from '../sprints/SprintStateBadge.jsx';
 import BacklogIssueRow from './BacklogIssueRow.jsx';
 import InlineCreateIssueRow from './InlineCreateIssueRow.jsx';
@@ -15,8 +15,10 @@ export default function SprintAccordion({
   canManageSprint,
   types = [],
   busy = false,
+  startBlockedReason,
   onSelectItem,
   onStart,
+  onEdit,
   onComplete,
   onQuickCreate,
   droppableProps = {},
@@ -130,8 +132,18 @@ export default function SprintAccordion({
 
         {!isBacklog && canManageSprint && group.state === 'FUTURE' && (
           <button
+            onClick={() => onEdit?.(group)}
+            disabled={busy}
+            title="Sửa tên, mục tiêu, ngày dự kiến (ngày bắt đầu quyết định thứ tự bắt đầu)"
+            style={iconBtn(busy)}
+          >
+            <Pencil size={13} />
+          </button>
+        )}
+        {!isBacklog && canManageSprint && group.state === 'FUTURE' && (
+          <button
             disabled={busy || !group.canStart}
-            title={group.canStart ? (group.name?.toLowerCase()?.includes('giai đoạn') ? 'Bắt đầu giai đoạn' : 'Bắt đầu chu kỳ') : 'Cần có công việc và không có chu kỳ nào đang chạy'}
+            title={group.canStart ? (group.name?.toLowerCase()?.includes('giai đoạn') ? 'Bắt đầu giai đoạn' : 'Bắt đầu chu kỳ') : startBlockedReason || 'Chưa thể bắt đầu lúc này'}
             onClick={() => onStart?.(group)}
             style={primaryBtn(busy || !group.canStart)}
           >
@@ -369,6 +381,22 @@ function primaryBtn(disabled) {
     cursor: disabled ? 'not-allowed' : 'pointer',
     backgroundColor: disabled ? '#E2E8F0' : '#2563EB',
     color: disabled ? '#94A3B8' : '#FFFFFF',
+  };
+}
+
+function iconBtn(disabled) {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    border: `1px solid ${SURFACE.border}`,
+    backgroundColor: '#FFFFFF',
+    color: SURFACE.textMuted,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    padding: 0,
   };
 }
 

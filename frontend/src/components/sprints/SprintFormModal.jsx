@@ -11,18 +11,23 @@ const DURATIONS = [
 ];
 
 /**
- * Modal dung chung cho "Tao Sprint" va "Bat dau Sprint".
+ * Modal dung chung cho "Tao Sprint", "Sua Sprint" va "Bat dau Sprint".
  *
- * Hai man hinh nay chi khac nhau o tieu de, nut bam va viec ngay ket thuc co bat buoc
+ * Ba man hinh nay chi khac nhau o tieu de, nut bam va viec ngay ket thuc co bat buoc
  * hay khong, nen gop lam mot de khong lap bo cuc form.
+ *
+ * Ngay bat dau du kien quyet dinh THU TU cac chu ky (BR-S15): chu ky nao co ngay som hon
+ * thi phai bat dau truoc. Vi vay khi tao moi, ngay mac dinh la sau chu ky cuoi cung
+ * (suggestedStartDate) thay vi hom nay - neu khong chu ky moi se chen len truoc ke hoach.
  *
  * Theo quy uoc san co cua du an: khong dung portal, tu render overlay fixed.
  */
 export default function SprintFormModal({
   isOpen,
-  mode = 'create', // 'create' | 'start'
+  mode = 'create', // 'create' | 'edit' | 'start'
   sprint,
   suggestedName,
+  suggestedStartDate,
   itemCount = 0,
   totalPoints = 0,
   hasActiveSprint = false,
@@ -32,6 +37,7 @@ export default function SprintFormModal({
 }) {
   const backdropProps = useModalBackdrop(onClose);
   const isStart = mode === 'start';
+  const isEdit = mode === 'edit';
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -43,10 +49,12 @@ export default function SprintFormModal({
     setError('');
     setName(sprint?.name || suggestedName || 'Chu kỳ 1');
     setGoal(sprint?.goal || '');
-    const start = sprint?.startDate ? toInput(sprint.startDate) : toInput(new Date());
+    const start = sprint?.startDate
+      ? toInput(sprint.startDate)
+      : toInput(suggestedStartDate || new Date());
     setStartDate(start);
     setEndDate(sprint?.endDate ? toInput(sprint.endDate) : isStart ? addDays(start, 14) : '');
-  }, [isOpen, sprint, suggestedName, isStart]);
+  }, [isOpen, sprint, suggestedName, suggestedStartDate, isStart]);
 
   if (!isOpen) return null;
 
@@ -65,8 +73,9 @@ export default function SprintFormModal({
       : {
           name: name.trim(),
           goal: goal.trim() || null,
-          startDate: startDate ? toIso(startDate) : null,
-          endDate: endDate ? toIso(endDate) : null,
+          // Khi sua ma khong doi ngay thi giu nguyen gio cu, tranh xao tron thu tu cac chu ky trung ngay.
+          startDate: keepOrIso(startDate, isEdit ? sprint?.startDate : null),
+          endDate: keepOrIso(endDate, isEdit ? sprint?.endDate : null),
         };
     try {
       await onSubmit?.(payload);
@@ -80,7 +89,7 @@ export default function SprintFormModal({
       <div style={panel} onClick={(e) => e.stopPropagation()}>
         <div style={header}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: SURFACE.text }}>
-            {isStart ? 'Bắt đầu chu kỳ' : 'Tạo chu kỳ mới'}
+            {isStart ? 'Bắt đầu chu kỳ' : isEdit ? 'Sửa chu kỳ' : 'Tạo chu kỳ mới'}
           </h3>
           <button onClick={onClose} style={iconBtn}><X size={18} /></button>
         </div>
@@ -94,6 +103,12 @@ export default function SprintFormModal({
                   Dự án đang có một chu kỳ đang chạy — cần hoàn tất chu kỳ đó trước.
                 </div>
               )}
+            </div>
+          )}
+          {!isStart && (
+            <div style={infoBox}>
+              Các chu kỳ được bắt đầu <b>lần lượt theo ngày bắt đầu dự kiến</b>: chu kỳ có ngày sớm hơn phải bắt
+              đầu trước. Muốn chen một chu kỳ lên trước, hãy đặt ngày bắt đầu sớm hơn chu kỳ đó.
             </div>
           )}
 
@@ -158,7 +173,7 @@ export default function SprintFormModal({
         <div style={footer}>
           <button onClick={onClose} style={secondaryBtn}>Hủy</button>
           <button onClick={submit} disabled={loading} style={primaryBtn(loading)}>
-            {loading ? 'Đang xử lý...' : isStart ? 'Bắt đầu' : 'Tạo chu kỳ'}
+            {loading ? 'Đang xử lý...' : isStart ? 'Bắt đầu' : isEdit ? 'Lưu thay đổi' : 'Tạo chu kỳ'}
           </button>
         </div>
       </div>
@@ -187,6 +202,10 @@ function addDays(dateStr, days) {
 }
 function toIso(dateStr) {
   return dateStr ? `${dateStr}T09:00:00` : null;
+}
+function keepOrIso(dateStr, original) {
+  if (!dateStr) return null;
+  return original && toInput(original) === dateStr ? original : toIso(dateStr);
 }
 
 const overlay = {

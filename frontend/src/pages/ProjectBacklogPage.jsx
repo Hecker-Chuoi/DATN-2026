@@ -52,6 +52,7 @@ export default function ProjectBacklogPage() {
   const [activeItem, setActiveItem] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [startTarget, setStartTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
   const [completeTarget, setCompleteTarget] = useState(null);
 
   const canManage = canManageSprint || isAdmin;
@@ -74,6 +75,23 @@ export default function ProjectBacklogPage() {
   );
 
   const types = project?.workItemTypes || [];
+
+  // Chu ky moi mac dinh bat dau SAU moc cuoi cung cua cac chu ky dang co, de no xep cuoi
+  // ke hoach thay vi chen len truoc (thu tu bat dau = ngay bat dau du kien, BR-S15).
+  const suggestedStartDate = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let latest = null;
+    for (const s of data?.sprints || []) {
+      const raw = s.endDate || s.startDate;
+      const d = raw ? new Date(raw) : null;
+      if (d && !Number.isNaN(d.getTime()) && (!latest || d > latest)) latest = d;
+    }
+    if (!latest || latest < today) return today;
+    const next = new Date(latest);
+    next.setDate(next.getDate() + 1);
+    return next;
+  }, [data]);
 
   // ───────────────────────── Kéo thả ─────────────────────────
 
@@ -186,6 +204,24 @@ export default function ProjectBacklogPage() {
 
   const suggestedName = `Chu kỳ ${(data?.sprints?.length || 0) + 1}`;
 
+  /**
+   * Ly do nut "Bat dau" bi khoa, de hien tooltip. Quyet dinh khoa/mo van do backend (canStart);
+   * o day chi giai thich. Backend tra cac Sprint FUTURE theo dung thu tu ke hoach (BR-S15),
+   * nen Sprint FUTURE dau tien chinh la Sprint duy nhat duoc bat dau tiep.
+   */
+  const startBlockedReason = (group) => {
+    if (group.state !== 'FUTURE' || group.canStart) return null;
+    const sprintGroups = data?.sprints || [];
+    const active = sprintGroups.find((s) => s.state === 'ACTIVE');
+    if (active) return `Đang có "${active.name}" chạy — hãy hoàn tất nó trước.`;
+    const next = sprintGroups.find((s) => s.state === 'FUTURE');
+    if (next && next.sprintId !== group.sprintId) {
+      return `Cần bắt đầu "${next.name}" trước — các chu kỳ/giai đoạn được bắt đầu lần lượt theo ngày bắt đầu dự kiến.`;
+    }
+    if (!group.itemCount) return 'Chưa có công việc nào — hãy kéo công việc vào trước.';
+    return null;
+  };
+
   // ───────────────────────── Render ─────────────────────────
 
   if (loading) {
@@ -247,10 +283,12 @@ export default function ProjectBacklogPage() {
                 canManageSprint={canManage}
                 types={types}
                 busy={busy}
+                startBlockedReason={startBlockedReason(group)}
                 isOver={isOver}
                 droppableProps={droppableProps}
                 onSelectItem={openItemDetail}
                 onStart={(g) => setStartTarget(g)}
+                onEdit={(g) => setEditTarget({ ...g, id: g.sprintId })}
                 onComplete={(g) => setCompleteTarget(g)}
                 onQuickCreate={handleQuickCreate}
                 renderRow={(item, _g, isChild) => (
@@ -275,12 +313,26 @@ export default function ProjectBacklogPage() {
         isOpen={createOpen}
         mode="create"
         suggestedName={suggestedName}
+        suggestedStartDate={suggestedStartDate}
         loading={busy}
         onClose={() => setCreateOpen(false)}
         onSubmit={async (payload) => {
           await backlog.createSprint(payload);
           setCreateOpen(false);
           toast.success('Đã tạo chu kỳ');
+        }}
+      />
+
+      <SprintFormModal
+        isOpen={!!editTarget}
+        mode="edit"
+        sprint={editTarget}
+        loading={busy}
+        onClose={() => setEditTarget(null)}
+        onSubmit={async (payload) => {
+          await backlog.updateSprint(editTarget.sprintId, payload);
+          setEditTarget(null);
+          toast.success('Đã cập nhật chu kỳ');
         }}
       />
 
