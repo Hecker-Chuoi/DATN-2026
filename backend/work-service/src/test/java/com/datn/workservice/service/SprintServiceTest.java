@@ -194,6 +194,80 @@ class SprintServiceTest {
         verify(outboxRecorder).record(eq("SPRINT"), eq(sprintId), eq("SPRINT_STARTED"), any());
     }
 
+    @Test
+    @DisplayName("startSprint: ném 409 khi còn Sprint FUTURE đứng trước trong kế hoạch (BR-S15)")
+    void startSprint_rejectsWhenEarlierSprintPlanned() {
+        LocalDateTime base = LocalDateTime.now().plusDays(1);
+        Sprint phase1 = Sprint.builder().id(UUID.randomUUID()).projectId(projectId)
+                .name("Giai đoạn 1").state(SprintState.FUTURE)
+                .startDate(base).endDate(base.plusDays(20)).build();
+        sprint.setName("Giai đoạn 2");
+        sprint.setStartDate(base.plusDays(20));
+        sprint.setEndDate(base.plusDays(42));
+
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(new Project()));
+        when(sprintRepository.findFirstByProjectIdAndState(projectId, SprintState.ACTIVE))
+                .thenReturn(Optional.empty());
+        when(sprintRepository.findByProjectIdAndState(projectId, SprintState.FUTURE))
+                .thenReturn(List.of(sprint, phase1));
+
+        assertThatThrownBy(() -> sprintService.startSprint(sprintId, new StartSprintRequest(), UUID.randomUUID()))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("Giai đoạn 1");
+
+        assertThat(sprint.getState()).isEqualTo(SprintState.FUTURE);
+        verify(sprintRepository, never()).save(any());
+        verify(outboxRecorder, never()).record(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("startSprint: Sprint chưa có ngày dự kiến đứng sau Sprint đã có ngày (BR-S15)")
+    void startSprint_rejectsUndatedSprintWhenDatedSprintPlanned() {
+        Sprint dated = Sprint.builder().id(UUID.randomUUID()).projectId(projectId)
+                .name("Sprint có lịch").state(SprintState.FUTURE)
+                .startDate(LocalDateTime.now().plusDays(30)).build();
+
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(new Project()));
+        when(sprintRepository.findFirstByProjectIdAndState(projectId, SprintState.ACTIVE))
+                .thenReturn(Optional.empty());
+        when(sprintRepository.findByProjectIdAndState(projectId, SprintState.FUTURE))
+                .thenReturn(List.of(sprint, dated));
+
+        assertThatThrownBy(() -> sprintService.startSprint(sprintId, new StartSprintRequest(), UUID.randomUUID()))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("Sprint có lịch");
+    }
+
+    @Test
+    @DisplayName("startSprint: cho phép bắt đầu Sprint FUTURE đứng đầu kế hoạch dù còn Sprint sau (BR-S15)")
+    void startSprint_allowsFirstSprintInPlan() {
+        LocalDateTime base = LocalDateTime.now().plusDays(1);
+        sprint.setStartDate(base);
+        Sprint later = Sprint.builder().id(UUID.randomUUID()).projectId(projectId)
+                .name("Sprint 2").state(SprintState.FUTURE)
+                .startDate(base.plusDays(14)).build();
+        StartSprintRequest req = StartSprintRequest.builder().endDate(base.plusDays(14)).build();
+
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(new Project()));
+        when(sprintRepository.findFirstByProjectIdAndState(projectId, SprintState.ACTIVE))
+                .thenReturn(Optional.empty());
+        when(sprintRepository.findByProjectIdAndState(projectId, SprintState.FUTURE))
+                .thenReturn(List.of(later, sprint));
+        when(workItemRepository.countBySprintIdAndDeletedAtIsNull(sprintId)).thenReturn(2L);
+        when(sprintRepository.save(any(Sprint.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(workItemRepository.findBySprintIdAndDeletedAtIsNullOrderByRankAsc(sprintId))
+                .thenReturn(List.of());
+        when(statusRepository.findAll()).thenReturn(List.of(todoStatus, doneStatus));
+
+        sprintService.startSprint(sprintId, req, UUID.randomUUID());
+
+        assertThat(sprint.getState()).isEqualTo(SprintState.ACTIVE);
+        assertThat(later.getState()).isEqualTo(SprintState.FUTURE);
+    }
+
     // ──────────────────────── completeSprint ────────────────────────
 
     @Test

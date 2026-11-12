@@ -18,6 +18,7 @@ import com.datn.workservice.repository.SprintRepository;
 import com.datn.workservice.repository.StatusRepository;
 import com.datn.workservice.repository.WorkItemRepository;
 import com.datn.workservice.service.BacklogService;
+import com.datn.workservice.service.SprintSequence;
 import com.datn.workservice.service.SprintService;
 import com.datn.workservice.service.mapper.CardMappingContext;
 import com.datn.workservice.service.mapper.WorkItemCardMapper;
@@ -59,12 +60,12 @@ public class BacklogServiceImpl implements BacklogService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
 
         // Sprint da dong khong hien tren Backlog - chung thuoc man hinh Bao cao.
+        // Thu tu hien thi trung voi thu tu ke hoach (BR-B02, BR-S15): khoi FUTURE tren cung
+        // chinh la giai doan duy nhat duoc bat dau tiep.
         List<Sprint> sprints = sprintRepository
                 .findByProjectIdAndStateIn(projectId, EnumSet.of(SprintState.ACTIVE, SprintState.FUTURE))
                 .stream()
-                .sorted(Comparator
-                        .<Sprint, Integer>comparing(s -> s.getState() == SprintState.ACTIVE ? 0 : 1)
-                        .thenComparing(s -> s.getStartDate() == null ? LocalDateTime.MAX : s.getStartDate()))
+                .sorted(SprintSequence.DISPLAY_ORDER)
                 .toList();
         List<UUID> sprintIds = sprints.stream().map(Sprint::getId).toList();
 
@@ -99,13 +100,13 @@ public class BacklogServiceImpl implements BacklogService {
                 .filter(c -> c.getSprintId() == null)
                 .toList();
 
-        boolean hasActive = sprints.stream().anyMatch(s -> s.getState() == SprintState.ACTIVE);
+        UUID startableId = SprintSequence.startableSprintId(sprints);
 
         List<BacklogGroupResponse> sprintGroups = sprints.stream()
-                .map(s -> toGroup(s, bySprint.getOrDefault(s.getId(), List.of()), hasActive))
+                .map(s -> toGroup(s, bySprint.getOrDefault(s.getId(), List.of()), startableId))
                 .toList();
 
-        BacklogGroupResponse backlogGroup = toGroup(null, backlogRows, hasActive);
+        BacklogGroupResponse backlogGroup = toGroup(null, backlogRows, startableId);
 
         SprintResponse activeSprint = sprints.stream()
                 .filter(s -> s.getState() == SprintState.ACTIVE)
@@ -152,7 +153,11 @@ public class BacklogServiceImpl implements BacklogService {
         return true;
     }
 
-    private BacklogGroupResponse toGroup(Sprint sprint, List<BoardCardResponse> items, boolean projectHasActive) {
+    /**
+     * @param startableSprintId Sprint duy nhat duoc phep bat dau luc nay
+     *                          ({@link SprintSequence#startableSprintId}), hoac null
+     */
+    private BacklogGroupResponse toGroup(Sprint sprint, List<BoardCardResponse> items, UUID startableSprintId) {
         int todo = 0, inProgress = 0, done = 0;
         BigDecimal total = BigDecimal.ZERO;
         BigDecimal todoPts = BigDecimal.ZERO;
@@ -188,7 +193,7 @@ public class BacklogServiceImpl implements BacklogService {
                 .inProgressCount(inProgress)
                 .doneCount(done)
                 .canStart(!isBacklog && sprint.getState() == SprintState.FUTURE
-                        && !items.isEmpty() && !projectHasActive)
+                        && !items.isEmpty() && Objects.equals(sprint.getId(), startableSprintId))
                 .canComplete(!isBacklog && sprint.getState() == SprintState.ACTIVE)
                 .build();
     }
