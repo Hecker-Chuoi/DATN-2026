@@ -1,0 +1,330 @@
+// =============================================================================
+// Jenkinsfile – HƯỚNG 2: Docker + Kubernetes (k3s) trên 1 EC2
+// Đặt trong repo tại: infrastructure/cicd/k8s/Jenkinsfile
+// Jenkins: Multibranch Pipeline → Build Configuration → Script Path = infrastructure/cicd/k8s/Jenkinsfile
+//
+// Luồng:
+//   1 Checkout → 2 Phát hiện thay đổi → 3 CI backend → 4 CI frontend
+//   → (chỉ nhánh main) 5 Build + push image lên registry localhost:5000
+//   → 6 Deploy: sinh overlay kustomize từ deployed.env rồi `kubectl apply` (khai báo)
+//   → 7 Chờ rollout + smoke test → lỗi thì TỰ ĐỘNG ROLLBACK.
+//
+// Credential cần có trong Jenkins:
+//   - datn-prod-env  : Secret file (docs/cicd/common/prod.env.example)
+//   - k3s-kubeconfig : Secret file (/opt/datn/kubeconfig-jenkins.yaml do setup-k3s.sh sinh ra)
+// =============================================================================
+import groovy.transform.Field
+
+@Field List<String> BACKEND_SERVICES = ['identity-service', 'api-gateway', 'work-service', 'workspace-service', 'notification-service']
+@Field List<String> ALL_TAG_KEYS = ['IDENTITY_SERVICE_TAG', 'API_GATEWAY_TAG', 'WORK_SERVICE_TAG',
+                                    'WORKSPACE_SERVICE_TAG', 'NOTIFICATION_SERVICE_TAG', 'FRONTEND_TAG']
+
+String tagKey(String svc) {
+  return svc.toUpperCase().replace('-', '_') + '_TAG'
+}
+
+void addOnce(List<String> list, String item) {
+  if (!list.contains(item)) { list.add(item) }
+}
+
+// Sinh overlay kustomize = manifest gốc + bảng tag hiện tại, rồi áp vào cluster.
+// Kubernetes so sánh với trạng thái đang chạy và CHỈ rolling update Deployment nào có image đổi.
+void renderAndApply() {
+  sh(script: '''
+    set -eu
+    for k in ''' + ALL_TAG_KEYS.join(' ') + '''; do
+      grep -q "^$k=" "$STATE_DIR/deployed.env" || { echo "Thiếu $k trong deployed.env → chạy lại với BUILD_ALL=true"; exit 1; }
+    done
+
+    rm -rf .k8s-overlay && mkdir -p .k8s-overlay
+    {
+      echo "apiVersion: kustomize.config.k8s.io/v1beta1"
+      echo "kind: Kustomization"
+      echo "resources:"
+      echo "  - ../$CICD_DIR/manifests"
+      echo "images:"
+      grep -E '^[A-Z_]+_TAG=' "$STATE_DIR/deployed.env" | while IFS='=' read -r key tag; do
+        svc=$(echo "$key" | sed 's/_TAG$//' | tr 'A-Z_' 'a-z-')
+        echo "  - name: datn/$svc"
+        echo "    newName: $REGISTRY/datn/$svc"
+        echo "    newTag: \\"$tag\\""
+      done
+    } > .k8s-overlay/kustomization.yaml
+    echo "----- overlay -----"; cat .k8s-overlay/kustomization.yaml
+
+    kubectl kustomize .k8s-overlay > k8s-rendered.yaml       # manifest cuối cùng (lưu lại làm bằng chứng)
+    kubectl apply -f k8s-rendered.yaml
+  ''')
+}
+
+pipeline {
+  agent any
+
+  options {
+    skipDefaultCheckout(true)
+    timestamps()
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    timeout(time: 50, unit: 'MINUTES')
+  }
+
+  parameters {
+    booleanParam(name: 'BUILD_ALL', defaultValue: false,
+      description: 'Bỏ qua phát hiện thay đổi: build + deploy TẤT CẢ service (lần đầu / sau rollback)')
+    string(name: 'ROLLBACK_TO', defaultValue: '',
+      description: 'Số build muốn quay về (vd 42). Để trống = chạy bình thường')
+  }
+
+  environment {
+    APP_DOMAIN    = 'datn.example.com'          // ĐỔI
+    AUTH_DOMAIN   = 'auth.datn.example.com'     // ĐỔI
+    DEPLOY_BRANCH = 'main'
+    CICD_DIR      = 'infrastructure/cicd/k8s'
+    STATE_DIR     = '/opt/datn/state'
+    REGISTRY      = 'localhost:5000'
+    NAMESPACE     = 'datn'
+    MAVEN_OPTS    = '-Xmx1g'
+  }
+
+  stages {
+
+    stage('1. Checkout') {
+      steps {
+        script {
+          def scmVars = checkout scm
+          env.PREV_OK_COMMIT   = scmVars.GIT_PREVIOUS_SUCCESSFUL_COMMIT ?: ''
+          env.GIT_SHORT        = sh(returnStdout: true, script: 'git rev-parse --short=7 HEAD').trim()
+          env.TAG              = "${env.BUILD_NUMBER}-${env.GIT_SHORT}"
+          env.IS_DEPLOY_BRANCH = (env.BRANCH_NAME == env.DEPLOY_BRANCH) ? 'true' : 'false'
+          env.MODE             = params.ROLLBACK_TO?.trim() ? 'rollback' : 'build'
+          if (env.MODE == 'rollback') {
+            if (env.IS_DEPLOY_BRANCH != 'true') { error("Chỉ rollback trên nhánh ${env.DEPLOY_BRANCH}") }
+            if (!params.ROLLBACK_TO.trim().matches(/\d+/)) { error('ROLLBACK_TO phải là số build') }
+          }
+          echo "Nhánh=${env.BRANCH_NAME} | TAG=${env.TAG} | Chế độ=${env.MODE}"
+        }
+      }
+    }
+
+    stage('2. Phát hiện thay đổi') {
+      when { environment name: 'MODE', value: 'build' }
+      steps {
+        script {
+          List<String> files = null
+          if (!params.BUILD_ALL && env.PREV_OK_COMMIT) {
+            int rc = sh(returnStatus: true, script: "git diff --name-only ${env.PREV_OK_COMMIT} HEAD > .changed-files")
+            if (rc == 0) {
+              files = []
+              for (String line : readFile('.changed-files').split('\n')) {
+                if (line.trim()) { files.add(line.trim()) }
+              }
+            }
+          }
+
+          List<String> selected = []
+          boolean infra = false
+          if (files == null) {
+            selected.addAll(BACKEND_SERVICES)
+            selected.add('frontend')
+            infra = true
+          } else {
+            for (String f : files) {
+              if (f.startsWith('backend/common/') || f == 'backend/pom.xml' || f == 'backend/Dockerfile.runtime') {
+                for (String s : BACKEND_SERVICES) { addOnce(selected, s) }
+              }
+              for (String s : BACKEND_SERVICES) {
+                if (f.startsWith("backend/${s}/".toString())) { addOnce(selected, s) }
+              }
+              if (f.startsWith('frontend/')) { addOnce(selected, 'frontend') }
+              // Sửa manifest k8s hoặc realm → cần apply lại dù không có image mới
+              if (f.startsWith("${env.CICD_DIR}/".toString()) || f.startsWith('infrastructure/keycloak/')) { infra = true }
+            }
+            echo "Có ${files.size()} file thay đổi:\n" + files.join('\n')
+          }
+
+          boolean backendChanged = false
+          for (String s : selected) { if (s != 'frontend') { backendChanged = true } }
+
+          env.SERVICES         = selected.join(' ')
+          env.HAS_SERVICES     = selected ? 'true' : 'false'
+          env.BACKEND_CHANGED  = backendChanged ? 'true' : 'false'
+          env.FRONTEND_CHANGED = selected.contains('frontend') ? 'true' : 'false'
+          env.INFRA_CHANGED    = infra ? 'true' : 'false'
+          echo "Service cần build: [${env.SERVICES}] | Manifest/realm đổi: ${env.INFRA_CHANGED}"
+        }
+      }
+    }
+
+    stage('3. CI · Backend: unit test + đóng gói jar') {
+      when { allOf { environment name: 'MODE', value: 'build'; environment name: 'BACKEND_CHANGED', value: 'true' } }
+      steps {
+        dir('backend') { sh 'mvn -B -ntp clean package' }
+      }
+      post {
+        always { junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml' }
+      }
+    }
+
+    stage('4. CI · Frontend: lint + build') {
+      when { allOf { environment name: 'MODE', value: 'build'; environment name: 'FRONTEND_CHANGED', value: 'true' } }
+      steps {
+        dir('frontend') {
+          sh 'npm ci --no-audit --no-fund'
+          sh 'npm run lint'
+          sh 'npm run build'
+        }
+      }
+    }
+
+    stage('5. Build + push image lên registry') {
+      when {
+        allOf {
+          environment name: 'MODE', value: 'build'
+          environment name: 'IS_DEPLOY_BRANCH', value: 'true'
+          environment name: 'HAS_SERVICES', value: 'true'
+        }
+      }
+      steps {
+        script {
+          for (String s : env.SERVICES.split(' ')) {
+            String image = "${env.REGISTRY}/datn/${s}:${env.TAG}"
+            if (s == 'frontend') {
+              sh """
+                docker build -t ${image} \\
+                  --build-arg VITE_KEYCLOAK_URL=https://${env.AUTH_DOMAIN} \\
+                  --build-arg NGINX_CONF=nginx.prod.conf \\
+                  frontend
+              """
+            } else {
+              sh "docker build -f backend/Dockerfile.runtime -t ${image} backend/${s}/target"
+            }
+            // Khác Hướng 1: k3s (containerd) không thấy image của Docker → phải đẩy qua registry
+            sh "docker push ${image}"
+          }
+        }
+      }
+    }
+
+    stage('6. Deploy (kubectl apply)') {
+      when {
+        allOf {
+          environment name: 'IS_DEPLOY_BRANCH', value: 'true'
+          anyOf {
+            environment name: 'MODE', value: 'rollback'
+            environment name: 'HAS_SERVICES', value: 'true'
+            environment name: 'INFRA_CHANGED', value: 'true'
+          }
+        }
+      }
+      steps {
+        withCredentials([file(credentialsId: 'datn-prod-env', variable: 'PROD_ENV'),
+                         file(credentialsId: 'k3s-kubeconfig', variable: 'KUBECONFIG')]) {
+          // a) Chụp lại trạng thái cũ để rollback
+          sh '''
+            set -eu
+            mkdir -p "$STATE_DIR/history"
+            touch "$STATE_DIR/deployed.env"
+            cp "$STATE_DIR/deployed.env" "$STATE_DIR/history/before-$BUILD_NUMBER.env"
+          '''
+          // b) Cập nhật bảng tag
+          script {
+            if (env.MODE == 'rollback') {
+              sh """
+                test -f ${env.STATE_DIR}/history/${params.ROLLBACK_TO}.env || { echo 'Không có history/${params.ROLLBACK_TO}.env'; exit 1; }
+                cp ${env.STATE_DIR}/history/${params.ROLLBACK_TO}.env ${env.STATE_DIR}/deployed.env
+              """
+            } else if (env.HAS_SERVICES == 'true') {
+              for (String s : env.SERVICES.split(' ')) {
+                String key = tagKey(s)
+                sh """
+                  if grep -q '^${key}=' ${env.STATE_DIR}/deployed.env; then
+                    sed -i 's/^${key}=.*/${key}=${env.TAG}/' ${env.STATE_DIR}/deployed.env
+                  else
+                    echo '${key}=${env.TAG}' >> ${env.STATE_DIR}/deployed.env
+                  fi
+                """
+              }
+            }
+            env.DEPLOY_STARTED = 'true'
+          }
+          // c) Secret + ConfigMap realm (idempotent: tạo mới hoặc cập nhật)
+          sh '''
+            set -eu
+            kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+            kubectl -n "$NAMESPACE" create secret generic datn-secrets \
+              --from-env-file="$PROD_ENV" --dry-run=client -o yaml | kubectl apply -f -
+            kubectl -n "$NAMESPACE" create configmap keycloak-realm \
+              --from-file=realm.json=infrastructure/keycloak/realm-export_08082026.json \
+              --dry-run=client -o yaml | kubectl apply -f -
+          '''
+          // d) Áp manifest + tag
+          script { renderAndApply() }
+        }
+      }
+      post {
+        always { archiveArtifacts artifacts: 'k8s-rendered.yaml', allowEmptyArchive: true }
+      }
+    }
+
+    stage('7. Rollout + smoke test') {
+      when { environment name: 'DEPLOY_STARTED', value: 'true' }
+      steps {
+        withCredentials([file(credentialsId: 'k3s-kubeconfig', variable: 'KUBECONFIG')]) {
+          sh '''
+            set -eu
+            # Chờ từng Deployment/StatefulSet hoàn tất rolling update (cái không đổi trả về ngay)
+            for r in $(kubectl -n "$NAMESPACE" get deploy,statefulset -o name); do
+              kubectl -n "$NAMESPACE" rollout status "$r" --timeout=420s
+            done
+            kubectl -n "$NAMESPACE" get pods -o wide
+
+            curl -fsS --retry 10 --retry-delay 6 -o /dev/null "https://$APP_DOMAIN/"
+            curl -fsS --retry 10 --retry-delay 6 "https://$AUTH_DOMAIN/realms/datn-realm/.well-known/openid-configuration" \
+              | grep -q "\\"issuer\\":\\"https://$AUTH_DOMAIN/realms/datn-realm\\""
+            kubectl -n "$NAMESPACE" exec deploy/api-gateway -- wget -qO- http://127.0.0.1:8081/actuator/health | grep -q UP
+            echo "SMOKE TEST OK"
+          '''
+          sh 'cp "$STATE_DIR/deployed.env" "$STATE_DIR/history/$BUILD_NUMBER.env"'
+        }
+      }
+    }
+  }
+
+  post {
+    failure {
+      script {
+        if (env.DEPLOY_STARTED == 'true') {
+          echo 'Deploy / rollout / smoke test lỗi → TỰ ĐỘNG ROLLBACK về bảng tag trước build này'
+          withCredentials([file(credentialsId: 'k3s-kubeconfig', variable: 'KUBECONFIG')]) {
+            sh 'cp "$STATE_DIR/history/before-$BUILD_NUMBER.env" "$STATE_DIR/deployed.env"'
+            try {
+              renderAndApply()
+            } catch (err) {
+              echo "ROLLBACK lỗi (vd lần deploy đầu tiên): ${err}. Dùng `kubectl rollout undo` bằng tay."
+            }
+          }
+        }
+      }
+    }
+    success {
+      script {
+        if (env.DEPLOY_STARTED == 'true') {
+          // Dọn image cũ trong Docker cục bộ của Jenkins (registry dọn định kỳ – xem tài liệu)
+          sh '''
+            KEEP=$(ls -t "$STATE_DIR"/history/[0-9]*.env 2>/dev/null | head -5 | xargs -r cat | cut -d= -f2 | sort -u)
+            docker images --format '{{.Repository}}:{{.Tag}}' | grep "^$REGISTRY/datn/" | while read -r img; do
+              echo "$KEEP" | grep -qx "${img##*:}" || docker rmi "$img" >/dev/null 2>&1 || true
+            done
+            docker image prune -f >/dev/null
+            docker builder prune -f --filter until=72h >/dev/null || true
+          '''
+        }
+      }
+    }
+    // "cleanup" luôn chạy SAU CÙNG (sau failure/success). Không dùng "always": always chạy TRƯỚC
+    // failure → sẽ xoá workspace trước khi rollback kịp đọc manifest.
+    cleanup {
+      cleanWs(deleteDirs: true, notFailBuild: true)
+    }
+  }
+}

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jira Realtime</title>
+<link rel="stylesheet" href="../_assets/slide.css">
+</head>
+<body>
+<div class="deck">
+
+  <!-- 1. Bìa -->
+  <section class="slide cover" data-title="Bìa">
+    <div class="brand">Nghiên cứu Realtime · 1/4 · Jira Cloud</div>
+    <h1>Jira làm "realtime" như thế nào?</h1>
+    <p class="lead">Không đồng bộ dữ liệu như Google Docs. Jira gửi một <b>thông báo rất mỏng</b> ("có thứ vừa đổi"), rồi trình duyệt <b>tự tải lại</b> qua REST API.</p>
+    <div class="row">
+      <span class="pill accent">Event-driven invalidation</span>
+      <span class="pill">StreamHub (Kinesis + SQS)</span>
+      <span class="pill">Frontend PubSub · PubNub</span>
+      <span class="pill">Thin event + refetch</span>
+    </div>
+    <p class="src">Nguồn chính: Atlassian Engineering (11/2019), Atlassian Developer Community (05/2023), jira.atlassian.com.</p>
+  </section>
+
+  <!-- 2. Bài toán -->
+  <section class="slide" data-title="Bài toán gốc">
+    <div class="kicker"><span class="tag">Bài toán gốc · 2019</span><span>Jira Software Next-Gen</span></div>
+    <h2>Trước đó: Board polling mỗi 1 phút</h2>
+    <div class="grid g3">
+      <div class="box bad"><h3>⏱ Chậm</h3><p class="small">Người khác kéo thẻ, bạn phải chờ tới ~60 giây hoặc tự F5 mới thấy.</p></div>
+      <div class="box bad"><h3>🔁 Lãng phí</h3><p class="small">Phần lớn request trả về "không có gì mới" nhưng vẫn tốn tải server.</p></div>
+      <div class="box good"><h3>🎯 Mục tiêu</h3><p class="small">Cộng tác "trong vài giây, không phải vài phút".</p></div>
+    </div>
+    <div class="box accent">
+      <h3>Điểm mấu chốt</h3>
+      <p class="small">Jira <b>đã sẵn</b> phát sự kiện issue/project lên event bus cho các service backend khác. Chỉ còn thiếu <i>"a way to deliver the right events to the right front-end"</i>, tức một cách đưa đúng sự kiện tới đúng trình duyệt.</p>
+    </div>
+    <p class="small muted">→ Với DATN, điều này tương ứng với bảng <code>outbox_events</code> và Kafka đã có sẵn nhưng chưa ai đọc.</p>
+  </section>
+
+  <!-- 3. Kiến trúc -->
+  <section class="slide" data-title="Kiến trúc JiRT">
+    <div class="kicker"><span class="tag">Kiến trúc</span><span>JiRT = Jira Real-Time service</span></div>
+    <h2>Luồng sự kiện từ Jira tới trình duyệt</h2>
+    <div class="flow">
+      <div class="node"><b>Jira</b><span class="tiny">phát event issue/project</span></div>
+      <div class="arrow">→</div>
+      <div class="node purple"><b>StreamHub</b><span class="tiny">Kinesis + SQS cho mỗi consumer<br>at-least-once</span></div>
+      <div class="arrow">→</div>
+      <div class="node accent"><b>JiRT</b><span class="tiny">trích project / board / issue</span></div>
+      <div class="arrow">→</div>
+      <div class="node good"><b>FPS</b><span class="tiny">Frontend PubSub<br>provider: PubNub</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>&lt;Realtime&gt;</b><span class="tiny">React component<br>onReceive → refetch</span></div>
+    </div>
+    <div class="grid g3">
+      <div class="box"><h3>Không sửa Jira</h3><p class="small">JiRT chỉ là <b>một consumer mới</b> của StreamHub. Producer và consumer tách rời nhau.</p></div>
+      <div class="box"><h3>Quyền khi subscribe</h3><p class="small">FPS gọi Permissions service để chặn đăng ký kênh trái phép. Kênh là <b>một project hoặc một board</b>.</p></div>
+      <div class="box"><h3>Thay được nhà cung cấp</h3><p class="small">FPS che PubNub phía sau. Bài viết <b>không nói</b> là WebSocket hay SSE.</p></div>
+    </div>
+  </section>
+
+  <!-- 4. Kênh & payload -->
+  <section class="slide" data-title="Kênh & payload">
+    <div class="kicker"><span class="tag">Hợp đồng sự kiện</span><span>ARI + AVI</span></div>
+    <h2>Kênh = tài nguyên, sự kiện = chỉ chứa ID</h2>
+    <div class="grid g2">
+      <div class="grid">
+        <div class="box"><h3>ARI · tên kênh</h3><p class="small mono">ari:cloud:&lt;owner&gt;:&lt;cloudId&gt;:project/10001</p></div>
+        <div class="box"><h3>AVI · loại sự kiện</h3><p class="small mono">avi:jira:created:issue<br>avi:jira:transitioned:issue<br>avi:jira:deleted:project</p><p class="tiny muted">Client tự chọn AVI muốn nghe, không phải sửa backend.</p></div>
+      </div>
+      <div class="grid">
+<pre class="code">{
+  "channels": ["ari:...:project/10001"],
+  "type": "avi:jira:transitioned:issue",
+  "payload": {
+    "projectId": 10001,
+    "issueId": 20042,
+    "atlassianId": "&lt;người-gây-ra&gt;"
+  }
+}</pre>
+        <div class="box warn"><h3>🔒 Vì sao không gửi nội dung?</h3><p class="small">Quyền có thể <b>đổi giữa lúc subscribe và lúc nhận</b>. Gửi ID rồi để client gọi API có kiểm quyền thì không thể lộ dữ liệu.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Client -->
+  <section class="slide" data-title="Xử lý phía client">
+    <div class="kicker"><span class="tag">Phía client</span><span>Phần đáng học nhất</span></div>
+    <h2>4 rào chắn để Board không "giật"</h2>
+    <div class="grid g4">
+      <div class="box accent"><h3>① Bỏ qua của mình</h3><p class="small">So <code>atlassianId</code> với user hiện tại để không tải lại khi chính mình vừa kéo thẻ.</p></div>
+      <div class="box accent"><h3>② Đệm khi thao tác</h3><p class="small">Đang <b>kéo thả</b> hoặc đang có <b>request bay</b> thì giữ sự kiện lại, phát sau.</p></div>
+      <div class="box accent"><h3>③ Một cái một lúc</h3><p class="small">Xử lý tuần tự. Sự kiện tới giữa chừng bị bỏ, vì lần refetch sau đã bao luôn.</p></div>
+      <div class="box accent"><h3>④ Refetch toàn board</h3><p class="small">Board/Backlog: mọi sự kiện đều đánh dấu "cũ" rồi tải lại. Đơn giản và luôn đúng.</p></div>
+    </div>
+    <div class="box">
+      <p class="small"><b>Một phần hay toàn bộ?</b> Payload đủ để client tự quyết định: <code>created:issue</code> có thể chỉ tải 1 issue. Nhưng team Board chọn <b>refetch toàn bộ</b> vì board phụ thuộc cột, swimlane và filter, vá cục bộ dễ sai.</p>
+    </div>
+    <p class="small muted">→ DATN đã có <code>useBoardData.reload({ silent: true })</code>, chỉ cần thêm ②③ và một nguồn sự kiện.</p>
+  </section>
+
+  <!-- 6. Issue view -->
+  <section class="slide" data-title="Issue view">
+    <div class="kicker"><span class="tag">Issue view realtime</span><span>EAP 05/2023 → GA</span></div>
+    <h2>Chi tiết issue tự cập nhật nền</h2>
+    <div class="grid g2">
+      <div class="box good">
+        <h3>Đã có</h3>
+        <ul class="clean small">
+          <li>Khi người khác sửa issue, issue view được cập nhật <b>ở nền</b>.</li>
+          <li>Phát sự kiện client-side <code>JIRA_ISSUE_CHANGED</code> cho app Forge/Connect tự cập nhật.</li>
+          <li>Là <b>sự kiện trên trang</b> (<code>AP.events</code>, <code>@forge/bridge</code>), không phải webhook.</li>
+        </ul>
+      </div>
+      <div class="box warn">
+        <h3>Giới hạn được nêu</h3>
+        <ul class="clean small">
+          <li>Chính người đang xem sửa thì view <b>không</b> làm mới (giả định họ đã thấy).</li>
+          <li>Phạm vi một issue nên cần ít rào chắn hơn board.</li>
+        </ul>
+      </div>
+    </div>
+<pre class="code">events.on('JIRA_ISSUE_CHANGED', (data) =&gt; { /* app tự tải lại phần của mình */ });</pre>
+  </section>
+
+  <!-- 7. Ma trận -->
+  <section class="slide" data-title="Phần nào realtime">
+    <div class="kicker"><span class="tag">Tổng hợp</span><span>Chỉ các màn hình bên trong project</span></div>
+    <h2>Phần nào trong project của Jira là realtime?</h2>
+    <table class="t">
+      <tr><th>Màn hình</th><th>Trạng thái</th><th>Cơ chế / bằng chứng</th></tr>
+      <tr><td>Board (kéo thẻ, thẻ mới)</td><td><span class="pill good">Có</span></td><td>Thin event, refetch toàn board, đệm khi kéo</td></tr>
+      <tr><td>Issue view: các trường</td><td><span class="pill good">Có</span></td><td>Cập nhật nền, <code>JIRA_ISSUE_CHANGED</code></td></tr>
+      <tr><td>Backlog</td><td><span class="pill warn">Chưa nhất quán</span></td><td>JRACLOUD-87370 mở từ 2017, "Gathering Interest"</td></tr>
+      <tr><td>Comment mới</td><td><span class="pill warn">Theo người dùng: chưa</span></td><td>Cộng đồng báo phải tải lại trang</td></tr>
+      <tr><td>Presence (ai đang xem)</td><td><span class="pill bad">Không</span></td><td>JRACLOUD-80241, dùng app Marketplace</td></tr>
+      <tr><td>Co-edit mô tả</td><td><span class="pill bad">Không</span></td><td>Khác Confluence và Linear</td></tr>
+      <tr><td>Báo cáo Burndown/Velocity</td><td><span class="pill">Không cần</span></td><td>Tính khi mở trang</td></tr>
+    </table>
+  </section>
+
+  <!-- 8. Bài học -->
+  <section class="slide" data-title="Bài học cho DATN">
+    <div class="kicker"><span class="tag">Áp dụng cho DATN</span><span>→ xem myapp/</span></div>
+    <h2>5 bài học mang về</h2>
+    <div class="grid g2">
+      <div class="box"><h3>1 · Không cần sync engine</h3><p class="small">Thông báo mỏng + refetch đã đủ cho Board. Đó là lựa chọn của sản phẩm lớn nhất thị trường.</p></div>
+      <div class="box"><h3>2 · Tách hai tầng</h3><p class="small">Event bus backend (StreamHub ≈ Outbox/Kafka) tách khỏi tầng đẩy xuống trình duyệt (FPS ≈ STOMP).</p></div>
+      <div class="box"><h3>3 · Quyền ở 3 chỗ</h3><p class="small">Khi subscribe, khi tạo payload (không có nội dung) và khi refetch qua API.</p></div>
+      <div class="box"><h3>4 · Client có rào chắn</h3><p class="small">Bỏ qua sự kiện của mình, đệm khi kéo, gộp sự kiện, chỉ một refetch tại một thời điểm.</p></div>
+      <div class="box good span2"><h3>5 · Chấp nhận mất hoặc trùng sự kiện</h3><p class="small">Client luôn lấy dữ liệu từ nguồn sự thật, nên trùng hay mất một sự kiện chỉ làm chậm chứ không làm sai.</p></div>
+    </div>
+  </section>
+
+</div>
+<script src="../_assets/slide.js"></script>
+</body>
+</html>

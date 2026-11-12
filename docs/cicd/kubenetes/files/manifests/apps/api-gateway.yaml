@@ -1,0 +1,66 @@
+# api-gateway (:8081) – Spring Cloud Gateway, route theo application-prod.yml (SPRING_PROFILES_ACTIVE=prod)
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        tier: app
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: datn/api-gateway
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+          envFrom:
+            - configMapRef: { name: datn-config }
+          env:
+            - name: APP_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DOMAIN } }
+            - name: AUTH_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: AUTH_DOMAIN } }
+            - name: APP_FRONTEND_URL
+              value: "https://$(APP_DOMAIN)"
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI
+              value: "https://$(AUTH_DOMAIN)/realms/datn-realm"
+          # Gateway đã có spring-boot-starter-actuator → kiểm tra sức khoẻ thật bằng HTTP
+          startupProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }

@@ -291,12 +291,12 @@ sequenceDiagram
     participant CS as community-service
     participant WS as workspace-service
     participant WK as work-service
-    U->>CS: POST /listings/{id}/remix {workspaceId, teamId, name, key, startDate}
+    U->>CS: POST /listings/{id}/remix {workspaceId, name, key, startDate}
     CS->>CS: license ≠ NO_REMIX?
     CS->>WS: U là MEMBER+ của workspace?
     CS->>CS: Tải blueprint của version hiện tại
     CS->>WK: POST /internal/blueprints/instantiate (blueprint, target, actor=U)
-    WK->>WK: Quy tắc tạo dự án (trưởng nhóm) + CloneEngine + validator
+    WK->>WK: Quy tắc tạo dự án (MEMBER+ trong Workspace) + CloneEngine + validator
     WK-->>CS: projectId mới
     CS->>CS: Ghi remix_records, remix_count++
     CS-->>U: Mở dự án mới
@@ -480,7 +480,7 @@ Bổ sung ở work-service (nội bộ, có xác thực service-to-service — t
 | Lộ dữ liệu nội bộ công ty | 🔴 | Ảnh chụp đã làm sạch; chính sách workspace mặc định tắt; màn hình xem trước bắt buộc |
 | Spam, nội dung xấu | 🟠 | Giới hạn tần suất, báo cáo, moderator |
 | Blueprint cũ không tương thích khi schema đổi | 🟠 | Lưu `schema_version` trong JSON; bộ chuyển đổi theo phiên bản |
-| Remix tạo hàng loạt dự án rác | 🟡 | Giới hạn remix / giờ; dự án remix vẫn chịu quy tắc "trưởng nhóm mới tạo được" |
+| Remix tạo hàng loạt dự án rác | 🟡 | Giới hạn remix / giờ; dự án remix vẫn tuân thủ quy tắc kiểm tra quyền thành viên Workspace (MEMBER+) |
 | Tranh chấp bản quyền | 🟡 | Trường `license`, ghi nguồn bắt buộc, quy trình báo cáo COPYRIGHT |
 
 ## 19. Lộ trình triển khai

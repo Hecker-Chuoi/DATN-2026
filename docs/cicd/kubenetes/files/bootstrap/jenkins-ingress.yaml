@@ -1,0 +1,55 @@
+# =============================================================================
+# Đưa Jenkins (chạy bằng Docker NGOÀI cluster, cổng 8080 của EC2) ra sau Traefik để có HTTPS
+# và để GitHub gửi webhook tới https://JENKINS_DOMAIN/github-webhook/
+#   kubectl apply -f jenkins-ingress.yaml      (áp dụng 1 lần)
+#
+# Cách làm: Service KHÔNG có selector + Endpoints khai báo tay IP riêng (private IP) của EC2.
+# Traefik coi Jenkins như một Service bình thường trong cluster.
+# ĐỔI: IP ở Endpoints (lệnh `hostname -I | awk '{print $1}'`) và tên miền ở Ingress.
+# Security Group KHÔNG mở cổng 8080 ra Internet – chỉ Traefik (trong máy) gọi tới.
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins-host
+  namespace: datn
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: jenkins-host            # phải TRÙNG tên Service
+  namespace: datn
+subsets:
+  - addresses:
+      - ip: 172.31.10.20        # ĐỔI = private IP của EC2
+    ports:
+      - name: http
+        port: 8080
+        protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jenkins
+  namespace: datn
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - jenkins.datn.example.com
+      secretName: jenkins-tls
+  rules:
+    - host: jenkins.datn.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: jenkins-host, port: { number: 8080 } } }

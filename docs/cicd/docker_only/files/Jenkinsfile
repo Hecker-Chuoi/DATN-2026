@@ -1,0 +1,308 @@
+// =============================================================================
+// Jenkinsfile – HƯỚNG 1: Docker thuần trên 1 EC2
+// Đặt trong repo tại: infrastructure/cicd/docker/Jenkinsfile
+// Jenkins: Multibranch Pipeline → Build Configuration → Script Path = infrastructure/cicd/docker/Jenkinsfile
+//
+// Luồng:
+//   1 Checkout → 2 Phát hiện thay đổi → 3 CI backend → 4 CI frontend
+//   → (chỉ nhánh main) 5 Build image → 6 Deploy (docker compose) → 7 Smoke test
+//   → lỗi ở 6/7 thì TỰ ĐỘNG ROLLBACK về trạng thái trước đó.
+// Nhánh khác / Pull Request: chỉ chạy 1→4 (CI), không đụng tới server đang chạy.
+//
+// Credential cần tạo trong Jenkins:
+//   - datn-prod-env : Secret file (nội dung theo docs/cicd/common/prod.env.example)
+//   - Credential GitHub (PAT) gắn vào nguồn Multibranch nếu repo private
+// =============================================================================
+import groovy.transform.Field
+
+@Field List<String> BACKEND_SERVICES = ['identity-service', 'api-gateway', 'work-service', 'workspace-service', 'notification-service']
+
+// work-service -> WORK_SERVICE_TAG (tên biến trong deployed.env và docker-compose.prod.yml)
+String tagKey(String svc) {
+  return svc.toUpperCase().replace('-', '_') + '_TAG'
+}
+
+void addOnce(List<String> list, String item) {
+  if (!list.contains(item)) { list.add(item) }
+}
+
+pipeline {
+  agent any
+
+  options {
+    skipDefaultCheckout(true)
+    timestamps()
+    disableConcurrentBuilds()                       // 1 server → không cho 2 lần deploy chồng nhau
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    timeout(time: 45, unit: 'MINUTES')
+  }
+
+  parameters {
+    booleanParam(name: 'BUILD_ALL', defaultValue: false,
+      description: 'Bỏ qua phát hiện thay đổi: build + deploy TẤT CẢ service (dùng cho lần đầu hoặc sau rollback)')
+    string(name: 'ROLLBACK_TO', defaultValue: '',
+      description: 'Số build muốn quay về, ví dụ 42 (phải là build deploy thành công). Để trống = chạy bình thường')
+  }
+
+  environment {
+    // ĐỔI cho khớp APP_DOMAIN / AUTH_DOMAIN trong prod.env
+    APP_DOMAIN    = 'datn.example.com'
+    AUTH_DOMAIN   = 'auth.datn.example.com'
+    DEPLOY_BRANCH = 'main'
+    CICD_DIR      = 'infrastructure/cicd/docker'
+    DEPLOY_DIR    = '/opt/datn/deploy'
+    STATE_DIR     = '/opt/datn/state'
+    COMPOSE       = 'docker compose -p datn -f /opt/datn/deploy/docker-compose.prod.yml'
+    MAVEN_OPTS    = '-Xmx1g'
+  }
+
+  stages {
+
+    stage('1. Checkout') {
+      steps {
+        script {
+          def scmVars = checkout scm
+          env.PREV_OK_COMMIT   = scmVars.GIT_PREVIOUS_SUCCESSFUL_COMMIT ?: ''
+          env.GIT_SHORT        = sh(returnStdout: true, script: 'git rev-parse --short=7 HEAD').trim()
+          env.TAG              = "${env.BUILD_NUMBER}-${env.GIT_SHORT}"      // vd 57-a1b2c3d: truy ngược được build + commit
+          env.IS_DEPLOY_BRANCH = (env.BRANCH_NAME == env.DEPLOY_BRANCH) ? 'true' : 'false'
+          env.MODE             = params.ROLLBACK_TO?.trim() ? 'rollback' : 'build'
+
+          if (env.MODE == 'rollback') {
+            if (env.IS_DEPLOY_BRANCH != 'true') { error("Chỉ rollback trên nhánh ${env.DEPLOY_BRANCH}") }
+            if (!params.ROLLBACK_TO.trim().matches(/\d+/)) { error('ROLLBACK_TO phải là số build') }
+          }
+          echo "Nhánh=${env.BRANCH_NAME} | TAG=${env.TAG} | Chế độ=${env.MODE} | Mốc so sánh=${env.PREV_OK_COMMIT ?: '(chưa có)'}"
+        }
+      }
+    }
+
+    stage('2. Phát hiện thay đổi') {
+      when { environment name: 'MODE', value: 'build' }
+      steps {
+        script {
+          List<String> files = null                       // null = không so sánh được → build tất cả
+          if (!params.BUILD_ALL && env.PREV_OK_COMMIT) {
+            int rc = sh(returnStatus: true, script: "git diff --name-only ${env.PREV_OK_COMMIT} HEAD > .changed-files")
+            if (rc == 0) {
+              files = []
+              for (String line : readFile('.changed-files').split('\n')) {
+                if (line.trim()) { files.add(line.trim()) }
+              }
+            }
+          }
+
+          List<String> selected = []
+          boolean infra = false
+          if (files == null) {
+            selected.addAll(BACKEND_SERVICES)
+            selected.add('frontend')
+            infra = true
+            echo 'Build đầu tiên / BUILD_ALL / không diff được → chọn TẤT CẢ service'
+          } else {
+            for (String f : files) {
+              // Sửa thư viện dùng chung hoặc pom cha → mọi service backend bị ảnh hưởng
+              if (f.startsWith('backend/common/') || f == 'backend/pom.xml' || f == 'backend/Dockerfile.runtime') {
+                for (String s : BACKEND_SERVICES) { addOnce(selected, s) }
+              }
+              for (String s : BACKEND_SERVICES) {
+                if (f.startsWith("backend/${s}/".toString())) { addOnce(selected, s) }
+              }
+              if (f.startsWith('frontend/')) { addOnce(selected, 'frontend') }
+              if (f.startsWith("${env.CICD_DIR}/".toString()) || f.startsWith('infrastructure/keycloak/')) { infra = true }
+            }
+            echo "Có ${files.size()} file thay đổi:\n" + files.join('\n')
+          }
+
+          boolean backendChanged = false
+          for (String s : selected) { if (s != 'frontend') { backendChanged = true } }
+
+          env.SERVICES         = selected.join(' ')
+          env.HAS_SERVICES     = selected ? 'true' : 'false'
+          env.BACKEND_CHANGED  = backendChanged ? 'true' : 'false'
+          env.FRONTEND_CHANGED = selected.contains('frontend') ? 'true' : 'false'
+          env.INFRA_CHANGED    = infra ? 'true' : 'false'
+          echo "Service cần build: [${env.SERVICES}] | Hạ tầng đổi: ${env.INFRA_CHANGED}"
+          if (!selected && !infra) { echo 'Không có gì cần build/deploy (vd chỉ sửa docs) → các stage sau sẽ được bỏ qua' }
+        }
+      }
+    }
+
+    stage('3. CI · Backend: unit test + đóng gói jar') {
+      when { allOf { environment name: 'MODE', value: 'build'; environment name: 'BACKEND_CHANGED', value: 'true' } }
+      steps {
+        dir('backend') {
+          // Một lệnh cho cả reactor: common build trước, test của MỌI module đều chạy.
+          // ~/.m2 nằm trong volume jenkins_home → lần sau không tải lại thư viện.
+          sh 'mvn -B -ntp clean package'
+        }
+      }
+      post {
+        always { junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml' }
+      }
+    }
+
+    stage('4. CI · Frontend: lint + build') {
+      when { allOf { environment name: 'MODE', value: 'build'; environment name: 'FRONTEND_CHANGED', value: 'true' } }
+      steps {
+        dir('frontend') {
+          sh 'npm ci --no-audit --no-fund'
+          sh 'npm run lint'
+          sh 'npm run build'
+        }
+      }
+    }
+
+    stage('5. Build Docker images') {
+      when {
+        allOf {
+          environment name: 'MODE', value: 'build'
+          environment name: 'IS_DEPLOY_BRANCH', value: 'true'
+          environment name: 'HAS_SERVICES', value: 'true'
+        }
+      }
+      steps {
+        script {
+          for (String s : env.SERVICES.split(' ')) {
+            if (s == 'frontend') {
+              // VITE_* bị "đóng băng" vào bundle lúc build → truyền URL Keycloak thật qua build-arg
+              sh """
+                docker build -t datn/frontend:${env.TAG} \\
+                  --build-arg VITE_KEYCLOAK_URL=https://${env.AUTH_DOMAIN} \\
+                  --build-arg NGINX_CONF=nginx.prod.conf \\
+                  frontend
+              """
+            } else {
+              // Jar đã có ở stage 3 → image chỉ chép jar (build once)
+              sh "docker build -f backend/Dockerfile.runtime -t datn/${s}:${env.TAG} backend/${s}/target"
+            }
+          }
+          sh "docker images --filter reference='datn/*:${env.TAG}'"
+        }
+      }
+    }
+
+    stage('6. Deploy (docker compose)') {
+      when {
+        allOf {
+          environment name: 'IS_DEPLOY_BRANCH', value: 'true'
+          anyOf {
+            environment name: 'MODE', value: 'rollback'
+            environment name: 'HAS_SERVICES', value: 'true'
+            environment name: 'INFRA_CHANGED', value: 'true'
+          }
+        }
+      }
+      steps {
+        withCredentials([file(credentialsId: 'datn-prod-env', variable: 'PROD_ENV')]) {
+          // a) Đồng bộ file triển khai từ repo sang thư mục CỐ ĐỊNH trên host + chụp lại trạng thái cũ
+          sh '''
+            set -eu
+            mkdir -p "$DEPLOY_DIR/keycloak" "$STATE_DIR/history"
+            cp "$CICD_DIR/docker-compose.prod.yml" "$DEPLOY_DIR/docker-compose.prod.yml"
+            cp infrastructure/keycloak/realm-export_08082026.json "$DEPLOY_DIR/keycloak/realm.json"
+            touch "$STATE_DIR/deployed.env"
+            cp "$STATE_DIR/deployed.env" "$STATE_DIR/history/before-$BUILD_NUMBER.env"
+          '''
+          // b) Cập nhật "bảng tag" deployed.env = trạng thái MONG MUỐN của hệ thống
+          script {
+            if (env.MODE == 'rollback') {
+              sh """
+                test -f ${env.STATE_DIR}/history/${params.ROLLBACK_TO}.env || { echo 'Không có history/${params.ROLLBACK_TO}.env'; exit 1; }
+                cp ${env.STATE_DIR}/history/${params.ROLLBACK_TO}.env ${env.STATE_DIR}/deployed.env
+              """
+            } else if (env.HAS_SERVICES == 'true') {
+              for (String s : env.SERVICES.split(' ')) {
+                String key = tagKey(s)
+                sh """
+                  if grep -q '^${key}=' ${env.STATE_DIR}/deployed.env; then
+                    sed -i 's/^${key}=.*/${key}=${env.TAG}/' ${env.STATE_DIR}/deployed.env
+                  else
+                    echo '${key}=${env.TAG}' >> ${env.STATE_DIR}/deployed.env
+                  fi
+                """
+              }
+            }
+            env.DEPLOY_STARTED = 'true'
+          }
+          // c) Áp trạng thái: compose chỉ tạo lại container nào có cấu hình/tag thay đổi
+          sh '''
+            set -eu
+            echo "----- deployed.env -----"; cat "$STATE_DIR/deployed.env"
+            $COMPOSE --env-file "$PROD_ENV" --env-file "$STATE_DIR/deployed.env" up -d --remove-orphans
+          '''
+        }
+      }
+    }
+
+    stage('7. Smoke test') {
+      when { environment name: 'DEPLOY_STARTED', value: 'true' }
+      steps {
+        sh '''
+          set -u
+          echo "Chờ mọi container của project datn healthy (tối đa ~6 phút)..."
+          BAD=""
+          for i in $(seq 1 72); do
+            BAD=$(docker ps --filter label=com.docker.compose.project=datn --format '{{.Names}}: {{.Status}}' \
+                  | grep -E 'health: starting|unhealthy|Restarting' || true)
+            [ -z "$BAD" ] && break
+            sleep 5
+          done
+          if [ -n "$BAD" ]; then echo "Container chưa ổn định:"; echo "$BAD"; exit 1; fi
+          docker ps --filter label=com.docker.compose.project=datn --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+
+          set -e
+          # Đi đúng đường người dùng đi: DNS → Caddy (HTTPS) → container
+          curl -fsS --retry 5 --retry-delay 5 -o /dev/null "https://$APP_DOMAIN/"
+          # Keycloak sống + realm đã import + issuer đúng URL công khai (sai là login hỏng toàn bộ)
+          curl -fsS --retry 5 --retry-delay 5 "https://$AUTH_DOMAIN/realms/datn-realm/.well-known/openid-configuration" \
+            | grep -q "\\"issuer\\":\\"https://$AUTH_DOMAIN/realms/datn-realm\\""
+          # Gateway (Jenkins nằm chung network datn-net nên gọi được tên container)
+          curl -fsS --retry 5 --retry-delay 5 http://api-gateway:8081/actuator/health | grep -q UP
+          echo "SMOKE TEST OK"
+        '''
+        // Chỉ bản deploy QUA được smoke test mới được lưu vào lịch sử để rollback về sau
+        sh 'cp "$STATE_DIR/deployed.env" "$STATE_DIR/history/$BUILD_NUMBER.env"'
+      }
+    }
+  }
+
+  post {
+    failure {
+      script {
+        if (env.DEPLOY_STARTED == 'true') {
+          echo 'Deploy hoặc smoke test lỗi → TỰ ĐỘNG ROLLBACK về trạng thái ngay trước build này'
+          withCredentials([file(credentialsId: 'datn-prod-env', variable: 'PROD_ENV')]) {
+            sh '''
+              cp "$STATE_DIR/history/before-$BUILD_NUMBER.env" "$STATE_DIR/deployed.env"
+              $COMPOSE --env-file "$PROD_ENV" --env-file "$STATE_DIR/deployed.env" up -d --remove-orphans \
+                || echo "ROLLBACK cũng lỗi (vd lần deploy đầu tiên) → vào server kiểm tra bằng tay"
+            '''
+          }
+        }
+      }
+      // Gửi mail (cần cấu hình SMTP trong Manage Jenkins → System → Extended E-mail):
+      // emailext to: 'nhom@example.com', subject: "[DATN] FAILED ${env.JOB_NAME} #${env.BUILD_NUMBER}", body: "${env.BUILD_URL}"
+    }
+    success {
+      script {
+        if (env.DEPLOY_STARTED == 'true') {
+          // Dọn image cũ: chỉ giữ các tag còn xuất hiện trong 5 lần deploy thành công gần nhất
+          sh '''
+            KEEP=$(ls -t "$STATE_DIR"/history/[0-9]*.env 2>/dev/null | head -5 | xargs -r cat | cut -d= -f2 | sort -u)
+            docker images --format '{{.Repository}}:{{.Tag}}' | grep '^datn/' | grep -v '^datn/jenkins:' | while read -r img; do
+              echo "$KEEP" | grep -qx "${img#*:}" || docker rmi "$img" >/dev/null 2>&1 || true
+            done
+            docker image prune -f >/dev/null
+            docker builder prune -f --filter until=72h >/dev/null || true
+            df -h / | tail -1
+          '''
+        }
+      }
+    }
+    // "cleanup" luôn chạy SAU CÙNG (sau failure/success) → dọn workspace an toàn
+    cleanup {
+      cleanWs(deleteDirs: true, notFailBuild: true)
+    }
+  }
+}

@@ -10,13 +10,13 @@
 2. [Ba kiểu nhân bản](#2-ba-kiểu-nhân-bản)
 3. [Thư viện mẫu](#3-thư-viện-mẫu)
 4. [Blueprint — "bản thiết kế" của một dự án](#4-blueprint--bản-thiết-kế-của-một-dự-án)
-5. [Quy trình chung](#5-quy-trình-chung)
+5. [Quy trình nhân bản chung](#5-quy-trình-nhân-bản-chung)
 6. [Clone Engine](#6-clone-engine)
-7. [Luồng 1 — Tạo dự án từ mẫu](#7-luồng-1--tạo-dự-án-từ-mẫu)
+7. [Luồng 1 — Tạo dự án từ mẫu & Quick Customization](#7-luồng-1--tạo-dự-án-từ-mẫu--quick-customization)
 8. [Luồng 2 — Lưu dự án thành mẫu](#8-luồng-2--lưu-dự-án-thành-mẫu)
 9. [Luồng 3 — Nhân bản dự án](#9-luồng-3--nhân-bản-dự-án)
 10. [Đánh dấu trực tiếp một dự án là mẫu](#10-đánh-dấu-trực-tiếp-một-dự-án-là-mẫu)
-11. [Kiểm tra toàn vẹn](#11-kiểm-tra-toàn-vẹn)
+11. [Kiểm tra toàn vẹn (Template Integrity Validator)](#11-kiểm-tra-toàn-vẹn-template-integrity-validator)
 12. [Nhật ký nhân bản và thống kê](#12-nhật-ký-nhân-bản-và-thống-kê)
 13. [Mẫu hệ thống có sẵn](#13-mẫu-hệ-thống-có-sẵn)
 14. [Danh mục API](#14-danh-mục-api)
@@ -25,20 +25,20 @@
 
 ## 1. Khái niệm
 
-**Dự án mẫu** (Template) là một `Project` bình thường có cờ `is_template = TRUE`. Mẫu có đủ mọi thứ một dự án có (trạng thái, workflow, board, vai trò, sprint, công việc...) nhưng dùng để **sao chép**, không dùng để làm việc thật.
+**Dự án mẫu** (Template) là một thực thể `Project` bình thường có cờ `is_template = TRUE`. Mẫu sở hữu đầy đủ toàn bộ hệ sinh thái của một dự án tiêu chuẩn (trạng thái, loại công việc, quy trình, bảng Kanban/Scrum, vai trò, sprint, công việc mẫu...) nhưng đóng vai trò là **khuôn mẫu để sao chép**, không dùng để vận hành công việc thực tế.
 
 ```mermaid
 flowchart LR
-    T["Project<br/>is_template = TRUE<br/>template_category"] -- "dùng làm khuôn" --> P1["Project mới A"]
-    T -- "dùng làm khuôn" --> P2["Project mới B"]
+    T["Dự án mẫu (Template)<br/>is_template = TRUE<br/>template_category"] -- "Nhân bản sâu (Deep Clone)" --> P1["Dự án mới A"]
+    T -- "Nhân bản sâu (Deep Clone)" --> P2["Dự án mới B"]
 ```
 
-| Điểm khác giữa mẫu và dự án thường | |
+| Đặc điểm khác biệt giữa Mẫu và Dự án thông thường | Chi tiết xử lý trong mã nguồn |
 |---|---|
-| Không bắt đầu được Sprint | `SprintServiceImpl.startSprint` chặn |
-| Không hiện trong danh sách dự án thường | Lọc `isTemplate = false` |
-| Có phân loại | `SOFTWARE, BUSINESS, MARKETING, DESIGN, OPERATIONS, EDUCATION, OTHER` |
-| Có đếm lượt dùng | Đếm từ `project_clones` |
+| **Không được chạy Sprint** | `SprintServiceImpl.startSprint` chủ động chặn nếu dự án là mẫu |
+| **Ẩn khỏi danh sách dự án làm việc** | `ProjectServiceImpl.getAllProjects` mặc định lọc `isTemplate = false` |
+| **Có phân loại lĩnh vực** | Thuộc tính `template_category`: `SOFTWARE`, `BUSINESS`, `MARKETING`, `DESIGN`, `OPERATIONS`, `EDUCATION`, `OTHER` |
+| **Đếm lượt sử dụng** | Tự động thống kê số lượt clone từ bảng `project_clones` |
 
 ---
 
@@ -46,381 +46,241 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    M["Mẫu"] -- "FROM_TEMPLATE" --> D1["Dự án thường"]
-    D2["Dự án thường"] -- "SAVE_AS_TEMPLATE" --> M2["Mẫu mới"]
-    D3["Dự án thường"] -- "DUPLICATE" --> D4["Dự án thường mới"]
+    M["Mẫu (Template)"] -- "FROM_TEMPLATE" --> D1["Dự án thực tế"]
+    D2["Dự án thực tế"] -- "SAVE_AS_TEMPLATE" --> M2["Mẫu mới"]
+    D3["Dự án thực tế"] -- "DUPLICATE" --> D4["Dự án mới"]
 ```
 
-| | FROM_TEMPLATE | SAVE_AS_TEMPLATE | DUPLICATE |
+| Tiêu chí | FROM_TEMPLATE | SAVE_AS_TEMPLATE | DUPLICATE |
 |---|---|---|---|
-| Nguồn | Mẫu | Dự án | Dự án (hoặc mẫu) |
-| Đích | Dự án thường | Mẫu | Cùng loại với nguồn |
-| Dời ngày | Theo `startDate` mới | **Không** (offset = 0) | Theo `startDate` bắt buộc |
-| Workspace đích | Người dùng chọn | Như nguồn | Như nguồn |
-| Team đích | Người dùng chọn | Chọn hoặc như nguồn | Như nguồn |
-| Lead đích | Chọn hoặc người tạo | Người thực hiện | Người thực hiện |
-| Tùy chọn | sprints, workItems, versions | sprints, workItems, versions | sprints, items (versions luôn có) |
-| Quyền | Dùng được mẫu + được tạo dự án | `PROJECT_ADMIN` nguồn + được tạo dự án | `PROJECT_ADMIN` nguồn + được tạo dự án |
-
-"Được tạo dự án" = trưởng nhóm của team đích, hoặc Global ADMIN (giống quy tắc tạo dự án trong tài liệu 02).
+| **Nguồn** | Dự án mẫu (`is_template = true`) | Dự án thông thường | Dự án thực tế (hoặc mẫu) |
+| **Đích sinh ra** | Dự án thực tế (`is_template = false`) | Dự án mẫu mới (`is_template = true`) | Cùng loại với dự án nguồn |
+| **Dời mốc thời gian** | Tự động dời toàn bộ lịch theo `startDate` mới | **Không** (offset = 0 ngày) | Dời toàn bộ lịch theo `startDate` mới |
+| **Workspace đích** | Người dùng lựa chọn trong các Workspace của mình | Cùng Workspace với dự án nguồn | Cùng Workspace với dự án nguồn |
+| **Project Lead** | Chỉ định hoặc mặc định là người thực hiện | Người thực hiện | Người thực hiện |
+| **Tùy chọn sao chép** | sprints, workItems, versions, **customizations** | sprints, workItems, versions | sprints, workItems (versions luôn sao chép) |
+| **Quyền hạn yêu cầu** | Có quyền dùng mẫu + là `MEMBER+` trong Workspace đích | Có quyền `PROJECT_ADMIN` dự án nguồn + là `MEMBER+` Workspace | Có quyền `PROJECT_ADMIN` dự án nguồn + là `MEMBER+` Workspace |
 
 ---
 
 ## 3. Thư viện mẫu
 
-### 3.1. Phạm vi nhìn thấy
+### 3.1. Phạm vi hiển thị mẫu
+
+Endpoint: `GET /templates?workspaceId=...`
 
 ```mermaid
 flowchart TD
-    A["GET /templates?workspaceId=X"] --> B{"Có workspaceId?"}
-    B -- "Có" --> C["Kiểm tra là thành viên X"]
-    C --> D["Phạm vi = X + Default Workspace"]
+    A["GET /templates?workspaceId=X"] --> B{"Có truyền workspaceId?"}
+    B -- "Có" --> C["Kiểm tra quyền thành viên trong X"]
+    C --> D["Phạm vi = Các mẫu trong Workspace X<br/>+ Mẫu hệ thống trong Default Workspace"]
     B -- "Không" --> E{"Global ADMIN?"}
-    E -- "Có" --> F["Mọi mẫu"]
-    E -- "Không" --> G["Mẫu trong mọi workspace của tôi"]
+    E -- "Có" --> F["Lấy toàn bộ mẫu trong hệ thống"]
+    E -- "Không" --> G["Lấy các mẫu trong mọi Workspace của user<br/>+ Mẫu hệ thống trong Default Workspace"]
 ```
 
-Mẫu thuộc **Default Workspace** được coi là **mẫu hệ thống**: mọi người dùng ở mọi workspace đều xem và dùng được.
+Các mẫu thuộc **Default Workspace** (`a0000000-0000-0000-0000-000000000001`) là **mẫu hệ thống dùng chung**: bất kỳ người dùng nào ở mọi Workspace đều có thể xem và khởi tạo dự án từ các mẫu này.
 
-### 3.2. Ai được dùng một mẫu
+### 3.2. Điều kiện được dùng một mẫu (`assertCanUseTemplate`)
 
-```mermaid
-flowchart TD
-    A["assertCanUseTemplate"] --> B{"Global ADMIN?"}
-    B -- "Có" --> OK["✅"]
-    B -- "Không" --> C{"Mẫu thuộc<br/>Default Workspace?"}
-    C -- "Có" --> OK
-    C -- "Không" --> D{"Là Lead / Creator /<br/>thành viên của mẫu?"}
-    D -- "Có" --> OK
-    D -- "Không" --> E{"Là thành viên workspace<br/>chứa mẫu?"}
-    E -- "Có" --> OK
-    E -- "Không" --> NO["❌ 403"]
-```
-
-### 3.3. Thông tin hiển thị
-
-| Màn hình | Nội dung (`TemplatePreviewBuilder`) |
-|----------|------------------------------------|
-| Thẻ mẫu (summary) | Tên, key, mô tả, phân loại, kiểu dự án, số loại công việc / Epic / sprint / công việc, độ dài timeline, số lượt dùng |
-| Xem trước (preview) | Toàn bộ trạng thái, workflow + transition, loại công việc, cột board, vai trò + quyền, sprint, cây công việc, nhãn, component, version, báo cáo toàn vẹn |
+Một người dùng được phép sử dụng một mẫu khi thỏa mãn một trong các điều kiện:
+1. Là Global ADMIN.
+2. Mẫu thuộc Default Workspace (mẫu hệ thống).
+3. Là Lead, người tạo hoặc có gán vai trò trong chính dự án mẫu đó.
+4. Là thành viên (bất kỳ vai trò nào) của Workspace sở hữu mẫu đó.
 
 ---
 
 ## 4. Blueprint — "bản thiết kế" của một dự án
 
-`ProjectBlueprintLoader` nạp **mọi bảng con** của một dự án vào một record bất biến `ProjectBlueprint`. Engine clone và validator đều chỉ làm việc trên blueprint.
-
-### 4.1. Nhóm cấu hình
-
-```mermaid
-flowchart LR
-    BP["ProjectBlueprint"] --> A["statuses"]
-    BP --> B["types"]
-    BP --> C["workflows + transitions"]
-    BP --> D["schemes + schemeMappings"]
-    BP --> E["boards + columns<br/>+ columnStatuses + swimlanes"]
-    BP --> F["roles + permissionEntries"]
-```
-
-### 4.2. Nhóm danh mục
-
-```mermaid
-flowchart LR
-    BP["ProjectBlueprint"] --> G["labels"]
-    BP --> H["components"]
-    BP --> I["versions"]
-    BP --> J["customFields"]
-    BP --> K["automationRules"]
-```
-
-### 4.3. Nhóm nội dung
-
-```mermaid
-flowchart LR
-    BP["ProjectBlueprint"] --> L["sprints"]
-    BP --> M["workItems<br/>(chưa xóa)"]
-    BP --> N["labelMaps · componentMaps"]
-    BP --> O["links"]
-```
-
-### 4.4. Mốc thời gian của blueprint
-
-| Hàm | Ý nghĩa |
-|-----|---------|
-| `anchorDate()` | `project.startDate`, nếu trống thì ngày sớm nhất trong sprint / công việc / version |
-| `latestDate()` | Muộn nhất trong `project.endDate`, sprint, hạn công việc, ngày phát hành |
-| `spanDays()` | `latestDate − anchorDate` (độ dài timeline) |
-
-> ⚠️ Thêm bảng con mới cho dự án thì **bắt buộc** bổ sung vào `ProjectBlueprint`, loader và engine; nếu không, mẫu sẽ âm thầm bỏ sót bảng đó.
-
----
-
-## 5. Quy trình chung
-
-Cả ba kiểu nhân bản đều đi qua cùng một lõi `cloneAndFinalize`, trong **một transaction**.
+Lớp `ProjectBlueprintLoader` đọc toàn bộ thực thể liên kết của một dự án và nạp vào một Java Record bất biến `ProjectBlueprint`. Mọi thao tác nhân bản và kiểm tra toàn vẹn đều xử lý tập trung trên Blueprint này.
 
 ```mermaid
 flowchart TD
-    A["Kiểm tra quyền<br/>+ mẫu hợp lệ (nếu FROM_TEMPLATE)"] --> B{"Key đích đã tồn tại?"}
-    B -- "Có" --> X["400"]
-    B -- "Không" --> C["Lưu Project đích"]
-    C --> D["ProjectCloneEngine.cloneInto"]
-    D --> E["Gán thành viên ban đầu"]
-    E --> F["Ghi project_clones"]
-    F --> G["Validate blueprint của đích"]
-    G -- "Lỗi" --> RB["Rollback toàn bộ"]
-    G -- "OK" --> R["201 + thống kê + báo cáo toàn vẹn"]
+    BP["ProjectBlueprint"] --> CFG["Nhóm cấu hình quy trình:<br/>statuses · types · workflows · transitions<br/>schemes · schemeMappings · boards · columns<br/>columnStatuses · swimlanes · roles · permissionEntries"]
+    BP --> CAT["Nhóm danh mục:<br/>labels · components · versions<br/>customFields · automationRules"]
+    BP --> CNT["Nhóm nội dung công việc:<br/>sprints · workItems (chưa xóa)<br/>labelMaps · componentMaps · links"]
 ```
 
-**Thành viên ban đầu** của dự án đích: Lead + người thực hiện là ADMINISTRATOR, cộng thành viên team (nếu có) theo ánh xạ LEADER→ADMINISTRATOR, VIEWER→VIEWER, còn lại MEMBER. Thành viên của mẫu **không** được sao chép.
+### Các mốc thời gian của Blueprint
+
+- `anchorDate()`: Ngày neo gốc của dự án. Lấy `project.startDate`, nếu để trống sẽ tự động lấy ngày sớm nhất trong các Sprint, công việc hoặc phiên bản phát hành.
+- `latestDate()`: Mốc thời gian muộn nhất trong `project.endDate`, ngày kết thúc sprint, hạn chót công việc, hoặc ngày phát hành version.
+- `spanDays()`: Độ dài tổng thể của timeline (`latestDate - anchorDate`).
+
+---
+
+## 5. Quy trình nhân bản chung
+
+Cả ba luồng nhân bản đều thực thi qua lõi `cloneAndFinalize` trong **một transaction duy nhất**:
+
+```mermaid
+flowchart TD
+    A["Kiểm tra quyền người dùng<br/>+ Validate mẫu nguồn"] --> B{"Mã dự án (Key) đích<br/>đã tồn tại?"}
+    B -- "Đã có" --> X["400: Mã dự án đã tồn tại"]
+    B -- "Hợp lệ" --> C["INSERT Project đích vào database"]
+    C --> D["ProjectCloneEngine.cloneInto<br/>(Sao chép sâu theo thứ tự phụ thuộc)"]
+    D --> E["Gán thành viên ban đầu:<br/>Lead + Creator = ADMINISTRATOR"]
+    E --> F["INSERT lịch sử vào bảng project_clones"]
+    F --> G["Kiểm tra toàn vẹn Blueprint của dự án đích<br/>(TemplateIntegrityValidator.validate)"]
+    G -- "Phát hiện lỗi" --> RB["Ném ngoại lệ → Rollback toàn bộ"]
+    G -- "Hợp lệ" --> R["201 Created + Thống kê số lượng + Báo cáo toàn vẹn"]
+```
 
 ---
 
 ## 6. Clone Engine
 
-### 6.1. Thứ tự sao chép (theo phụ thuộc)
+### 6.1. Thứ tự sao chép chuẩn (Dependency Order)
 
 ```mermaid
 flowchart TD
-    S0["Tạo sequence mã công việc"] --> S1["Statuses"]
-    S1 --> S2["Work Item Types"]
-    S2 --> S3["Workflows → Transitions"]
-    S3 --> S4["Schemes → Mappings"]
-    S4 --> S5["Boards → Columns → ColumnStatuses → Swimlanes"]
-    S5 --> S6["Roles → Permission entries"]
-    S6 --> S7["Labels · Components"]
-    S7 --> S8["Versions (tùy chọn)"]
-    S8 --> S9["Custom fields · Automation rules"]
-    S9 --> S10["Sprints (tùy chọn)"]
-    S10 --> S11["Work Items (tùy chọn)"]
+    S0["Tạo Sequence mã công việc riêng"] --> S1["Trạng thái (Statuses)"]
+    S1 --> S2["Loại công việc (Work Item Types)"]
+    S2 --> S3["Quy trình & Bước chuyển (Workflows & Transitions)"]
+    S3 --> S4["Workflow Schemes & Ánh xạ loại việc"]
+    S4 --> S5["Bảng công việc (Boards → Columns → Statuses → Swimlanes)"]
+    S5 --> S6["Vai trò & Phân quyền (Roles & Permission Entries)"]
+    S6 --> S7["Nhãn (Labels) & Phân hệ (Components)"]
+    S7 --> S8["Phiên bản phát hành (Versions - tùy chọn)"]
+    S8 --> S9["Trường tùy biến & Quy tắc tự động hóa"]
+    S9 --> S10["Chu kỳ Sprint (tùy chọn)"]
+    S10 --> S11["Công việc (Work Items - tùy chọn) & Liên kết (Links)"]
 ```
 
-Bảng nào phụ thuộc bảng nào thì sao chép sau bảng đó, để khi sao chép đã biết id đích.
+### 6.2. Cơ chế Ánh xạ ID (`idMap`)
 
-### 6.2. Ánh xạ ID
+Trong quá trình sao chép, một bảng tra cứu `idMap` (UUID cũ $\rightarrow$ UUID mới) được duy trì:
+- Các tham chiếu nội bộ trong dự án được cập nhật chính xác sang ID mới.
+- Các thuộc tính JSONB cấu hình (`conditions_config`, `validators_config`, `custom_fields`) được duyệt đệ quy; mọi chuỗi UUID khớp với ID cũ sẽ tự động được thay thế bằng ID mới tương ứng.
 
-```mermaid
-flowchart LR
-    A["id nguồn"] --> M{{"idMap<br/>(dùng chung mọi loại)"}}
-    M -- "có" --> B["id đích"]
-    M -- "không có<br/>hàm id()" --> C["giữ nguyên<br/>(tham chiếu toàn cục)"]
-    M -- "không có<br/>hàm idOrNull()" --> D["null<br/>(dữ liệu không được chép)"]
-```
+### 6.3. Thuật toán dời mốc thời gian (Date Shifting)
 
-- `id()` dùng cho tham chiếu bắt buộc (status, type, workflow...).
-- `idOrNull()` dùng cho tham chiếu tùy chọn (sprint, component, version) — nếu phần đó không được chọn sao chép thì đặt `null`.
+$$offset = startDate_{mới} - anchorDate_{nguồn}$$
 
-### 6.3. Ánh xạ trong JSON
-
-Các cột JSONB (`conditions/validators/post_functions_config`, `custom_fields`, `options`, `actions_config`...) được **duyệt đệ quy**; mọi chuỗi dài 36 ký tự parse được thành UUID có trong `idMap` sẽ được thay bằng id đích.
-
-### 6.4. Dời mốc thời gian
-
-```mermaid
-flowchart LR
-    subgraph Nguon["Nguồn (anchor = 01/01)"]
-        A1["Sprint 1: 01/01 – 14/01"]
-        A2["Task: hạn 10/01"]
-    end
-    subgraph Dich["Đích (startDate = 01/03, offset = +59)"]
-        B1["Sprint 1: 01/03 – 14/03"]
-        B2["Task: hạn 10/03"]
-    end
-    A1 -- "+59 ngày" --> B1
-    A2 -- "+59 ngày" --> B2
-```
-
-`offset = startDate_mới − anchorDate_nguồn`. Mọi ngày của sprint, công việc, version cộng cùng một offset → **khoảng cách tương đối được giữ nguyên**. Hạn chót dự án mặc định = `latestDate + offset`.
-
-### 6.5. Cái gì được giữ, đặt lại, bỏ đi
-
-| Đối tượng | Giữ nguyên | Đặt lại | Bỏ đi |
-|-----------|-----------|---------|-------|
-| Cấu hình (status, type, workflow, board, role, quyền) | ✅ toàn bộ | Tên workflow/scheme/board đổi tiền tố theo tên dự án mới | |
-| Label, Component | Tên, màu, mô tả | | Lead của component |
-| Version | Tên, mô tả, ngày (dời) | `is_released = false`, `is_archived = false` | |
-| Sprint | Tên, mục tiêu, ngày (dời) | `state = FUTURE`, `completedDate = null` | |
-| Work Item | Tóm tắt, mô tả, ưu tiên, story points, ước lượng ban đầu, rank, cây cha-con, nhãn, component, liên kết | Mã mới theo key đích; trạng thái = trạng thái khởi tạo của workflow; `remaining = original`; `reporter = người thực hiện` | Assignee, resolution, time spent, resolvedAt |
-| Bình luận, tệp đính kèm, changelog | | | ✅ không sao chép |
-| Thành viên (role_assignments) | | | ✅ không sao chép |
-
-Mỗi công việc được tạo ra có một dòng changelog: *"Đã tạo công việc WEB-3 từ TPLWEB-3 của mẫu ..."*.
-
-### 6.6. Trạng thái khởi tạo của công việc được chép
-
-```mermaid
-flowchart TD
-    A["Loại công việc của item"] --> B["Workflow gắn với loại<br/>(qua scheme mapping)"]
-    B --> C{"Có transition<br/>from = NULL?"}
-    C -- "Có" --> D["Dùng to_status của transition đó"]
-    C -- "Không" --> E["Status TODO đầu tiên<br/>(hoặc status bất kỳ)"]
-```
+Toàn bộ mốc thời gian của Sprint, hạn chót công việc, ngày bắt đầu và ngày phát hành của version đều được cộng thêm đúng $offset$ ngày. Nhờ đó, khoảng cách tương đối và lộ trình tiến độ của dự án mẫu được giữ nguyên vẹn.
 
 ---
 
-## 7. Luồng 1 — Tạo dự án từ mẫu
+## 7. Luồng 1 — Tạo dự án từ mẫu & Quick Customization
 
-```mermaid
-sequenceDiagram
-    actor U as Trưởng nhóm
-    participant FE as CreateProjectModal
-    participant C as TemplateController
-    participant S as TemplateService
-    participant E as CloneEngine
-    U->>FE: Chọn mẫu trong TemplateGallery
-    FE->>C: GET /templates/{id}/preview
-    U->>FE: Nhập tên, key, team, ngày bắt đầu, tùy chọn
-    FE->>C: POST /templates/{id}/projects
-    C->>S: createFromTemplate
-    S->>S: assertCanUseTemplate + quyền WS (MEMBER+) + trưởng nhóm
-    S->>S: Validate mẫu (lỗi → 400)
-    S->>S: Tính offset & endDate
-    S->>E: cloneInto(blueprint, target)
-    S-->>FE: 201 Project mới + stats
+### 7.1. Cấu trúc Request (`CreateProjectFromTemplateRequest`)
+
+```json
+{
+  "workspaceId": "a1111111-...",
+  "name": "Cửa Hàng Trà Sữa Phố",
+  "key": "FNB",
+  "description": "Dự án triển khai theo mẫu F&B",
+  "leadUserId": "b2222222-...",
+  "startDate": "2026-11-01",
+  "endDate": "2027-02-01",
+  "includeSprints": true,
+  "includeWorkItems": true,
+  "includeVersions": true,
+  "customizations": { ... }
+}
 ```
 
-| Ràng buộc | |
-|---|---|
-| `endDate` (nếu nhập) không được trước `startDate` | 400 |
-| `startDate` mặc định = hôm nay | |
-| Mô tả mặc định = mô tả của mẫu | |
+### 7.2. Tính năng Tùy biến nhanh (Quick Customization)
+
+Hệ thống cung cấp đối tượng `TemplateCustomizationsRequest` cho phép người dùng tùy biến linh hoạt ngay trong lúc khởi tạo:
+
+| Trường tùy biến | Ý nghĩa nghiệp vụ |
+|-----------------|-------------------|
+| `renamedStatuses` | Map `{sourceStatusId: "Tên trạng thái mới"}` để đổi tên trạng thái phù hợp với tổ chức |
+| `renamedTypes` | Map `{sourceTypeId: "Tên loại việc mới"}` để đổi tên loại công việc |
+| `excludedSprintIds` | Danh sách ID sprint trong mẫu cần **bỏ qua không sao chép** |
+| `renamedSprints` | Map `{sourceSprintId: "Tên sprint mới"}` |
+| `excludedWorkItemIds` | Danh sách ID công việc trong mẫu cần **bỏ qua** (hệ thống tự động loại bỏ toàn bộ subtask con của các việc này) |
+| `renamedWorkItems` | Map `{sourceWorkItemId: "Tiêu đề summary mới"}` |
 
 ---
 
 ## 8. Luồng 2 — Lưu dự án thành mẫu
 
-```mermaid
-sequenceDiagram
-    actor A as Quản trị dự án
-    participant FE as SaveAsTemplateModal
-    participant S as TemplateService
-    A->>FE: Nhập tên mẫu, key, phân loại, tùy chọn
-    FE->>S: POST /projects/{id}/save-as-template
-    S->>S: Cần PROJECT_ADMIN nguồn + là trưởng nhóm đích
-    S->>S: Clone với offset = 0, is_template = true
-    S-->>FE: 201 Mẫu mới
-```
-
-- Mẫu giữ nguyên ngày của dự án nguồn; việc dời ngày chỉ xảy ra khi **dùng** mẫu.
-- Phân loại mặc định = `OTHER`.
+- Endpoint: `POST /projects/{id}/save-as-template`
+- Request: `SaveAsTemplateRequest` (`name`, `key`, `description`, `templateCategory`, `includeSprints`, `includeWorkItems`, `includeVersions`).
+- Yêu cầu quyền: `PROJECT_ADMIN` trên dự án nguồn và là `MEMBER+` trong Workspace.
+- Cơ chế: Thực hiện sao chép với $offset = 0$ ngày, gán cờ `is_template = true`.
 
 ---
 
 ## 9. Luồng 3 — Nhân bản dự án
 
-```mermaid
-sequenceDiagram
-    actor A as Quản trị dự án
-    participant S as TemplateService
-    A->>S: POST /projects/{id}/clone {name, key, startDate, includeItems, includeSprints}
-    S->>S: Cần PROJECT_ADMIN nguồn + là trưởng nhóm của team nguồn
-    S->>S: offset = startDate − anchor
-    S->>S: Clone (versions luôn được chép)
-    S-->>A: 201 Dự án mới cùng workspace, cùng team
-```
+- Endpoint: `POST /projects/{id}/clone`
+- Request: `CloneProjectRequest` (`name`, `key`, `startDate`, `includeItems`, `includeSprints`).
+- Yêu cầu quyền: `PROJECT_ADMIN` trên dự án nguồn.
+- Tạo ra một dự án mới hoàn toàn độc lập trong cùng Workspace với các mốc thời gian được dời tương ứng theo `startDate`.
 
 ---
 
 ## 10. Đánh dấu trực tiếp một dự án là mẫu
 
-Ngoài "Lưu thành mẫu" (tạo bản sao), quản trị dự án có thể **bật cờ** `isTemplate` ngay trên dự án hiện có qua `PUT /projects/{id}`:
-
-```mermaid
-flowchart LR
-    A["PUT isTemplate = true"] --> B["TemplateIntegrityValidator"]
-    B -- "Có lỗi" --> X["400 kèm danh sách lỗi"]
-    B -- "Hợp lệ" --> C["Dự án trở thành mẫu<br/>(giữ nguyên thành viên, tiến độ)"]
-```
-
-`GET /projects/{id}/template-check` cho phép kiểm tra trước mà không thay đổi gì.
+Quản trị viên có thể chuyển đổi một dự án đang có thành dự án mẫu bằng cách gọi `PUT /projects/{id}` và gán `isTemplate = true`.
+- Trước khi cập nhật, `TemplateIntegrityValidator` kiểm tra tính hợp lệ của dự án. Nếu vi phạm bất kỳ ràng buộc nghiêm trọng nào, hệ thống từ chối cập nhật và trả về danh sách lỗi cụ thể (HTTP 400).
+- Endpoint kiểm tra trước mà không thay đổi dữ liệu: `GET /projects/{id}/template-check`.
 
 ---
 
-## 11. Kiểm tra toàn vẹn
+## 11. Kiểm tra toàn vẹn (Template Integrity Validator)
 
-`TemplateIntegrityValidator` trả về danh sách **lỗi** (chặn) và **cảnh báo** (chỉ thông báo). Được chạy ở 3 thời điểm: trước khi dùng mẫu, sau khi clone (trên đích), và khi bật cờ mẫu.
+`TemplateIntegrityValidator` kiểm tra tính toàn vẹn của Blueprint và phân loại thành **Lỗi (Error - Chặn thực thi)** hoặc **Cảnh báo (Warning - Chỉ thông báo)**:
 
-### 11.1. Dự án và trạng thái
-
-| Mã | Mức | Điều kiện |
-|----|-----|-----------|
-| `PROJECT_DATE_RANGE` | Lỗi | Hạn chót trước ngày bắt đầu |
-| `NO_STATUS` | Lỗi | Không có trạng thái |
-| `NO_TODO_STATUS` / `NO_DONE_STATUS` | Lỗi | Thiếu nhóm TODO / DONE |
-| `NO_IN_PROGRESS_STATUS` | Cảnh báo | Thiếu nhóm IN_PROGRESS |
-| `DUPLICATE_STATUS` | Lỗi | Trùng tên trạng thái |
-
-### 11.2. Loại công việc, workflow, board, vai trò
-
-| Mã | Mức | Điều kiện |
-|----|-----|-----------|
-| `NO_STANDARD_TYPE` | Lỗi | Không có loại cấp 0 |
-| `DUPLICATE_TYPE_CODE` | Lỗi | Trùng mã loại |
-| `NO_WORKFLOW` | Lỗi | Không có workflow |
-| `TRANSITION_FOREIGN_STATUS` | Lỗi | Transition trỏ ra trạng thái ngoài dự án |
-| `NO_CREATE_TRANSITION` / `STATUS_UNREACHABLE` | Cảnh báo | Thiếu bước khởi tạo / trạng thái không tới được |
-| `SCHEME_FOREIGN_TYPE` / `SCHEME_FOREIGN_WORKFLOW` | Lỗi | Scheme trỏ ra ngoài dự án |
-| `TYPE_UNMAPPED` | Cảnh báo | Loại chưa gắn workflow |
-| `NO_BOARD` / `STATUS_NOT_ON_BOARD` | Cảnh báo | Thiếu board / trạng thái không nằm cột nào |
-| `COLUMN_FOREIGN_STATUS`, `WIP_LIMIT_RANGE` | Lỗi | Cột gom trạng thái ngoài / WIP min > max |
-| `MISSING_ROLE` | Lỗi | Thiếu một trong ADMINISTRATOR, MEMBER, VIEWER |
-
-### 11.3. Sprint và công việc
-
-| Mã | Mức | Điều kiện |
-|----|-----|-----------|
-| `KANBAN_WITH_SPRINTS` | Cảnh báo | Dự án Kanban có sprint |
-| `SPRINT_NOT_FUTURE` | Cảnh báo | Sprint không ở FUTURE |
-| `SPRINT_DATE_RANGE`, `SPRINT_TOO_LONG` (> 8 tuần), `SPRINT_AFTER_PROJECT` | Lỗi | |
-| `SPRINT_BEFORE_PROJECT`, `SPRINT_OVERLAP` | Cảnh báo | |
-| `ITEM_FOREIGN_STATUS/TYPE/SPRINT/PARENT`, `ITEM_HIERARCHY`, `ITEM_DATE_RANGE` | Lỗi | |
-| `ITEM_AFTER_PROJECT` | Cảnh báo | Hạn công việc sau hạn dự án |
+| Mã kiểm tra | Mức độ | Điều kiện vi phạm |
+|-------------|:------:|-------------------|
+| `PROJECT_DATE_RANGE` | Lỗi | Ngày kết thúc trước ngày bắt đầu |
+| `NO_STATUS` | Lỗi | Dự án không có bất kỳ trạng thái nào |
+| `NO_TODO_STATUS` / `NO_DONE_STATUS` | Lỗi | Thiếu trạng thái thuộc nhóm `TODO` hoặc nhóm `DONE` |
+| `NO_IN_PROGRESS_STATUS` | Cảnh báo | Thiếu trạng thái thuộc nhóm `IN_PROGRESS` |
+| `DUPLICATE_STATUS` | Lỗi | Trùng tên trạng thái trong cùng dự án |
+| `NO_STANDARD_TYPE` | Lỗi | Không có loại công việc cấp 0 (Standard Task) |
+| `DUPLICATE_TYPE_CODE` | Lỗi | Trùng mã loại công việc (Type Code) |
+| `NO_WORKFLOW` | Lỗi | Dự án không có quy trình workflow nào |
+| `TRANSITION_FOREIGN_STATUS` | Lỗi | Bước chuyển trỏ tới trạng thái không thuộc dự án |
+| `NO_CREATE_TRANSITION` | Cảnh báo | Thiếu bước chuyển khởi tạo (`from_status = null`) |
+| `STATUS_NOT_ON_BOARD` | Cảnh báo | Có trạng thái chưa được đưa vào cột nào trên Board |
+| `MISSING_ROLE` | Lỗi | Thiếu một trong các vai trò cốt lõi (`ADMINISTRATOR`, `MEMBER`, `VIEWER`) |
+| `ITEM_HIERARCHY` | Lỗi | Vi phạm phân cấp công việc 3 cấp độ |
 
 ---
 
 ## 12. Nhật ký nhân bản và thống kê
 
-```mermaid
-erDiagram
-    PROJECT_CLONES {
-        uuid source_project_id
-        uuid cloned_project_id "UNIQUE"
-        enum clone_type
-        int date_offset_days
-        jsonb clone_options "includeSprints, includeWorkItems, includeVersions"
-        jsonb clone_stats "statuses: 3, workItems: 24, ..."
-    }
-```
-
-- **Lượt dùng** của một mẫu = số dòng `FROM_TEMPLATE` có `source_project_id` là mẫu đó.
-- `clone_stats` cho phép hiển thị "Đã tạo 3 trạng thái, 2 workflow, 24 công việc...".
+Mỗi lần nhân bản thành công, một bản ghi được lưu vào bảng `project_clones`:
+- `source_project_id`: ID dự án nguồn.
+- `cloned_project_id`: ID dự án mới sinh ra (duy nhất).
+- `clone_type`: `FROM_TEMPLATE`, `SAVE_AS_TEMPLATE`, hoặc `DUPLICATE`.
+- `date_offset_days`: Số ngày dịch chuyển mốc thời gian.
+- `clone_options`: Lưu trữ các cờ tùy chọn (`includeSprints`, `includeWorkItems`, `includeVersions`).
+- `clone_stats`: Thống kê số lượng bản ghi đã tạo (ví dụ: `{ "statuses": 3, "workItems": 24, "sprints": 3 }`).
 
 ---
 
 ## 13. Mẫu hệ thống có sẵn
 
-Ba mẫu được tạo sẵn trong Default Workspace bởi migration `V7` (và được `TemplateDataSeeder` tạo lại khi thư viện rỗng):
+Hệ thống được khởi tạo sẵn 3 dự án mẫu tiêu chuẩn trong Default Workspace (thông qua Flyway migration `V7` và `TemplateDataSeeder`):
 
-| Key | Tên | Phân loại | Độ dài |
-|-----|-----|-----------|--------|
-| `TPLFNB` | Xây dựng Cửa hàng F&B (Nhà hàng – Quán Café) | BUSINESS | 90 ngày |
-| `TPLWEB` | Xây dựng Website Bán hàng E-Commerce | SOFTWARE | 90 ngày |
-| `TPLAGRI` | Kế hoạch Vận hành Mùa vụ Cây ăn quả | OPERATIONS | 90 ngày |
+| Mã Key | Tên dự án mẫu | Phân loại | Độ dài timeline |
+|--------|---------------|-----------|:---------------:|
+| `TPLFNB` | Xây dựng Cửa hàng F&B (Nhà hàng – Quán Café) | `BUSINESS` | 90 ngày |
+| `TPLWEB` | Xây dựng Website Bán hàng E-Commerce | `SOFTWARE` | 90 ngày |
+| `TPLAGRI` | Kế hoạch Vận hành Mùa vụ Cây ăn quả | `OPERATIONS` | 90 ngày |
 
-Cả ba mẫu đều mang `project_type = SOFTWARE_SCRUM`, kể cả hai mẫu không phải phần mềm.
-
-Mỗi mẫu có đủ vai trò, quyền, loại công việc, trạng thái, workflow, board, component, nhãn, sprint và cây công việc Epic → Task → Subtask.
+Cả ba mẫu đều sở hữu đầy đủ quy trình chuẩn, các vai trò phân quyền, bảng Kanban/Scrum, nhãn, phân hệ, các Sprint kế hoạch và cây phân cấp công việc hoàn chỉnh (`Epic › Task › Subtask`).
 
 ---
 
 ## 14. Danh mục API
 
-| Phương thức | Endpoint (tiền tố `/work/api/v1/work`) | Quyền |
-|-------------|----------------------------------------|-------|
-| GET | `/templates?workspaceId=&category=&search=` | Thành viên workspace |
-| GET | `/templates/{id}/preview` | Dùng được mẫu |
-| POST | `/templates/{id}/projects` | Dùng được mẫu + WS MEMBER+ + trưởng nhóm đích |
-| POST | `/projects/{id}/save-as-template` | `PROJECT_ADMIN` + trưởng nhóm đích |
-| POST | `/projects/{id}/clone` | `PROJECT_ADMIN` + trưởng nhóm team nguồn |
-| GET | `/projects/{id}/template-check` | `PROJECT_VIEW` |
-| GET | `/projects/templates` | (cũ) danh sách mẫu dạng `ProjectResponse` |
+Tiền tố chung: `/work/api/v1/work`
+
+| Phương thức | Endpoint | Quyền hạn yêu cầu | Mô tả |
+|:-----------:|----------|-------------------|-------|
+| GET | `/templates?workspaceId=&category=&search=` | Thành viên Workspace | Lấy danh sách mẫu trong thư viện |
+| GET | `/templates/{id}/preview` | Quyền xem mẫu | Xem chi tiết cấu hình, sprint và cây công việc của mẫu |
+| POST | `/templates/{id}/projects` | Quyền xem mẫu + WS MEMBER+ | Khởi tạo dự án mới từ mẫu (kèm tùy biến nhanh) |
+| POST | `/projects/{id}/save-as-template` | `PROJECT_ADMIN` + WS MEMBER+ | Lưu dự án hiện tại thành một mẫu mới |
+| POST | `/projects/{id}/clone` | `PROJECT_ADMIN` dự án nguồn | Nhân bản dự án trong cùng Workspace |
+| GET | `/projects/{id}/template-check` | `PROJECT_VIEW` | Kiểm tra tính toàn vẹn của dự án trước khi lưu mẫu |
+| GET | `/projects/templates` | Thành viên Workspace | API tương thích lấy danh sách mẫu dạng ProjectResponse |

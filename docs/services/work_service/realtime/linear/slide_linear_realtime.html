@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linear Sync Engine</title>
+<link rel="stylesheet" href="../_assets/slide.css">
+</head>
+<body>
+<div class="deck">
+
+  <section class="slide cover" data-title="Bìa">
+    <div class="brand">Nghiên cứu Realtime · 2/4 · Linear</div>
+    <h1>Linear: trình duyệt chính là cơ sở dữ liệu</h1>
+    <p class="lead">Mỗi client giữ một <b>bản sao CSDL</b> (IndexedDB + MobX). UI đọc và ghi cục bộ nên phản hồi tức thì. Server phát <b>delta</b> qua WebSocket kèm <b>syncId</b> tăng dần.</p>
+    <div class="row">
+      <span class="pill purple">Local-first</span><span class="pill">IndexedDB</span><span class="pill">MobX Object Pool</span>
+      <span class="pill">Transaction → GraphQL</span><span class="pill">Delta packet / WebSocket</span><span class="pill">lastSyncId</span>
+    </div>
+    <p class="src">Nguồn: wzhudev/reverse-linear-sync-engine (bản dịch ngược, được CTO Linear xác nhận "correct") · linear.app changelog 12/2023.</p>
+  </section>
+
+  <section class="slide" data-title="Tổng thể">
+    <div class="kicker"><span class="tag">Kiến trúc tổng thể</span><span>Hai đường: ghi lên và delta xuống</span></div>
+    <h2>Đọc/ghi cục bộ, đồng bộ ở nền</h2>
+    <div class="flow">
+      <div class="node"><b>React UI</b><span class="tiny">observer</span></div>
+      <div class="arrow">⇄</div>
+      <div class="node purple"><b>Object Pool</b><span class="tiny">model MobX trong bộ nhớ</span></div>
+      <div class="arrow">⇄</div>
+      <div class="node purple"><b>IndexedDB</b><span class="tiny">mỗi model một store<br>_meta.lastSyncId</span></div>
+    </div>
+    <div class="grid g2">
+      <div class="box accent">
+        <h3>↑ Đường ghi (Transaction)</h3>
+        <p class="small"><code>issue.assignee = u</code> làm UI đổi ngay. <code>save()</code> sinh Transaction, xếp hàng (lưu tạm IndexedDB) rồi gom batch thành <b>một GraphQL mutation</b>.</p>
+      </div>
+      <div class="box good">
+        <h3>↓ Đường đọc (Delta packet)</h3>
+        <p class="small">Server ghi CSDL, cấp <b>syncId</b> rồi phát delta qua <b>WebSocket</b> cho mọi client liên quan, <b>kể cả client gây ra</b> để xác nhận.</p>
+      </div>
+    </div>
+    <p class="small muted">Phía server (CSDL, cách sinh syncId, pub/sub) <b>không được công bố</b>. Slide này chỉ mô tả những gì quan sát được từ client.</p>
+  </section>
+
+  <section class="slide" data-title="Bootstrap">
+    <div class="kicker"><span class="tag">Khởi động</span><span>Bootstrap + lazy loading</span></div>
+    <h2>Lần đầu tải gì, lần sau tải gì</h2>
+    <table class="t">
+      <tr><th>Kiểu</th><th>Khi nào</th><th>Cách</th></tr>
+      <tr><td><span class="pill purple">full</span></td><td>Chưa có dữ liệu, schema đổi, <code>lastSyncId</code> rỗng</td><td class="mono tiny">GET /sync/bootstrap?type=full&amp;onlyModels=…<br>JSON-lines + dòng _metadata_ (lastSyncId, syncGroups)</td></tr>
+      <tr><td><span class="pill accent">partial</span></td><td>Tải dần model lớn (Issue của một team)</td><td class="mono tiny">/sync/bootstrap?type=partial&amp;firstSyncId=…&amp;syncGroups=…</td></tr>
+      <tr><td><span class="pill good">local</span></td><td>Đã có dữ liệu cục bộ</td><td>Đọc IndexedDB rồi bắt kịp bằng delta</td></tr>
+    </table>
+    <div class="grid g3">
+      <div class="box"><h3>loadStrategy</h3><p class="small"><code>instant</code> · <code>lazy</code> · <code>partial</code> · <code>explicitlyRequested</code> · <code>local</code></p></div>
+      <div class="box"><h3>Lazy load</h3><p class="small">Mở issue mới tải Comment. Các yêu cầu lẻ được gom thành <code>POST /sync/batch</code>.</p></div>
+      <div class="box"><h3>Thứ tự</h3><p class="small">Migrate IDB → bootstrap → ghi IDB → nạp model instant → <b>mở WebSocket</b>.</p></div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Transaction">
+    <div class="kicker"><span class="tag">Đường ghi</span><span>Optimistic, batch, rollback</span></div>
+    <h2>Transaction: ghi trước, xác nhận sau</h2>
+    <div class="flow">
+      <div class="node"><b>Gán thuộc tính</b><span class="tiny">UI đổi ngay</span></div><div class="arrow">→</div>
+      <div class="node"><b>TransactionQueue</b><span class="tiny">lưu IDB, gom batchIndex</span></div><div class="arrow">→</div>
+      <div class="node accent"><b>GraphQL mutation</b><span class="tiny">alias o1, o2…</span></div><div class="arrow">→</div>
+      <div class="node"><b>Server trả syncId</b></div><div class="arrow">→</div>
+      <div class="node good"><b>Chờ delta có syncId đó</b><span class="tiny">mới coi là xong</span></div>
+    </div>
+    <div class="grid g3">
+      <div class="box bad"><h3>Lỗi</h3><p class="small"><code>rollback()</code> hoàn tác thay đổi cục bộ.</p></div>
+      <div class="box"><h3>Offline</h3><p class="small">Transaction nằm trong IndexedDB, mở lại thì gửi tiếp. Lưu ý: "some transactions are not idempotent".</p></div>
+      <div class="box"><h3>Undo/Redo</h3><p class="small">Mỗi transaction có <code>undoTransaction()</code>. Undo là một transaction mới đi đúng luồng.</p></div>
+    </div>
+    <p class="small muted">Loại: Creation · Updating · Deletion · Archival · Unarchive · Local.</p>
+  </section>
+
+  <section class="slide" data-title="Delta & syncId">
+    <div class="kicker"><span class="tag">Đường đọc realtime</span><span>Thứ tự, phát hiện hụt, quyền</span></div>
+    <h2>Delta packet và lastSyncId</h2>
+    <div class="grid g2">
+      <div class="grid">
+<pre class="code">// client nhớ lastSyncId = 1041
+WS ◀ delta { actions: [
+  { syncId: 1042, action: "U", model: "Issue", id: "…", data: {…} },
+  { syncId: 1045, action: "I", model: "Comment", … }
+]}
+// 1043, 1044 thuộc team khác nên không nhận (bình thường)
+// nếu server báo lastSyncId &gt; của mình: tải phần thiếu</pre>
+        <div class="box"><p class="small">Áp tuần tự dưới <code>updateLock.runExclusive</code>. Delta có thể <b>khác</b> transaction gốc vì server thêm hiệu ứng phụ, và client luôn theo delta.</p></div>
+      </div>
+      <div class="grid">
+        <div class="box accent"><h3>🔢 syncId tăng đơn điệu</h3><p class="small">Cho mọi client cùng một thứ tự. Bị hụt thì tải bù.</p></div>
+        <div class="box warn"><h3>⚔️ Xung đột</h3><p class="small"><b>Last-Writer-Wins</b> cho Update. Transaction đang chờ được <b>rebase</b> lên delta mới.</p></div>
+        <div class="box good"><h3>🔒 Sync group</h3><p class="small">Theo user, team, role. Không có quyền thì không nhận delta.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Phần nào realtime">
+    <div class="kicker"><span class="tag">Tổng hợp</span><span>Bên trong một Team/Project</span></div>
+    <h2>Linear: gần như mọi thứ đều realtime</h2>
+    <table class="t">
+      <tr><th>Chức năng</th><th>Trạng thái</th><th>Ghi chú</th></tr>
+      <tr><td>Danh sách / Board / Backlog</td><td><span class="pill good">Có</span></td><td>Vá đúng model bị đổi, không refetch</td></tr>
+      <tr><td>Kéo thẻ, sắp xếp</td><td><span class="pill good">Có</span></td><td>Optimistic, delta xác nhận</td></tr>
+      <tr><td>Chi tiết issue, mọi trường</td><td><span class="pill good">Có</span></td><td>Cùng cơ chế</td></tr>
+      <tr><td>Comment</td><td><span class="pill good">Có</span></td><td>Lazy-load khi mở issue</td></tr>
+      <tr><td>Co-edit mô tả + con trỏ</td><td><span class="pill good">Có (12/2023)</span></td><td>Thuật toán không công bố</td></tr>
+      <tr><td>Cycle, Project, Workflow state</td><td><span class="pill good">Có</span></td><td>Đều là Model</td></tr>
+      <tr><td>Offline, Undo/Redo</td><td><span class="pill good">Có</span></td><td>Nhờ hàng đợi Transaction</td></tr>
+    </table>
+  </section>
+
+  <section class="slide" data-title="Cái giá & bài học">
+    <div class="kicker"><span class="tag">Đánh giá cho DATN</span><span>→ xem myapp/</span></div>
+    <h2>Không sao chép, nhưng mượn 4 ý tưởng</h2>
+    <div class="grid g2">
+      <div class="box bad">
+        <h3>Vì sao không làm như Linear</h3>
+        <ul class="clean small">
+          <li>Phải viết ORM phía client, IndexedDB và migrate schema.</li>
+          <li>Work-service có nhiều rule phía server (workflow guard, WIP, cascade sprint/subtask, hierarchy), nên optimistic sẽ phải rollback liên tục.</li>
+          <li>Logic quyền bị nhân đôi giữa server và client.</li>
+          <li>Vượt phạm vi một đồ án.</li>
+        </ul>
+      </div>
+      <div class="box good">
+        <h3>4 ý tưởng nên mượn</h3>
+        <ol class="small" style="margin:0;padding-left:18px">
+          <li><b>seq tăng dần theo project</b> để phát hiện hụt rồi refetch.</li>
+          <li><b>Phát lại cho cả người gây ra</b>, kèm <code>clientMutationId</code> theo tab.</li>
+          <li><b>Sync group</b> tương đương <code>/topic/projects/{id}</code>, kiểm quyền khi subscribe.</li>
+          <li><b>LWW theo trường + version</b> để chống ghi đè.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+</div>
+<script src="../_assets/slide.js"></script>
+</body>
+</html>

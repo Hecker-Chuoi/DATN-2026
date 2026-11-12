@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trello Socket Architecture</title>
+<link rel="stylesheet" href="../_assets/slide.css">
+</head>
+<body>
+<div class="deck">
+
+  <section class="slide cover" data-title="Bìa">
+    <div class="brand">Nghiên cứu Realtime · 3/4 · Trello</div>
+    <h1>Trello: WebSocket + backplane<br>Redis → RabbitMQ → Kafka</h1>
+    <p class="lead">App Kanban realtime kinh điển, và là ví dụ thực tế trả lời câu hỏi <b>"nên dùng Realtime, Redis hay Kafka?"</b>: chúng nằm ở hai tầng khác nhau.</p>
+    <div class="row"><span class="pill accent">WebSocket</span><span class="pill">subscribe / unsubscribe</span><span class="pill bad">Redis Pub/Sub</span><span class="pill warn">RabbitMQ · 15 instance</span><span class="pill good">Kafka</span></div>
+    <p class="src">Nguồn: Atlassian – "Why we chose Kafka for the Trello socket architecture" (Sebastian Mayr, 29/03/2018).</p>
+  </section>
+
+  <section class="slide" data-title="Kiến trúc">
+    <div class="kicker"><span class="tag">Kiến trúc</span><span>Tách nơi ghi và nơi giữ socket</span></div>
+    <h2>App server không cần biết ai đang online</h2>
+    <div class="flow">
+      <div class="node"><b>Trình duyệt A</b><span class="tiny">kéo thẻ (REST)</span></div><div class="arrow">→</div>
+      <div class="node accent"><b>Trello Server</b><span class="tiny">ghi DB, publish delta</span></div><div class="arrow">→</div>
+      <div class="node purple"><b>Backplane</b><span class="tiny">Redis → RabbitMQ → Kafka</span></div><div class="arrow">→</div>
+      <div class="node good"><b>Socket server</b><span class="tiny">biết ai nghe model nào</span></div><div class="arrow">→</div>
+      <div class="node"><b>Trình duyệt B, C…</b><span class="tiny">WebSocket</span></div>
+    </div>
+    <div class="grid g3">
+      <div class="box"><h3>Giao thức tối giản</h3><p class="small">"the only commands we support are subscribing and unsubscribing to a channel"</p></div>
+      <div class="box"><h3>Kênh theo model</h3><p class="small">Mỗi lệnh subscribe gồm <b>loại</b> (board, card, member, organization) và <b>id</b>.</p></div>
+      <div class="box good"><h3>Kiểm quyền khi subscribe</h3><p class="small">"it checks permissions and then forwards the request to the master"</p></div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Ba thế hệ">
+    <div class="kicker"><span class="tag">Lịch sử backplane</span><span>Mỗi lần đổi là một bài học</span></div>
+    <h2>Ba thế hệ backplane</h2>
+    <div class="grid g3">
+      <div class="box">
+        <div class="row"><span class="pill bad">1</span><h3 style="margin:0">Redis Pub/Sub</h3></div>
+        <ul class="clean small">
+          <li>Đơn giản, nhanh.</li>
+          <li><b>Fire-and-forget</b>: subscriber offline thì mất tin.</li>
+          <li>Redis Streams (12/2017) còn "unreleased" và chưa có failover.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <div class="row"><span class="pill warn">2</span><h3 style="margin:0">RabbitMQ · ~3 năm</h3></div>
+        <ul class="clean small">
+          <li>Cụm inbound 3 node, shovel tới 16 queue, 4 cụm outbound (tổng 15 instance).</li>
+          <li><b>Shard theo model id</b> (16 shard) để giữ thứ tự.</li>
+          <li>Mỗi subscribe tạo một binding.</li>
+        </ul>
+      </div>
+      <div class="box good">
+        <div class="row"><span class="pill good">3</span><h3 style="margin:0">Kafka · 2018</h3></div>
+        <ul class="clean small">
+          <li><b>Master process</b> đọc toàn topic và "does its filtering locally".</li>
+          <li><b>Client process</b> giữ socket và xác thực.</li>
+          <li>Có thứ tự trong từng partition.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Vì sao bỏ RabbitMQ">
+    <div class="kicker"><span class="tag">Sự cố thực tế</span><span>Những rủi ro DATN cũng sẽ gặp (ở quy mô nhỏ)</span></div>
+    <h2>Vì sao RabbitMQ thất bại</h2>
+    <div class="grid g2">
+      <div class="box bad"><h3>🧠 Split-brain</h3><p class="small">Network partition dẫn tới "from split-brain to complete cluster failure". Khi cụm hỏng thì phải <b>ngắt mọi socket</b> và bắt client kết nối lại.</p></div>
+      <div class="box bad"><h3>🙈 Mất tin mà không biết</h3><p class="small">Client "may have missed a message but received a later one and has no way of knowing".</p></div>
+      <div class="box warn"><h3>🌊 Reconnect storm</h3><p class="small">Hàng loạt client kết nối lại cùng lúc kéo theo hàng loạt binding, RabbitMQ treo. <b>Jitter</b> giảm được một phần.</p></div>
+      <div class="box warn"><h3>📉 Tần suất</h3><p class="small">4 sự cố trong tháng trước khi chuyển đổi.</p></div>
+    </div>
+    <div class="box accent"><p class="small"><b>Bài học cho DATN:</b> client cần <b>seq</b> để tự phát hiện mất tin, <b>backoff có jitter</b> khi kết nối lại, và <b>refetch sau khi kết nối lại</b>.</p></div>
+  </section>
+
+  <section class="slide" data-title="Kết quả Kafka">
+    <div class="kicker"><span class="tag">Kết quả sau khi chuyển sang Kafka</span><span>Quy mô 2k+ tin/giây</span></div>
+    <h2>Đánh đổi CPU lấy độ ổn định</h2>
+    <div class="grid g4 center">
+      <div class="box good"><div class="big-number">−33%</div><p class="small">Bộ nhớ</p></div>
+      <div class="box warn"><div class="big-number">~2×</div><p class="small">CPU (do lọc cục bộ)</p></div>
+      <div class="box good"><div class="big-number">~5×</div><p class="small">Giảm chi phí</p></div>
+      <div class="box good"><div class="big-number">4 → 1</div><p class="small">Sự cố/tháng (1 sự cố nhỏ)</p></div>
+    </div>
+    <div class="box"><p class="small">Kafka được chọn vì <b>bền</b>, <b>chịu được partition</b> và <b>có thứ tự theo partition</b>. Đây là nhu cầu ở quy mô hàng nghìn tin/giây và nhiều socket server.</p></div>
+  </section>
+
+  <section class="slide" data-title="Realtime vs Redis vs Kafka">
+    <div class="kicker"><span class="tag">Trả lời câu hỏi của bạn</span><span>Hai tầng khác nhau</span></div>
+    <h2>"Realtime, Redis hay Kafka?" Không phải chọn một</h2>
+    <table class="t">
+      <tr><th>Tầng</th><th>Trả lời câu hỏi</th><th>Lựa chọn</th><th>DATN dùng khi nào</th></tr>
+      <tr><td><b>Đẩy xuống trình duyệt</b></td><td>Server "gõ cửa" trình duyệt thế nào?</td><td>WebSocket/STOMP, SSE, PubNub</td><td><span class="pill good">Ngay từ R1</span> STOMP <code>/ws-work</code></td></tr>
+      <tr><td><b>Backplane</b> giữa các server</td><td>Instance A ghi, instance B giữ socket thì B biết bằng cách nào?</td><td>Redis Pub/Sub · RabbitMQ · Kafka</td><td><span class="pill accent">Khi chạy ≥ 2 instance</span> Redis Pub/Sub</td></tr>
+      <tr><td><b>Sự kiện tích hợp bền</b></td><td>Consumer khác (thông báo, automation) không được mất sự kiện</td><td>Outbox + Kafka</td><td><span class="pill purple">R3</span> relay <code>outbox_events</code> lên Kafka</td></tr>
+    </table>
+    <p class="small muted">1 instance thì gọi thẳng <code>SimpMessagingTemplate</code>, không cần backplane. Trello cần Kafka ở quy mô mà DATN không chạm tới.</p>
+  </section>
+
+  <section class="slide" data-title="Bài học">
+    <div class="kicker"><span class="tag">Áp dụng cho DATN</span><span>→ xem myapp/</span></div>
+    <h2>6 bài học mang về</h2>
+    <div class="grid g3">
+      <div class="box"><h3>1 · Interface Broadcaster</h3><p class="small">Service nghiệp vụ không biết transport. Hôm nay gửi thẳng, mai đổi sang Redis.</p></div>
+      <div class="box"><h3>2 · Kênh theo model</h3><p class="small"><code>/topic/projects/{id}</code>, lọc <code>itemId</code> ở client.</p></div>
+      <div class="box"><h3>3 · Chỉ SUB/UNSUB</h3><p class="small">Kiểm quyền <code>PROJECT_VIEW</code> khi SUBSCRIBE.</p></div>
+      <div class="box"><h3>4 · Khoá theo id</h3><p class="small">Nếu đi qua Kafka thì dùng key = <code>projectId</code> để giữ thứ tự.</p></div>
+      <div class="box"><h3>5 · Jitter + refetch</h3><p class="small">Backoff ngẫu nhiên khi kết nối lại, kết nối xong thì tải lại.</p></div>
+      <div class="box"><h3>6 · seq phát hiện mất tin</h3><p class="small">Tránh tình trạng "no way of knowing".</p></div>
+    </div>
+  </section>
+
+</div>
+<script src="../_assets/slide.js"></script>
+</body>
+</html>

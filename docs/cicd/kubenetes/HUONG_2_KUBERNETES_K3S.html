@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hướng 2 Kubernetes k3s — DATN-2026</title>
+<meta name="description" content="Triển khai CI/CD DATN-2026 bằng Jenkins + Docker + Kubernetes k3s trên 1 EC2: khái niệm K8s, kiến trúc, pipeline, rolling update, manifest, từng bước cài đặt, vận hành.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
+<style>:root {
+  --bg: #F4F6FA; --surface: #FFFFFF; --surface-2: #F8FAFC; --border: #E2E8F0; --border-strong: #CBD5E1;
+  --text: #0F172A; --muted: #475569; --dim: #64748B;
+  --accent: #2563EB; --accent-soft: #EFF6FF; --accent-ink: #1E40AF;
+  --ok: #047857; --ok-soft: #ECFDF5; --warn: #B45309; --warn-soft: #FFFBEB;
+  --bad: #B91C1C; --bad-soft: #FEF2F2; --violet: #6D28D9; --violet-soft: #F5F3FF;
+  --code-bg: #0F172A; --code-text: #E2E8F0; --code-comment: #8B9BB4; --code-head: #1E293B;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(15,23,42,.04), 0 10px 28px -16px rgba(15,23,42,.18);
+  --font-body: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Plus Jakarta Sans", "Be Vietnam Pro", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B1120; --surface: #111827; --surface-2: #0F172A; --border: #1F2A3C; --border-strong: #334155;
+    --text: #E5E7EB; --muted: #A3AEC2; --dim: #7C8AA3;
+    --accent: #60A5FA; --accent-soft: rgba(96,165,250,.12); --accent-ink: #BFDBFE;
+    --ok: #34D399; --ok-soft: rgba(52,211,153,.10); --warn: #FBBF24; --warn-soft: rgba(251,191,36,.10);
+    --bad: #F87171; --bad-soft: rgba(248,113,113,.10); --violet: #A78BFA; --violet-soft: rgba(167,139,250,.12);
+    --code-bg: #070B14; --code-text: #E2E8F0; --code-comment: #7C8AA3; --code-head: #111827;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -16px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B1120; --surface: #111827; --surface-2: #0F172A; --border: #1F2A3C; --border-strong: #334155;
+  --text: #E5E7EB; --muted: #A3AEC2; --dim: #7C8AA3;
+  --accent: #60A5FA; --accent-soft: rgba(96,165,250,.12); --accent-ink: #BFDBFE;
+  --ok: #34D399; --ok-soft: rgba(52,211,153,.10); --warn: #FBBF24; --warn-soft: rgba(251,191,36,.10);
+  --bad: #F87171; --bad-soft: rgba(248,113,113,.10); --violet: #A78BFA; --violet-soft: rgba(167,139,250,.12);
+  --code-bg: #070B14; --code-text: #E2E8F0; --code-comment: #7C8AA3; --code-head: #111827;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -16px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15.5px/1.7 var(--font-body); }
+a { color: var(--accent); text-underline-offset: 3px; }
+code, kbd { font-family: var(--font-mono); font-size: .86em; }
+:not(pre) > code { background: var(--accent-soft); color: var(--accent-ink); padding: .12em .4em; border-radius: 6px; overflow-wrap: anywhere; }
+strong { font-weight: 650; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
+
+/* ---------- layout ---------- */
+.topbar { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+.topbar-in { max-width: 1280px; margin: 0 auto; padding: 10px 24px; display: flex; align-items: center; gap: 14px; }
+.brand { font-family: var(--font-display); font-weight: 800; letter-spacing: -.01em; color: var(--text); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+.brand-dot { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+.topnav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.topnav a { color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 600; padding: 6px 10px; border-radius: 8px; }
+.topnav a:hover, .topnav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); }
+.theme-btn { border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 8px; padding: 6px 10px; font: 600 13px var(--font-body); cursor: pointer; }
+.layout { max-width: 1280px; margin: 0 auto; padding: 28px 24px 80px; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 44px; }
+.toc { position: sticky; top: 70px; align-self: start; max-height: calc(100vh - 90px); overflow: auto; font-size: 13.5px; padding-right: 6px; }
+.toc-title { font: 700 11.5px var(--font-display); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 0 0 10px; }
+.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+.toc li { counter-increment: toc; }
+.toc a { display: block; color: var(--muted); text-decoration: none; padding: 5px 10px; border-left: 2px solid var(--border); line-height: 1.45; }
+.toc a::before { content: counter(toc) ". "; color: var(--dim); }
+.toc a:hover { color: var(--text); }
+.toc a.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); }
+.toc details summary { display: none; }
+main { min-width: 0; }
+
+@media (max-width: 1000px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 18px 16px 64px; }
+  .toc { position: static; max-height: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; }
+  .toc details summary { display: block; cursor: pointer; font-weight: 700; padding: 6px 0; }
+  .toc .toc-title { display: none; }
+  .topbar-in { padding: 10px 16px; }
+  .topnav a { padding: 5px 7px; font-size: 12.5px; }
+}
+
+/* ---------- hero ---------- */
+.hero { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 34px 34px 28px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+.hero::after { content: ""; position: absolute; inset: 0 0 auto auto; width: 340px; height: 340px; transform: translate(35%, -45%); background: radial-gradient(closest-side, var(--accent-soft), transparent); pointer-events: none; }
+.eyebrow { font: 700 12px var(--font-display); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+h1 { font: 800 clamp(26px, 4vw, 38px)/1.15 var(--font-display); letter-spacing: -.02em; margin: 0 0 12px; text-wrap: balance; }
+.lead { font-size: 17px; color: var(--muted); margin: 0; max-width: 72ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.chip { font: 600 12.5px var(--font-body); border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 4px 11px; }
+.chip.b { border-color: transparent; background: var(--accent-soft); color: var(--accent-ink); }
+.chip.g { border-color: transparent; background: var(--ok-soft); color: var(--ok); }
+.chip.v { border-color: transparent; background: var(--violet-soft); color: var(--violet); }
+.chip.w { border-color: transparent; background: var(--warn-soft); color: var(--warn); }
+
+/* ---------- sections ---------- */
+section { scroll-margin-top: 76px; padding-top: 8px; }
+h2 { font: 800 25px/1.25 var(--font-display); letter-spacing: -.015em; margin: 52px 0 14px; display: flex; gap: 12px; align-items: baseline; text-wrap: balance; }
+h2 .n { flex: none; font-size: 13px; font-weight: 800; color: var(--accent); background: var(--accent-soft); border-radius: 8px; padding: 3px 9px; transform: translateY(-3px); }
+h3 { font: 750 18.5px/1.35 var(--font-display); margin: 30px 0 8px; letter-spacing: -.005em; }
+h4 { font: 700 15.5px var(--font-display); margin: 20px 0 6px; }
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+li { margin: 4px 0; }
+li::marker { color: var(--dim); }
+.muted { color: var(--muted); }
+.small { font-size: 13.5px; }
+
+/* ---------- callouts ---------- */
+.callout { border: 1px solid var(--border); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 10px; padding: 12px 16px; margin: 16px 0; }
+.callout > :first-child { margin-top: 0; } .callout > :last-child { margin-bottom: 0; }
+.callout .ct { font: 750 13px var(--font-display); letter-spacing: .03em; text-transform: uppercase; margin-bottom: 4px; display: block; }
+.callout.info { border-left-color: var(--accent); background: var(--accent-soft); } .callout.info .ct { color: var(--accent); }
+.callout.ok { border-left-color: var(--ok); background: var(--ok-soft); } .callout.ok .ct { color: var(--ok); }
+.callout.warn { border-left-color: var(--warn); background: var(--warn-soft); } .callout.warn .ct { color: var(--warn); }
+.callout.bad { border-left-color: var(--bad); background: var(--bad-soft); } .callout.bad .ct { color: var(--bad); }
+.callout.v { border-left-color: var(--violet); background: var(--violet-soft); } .callout.v .ct { color: var(--violet); }
+
+/* ---------- cards ---------- */
+.grid { display: grid; gap: 14px; margin: 16px 0; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 760px) { .g2, .g3 { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); min-width: 0; }
+.card h4 { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+.card .k { font: 700 11.5px var(--font-display); text-transform: uppercase; letter-spacing: .08em; color: var(--dim); }
+a.card { text-decoration: none; color: inherit; display: block; transition: border-color .15s, transform .15s; }
+a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+/* ---------- tables ---------- */
+.tbl { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); margin: 16px 0; box-shadow: var(--shadow); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+th { font: 700 12.5px var(--font-display); text-transform: uppercase; letter-spacing: .04em; color: var(--dim); background: var(--surface-2); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.yes { color: var(--ok); font-weight: 700; } .no { color: var(--bad); font-weight: 700; } .mid { color: var(--warn); font-weight: 700; }
+
+/* ---------- code ---------- */
+.code { margin: 14px 0; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border-strong); background: var(--code-bg); box-shadow: var(--shadow); }
+.code-h { display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 14px; background: var(--code-head); color: #CBD5E1; font: 600 12.5px var(--font-mono); border-bottom: 1px solid rgba(148,163,184,.18); }
+.code-h .lang { color: #93C5FD; text-transform: uppercase; font-size: 11px; letter-spacing: .06em; }
+.code-h .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy { margin-left: auto; flex: none; border: 1px solid rgba(148,163,184,.35); background: transparent; color: #E2E8F0; font: 600 11.5px var(--font-body); padding: 3px 10px; border-radius: 6px; cursor: pointer; }
+.copy:hover { background: rgba(148,163,184,.15); }
+pre { margin: 0; padding: 14px 16px; overflow: auto; color: var(--code-text); font: 13px/1.6 var(--font-mono); tab-size: 2; max-height: 640px; }
+pre .cm { color: var(--code-comment); font-style: italic; }
+details.file { margin: 12px 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+details.file > summary { cursor: pointer; padding: 12px 16px; font-weight: 650; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; list-style: none; }
+details.file > summary::-webkit-details-marker { display: none; }
+details.file > summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
+details.file[open] > summary::before { transform: rotate(90deg); }
+details.file > summary code { font-size: 12.5px; }
+details.file > summary .d { color: var(--muted); font-weight: 400; font-size: 13.5px; }
+details.file > .code { margin: 0 12px 12px; }
+
+/* ---------- pipeline flow ---------- */
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 18px 0; }
+.stage { flex: 1 1 130px; min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--accent); border-radius: 10px; padding: 10px 12px; box-shadow: var(--shadow); position: relative; }
+.stage .sn { font: 800 11px var(--font-display); color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
+.stage .st { font: 750 14px/1.3 var(--font-display); margin: 2px 0 4px; }
+.stage .sd { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.stage.ci { border-top-color: var(--accent); }
+.stage.cd { border-top-color: var(--ok); }
+.stage.rb { border-top-color: var(--bad); }
+.stage.src { border-top-color: var(--violet); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+
+/* ---------- architecture diagram ---------- */
+.arch { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); margin: 18px 0; }
+.arch .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.arch .down { text-align: center; color: var(--dim); font: 600 12.5px var(--font-body); margin: 6px 0; }
+.arch .down::before { content: "▼"; display: block; color: var(--border-strong); font-size: 14px; line-height: 1; margin-bottom: 2px; }
+.node { border: 1px solid var(--border-strong); border-radius: 10px; padding: 8px 12px; background: var(--surface-2); text-align: center; min-width: 120px; flex: 0 1 auto; }
+.node b { display: block; font: 750 13.5px var(--font-display); }
+.node small { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.node.ext { background: var(--violet-soft); border-color: transparent; }
+.node.edge { background: var(--accent-soft); border-color: transparent; }
+.node.app { background: var(--ok-soft); border-color: transparent; }
+.node.data { background: var(--warn-soft); border-color: transparent; }
+.node.ci { background: var(--bad-soft); border-color: transparent; }
+.zone { border: 1.5px dashed var(--border-strong); border-radius: 14px; padding: 26px 12px 12px; position: relative; margin-top: 8px; }
+.zone > .zl { position: absolute; top: 6px; left: 12px; font: 750 11.5px var(--font-display); letter-spacing: .07em; text-transform: uppercase; color: var(--dim); }
+.zone + .zone { margin-top: 12px; }
+.zones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .zones { grid-template-columns: 1fr; } .node { min-width: 0; flex: 1 1 140px; } }
+
+/* ---------- steps ---------- */
+ol.steps { list-style: none; padding: 0; counter-reset: st; margin: 16px 0; }
+ol.steps > li { counter-increment: st; position: relative; padding: 0 0 18px 48px; margin: 0; border-left: 2px solid var(--border); margin-left: 15px; padding-left: 30px; }
+ol.steps > li:last-child { border-left-color: transparent; padding-bottom: 0; }
+ol.steps > li::before { content: counter(st); position: absolute; left: -16px; top: -2px; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font: 800 13px/30px var(--font-display); text-align: center; }
+ol.steps > li > h4 { margin-top: 0; }
+
+/* ---------- misc ---------- */
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 14px; }
+.kv dt { color: var(--dim); font-weight: 600; } .kv dd { margin: 0; }
+.bar { height: 10px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+.timeline { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; font-size: 13.5px; align-items: center; margin: 14px 0; }
+.timeline .pods { display: flex; gap: 6px; flex-wrap: wrap; }
+.pod { font: 600 12px var(--font-mono); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); }
+.pod.old { background: var(--surface-2); color: var(--muted); }
+.pod.new { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.pod.starting { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.pod.gone { text-decoration: line-through; opacity: .55; }
+footer { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--dim); font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-in">
+  <a class="brand" href="../00_TONG_QUAN_CICD.html"><span class="brand-dot"></span>DATN-2026 · CI/CD</a>
+  <nav class="topnav" aria-label="Tài liệu">
+    <a href="../00_TONG_QUAN_CICD.html">Tổng quan</a>
+    <a href="../docker_only/HUONG_1_DOCKER_THUAN.html">Hướng 1 · Docker</a>
+    <a href="HUONG_2_KUBERNETES_K3S.html" aria-current="page">Hướng 2 · Kubernetes</a>
+  </nav>
+  <button class="theme-btn" data-theme-toggle type="button">Sáng / Tối</button>
+</div></header>
+
+<div class="layout">
+<nav class="toc" aria-label="Mục lục"><details open><summary>Mục lục</summary>
+  <p class="toc-title">Mục lục</p>
+  <ol>
+    <li><a href="#tldr">Tóm tắt 1 phút</a></li>
+    <li><a href="#k8s-basics">Kubernetes tối thiểu cần biết</a></li>
+    <li><a href="#distro">Vì sao chọn k3s</a></li>
+    <li><a href="#architecture">Kiến trúc trên 1 EC2</a></li>
+    <li><a href="#pipeline">Pipeline: giống &amp; khác Hướng 1</a></li>
+    <li><a href="#deploy-mechanism">Deploy khai báo &amp; rolling update</a></li>
+    <li><a href="#manifests">Đọc hiểu manifest</a></li>
+    <li><a href="#rollback">Rollback</a></li>
+    <li><a href="#sizing">RAM &amp; cấu hình máy</a></li>
+    <li><a href="#setup">Triển khai từng bước</a></li>
+    <li><a href="#migrate">Chuyển từ Hướng 1 sang</a></li>
+    <li><a href="#ops">Vận hành &amp; kubectl</a></li>
+    <li><a href="#troubleshoot">Sự cố thường gặp</a></li>
+    <li><a href="#proscons">Ưu / nhược điểm</a></li>
+    <li><a href="#files">Toàn bộ file mẫu</a></li>
+  </ol>
+</details></nav>
+
+<main>
+  <div class="hero">
+    <p class="eyebrow">Hướng 2 · Docker + Kubernetes</p>
+    <h1>Jenkins + k3s (Kubernetes rút gọn) trên một EC2</h1>
+    <p class="lead">Docker vẫn được dùng để build image và chạy Jenkins. Ứng dụng thì do <strong>k3s</strong> điều phối: Jenkins đẩy image lên registry nội bộ rồi khai báo "phiên bản mong muốn" bằng <code>kubectl apply</code>. Kubernetes tự cập nhật cuốn chiếu không gián đoạn, tự khởi động lại Pod bị treo, và Traefik + cert-manager lo HTTPS.</p>
+    <div class="chips">
+      <span class="chip v">k3s · 1 node</span><span class="chip v">Kustomize</span><span class="chip g">Traefik Ingress + cert-manager</span><span class="chip b">Jenkins ngoài cluster</span><span class="chip b">Registry localhost:5000</span><span class="chip w">t3.xlarge (16 GB)</span>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <section id="tldr">
+    <h2><span class="n">01</span>Tóm tắt 1 phút</h2>
+    <div class="grid g3">
+      <div class="card"><span class="k">Phía Docker</span><h4>Jenkins + Registry</h4><p class="small">Compose <code>datn-platform</code> chạy Jenkins (build và test) và <code>registry:2</code> (kho image tại <code>localhost:5000</code>).</p></div>
+      <div class="card"><span class="k">Phía k3s</span><h4>Namespace <code>datn</code></h4><p class="small">6 Deployment ứng dụng, 5 StatefulSet có ổ đĩa (2 Postgres, Redis, Kafka, MinIO), Deployment Keycloak, 1 Ingress. Traefik nghe cổng 80/443.</p></div>
+      <div class="card"><span class="k">Điểm mấu chốt</span><h4>Khai báo, không ra lệnh</h4><p class="small">Jenkins không bảo "khởi động lại service X". Nó nộp toàn bộ trạng thái mong muốn, và K8s tự tìm ra phần nào cần đổi.</p></div>
+    </div>
+    <div class="flow">
+      <div class="stage src"><div class="sn">1–2</div><div class="st">Checkout + phát hiện thay đổi</div><div class="sd">giống Hướng 1</div></div>
+      <div class="stage ci"><div class="sn">3–4</div><div class="st">CI backend + frontend</div><div class="sd">giống Hướng 1</div></div>
+      <div class="stage cd"><div class="sn">5 · main</div><div class="st">Build + push</div><div class="sd">→ localhost:5000</div></div>
+      <div class="stage cd"><div class="sn">6 · main</div><div class="st">kubectl apply</div><div class="sd">Secret, realm, overlay Kustomize</div></div>
+      <div class="stage cd"><div class="sn">7 · main</div><div class="st">Rollout + smoke</div><div class="sd">rollout status + HTTPS</div></div>
+      <div class="stage rb"><div class="sn">post</div><div class="st">Rollback</div><div class="sd">apply bảng tag cũ</div></div>
+    </div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="k8s-basics">
+    <h2><span class="n">02</span>Kubernetes tối thiểu cần biết</h2>
+    <p>Kubernetes chạy một <strong>vòng lặp điều hoà</strong> (reconcile loop): bạn khai báo "muốn có 1 bản <code>work-service</code> image <code>57-a1b2c3d</code>, mỗi bản tối đa 1 GB RAM", và các controller liên tục so sánh <em>mong muốn</em> với <em>thực tế</em> rồi sửa phần chênh lệch. Pod chết thì tạo Pod mới. Image đổi thì cập nhật cuốn chiếu. Pod treo không trả lời health check thì khởi động lại. Nếu đã quen Docker Compose, bảng sau ánh xạ khái niệm sang K8s:</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Docker Compose (Hướng 1)</th><th>Kubernetes (Hướng 2)</th><th>Ghi chú</th></tr></thead>
+      <tbody>
+        <tr><td>container</td><td><strong>Pod</strong></td><td>Đơn vị chạy nhỏ nhất, gồm 1 hoặc nhiều container dùng chung IP</td></tr>
+        <tr><td>service không có dữ liệu (app)</td><td><strong>Deployment</strong> → ReplicaSet → Pod</td><td>Khai báo số bản và cách cập nhật; giữ ReplicaSet cũ để rollback</td></tr>
+        <tr><td>service có volume (DB)</td><td><strong>StatefulSet</strong> + <strong>PVC</strong></td><td>Tên Pod cố định (<code>app-db-0</code>), luôn gắn lại đúng ổ đĩa cũ</td></tr>
+        <tr><td>named volume</td><td><strong>PersistentVolumeClaim</strong> (StorageClass <code>local-path</code>)</td><td>Dữ liệu nằm ở <code>/var/lib/rancher/k3s/storage</code> trên EC2</td></tr>
+        <tr><td>tên service trong network</td><td><strong>Service</strong> (ClusterIP) + DNS</td><td>IP ảo cố định, tự cân bằng tải giữa các Pod <em>Ready</em></td></tr>
+        <tr><td>Caddy (chia theo domain/path)</td><td><strong>Ingress</strong> + Ingress Controller (<strong>Traefik</strong>)</td><td>Ingress chỉ là luật; Traefik là bên thực thi</td></tr>
+        <tr><td>Caddy tự xin chứng chỉ</td><td><strong>cert-manager</strong> + ClusterIssuer</td><td>Chứng chỉ lưu trong Secret <code>datn-tls</code></td></tr>
+        <tr><td><code>environment</code>, <code>.env</code></td><td><strong>ConfigMap</strong> / <strong>Secret</strong></td><td>Nạp vào Pod bằng <code>envFrom</code> / <code>secretKeyRef</code></td></tr>
+        <tr><td><code>healthcheck</code></td><td><strong>startup / readiness / liveness probe</strong></td><td>Readiness <em>chặn traffic</em>, liveness <em>khởi động lại</em> Pod</td></tr>
+        <tr><td><code>restart: unless-stopped</code></td><td>Controller luôn giữ đủ <code>replicas</code></td><td>—</td></tr>
+        <tr><td><code>mem_limit</code></td><td><code>resources.requests</code> / <code>limits</code></td><td>requests để xếp lịch, limits là ngưỡng bị OOMKill</td></tr>
+        <tr><td>project name</td><td><strong>Namespace</strong> (<code>datn</code>)</td><td>Gom và cô lập tài nguyên</td></tr>
+        <tr><td><code>docker compose up -d</code></td><td><code>kubectl apply -f</code></td><td>Cả hai đều khai báo; K8s còn tiếp tục theo dõi sau khi apply</td></tr>
+        <tr><td>—</td><td><strong>Kustomize</strong></td><td>Ghép manifest gốc với "lớp phủ" (ở đây: tag image), có sẵn trong <code>kubectl</code></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="distro">
+    <h2><span class="n">03</span>Chọn bản Kubernetes cho 1 server: vì sao k3s</h2>
+    <div class="tbl"><table>
+      <thead><tr><th></th><th>k3s</th><th>MicroK8s</th><th>minikube / kind</th><th>kubeadm</th><th>Amazon EKS</th></tr></thead>
+      <tbody>
+        <tr><td>Bản chất</td><td>K8s rút gọn (CNCF), 1 file binary</td><td>K8s đóng gói snap (Canonical)</td><td>K8s trong VM/container cho dev, test</td><td>Bộ cài K8s "chuẩn gốc"</td><td>K8s do AWS quản lý</td></tr>
+        <tr><td>RAM nền</td><td class="yes">~0,5–0,8 GB</td><td class="mid">~0,8–1 GB</td><td class="mid">1–2 GB+</td><td class="mid">1,5–2 GB</td><td>Control plane ở AWS</td></tr>
+        <tr><td>Dùng cho server thật</td><td class="yes">Có</td><td class="yes">Có</td><td class="no">Không</td><td class="yes">Có</td><td class="yes">Có</td></tr>
+        <tr><td>Có sẵn</td><td class="yes">Traefik, local-path, CoreDNS, metrics-server, ServiceLB</td><td class="mid">Addon bật tay</td><td class="mid">Addon</td><td class="no">Gần như không có</td><td class="mid">Phải cài thêm LB controller, EBS CSI</td></tr>
+        <tr><td>Cài trên 1 EC2</td><td class="yes">1 lệnh</td><td class="yes">Được</td><td class="no">Không hợp</td><td class="mid">Được nhưng phức tạp</td><td class="no">Không: thêm ~73 USD/tháng phí control plane + node riêng</td></tr>
+      </tbody>
+    </table></div>
+    <p><strong>Kết luận:</strong> k3s là Kubernetes thật (đạt chứng nhận CNCF, dùng chung <code>kubectl</code> và manifest với mọi cluster khác), nhẹ nhất, và có sẵn đủ thứ cần cho một node. Manifest viết cho k3s có thể chạy trên EKS hoặc GKE với thay đổi nhỏ (StorageClass, IngressClass).</p>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="architecture">
+    <h2><span class="n">04</span>Kiến trúc trên 1 EC2</h2>
+    <div class="arch" role="img" aria-label="Kiến trúc Hướng 2">
+      <div class="row"><div class="node ext"><b>Người dùng</b></div><div class="node ext"><b>GitHub</b><small>webhook</small></div><div class="node ext"><b>Let's Encrypt</b></div></div>
+      <div class="down">Elastic IP · Security Group 80/443 (22 cho IP của bạn)</div>
+      <div class="zone"><span class="zl">EC2 Ubuntu 24.04</span>
+        <div class="zones">
+          <div class="zone"><span class="zl">Docker · compose "datn-platform"</span>
+            <div class="row"><div class="node ci"><b>jenkins</b><small>:8080 (chỉ nội bộ)<br>mvn · npm · docker · kubectl</small></div></div>
+            <div class="down">docker push</div>
+            <div class="row"><div class="node ci"><b>registry:2</b><small>127.0.0.1:5000</small></div></div>
+            <p class="small muted" style="text-align:center;margin:10px 0 0">Jenkins gọi API server k3s qua <code>https://&lt;private-ip&gt;:6443</code> (kubeconfig)</p>
+          </div>
+          <div class="zone"><span class="zl">k3s (containerd riêng)</span>
+            <div class="row"><div class="node edge"><b>Traefik</b><small>:80 :443 · Ingress</small></div><div class="node edge"><b>cert-manager</b><small>Let's Encrypt</small></div></div>
+            <div class="down">namespace "datn"</div>
+            <div class="row">
+              <div class="node app"><b>frontend ×2</b></div><div class="node app"><b>api-gateway</b></div><div class="node app"><b>identity</b></div><div class="node app"><b>work</b></div><div class="node app"><b>workspace</b></div><div class="node app"><b>notification</b></div>
+            </div>
+            <div class="down">StatefulSet + PVC (local-path)</div>
+            <div class="row">
+              <div class="node data"><b>keycloak</b></div><div class="node data"><b>app-db-0</b></div><div class="node data"><b>keycloak-db-0</b></div><div class="node data"><b>redis-0</b></div><div class="node data"><b>kafka-0</b></div><div class="node data"><b>minio-0</b></div>
+            </div>
+          </div>
+        </div>
+        <p class="small muted" style="text-align:center;margin:12px 0 0">k3s kéo image từ <code>localhost:5000</code> (cấu hình <code>/etc/rancher/k3s/registries.yaml</code>) · Traefik chuyển <code>jenkins.&lt;domain&gt;</code> về Jenkins qua Service + Endpoints trỏ private IP</p>
+      </div>
+    </div>
+
+    <h3>Ba câu hỏi "vì sao" quan trọng</h3>
+    <div class="grid g3">
+      <div class="card"><span class="k">Vì sao Jenkins ở NGOÀI k3s?</span>
+        <p class="small">(1) Tránh vòng luẩn quẩn: cluster hỏng thì vẫn còn Jenkins để sửa. (2) Build image trong Pod phải dùng Kaniko hoặc BuildKit, phức tạp hơn nhiều so với dùng docker.sock. (3) Dùng lại y nguyên image Jenkins của Hướng 1.</p></div>
+      <div class="card"><span class="k">Vì sao phải có registry?</span>
+        <p class="small">k3s dùng <strong>containerd riêng</strong>, không nhìn thấy kho image của Docker. Image Docker vừa build phải được <em>push</em> lên <code>localhost:5000</code> rồi k3s mới <em>pull</em> về được. Registry chỉ nghe ở 127.0.0.1, không lộ ra ngoài.</p></div>
+      <div class="card"><span class="k">Jenkins có HTTPS bằng cách nào?</span>
+        <p class="small">Traefik đã chiếm 80/443 nên không dùng Caddy được. Ta tạo một <code>Service</code> không có selector, kèm <code>Endpoints</code> trỏ <code>&lt;private-ip&gt;:8080</code>, rồi gắn Ingress lên. Traefik coi Jenkins như một service trong cluster (file <code>bootstrap/jenkins-ingress.yaml</code>).</p></div>
+    </div>
+
+    <h3>Bố cục trong repo</h3>
+    <div class="code"><div class="code-h"><span class="lang">text</span><span class="t">infrastructure/cicd/k8s/ (đề xuất)</span><button class="copy" type="button">Sao chép</button></div><pre><code>infrastructure/cicd/k8s/
+├── Jenkinsfile
+├── bootstrap/                 # áp TAY 1 lần, KHÔNG nằm trong kustomization
+│   ├── cluster-issuer.yaml    # cert-manager ↔ Let's Encrypt
+│   └── jenkins-ingress.yaml   # đưa Jenkins (ngoài cluster) ra sau Traefik
+└── manifests/                 # Jenkins apply mỗi lần deploy
+    ├── kustomization.yaml
+    ├── namespace.yaml
+    ├── config.yaml            # ConfigMap datn-config (không bí mật)
+    ├── ingress.yaml           # datn.&lt;domain&gt;, auth.datn.&lt;domain&gt;
+    ├── infra/  app-db · keycloak-db · keycloak · redis · kafka · minio
+    └── apps/   identity · workspace · work · notification · api-gateway · frontend</code></pre></div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="pipeline">
+    <h2><span class="n">05</span>Pipeline: giống &amp; khác Hướng 1</h2>
+    <p>File: <code>docs/cicd/kubenetes/files/Jenkinsfile</code> → <code>infrastructure/cicd/k8s/Jenkinsfile</code>. Stage 1–4 (checkout, phát hiện thay đổi, CI backend, CI frontend) <strong>giống hệt</strong> Hướng 1. Xem giải thích chi tiết ở <a href="../docker_only/HUONG_1_DOCKER_THUAN.html#pipeline">Hướng 1 · mục 4</a> và <a href="../docker_only/HUONG_1_DOCKER_THUAN.html#design">mục 5</a>.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Stage</th><th>Hướng 1 · Docker</th><th>Hướng 2 · k3s</th></tr></thead>
+      <tbody>
+        <tr><td>5. Image</td><td><code>docker build</code>; image ở lại trên EC2</td><td><code>docker build</code> + <code>docker push localhost:5000/datn/&lt;svc&gt;:&lt;TAG&gt;</code></td></tr>
+        <tr><td>6. Deploy</td><td>Chép compose → sửa <code>deployed.env</code> → <code>compose up -d</code></td><td>Sửa <code>deployed.env</code> → tạo/cập nhật Namespace, Secret <code>datn-secrets</code> (từ <code>prod.env</code>), ConfigMap <code>keycloak-realm</code> → sinh overlay Kustomize → <code>kubectl apply</code></td></tr>
+        <tr><td>7. Kiểm tra</td><td>Chờ container healthy + curl HTTPS</td><td><code>kubectl rollout status</code> cho mọi Deployment/StatefulSet + curl HTTPS + <code>kubectl exec</code> kiểm tra gateway</td></tr>
+        <tr><td>Rollback</td><td>Khôi phục bảng tag → <code>compose up</code></td><td>Khôi phục bảng tag → apply lại (hoặc <code>kubectl rollout undo</code> khẩn cấp)</td></tr>
+        <tr><td>Lưu vết</td><td>—</td><td><code>k8s-rendered.yaml</code>: manifest đã áp thực tế, đính kèm vào mỗi build</td></tr>
+        <tr><td>Credential</td><td><code>datn-prod-env</code></td><td><code>datn-prod-env</code> + <code>k3s-kubeconfig</code></td></tr>
+      </tbody>
+    </table></div>
+    <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Stage 6 – phần cốt lõi (rút gọn)</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># Bí mật &amp; realm: "create --dry-run | apply" = tạo nếu chưa có, cập nhật nếu đã có (idempotent)</span>
+kubectl -n datn create secret generic datn-secrets --from-env-file="$PROD_ENV" --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n datn create configmap keycloak-realm --from-file=realm.json=infrastructure/keycloak/realm-export_08082026.json \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+<span class="cm"># Overlay = manifest gốc + bảng tag  →  kubectl apply</span>
+kubectl kustomize .k8s-overlay &gt; k8s-rendered.yaml
+kubectl apply -f k8s-rendered.yaml</code></pre></div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="deploy-mechanism">
+    <h2><span class="n">06</span>Deploy khai báo &amp; rolling update</h2>
+    <h3>6.1 Từ bảng tag đến manifest cuối cùng</h3>
+    <p>Trong <code>manifests/apps/*.yaml</code>, image chỉ ghi tên (<code>image: datn/work-service</code>), không có tag. Mỗi lần deploy, Jenkins đọc <code>/opt/datn/state/deployed.env</code> (cùng cơ chế với Hướng 1) và sinh một overlay nhỏ:</p>
+    <div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">.k8s-overlay/kustomization.yaml (Jenkins tự sinh, không commit)</span><button class="copy" type="button">Sao chép</button></div><pre><code>apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../infrastructure/cicd/k8s/manifests      # manifest gốc trong repo
+images:                                       # ↓ đọc từ deployed.env
+  - name: datn/work-service
+    newName: localhost:5000/datn/work-service
+    newTag: "57-a1b2c3d"
+  - name: datn/identity-service
+    newName: localhost:5000/datn/identity-service
+    newTag: "41-9f8e7d6"
+<span class="cm">  # ... 4 service còn lại</span></code></pre></div>
+    <p><code>kubectl kustomize</code> thay <code>image: datn/work-service</code> bằng <code>localhost:5000/datn/work-service:57-a1b2c3d</code> rồi <code>kubectl apply</code> nộp toàn bộ. API server so với trạng thái đang chạy: chỉ Deployment <code>work-service</code> có <em>pod template</em> đổi nên chỉ nó được rolling update. 11 workload còn lại báo <code>unchanged</code>, Pod không bị động tới.</p>
+    <div class="callout info"><span class="ct">Vì sao không dùng <code>kubectl set image</code>?</span>
+      <code>set image</code> là lệnh mệnh lệnh: nó sửa trực tiếp trên cluster nhưng không ghi lại ở đâu. Lần sau ai đó <code>kubectl apply</code> manifest gốc thì image sẽ bị đổi về giá trị trong file (gọi là "drift"). Với overlay sinh từ bảng tag, <strong>một nguồn sự thật</strong> (Git + <code>deployed.env</code>) luôn tạo ra đúng một trạng thái cluster.
+    </div>
+
+    <h3>6.2 Rolling update không gián đoạn</h3>
+    <p>Mỗi Deployment ứng dụng có <code>maxSurge: 1</code>, <code>maxUnavailable: 0</code>. Ví dụ khi đổi <code>work-service</code> từ v56 lên v57:</p>
+    <div class="timeline">
+      <b>t0 · apply</b><div class="pods"><span class="pod old">v56 · Ready · nhận traffic</span></div>
+      <b>t1 · surge</b><div class="pods"><span class="pod old">v56 · Ready · nhận traffic</span><span class="pod starting">v57 · đang khởi động (startupProbe)</span></div>
+      <b>t2 · ready</b><div class="pods"><span class="pod old">v56 · Ready</span><span class="pod new">v57 · Ready → Service thêm vào</span></div>
+      <b>t3 · thay</b><div class="pods"><span class="pod old gone">v56 · Terminating</span><span class="pod new">v57 · Ready · nhận traffic</span></div>
+      <b>Nếu v57 lỗi</b><div class="pods"><span class="pod old">v56 vẫn phục vụ</span><span class="pod starting">v57 CrashLoop / không Ready</span><span class="small muted">→ <code>rollout status</code> hết giờ → Jenkins rollback</span></div>
+    </div>
+    <p>Người dùng không gặp lỗi nào trong suốt quá trình, vì Service chỉ gửi request tới Pod đã <em>Ready</em>. Đây là khác biệt lớn nhất so với Hướng 1 và là phần đáng trình diễn khi bảo vệ (cách làm ở <a href="#setup">mục 10, bước 12</a>).</p>
+    <div class="callout warn"><span class="ct">Chi phí của zero-downtime</span>
+      Trong lúc cập nhật, cả Pod cũ và Pod mới cùng chạy, nên RAM tăng tạm thời bằng một Pod (tối đa ~1 GB với work-service). Keycloak và các DB dùng <code>Recreate</code> / StatefulSet một bản nên <strong>vẫn gián đoạn ngắn</strong> khi chính chúng được nâng cấp. Việc này hiếm khi xảy ra vì chúng không đổi theo code.
+    </div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="manifests">
+    <h2><span class="n">07</span>Đọc hiểu manifest</h2>
+    <h3>7.1 Giải phẫu một Deployment</h3>
+    <div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">apps/work-service.yaml (rút gọn, có chú thích)</span><button class="copy" type="button">Sao chép</button></div><pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: work-service
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5              # giữ 5 ReplicaSet cũ → `kubectl rollout undo`
+  strategy:
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }   # zero-downtime
+  selector:
+    matchLabels: { app: work-service } # Deployment quản lý Pod có nhãn này
+  template:                            # "khuôn" Pod – đổi bất cứ gì ở đây = rolling update
+    metadata:
+      labels: { app: work-service, tier: app }
+    spec:
+      enableServiceLinks: false        # không bơm biến *_PORT=tcp://... vào Pod
+      containers:
+        - name: app
+          image: datn/work-service     # Kustomize gắn registry + tag
+          envFrom:
+            - configMapRef: { name: datn-config }        # URL nội bộ, Redis, Kafka, MinIO...
+          env:
+            - name: AUTH_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: AUTH_DOMAIN } }
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI
+              value: "https://$(AUTH_DOMAIN)/realms/datn-realm"   # K8s tự ghép biến khai báo phía trên
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_PASSWORD } }
+          startupProbe:  { tcpSocket: { port: 8083 }, periodSeconds: 5, failureThreshold: 60 }  # ≤ 5 phút để boot
+          readinessProbe: { tcpSocket: { port: 8083 }, periodSeconds: 10 }   # Ready mới nhận traffic
+          livenessProbe:  { tcpSocket: { port: 8083 }, periodSeconds: 20 }   # treo → restart
+          resources:
+            requests: { cpu: 150m, memory: 512Mi }   # "giữ chỗ" khi xếp lịch
+            limits:   { memory: 1Gi }                # vượt → OOMKilled → tự khởi động lại</code></pre></div>
+
+    <h3>7.2 Ba loại probe &amp; vì sao cần <code>startupProbe</code></h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Probe</th><th>Câu hỏi</th><th>Khi thất bại</th></tr></thead>
+      <tbody>
+        <tr><td><strong>startupProbe</strong></td><td>"Đã khởi động xong chưa?"</td><td>Chờ tiếp, tới <code>failureThreshold × periodSeconds</code> thì restart. Trong lúc này hai probe kia <em>chưa chạy</em></td></tr>
+        <tr><td><strong>readinessProbe</strong></td><td>"Nhận request được chưa?"</td><td>Bị gỡ khỏi Service (không nhận traffic), <em>không</em> restart</td></tr>
+        <tr><td><strong>livenessProbe</strong></td><td>"Còn sống không hay đã treo?"</td><td>Restart container</td></tr>
+      </tbody>
+    </table></div>
+    <p>Spring Boot mất 30–90 giây để khởi động (work-service có Flyway và seed template). Nếu không có startupProbe, livenessProbe có thể giết Pod trước khi nó kịp boot xong, gây vòng lặp CrashLoop vô tận.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Workload</th><th>Kiểu probe</th><th>Thời gian boot tối đa</th><th>requests / limits RAM</th></tr></thead>
+      <tbody>
+        <tr><td>api-gateway</td><td>HTTP <code>/actuator/health</code></td><td class="num">3 phút</td><td class="num">256Mi / 512Mi</td></tr>
+        <tr><td>identity-service, workspace-service</td><td>TCP (chưa có actuator)</td><td class="num">4 phút</td><td class="num">384Mi / 768Mi</td></tr>
+        <tr><td>work-service</td><td>TCP</td><td class="num">5 phút</td><td class="num">512Mi / 1Gi</td></tr>
+        <tr><td>notification-service</td><td>TCP</td><td class="num">3 phút</td><td class="num">256Mi / 512Mi</td></tr>
+        <tr><td>keycloak</td><td>HTTP <code>/health/started|ready|live</code> (<code>KC_HEALTH_ENABLED</code>)</td><td class="num">5 phút</td><td class="num">512Mi / 1Gi</td></tr>
+        <tr><td>app-db, keycloak-db</td><td>exec <code>pg_isready</code></td><td class="num">—</td><td class="num">128Mi / 512Mi · 96Mi / 384Mi</td></tr>
+        <tr><td>redis · kafka · minio</td><td><code>redis-cli ping</code> · TCP · TCP</td><td class="num">—</td><td class="num">64Mi/256Mi · 512Mi/1Gi · 128Mi/512Mi</td></tr>
+        <tr><td>frontend ×2</td><td>HTTP <code>/</code></td><td class="num">—</td><td class="num">16Mi / 128Mi</td></tr>
+      </tbody>
+    </table></div>
+    <p class="small muted">Tổng <em>requests</em> ≈ 3,2 GiB; tổng <em>limits</em> ≈ 7,4 GiB. Bộ xếp lịch của K8s chỉ biết <em>requests</em>; nó không biết Jenkins ở ngoài đang dùng 2–3 GB. Vì vậy cần máy 16 GB để tổng <em>limits</em> + Jenkins + k3s vẫn vừa RAM thật.</p>
+
+    <h3>7.3 StatefulSet + PVC cho dữ liệu</h3>
+    <p>Postgres, Redis, Kafka, MinIO dùng <code>StatefulSet</code> có <code>volumeClaimTemplates</code>. k3s tự tạo PVC (ví dụ <code>data-app-db-0</code>) bằng StorageClass <code>local-path</code>, tức là một thư mục trên ổ EBS của EC2. Xoá Pod hay deploy lại thì dữ liệu vẫn còn. <strong>Xoá PVC hoặc namespace thì mất dữ liệu</strong>, nên đừng chạy <code>kubectl delete namespace datn</code> khi chưa backup.</p>
+
+    <h3>7.4 Bí mật &amp; cấu hình</h3>
+    <ul>
+      <li><strong>ConfigMap <code>datn-config</code></strong> (trong Git): URL nội bộ (<code>http://keycloak:8080</code>, <code>redis</code>, <code>kafka:9092</code>…), profile <code>prod</code>, tuỳ chọn JVM. Mọi service Spring nạp toàn bộ bằng <code>envFrom</code>; key không dùng tới thì Spring bỏ qua.</li>
+      <li><strong>Secret <code>datn-secrets</code></strong> (không có trong Git): Jenkins tạo từ credential <code>datn-prod-env</code>, tức là cùng file <code>prod.env</code> với Hướng 1. Mỗi Pod chỉ lấy đúng key nó cần qua <code>secretKeyRef</code>.</li>
+      <li><strong><code>$(AUTH_DOMAIN)</code></strong> trong <code>value:</code> được Kubernetes thay bằng biến môi trường khai báo <em>phía trên</em> trong cùng container. Nhờ vậy tên miền chỉ nằm ở <code>prod.env</code>, không phải viết cứng vào manifest (trừ <code>ingress.yaml</code>).</li>
+    </ul>
+    <div class="callout bad"><span class="ct">Bẫy: service links bơm biến lạ vào Pod</span>
+      Mặc định K8s bơm vào mỗi Pod các biến như <code>KAFKA_PORT=tcp://10.43.12.7:9092</code> cho mọi Service trong namespace. Image <code>apache/kafka</code> biến mọi biến <code>KAFKA_*</code> thành cấu hình broker, nên nhận nhầm <code>port=tcp://…</code> và không khởi động được. Tất cả manifest đã đặt <code>enableServiceLinks: false</code> để tránh lỗi này (ứng dụng tìm nhau qua DNS, không cần các biến đó).
+    </div>
+
+    <h3>7.5 Ingress &amp; HTTPS</h3>
+    <p><code>ingress.yaml</code> có hai host. <code>datn.&lt;domain&gt;</code> chia <code>/identity</code>, <code>/work</code>, <code>/workspace</code> → <code>api-gateway:8081</code>, còn lại → <code>frontend:80</code>. <code>auth.&lt;domain&gt;</code> → <code>keycloak:8080</code>. <code>pathType: Prefix</code> so khớp theo từng đoạn đường dẫn, nên <code>/work</code> không ăn nhầm <code>/workspace</code>. Annotation <code>cert-manager.io/cluster-issuer: letsencrypt-prod</code> khiến cert-manager tự tạo Certificate, giải thử thách HTTP-01 qua Traefik, rồi lưu chứng chỉ vào Secret <code>datn-tls</code> và tự gia hạn trước 30 ngày.</p>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="rollback">
+    <h2><span class="n">08</span>Rollback</h2>
+    <div class="grid g3">
+      <div class="card"><span class="k">Tự động</span><h4>Stage 6/7 lỗi</h4><p class="small"><code>post { failure }</code> khôi phục <code>before-N.env</code> rồi <code>renderAndApply()</code>. K8s rolling update ngược về image cũ, vẫn không gián đoạn.</p></div>
+      <div class="card"><span class="k">Bằng tay qua Jenkins</span><h4><code>ROLLBACK_TO=42</code></h4><p class="small">Đưa cả hệ thống về đúng trạng thái sau build #42. Image phải còn trong registry (giữ 5 lần gần nhất). Lần build sau đó bật <code>BUILD_ALL</code>.</p></div>
+      <div class="card"><span class="k">Khẩn cấp</span><h4><code>kubectl rollout undo</code></h4><p class="small">Quay một Deployment về ReplicaSet trước, xong trong vài giây, không cần Jenkins. Nhớ sau đó chạy rollback qua Jenkins để bảng tag khớp lại với cluster.</p></div>
+    </div>
+    <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Rollback khẩn cấp trên EC2</span><button class="copy" type="button">Sao chép</button></div><pre><code>kubectl -n datn rollout history deploy/work-service           # các revision đã có
+kubectl -n datn rollout undo deploy/work-service              # về revision ngay trước
+kubectl -n datn rollout undo deploy/work-service --to-revision=3
+kubectl -n datn rollout status deploy/work-service</code></pre></div>
+    <div class="callout bad"><span class="ct">Database không quay ngược</span>
+      Giống Hướng 1: Flyway và Hibernate chỉ tiến, không lùi. Migration phải tương thích ngược (expand → contract). Xem <a href="../docker_only/HUONG_1_DOCKER_THUAN.html#rollback">Hướng 1 · mục 6</a>.
+    </div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="sizing">
+    <h2><span class="n">09</span>RAM &amp; cấu hình máy</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Nhóm</th><th>Thực tế (ước tính)</th></tr></thead>
+      <tbody>
+        <tr><td>Ubuntu + Docker Engine</td><td class="num">~0,5 GB</td></tr>
+        <tr><td>k3s server + containerd + CoreDNS + metrics-server</td><td class="num">~0,6–0,9 GB</td></tr>
+        <tr><td>Traefik + cert-manager (3 Pod)</td><td class="num">~0,2–0,3 GB</td></tr>
+        <tr><td>Jenkins (rảnh / build) + registry</td><td class="num">0,8 / 2,5 GB + 30 MB</td></tr>
+        <tr><td>Keycloak + 2 Postgres + Redis + Kafka + MinIO</td><td class="num">~1,6–2,2 GB</td></tr>
+        <tr><td>5 service Spring + frontend ×2</td><td class="num">~1,9–2,6 GB</td></tr>
+        <tr><td>Pod mới song song khi rolling update</td><td class="num">+0,3–1 GB (tạm thời)</td></tr>
+        <tr><td><strong>Tổng</strong></td><td class="num"><strong>≈ 6–7 GB rảnh · 9–10 GB lúc build + deploy</strong></td></tr>
+      </tbody>
+    </table></div>
+    <p><strong><code>t3.xlarge</code> (4 vCPU, 16 GB) là tối thiểu thực tế</strong> cho Hướng 2. Ổ đĩa 50–60 GB vì có thêm registry và kho image của containerd. Muốn tiết kiệm có thể bỏ Kafka: comment dòng <code>infra/kafka.yaml</code> trong <code>kustomization.yaml</code> rồi xoá StatefulSet cũ bằng <code>kubectl -n datn delete sts kafka</code>.</p>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="setup">
+    <h2><span class="n">10</span>Triển khai từng bước</h2>
+    <ol class="steps">
+      <li><h4>Đưa file mẫu vào repo</h4>
+        <div class="tbl"><table>
+          <thead><tr><th>Từ <code>docs/cicd/…</code></th><th>Tới</th></tr></thead>
+          <tbody>
+            <tr><td><code>common/</code> (4 file: Dockerfile.runtime, frontend Dockerfile, nginx.prod.conf, application-prod.yml)</td><td>Giống Hướng 1 (<a href="../00_TONG_QUAN_CICD.html#common-files">Tổng quan · mục 9</a>)</td></tr>
+            <tr><td><code>kubenetes/files/Jenkinsfile</code></td><td><code>infrastructure/cicd/k8s/Jenkinsfile</code></td></tr>
+            <tr><td><code>kubenetes/files/manifests/</code></td><td><code>infrastructure/cicd/k8s/manifests/</code></td></tr>
+            <tr><td><code>kubenetes/files/bootstrap/</code></td><td><code>infrastructure/cicd/k8s/bootstrap/</code> (để lưu trữ; áp bằng tay)</td></tr>
+          </tbody>
+        </table></div>
+        <p>Đổi tên miền trong <code>Jenkinsfile</code> (<code>APP_DOMAIN</code>, <code>AUTH_DOMAIN</code>) và <code>manifests/ingress.yaml</code> (4 chỗ).</p>
+      </li>
+      <li><h4>EC2 + Security Group + DNS</h4><p><code>t3.xlarge</code>, Ubuntu 24.04, gp3 60 GB. Security Group <strong>chỉ</strong> mở 22 (IP của bạn), 80, 443. Không mở 6443 (API k3s), 8080 (Jenkins), 5000 (registry). 3 bản ghi A như <a href="../00_TONG_QUAN_CICD.html#common-steps">Tổng quan · 8.1</a>.</p></li>
+      <li><h4>Cài Docker + k3s + cert-manager</h4>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Từ máy bạn → EC2</span><button class="copy" type="button">Sao chép</button></div><pre><code>scp -i datn-key.pem kubenetes/files/setup-k3s.sh kubenetes/files/docker-compose.platform.yml \
+    kubenetes/files/registry-cleanup.sh common/jenkins.Dockerfile \
+    kubenetes/files/bootstrap/*.yaml  ubuntu@&lt;ELASTIC_IP&gt;:~
+ssh -i datn-key.pem ubuntu@&lt;ELASTIC_IP&gt;
+sudo bash setup-k3s.sh          # ~3–5 phút; cuối cùng in ra PRIVATE IP – ghi lại</code></pre></div>
+      </li>
+      <li><h4>Dựng Jenkins + registry</h4>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Trên EC2</span><button class="copy" type="button">Sao chép</button></div><pre><code>sudo mv ~/docker-compose.platform.yml ~/jenkins.Dockerfile /opt/datn/platform/
+sudo mv ~/registry-cleanup.sh /opt/datn/
+cd /opt/datn/platform &amp;&amp; sudo docker compose up -d --build
+curl -s http://localhost:5000/v2/_catalog          # {"repositories":[]} = registry sống
+curl -sI http://$(hostname -I | awk '{print $1}'):8080/login | head -1   # Jenkins trả 200</code></pre></div>
+      </li>
+      <li><h4>Áp bootstrap: ClusterIssuer + Ingress cho Jenkins</h4>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Trên EC2 (sửa email, private IP, tên miền trước)</span><button class="copy" type="button">Sao chép</button></div><pre><code>nano ~/cluster-issuer.yaml       # email
+nano ~/jenkins-ingress.yaml      # IP ở Endpoints = PRIVATE IP; host = jenkins.&lt;domain&gt;
+kubectl apply -f ~/cluster-issuer.yaml
+kubectl apply -f ~/jenkins-ingress.yaml
+kubectl -n datn get certificate -w        # đợi jenkins-tls READY=True (1–2 phút)</code></pre></div>
+      </li>
+      <li><h4>Cấu hình Jenkins lần đầu</h4><p>Mở <code>https://jenkins.&lt;domain&gt;</code>. Mật khẩu mở khoá: <code>docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword</code>. Các bước còn lại giống <a href="../docker_only/HUONG_1_DOCKER_THUAN.html#setup">Hướng 1 · bước 6</a> (plugin None, admin, Jenkins URL, executors, security).</p></li>
+      <li><h4>Tạo 3 credential</h4>
+        <div class="tbl"><table>
+          <thead><tr><th>ID</th><th>Kind</th><th>Nội dung</th></tr></thead>
+          <tbody>
+            <tr><td><code>github-pat</code></td><td>Username with password</td><td>GitHub token</td></tr>
+            <tr><td><code>datn-prod-env</code></td><td>Secret file</td><td><code>prod.env</code> (cùng mẫu với Hướng 1)</td></tr>
+            <tr><td><code>k3s-kubeconfig</code></td><td>Secret file</td><td><code>/opt/datn/kubeconfig-jenkins.yaml</code>. Tải về bằng <code>scp</code>, upload lên Jenkins, rồi <code>sudo rm</code> bản trên server</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout warn"><span class="ct">Kubeconfig này là quyền admin toàn cluster</span>
+          Đủ dùng cho ĐATN. Muốn chặt hơn thì tạo ServiceAccount <code>jenkins</code> chỉ có Role trong namespace <code>datn</code>, và cấp kubeconfig dùng token của ServiceAccount đó.
+        </div>
+      </li>
+      <li><h4>Multibranch Pipeline + webhook</h4><p>Script Path: <code>infrastructure/cicd/k8s/Jenkinsfile</code>. Webhook <code>https://jenkins.&lt;domain&gt;/github-webhook/</code> (<a href="../00_TONG_QUAN_CICD.html#common-steps">Tổng quan · 8.3</a>).</p></li>
+      <li><h4>Lần deploy đầu tiên</h4>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Trên EC2 – theo dõi</span><button class="copy" type="button">Sao chép</button></div><pre><code>kubectl -n datn get pods -w                       # Pending → ContainerCreating → Running → READY 1/1
+kubectl -n datn get pvc                           # 5 PVC Bound
+kubectl -n datn get certificate                   # datn-tls READY True
+kubectl -n datn logs -f deploy/keycloak           # lần đầu "start" + import realm 1–3 phút
+kubectl -n datn logs -f deploy/work-service</code></pre></div>
+      </li>
+      <li><h4>Cấu hình Keycloak &amp; Google</h4><p><a href="../00_TONG_QUAN_CICD.html#common-steps">Tổng quan · 8.4</a>: redirect URI, tạo lại client secret, cập nhật <code>datn-prod-env</code>, chạy <code>BUILD_ALL=true</code> (Pod mới nhận Secret mới), thêm URI vào Google Console.</p></li>
+      <li><h4>Kiểm tra chức năng</h4><p>Dùng checklist ở <a href="../docker_only/HUONG_1_DOCKER_THUAN.html#setup">Hướng 1 · bước 10</a> (đăng ký, mail, Google, project, upload, mời thành viên, rollback).</p></li>
+      <li><h4>Trình diễn zero-downtime (dùng khi bảo vệ)</h4>
+        <p>Mở 2 terminal. Terminal 1 gọi API liên tục, terminal 2 theo dõi Pod. Push một thay đổi nhỏ trong <code>backend/identity-service</code>:</p>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Terminal 1 – máy bạn: không được thấy mã 502/503</span><button class="copy" type="button">Sao chép</button></div><pre><code>while true; do
+  curl -s -o /dev/null -w "%{http_code} " -X POST -H 'Content-Type: application/json' \
+       -d '{"username":"demo","password":"sai"}' https://datn.example.com/identity/api/v1/auth/login
+  sleep 0.5
+done     # kỳ vọng: toàn 401/400 (sai mật khẩu) trong suốt quá trình deploy</code></pre></div>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Terminal 2 – EC2: xem Pod mới lên, Pod cũ xuống</span><button class="copy" type="button">Sao chép</button></div><pre><code>kubectl -n datn get pods -l app=identity-service -w</code></pre></div>
+        <p>Làm lại với Hướng 1 thì sẽ thấy một khoảng 502 khi container identity được tạo lại. Đây là bằng chứng trực quan cho phần so sánh.</p>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="migrate">
+    <h2><span class="n">11</span>Chuyển từ Hướng 1 sang Hướng 2 (cùng EC2)</h2>
+    <p>Hai hướng không chạy song song được (Caddy và Traefik cùng cần 80/443). Đường chuyển an toàn, có giữ dữ liệu:</p>
+    <ol class="steps">
+      <li><h4>Backup</h4>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Trên EC2 (stack Hướng 1 đang chạy)</span><button class="copy" type="button">Sao chép</button></div><pre><code>docker exec datn-app-db-1 pg_dump -U datn -Fc datn_main_db &gt; /opt/datn/backups/migrate_app.dump
+docker exec datn-keycloak-db-1 pg_dump -U keycloak -Fc keycloak &gt; /opt/datn/backups/migrate_kc.dump
+ls -lh /opt/datn/backups/</code></pre></div>
+      </li>
+      <li><h4>Dừng stack Hướng 1 (giữ volume để còn đường lui)</h4>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Trên EC2</span><button class="copy" type="button">Sao chép</button></div><pre><code>docker compose -p datn down            # KHÔNG thêm -v: volume dữ liệu cũ vẫn còn
+cd /opt/datn/platform &amp;&amp; docker compose down    # giải phóng 80/443 (Caddy)
+sudo rm -f /opt/datn/state/history/*.env /opt/datn/state/deployed.env   # tag cũ không có trong registry</code></pre></div>
+      </li>
+      <li><h4>Cài k3s và platform mới</h4><p>Làm bước 3–5 ở mục 10. Compose platform mới vẫn tên <code>datn-platform</code> và vẫn dùng volume <code>jenkins_home</code>, nên <strong>job và credential Jenkins cũ được giữ nguyên</strong>. Image Jenkins được build lại có thêm <code>kubectl</code>.</p></li>
+      <li><h4>Đổi job sang Jenkinsfile k8s</h4><p>Job → Configure → Script Path = <code>infrastructure/cicd/k8s/Jenkinsfile</code>; thêm credential <code>k3s-kubeconfig</code>; chạy <code>BUILD_ALL=true</code>. Hệ thống lên với DB trống (Keycloak import realm).</p></li>
+      <li><h4>Khôi phục dữ liệu</h4>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Trên EC2</span><button class="copy" type="button">Sao chép</button></div><pre><code>kubectl -n datn scale deploy --all --replicas=0      # tạm dừng app + keycloak (DB vẫn chạy)
+kubectl -n datn exec -i app-db-0 -- pg_restore -U datn -d datn_main_db --clean --if-exists &lt; /opt/datn/backups/migrate_app.dump
+kubectl -n datn exec -i keycloak-db-0 -- pg_restore -U keycloak -d keycloak --clean --if-exists &lt; /opt/datn/backups/migrate_kc.dump
+kubectl -n datn scale deploy --all --replicas=1
+kubectl -n datn scale deploy/frontend --replicas=2</code></pre></div>
+      </li>
+      <li><h4>Kiểm tra rồi dọn</h4><p>Khi đã chắc chắn mọi thứ ổn (vài ngày), xoá volume cũ: <code>docker volume ls | grep '^local *datn_'</code> rồi <code>docker volume rm …</code> (bạn tự chạy).</p></li>
+    </ol>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="ops">
+    <h2><span class="n">12</span>Vận hành &amp; kubectl</h2>
+    <p>Trên EC2, <code>kubectl</code> đã có sẵn (k3s cài vào <code>/usr/local/bin</code>). Kubeconfig mặc định nằm ở <code>/etc/rancher/k3s/k3s.yaml</code>.</p>
+    <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Lệnh hay dùng</span><button class="copy" type="button">Sao chép</button></div><pre><code>kubectl -n datn get pods -o wide                         # trạng thái, restart bao nhiêu lần
+kubectl -n datn get deploy,sts,svc,ingress,pvc,certificate
+kubectl -n datn describe pod &lt;tên-pod&gt;                   # mục Events: vì sao Pending / CrashLoop / OOMKilled
+kubectl -n datn logs -f deploy/work-service --tail=200
+kubectl -n datn logs &lt;tên-pod&gt; --previous                # log của lần chạy TRƯỚC khi crash
+kubectl -n datn rollout restart deploy/identity-service  # khởi động lại cuốn chiếu
+kubectl -n datn exec -it app-db-0 -- psql -U datn -d datn_main_db
+kubectl top nodes &amp;&amp; kubectl -n datn top pods            # RAM/CPU (metrics-server có sẵn trong k3s)
+kubectl -n datn get events --sort-by=.lastTimestamp | tail -20</code></pre></div>
+    <p class="small muted">Công cụ nên cài: <strong>k9s</strong>, giao diện terminal để xem Pod, log, exec rất nhanh.</p>
+
+    <h3>Backup &amp; dọn dẹp định kỳ</h3>
+    <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">/etc/cron.d/datn-k8s (sudo nano /etc/cron.d/datn-k8s)</span><button class="copy" type="button">Sao chép</button></div><pre><code>KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+<span class="cm"># 2h sáng mỗi ngày: dump 2 DB, giữ 7 ngày</span>
+0 2 * * * root /usr/local/bin/kubectl -n datn exec app-db-0 -- pg_dump -U datn -Fc datn_main_db &gt; /opt/datn/backups/datn_main_db_$(date +\%F).dump &amp;&amp; /usr/local/bin/kubectl -n datn exec keycloak-db-0 -- pg_dump -U keycloak -Fc keycloak &gt; /opt/datn/backups/keycloak_$(date +\%F).dump &amp;&amp; find /opt/datn/backups -name '*.dump' -mtime +7 -delete
+<span class="cm"># 3h sáng Chủ nhật: dọn tag cũ trong registry + image không dùng trong containerd</span>
+0 3 * * 0 root bash /opt/datn/registry-cleanup.sh &gt;&gt; /var/log/datn-registry-cleanup.log 2&gt;&amp;1 &amp;&amp; /usr/local/bin/k3s crictl rmi --prune</code></pre></div>
+    <div class="callout info"><span class="ct">Đổi cấu hình qua Git</span>
+      Sửa <code>infrastructure/cicd/k8s/manifests/**</code> (ví dụ tăng <code>limits</code>, đổi bản Keycloak, thêm biến môi trường) → push <code>main</code>. Pipeline phát hiện thay đổi hạ tầng và chạy apply, K8s chỉ cập nhật đúng workload bị sửa. Tránh <code>kubectl edit</code> trực tiếp, vì lần deploy sau sẽ ghi đè thay đổi đó.
+    </div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="troubleshoot">
+    <h2><span class="n">13</span>Sự cố thường gặp</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Triệu chứng</th><th>Nguyên nhân hay gặp</th><th>Cách xử lý</th></tr></thead>
+      <tbody>
+        <tr><td>Pod <code>Pending</code></td><td><code>describe</code> báo <em>Insufficient memory</em> (tổng requests vượt RAM node) hoặc PVC chưa Bound</td><td>Giảm <code>requests</code>, bỏ Kafka, hoặc nâng máy; kiểm tra <code>kubectl get pvc</code></td></tr>
+        <tr><td><code>ImagePullBackOff</code></td><td>Image thiếu tag hoặc registry (bảng tag thiếu service), hoặc chưa có <code>registries.yaml</code></td><td><code>curl localhost:5000/v2/datn/work-service/tags/list</code>; chạy <code>BUILD_ALL=true</code>; kiểm tra <code>/etc/rancher/k3s/registries.yaml</code> rồi <code>sudo systemctl restart k3s</code></td></tr>
+        <tr><td><code>CrashLoopBackOff</code></td><td>Lỗi lúc boot: sai mật khẩu DB, thiếu key Secret, DB chưa sẵn sàng</td><td><code>kubectl logs &lt;pod&gt; --previous</code>; <code>describe</code> xem <em>CreateContainerConfigError</em> (thiếu key trong <code>datn-secrets</code>)</td></tr>
+        <tr><td><em>Last State: Terminated · Reason: OOMKilled</em></td><td>Vượt <code>limits.memory</code></td><td>Tăng limit trong manifest; heap đã tự co theo limit (<code>MaxRAMPercentage=70</code>)</td></tr>
+        <tr><td><code>rollout status</code> hết giờ</td><td>Pod mới không bao giờ Ready (khởi động chậm, hoặc lỗi)</td><td>Xem log; nếu chỉ do chậm thì tăng <code>failureThreshold</code> của startupProbe</td></tr>
+        <tr><td>Certificate mãi không READY</td><td>DNS sai, cổng 80 đóng, hoặc thử nhiều lần dính rate-limit</td><td><code>kubectl describe certificate -n datn</code>, <code>kubectl get challenges -A</code>; thử với ClusterIssuer staging</td></tr>
+        <tr><td>Traefik trả <em>404 page not found</em></td><td>Host trong <code>ingress.yaml</code> chưa đổi đúng tên miền</td><td><code>kubectl -n datn get ingress</code> so với tên miền thật</td></tr>
+        <tr><td><code>jenkins.&lt;domain&gt;</code> trả 502/504</td><td>IP trong Endpoints sai, hoặc Jenkins chỉ nghe 127.0.0.1</td><td>Trên EC2: <code>curl -I http://&lt;private-ip&gt;:8080/login</code> phải ra 200</td></tr>
+        <tr><td>Jenkins báo <em>connection refused</em> / <em>x509</em> khi chạy kubectl</td><td>Kubeconfig còn <code>127.0.0.1</code></td><td>Server trong kubeconfig phải là <code>https://&lt;private-ip&gt;:6443</code> (script đã đổi)</td></tr>
+        <tr><td>Pod không ra Internet / không gọi được nhau</td><td>Docker đặt chính sách iptables FORWARD = DROP</td><td><code>sudo iptables -L FORWARD | head -1</code>; nếu là DROP thì <code>sudo iptables -P FORWARD ACCEPT</code> rồi khởi động lại k3s</td></tr>
+        <tr><td>Kafka không khởi động, log nhắc <em>port</em></td><td>Biến service link <code>KAFKA_PORT</code></td><td>Đảm bảo <code>enableServiceLinks: false</code> (đã có trong mẫu)</td></tr>
+        <tr><td>401 trên mọi API / 404 ở <code>/work</code></td><td>Lệch issuer / gateway không chạy profile prod</td><td>Giống Hướng 1 (<a href="../docker_only/HUONG_1_DOCKER_THUAN.html#troubleshoot">mục 10</a>)</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="proscons">
+    <h2><span class="n">14</span>Ưu / nhược điểm</h2>
+    <div class="grid g2">
+      <div class="card"><span class="k" style="color:var(--ok)">Ưu điểm</span>
+        <ul class="small">
+          <li><strong>Không gián đoạn</strong> khi deploy service ứng dụng (rolling update + readiness).</li>
+          <li><strong>Tự phục hồi</strong> cả khi Pod chết lẫn khi Pod treo (liveness), tự giữ đủ số bản.</li>
+          <li>Hạ tầng mô tả hoàn toàn bằng code (manifest trong Git); <code>k8s-rendered.yaml</code> lưu vết từng lần deploy.</li>
+          <li>Scale một service bằng <code>replicas</code>, Service tự cân bằng tải.</li>
+          <li>Kỹ năng K8s dùng được ở doanh nghiệp; manifest chuyển sang EKS/GKE dễ dàng.</li>
+          <li>Phần trình diễn khi bảo vệ rất thuyết phục.</li>
+        </ul></div>
+      <div class="card"><span class="k" style="color:var(--bad)">Nhược điểm</span>
+        <ul class="small">
+          <li>Nhiều khái niệm, đường học dốc; debug phải đi qua nhiều lớp.</li>
+          <li>Tốn thêm ~1–1,5 GB RAM cho phần nền; bắt buộc máy 16 GB.</li>
+          <li>Thêm thành phần phải bảo trì: registry (dọn tag), cert-manager, Traefik.</li>
+          <li>Vẫn chỉ 1 node: máy EC2 chết thì toàn hệ thống chết, K8s không cứu được.</li>
+          <li>DB chạy trong K8s với ổ local-path: ổn cho ĐATN, còn production thật thường dùng RDS.</li>
+        </ul></div>
+    </div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="files">
+    <h2><span class="n">15</span>Toàn bộ file mẫu</h2>
+    <p>Nhúng nguyên văn từ <code>docs/cicd/kubenetes/files/</code>.</p>
+    <h3>Pipeline &amp; máy chủ</h3>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/Jenkinsfile</code><span class="d">Pipeline 7 stage + overlay Kustomize + rollback · 331 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">groovy</span><span class="t">kubenetes/files/Jenkinsfile</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm">// =============================================================================</span>
+<span class="cm">// Jenkinsfile – HƯỚNG 2: Docker + Kubernetes (k3s) trên 1 EC2</span>
+<span class="cm">// Đặt trong repo tại: infrastructure/cicd/k8s/Jenkinsfile</span>
+<span class="cm">// Jenkins: Multibranch Pipeline → Build Configuration → Script Path = infrastructure/cicd/k8s/Jenkinsfile</span>
+<span class="cm">//</span>
+<span class="cm">// Luồng:</span>
+<span class="cm">//   1 Checkout → 2 Phát hiện thay đổi → 3 CI backend → 4 CI frontend</span>
+<span class="cm">//   → (chỉ nhánh main) 5 Build + push image lên registry localhost:5000</span>
+<span class="cm">//   → 6 Deploy: sinh overlay kustomize từ deployed.env rồi `kubectl apply` (khai báo)</span>
+<span class="cm">//   → 7 Chờ rollout + smoke test → lỗi thì TỰ ĐỘNG ROLLBACK.</span>
+<span class="cm">//</span>
+<span class="cm">// Credential cần có trong Jenkins:</span>
+<span class="cm">//   - datn-prod-env  : Secret file (docs/cicd/common/prod.env.example)</span>
+<span class="cm">//   - k3s-kubeconfig : Secret file (/opt/datn/kubeconfig-jenkins.yaml do setup-k3s.sh sinh ra)</span>
+<span class="cm">// =============================================================================</span>
+import groovy.transform.Field
+
+@Field List&lt;String&gt; BACKEND_SERVICES = ['identity-service', 'api-gateway', 'work-service', 'workspace-service', 'notification-service']
+@Field List&lt;String&gt; ALL_TAG_KEYS = ['IDENTITY_SERVICE_TAG', 'API_GATEWAY_TAG', 'WORK_SERVICE_TAG',
+                                    'WORKSPACE_SERVICE_TAG', 'NOTIFICATION_SERVICE_TAG', 'FRONTEND_TAG']
+
+String tagKey(String svc) {
+  return svc.toUpperCase().replace('-', '_') + '_TAG'
+}
+
+void addOnce(List&lt;String&gt; list, String item) {
+  if (!list.contains(item)) { list.add(item) }
+}
+
+<span class="cm">// Sinh overlay kustomize = manifest gốc + bảng tag hiện tại, rồi áp vào cluster.</span>
+<span class="cm">// Kubernetes so sánh với trạng thái đang chạy và CHỈ rolling update Deployment nào có image đổi.</span>
+void renderAndApply() {
+  sh(script: '''
+    set -eu
+    for k in ''' + ALL_TAG_KEYS.join(' ') + '''; do
+      grep -q "^$k=" "$STATE_DIR/deployed.env" || { echo "Thiếu $k trong deployed.env → chạy lại với BUILD_ALL=true"; exit 1; }
+    done
+
+    rm -rf .k8s-overlay &amp;&amp; mkdir -p .k8s-overlay
+    {
+      echo "apiVersion: kustomize.config.k8s.io/v1beta1"
+      echo "kind: Kustomization"
+      echo "resources:"
+      echo "  - ../$CICD_DIR/manifests"
+      echo "images:"
+      grep -E '^[A-Z_]+_TAG=' "$STATE_DIR/deployed.env" | while IFS='=' read -r key tag; do
+        svc=$(echo "$key" | sed 's/_TAG$//' | tr 'A-Z_' 'a-z-')
+        echo "  - name: datn/$svc"
+        echo "    newName: $REGISTRY/datn/$svc"
+        echo "    newTag: \\"$tag\\""
+      done
+    } &gt; .k8s-overlay/kustomization.yaml
+    echo "----- overlay -----"; cat .k8s-overlay/kustomization.yaml
+
+    kubectl kustomize .k8s-overlay &gt; k8s-rendered.yaml       # manifest cuối cùng (lưu lại làm bằng chứng)
+    kubectl apply -f k8s-rendered.yaml
+  ''')
+}
+
+pipeline {
+  agent any
+
+  options {
+    skipDefaultCheckout(true)
+    timestamps()
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    timeout(time: 50, unit: 'MINUTES')
+  }
+
+  parameters {
+    booleanParam(name: 'BUILD_ALL', defaultValue: false,
+      description: 'Bỏ qua phát hiện thay đổi: build + deploy TẤT CẢ service (lần đầu / sau rollback)')
+    string(name: 'ROLLBACK_TO', defaultValue: '',
+      description: 'Số build muốn quay về (vd 42). Để trống = chạy bình thường')
+  }
+
+  environment {
+    APP_DOMAIN    = 'datn.example.com'          // ĐỔI
+    AUTH_DOMAIN   = 'auth.datn.example.com'     // ĐỔI
+    DEPLOY_BRANCH = 'main'
+    CICD_DIR      = 'infrastructure/cicd/k8s'
+    STATE_DIR     = '/opt/datn/state'
+    REGISTRY      = 'localhost:5000'
+    NAMESPACE     = 'datn'
+    MAVEN_OPTS    = '-Xmx1g'
+  }
+
+  stages {
+
+    stage('1. Checkout') {
+      steps {
+        script {
+          def scmVars = checkout scm
+          env.PREV_OK_COMMIT   = scmVars.GIT_PREVIOUS_SUCCESSFUL_COMMIT ?: ''
+          env.GIT_SHORT        = sh(returnStdout: true, script: 'git rev-parse --short=7 HEAD').trim()
+          env.TAG              = "${env.BUILD_NUMBER}-${env.GIT_SHORT}"
+          env.IS_DEPLOY_BRANCH = (env.BRANCH_NAME == env.DEPLOY_BRANCH) ? 'true' : 'false'
+          env.MODE             = params.ROLLBACK_TO?.trim() ? 'rollback' : 'build'
+          if (env.MODE == 'rollback') {
+            if (env.IS_DEPLOY_BRANCH != 'true') { error("Chỉ rollback trên nhánh ${env.DEPLOY_BRANCH}") }
+            if (!params.ROLLBACK_TO.trim().matches(/\d+/)) { error('ROLLBACK_TO phải là số build') }
+          }
+          echo "Nhánh=${env.BRANCH_NAME} | TAG=${env.TAG} | Chế độ=${env.MODE}"
+        }
+      }
+    }
+
+    stage('2. Phát hiện thay đổi') {
+      when { environment name: 'MODE', value: 'build' }
+      steps {
+        script {
+          List&lt;String&gt; files = null
+          if (!params.BUILD_ALL &amp;&amp; env.PREV_OK_COMMIT) {
+            int rc = sh(returnStatus: true, script: "git diff --name-only ${env.PREV_OK_COMMIT} HEAD &gt; .changed-files")
+            if (rc == 0) {
+              files = []
+              for (String line : readFile('.changed-files').split('\n')) {
+                if (line.trim()) { files.add(line.trim()) }
+              }
+            }
+          }
+
+          List&lt;String&gt; selected = []
+          boolean infra = false
+          if (files == null) {
+            selected.addAll(BACKEND_SERVICES)
+            selected.add('frontend')
+            infra = true
+          } else {
+            for (String f : files) {
+              if (f.startsWith('backend/common/') || f == 'backend/pom.xml' || f == 'backend/Dockerfile.runtime') {
+                for (String s : BACKEND_SERVICES) { addOnce(selected, s) }
+              }
+              for (String s : BACKEND_SERVICES) {
+                if (f.startsWith("backend/${s}/".toString())) { addOnce(selected, s) }
+              }
+              if (f.startsWith('frontend/')) { addOnce(selected, 'frontend') }
+<span class="cm">              // Sửa manifest k8s hoặc realm → cần apply lại dù không có image mới</span>
+              if (f.startsWith("${env.CICD_DIR}/".toString()) || f.startsWith('infrastructure/keycloak/')) { infra = true }
+            }
+            echo "Có ${files.size()} file thay đổi:\n" + files.join('\n')
+          }
+
+          boolean backendChanged = false
+          for (String s : selected) { if (s != 'frontend') { backendChanged = true } }
+
+          env.SERVICES         = selected.join(' ')
+          env.HAS_SERVICES     = selected ? 'true' : 'false'
+          env.BACKEND_CHANGED  = backendChanged ? 'true' : 'false'
+          env.FRONTEND_CHANGED = selected.contains('frontend') ? 'true' : 'false'
+          env.INFRA_CHANGED    = infra ? 'true' : 'false'
+          echo "Service cần build: [${env.SERVICES}] | Manifest/realm đổi: ${env.INFRA_CHANGED}"
+        }
+      }
+    }
+
+    stage('3. CI · Backend: unit test + đóng gói jar') {
+      when { allOf { environment name: 'MODE', value: 'build'; environment name: 'BACKEND_CHANGED', value: 'true' } }
+      steps {
+        dir('backend') { sh 'mvn -B -ntp clean package' }
+      }
+      post {
+        always { junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml' }
+      }
+    }
+
+    stage('4. CI · Frontend: lint + build') {
+      when { allOf { environment name: 'MODE', value: 'build'; environment name: 'FRONTEND_CHANGED', value: 'true' } }
+      steps {
+        dir('frontend') {
+          sh 'npm ci --no-audit --no-fund'
+          sh 'npm run lint'
+          sh 'npm run build'
+        }
+      }
+    }
+
+    stage('5. Build + push image lên registry') {
+      when {
+        allOf {
+          environment name: 'MODE', value: 'build'
+          environment name: 'IS_DEPLOY_BRANCH', value: 'true'
+          environment name: 'HAS_SERVICES', value: 'true'
+        }
+      }
+      steps {
+        script {
+          for (String s : env.SERVICES.split(' ')) {
+            String image = "${env.REGISTRY}/datn/${s}:${env.TAG}"
+            if (s == 'frontend') {
+              sh """
+                docker build -t ${image} \\
+                  --build-arg VITE_KEYCLOAK_URL=https://${env.AUTH_DOMAIN} \\
+                  --build-arg NGINX_CONF=nginx.prod.conf \\
+                  frontend
+              """
+            } else {
+              sh "docker build -f backend/Dockerfile.runtime -t ${image} backend/${s}/target"
+            }
+<span class="cm">            // Khác Hướng 1: k3s (containerd) không thấy image của Docker → phải đẩy qua registry</span>
+            sh "docker push ${image}"
+          }
+        }
+      }
+    }
+
+    stage('6. Deploy (kubectl apply)') {
+      when {
+        allOf {
+          environment name: 'IS_DEPLOY_BRANCH', value: 'true'
+          anyOf {
+            environment name: 'MODE', value: 'rollback'
+            environment name: 'HAS_SERVICES', value: 'true'
+            environment name: 'INFRA_CHANGED', value: 'true'
+          }
+        }
+      }
+      steps {
+        withCredentials([file(credentialsId: 'datn-prod-env', variable: 'PROD_ENV'),
+                         file(credentialsId: 'k3s-kubeconfig', variable: 'KUBECONFIG')]) {
+<span class="cm">          // a) Chụp lại trạng thái cũ để rollback</span>
+          sh '''
+            set -eu
+            mkdir -p "$STATE_DIR/history"
+            touch "$STATE_DIR/deployed.env"
+            cp "$STATE_DIR/deployed.env" "$STATE_DIR/history/before-$BUILD_NUMBER.env"
+          '''
+<span class="cm">          // b) Cập nhật bảng tag</span>
+          script {
+            if (env.MODE == 'rollback') {
+              sh """
+                test -f ${env.STATE_DIR}/history/${params.ROLLBACK_TO}.env || { echo 'Không có history/${params.ROLLBACK_TO}.env'; exit 1; }
+                cp ${env.STATE_DIR}/history/${params.ROLLBACK_TO}.env ${env.STATE_DIR}/deployed.env
+              """
+            } else if (env.HAS_SERVICES == 'true') {
+              for (String s : env.SERVICES.split(' ')) {
+                String key = tagKey(s)
+                sh """
+                  if grep -q '^${key}=' ${env.STATE_DIR}/deployed.env; then
+                    sed -i 's/^${key}=.*/${key}=${env.TAG}/' ${env.STATE_DIR}/deployed.env
+                  else
+                    echo '${key}=${env.TAG}' &gt;&gt; ${env.STATE_DIR}/deployed.env
+                  fi
+                """
+              }
+            }
+            env.DEPLOY_STARTED = 'true'
+          }
+<span class="cm">          // c) Secret + ConfigMap realm (idempotent: tạo mới hoặc cập nhật)</span>
+          sh '''
+            set -eu
+            kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+            kubectl -n "$NAMESPACE" create secret generic datn-secrets \
+              --from-env-file="$PROD_ENV" --dry-run=client -o yaml | kubectl apply -f -
+            kubectl -n "$NAMESPACE" create configmap keycloak-realm \
+              --from-file=realm.json=infrastructure/keycloak/realm-export_08082026.json \
+              --dry-run=client -o yaml | kubectl apply -f -
+          '''
+<span class="cm">          // d) Áp manifest + tag</span>
+          script { renderAndApply() }
+        }
+      }
+      post {
+        always { archiveArtifacts artifacts: 'k8s-rendered.yaml', allowEmptyArchive: true }
+      }
+    }
+
+    stage('7. Rollout + smoke test') {
+      when { environment name: 'DEPLOY_STARTED', value: 'true' }
+      steps {
+        withCredentials([file(credentialsId: 'k3s-kubeconfig', variable: 'KUBECONFIG')]) {
+          sh '''
+            set -eu
+<span class="cm">            # Chờ từng Deployment/StatefulSet hoàn tất rolling update (cái không đổi trả về ngay)</span>
+            for r in $(kubectl -n "$NAMESPACE" get deploy,statefulset -o name); do
+              kubectl -n "$NAMESPACE" rollout status "$r" --timeout=420s
+            done
+            kubectl -n "$NAMESPACE" get pods -o wide
+
+            curl -fsS --retry 10 --retry-delay 6 -o /dev/null "https://$APP_DOMAIN/"
+            curl -fsS --retry 10 --retry-delay 6 "https://$AUTH_DOMAIN/realms/datn-realm/.well-known/openid-configuration" \
+              | grep -q "\\"issuer\\":\\"https://$AUTH_DOMAIN/realms/datn-realm\\""
+            kubectl -n "$NAMESPACE" exec deploy/api-gateway -- wget -qO- http://127.0.0.1:8081/actuator/health | grep -q UP
+            echo "SMOKE TEST OK"
+          '''
+          sh 'cp "$STATE_DIR/deployed.env" "$STATE_DIR/history/$BUILD_NUMBER.env"'
+        }
+      }
+    }
+  }
+
+  post {
+    failure {
+      script {
+        if (env.DEPLOY_STARTED == 'true') {
+          echo 'Deploy / rollout / smoke test lỗi → TỰ ĐỘNG ROLLBACK về bảng tag trước build này'
+          withCredentials([file(credentialsId: 'k3s-kubeconfig', variable: 'KUBECONFIG')]) {
+            sh 'cp "$STATE_DIR/history/before-$BUILD_NUMBER.env" "$STATE_DIR/deployed.env"'
+            try {
+              renderAndApply()
+            } catch (err) {
+              echo "ROLLBACK lỗi (vd lần deploy đầu tiên): ${err}. Dùng `kubectl rollout undo` bằng tay."
+            }
+          }
+        }
+      }
+    }
+    success {
+      script {
+        if (env.DEPLOY_STARTED == 'true') {
+<span class="cm">          // Dọn image cũ trong Docker cục bộ của Jenkins (registry dọn định kỳ – xem tài liệu)</span>
+          sh '''
+            KEEP=$(ls -t "$STATE_DIR"/history/[0-9]*.env 2&gt;/dev/null | head -5 | xargs -r cat | cut -d= -f2 | sort -u)
+            docker images --format '{{.Repository}}:{{.Tag}}' | grep "^$REGISTRY/datn/" | while read -r img; do
+              echo "$KEEP" | grep -qx "${img##*:}" || docker rmi "$img" &gt;/dev/null 2&gt;&amp;1 || true
+            done
+            docker image prune -f &gt;/dev/null
+            docker builder prune -f --filter until=72h &gt;/dev/null || true
+          '''
+        }
+      }
+    }
+<span class="cm">    // "cleanup" luôn chạy SAU CÙNG (sau failure/success). Không dùng "always": always chạy TRƯỚC</span>
+<span class="cm">    // failure → sẽ xoá workspace trước khi rollback kịp đọc manifest.</span>
+    cleanup {
+      cleanWs(deleteDirs: true, notFailBuild: true)
+    }
+  }
+}</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/setup-k3s.sh</code><span class="d">Cài Docker, k3s, registries.yaml, cert-manager, kubeconfig cho Jenkins · 79 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">kubenetes/files/setup-k3s.sh</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm">#!/usr/bin/env bash</span>
+<span class="cm"># =============================================================================</span>
+<span class="cm"># setup-k3s.sh – HƯỚNG 2: chuẩn bị EC2 Ubuntu 24.04 cho Docker + k3s (chạy MỘT lần)</span>
+<span class="cm">#   scp setup-k3s.sh ubuntu@&lt;EIP&gt;:~ &amp;&amp; ssh ubuntu@&lt;EIP&gt; 'sudo bash setup-k3s.sh'</span>
+<span class="cm">#</span>
+<span class="cm"># Docker vẫn cần: chạy Jenkins + registry và để Jenkins build image.</span>
+<span class="cm"># k3s (Kubernetes rút gọn, 1 file binary) chạy ứng dụng; có sẵn Traefik (Ingress),</span>
+<span class="cm"># local-path (ổ đĩa cho PVC), CoreDNS, metrics-server.</span>
+<span class="cm"># =============================================================================</span>
+set -euo pipefail
+
+CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.16.2}"   # xem bản mới: github.com/cert-manager/cert-manager/releases
+
+echo "==&gt; 1. Cài Docker Engine + Compose plugin (+ jq cho registry-cleanup.sh)"
+apt-get update
+apt-get install -y ca-certificates curl gnupg git jq
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release &amp;&amp; echo "$VERSION_CODENAME") stable" \
+  &gt; /etc/apt/sources.list.d/docker.list
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+usermod -aG docker ubuntu
+cat &gt; /etc/docker/daemon.json &lt;&lt;'EOF'
+{ "log-driver": "json-file", "log-opts": { "max-size": "20m", "max-file": "3" } }
+EOF
+systemctl restart docker
+
+echo "==&gt; 2. Swap 4GB (k3s mặc định chạy được khi bật swap)"
+if ! swapon --show | grep -q /swapfile; then
+  fallocate -l 4G /swapfile &amp;&amp; chmod 600 /swapfile &amp;&amp; mkswap /swapfile &amp;&amp; swapon /swapfile
+  echo '/swapfile none swap sw 0 0' &gt;&gt; /etc/fstab
+fi
+echo 'vm.swappiness=10' &gt; /etc/sysctl.d/99-datn.conf
+sysctl --system &gt;/dev/null
+
+echo "==&gt; 3. Cho k3s biết registry nội bộ localhost:5000 (http, không TLS)"
+mkdir -p /etc/rancher/k3s
+cat &gt; /etc/rancher/k3s/registries.yaml &lt;&lt;'EOF'
+mirrors:
+  "localhost:5000":
+    endpoint:
+      - "http://localhost:5000"
+EOF
+
+echo "==&gt; 4. Cài k3s (Traefik + local-path + CoreDNS + metrics-server đi kèm)"
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --write-kubeconfig-mode=644" sh -
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+until kubectl get nodes 2&gt;/dev/null | grep -q ' Ready'; do echo "  ...chờ node Ready"; sleep 5; done
+kubectl get nodes -o wide
+
+echo "==&gt; 5. Cài cert-manager ${CERT_MANAGER_VERSION} (tự xin chứng chỉ Let's Encrypt cho Ingress)"
+kubectl apply -f "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml"
+kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=300s
+
+echo "==&gt; 6. Namespace ứng dụng"
+kubectl create namespace datn --dry-run=client -o yaml | kubectl apply -f -
+
+echo "==&gt; 7. Thư mục làm việc + kubeconfig cho Jenkins"
+mkdir -p /opt/datn/{platform,state/history,backups}
+chown -R 1000:1000 /opt/datn/state
+PRIVATE_IP=$(hostname -I | awk '{print $1}')
+<span class="cm"># Jenkins chạy trong container: 127.0.0.1 là chính container đó → đổi sang private IP của EC2</span>
+<span class="cm"># (chứng chỉ API server của k3s đã có sẵn IP này trong SAN).</span>
+sed "s#https://127.0.0.1:6443#https://${PRIVATE_IP}:6443#" /etc/rancher/k3s/k3s.yaml &gt; /opt/datn/kubeconfig-jenkins.yaml
+chmod 600 /opt/datn/kubeconfig-jenkins.yaml
+chown ubuntu:ubuntu /opt/datn/kubeconfig-jenkins.yaml
+[ -f /opt/datn/platform/.env ] || echo "DOCKER_GID=$(getent group docker | cut -d: -f3)" &gt; /opt/datn/platform/.env
+
+echo
+echo "XONG. Private IP của EC2: ${PRIVATE_IP}"
+echo "Bước tiếp theo:"
+echo "  1) Copy jenkins.Dockerfile + docker-compose.platform.yml vào /opt/datn/platform rồi:"
+echo "       cd /opt/datn/platform &amp;&amp; docker compose up -d --build"
+echo "  2) Sửa email trong bootstrap/cluster-issuer.yaml; IP ${PRIVATE_IP} + tên miền trong bootstrap/jenkins-ingress.yaml:"
+echo "       kubectl apply -f cluster-issuer.yaml &amp;&amp; kubectl apply -f jenkins-ingress.yaml"
+echo "  3) Tải /opt/datn/kubeconfig-jenkins.yaml về máy, upload vào Jenkins (Secret file, ID: k3s-kubeconfig), rồi XOÁ file trên server."</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/docker-compose.platform.yml</code><span class="d">Jenkins (có kubectl) + registry:2 · 57 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/docker-compose.platform.yml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># =============================================================================</span>
+<span class="cm"># docker-compose.platform.yml – HƯỚNG 2: Jenkins + Docker Registry chạy NGOÀI k3s</span>
+<span class="cm"># Đặt trên server tại: /opt/datn/platform/  (cùng jenkins.Dockerfile, .env chứa DOCKER_GID)</span>
+<span class="cm">#</span>
+<span class="cm">#   cd /opt/datn/platform &amp;&amp; docker compose up -d --build</span>
+<span class="cm">#</span>
+<span class="cm"># Vì sao Jenkins không chạy TRONG k3s?</span>
+<span class="cm">#   - Tránh "con gà – quả trứng": cluster hỏng thì vẫn còn Jenkins để sửa / deploy lại.</span>
+<span class="cm">#   - Build image cần Docker daemon; trong Pod phải dùng Kaniko/BuildKit → phức tạp hơn nhiều.</span>
+<span class="cm">#</span>
+<span class="cm"># Vì sao cần registry?</span>
+<span class="cm">#   k3s dùng containerd RIÊNG, không nhìn thấy image trong Docker. Jenkins build bằng Docker</span>
+<span class="cm">#   → push lên registry localhost:5000 → k3s kéo về (cấu hình ở /etc/rancher/k3s/registries.yaml).</span>
+<span class="cm"># =============================================================================</span>
+name: datn-platform
+
+services:
+
+  jenkins:
+    build:
+      context: .
+      dockerfile: jenkins.Dockerfile
+      args:
+        INSTALL_KUBECTL: "true"
+    image: datn/jenkins:lts-k8s
+    container_name: jenkins
+    restart: unless-stopped
+    group_add:
+      - "${DOCKER_GID:?thieu DOCKER_GID trong .env}"
+    environment:
+      JAVA_OPTS: "-Xmx1g -Djava.awt.headless=true"
+      MAVEN_OPTS: "-Xmx1g"
+    ports:
+<span class="cm">      # Traefik (trong k3s) gọi tới qua private IP của EC2. Security Group KHÔNG mở 8080 ra Internet.</span>
+      - "8080:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/datn:/opt/datn            # state/deployed.env + history để rollback
+    mem_limit: 3g
+
+  registry:
+    image: registry:2
+    container_name: registry
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5000:5000"          # chỉ trong máy: Docker push &amp; k3s pull đều qua localhost
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    volumes:
+      - registry_data:/var/lib/registry
+    mem_limit: 128m
+
+volumes:
+  jenkins_home:
+  registry_data:</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/registry-cleanup.sh</code><span class="d">Dọn tag cũ trong registry + garbage-collect · 33 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">kubenetes/files/registry-cleanup.sh</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm">#!/usr/bin/env bash</span>
+<span class="cm"># =============================================================================</span>
+<span class="cm"># registry-cleanup.sh – HƯỚNG 2: dọn registry localhost:5000</span>
+<span class="cm"># Giữ các tag xuất hiện trong 5 lần deploy thành công gần nhất (+ bảng tag hiện tại),</span>
+<span class="cm"># xoá các tag còn lại rồi chạy garbage-collect để giải phóng ổ đĩa.</span>
+<span class="cm"># Chạy tay hoặc cron hằng tuần:  sudo bash /opt/datn/registry-cleanup.sh</span>
+<span class="cm"># Cần: jq (setup-k3s.sh đã cài)</span>
+<span class="cm"># =============================================================================</span>
+set -euo pipefail
+
+REG=http://localhost:5000
+STATE=/opt/datn/state
+ACCEPT='Accept: application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json'
+
+KEEP=$( { ls -t "$STATE"/history/[0-9]*.env 2&gt;/dev/null | head -5 | xargs -r cat; cat "$STATE/deployed.env"; } \
+        | cut -d= -f2 | sort -u )
+echo "Giữ lại các tag:"; echo "$KEEP"
+
+for repo in $(curl -fsS "$REG/v2/_catalog" | jq -r '.repositories[]'); do
+  for tag in $(curl -fsS "$REG/v2/$repo/tags/list" | jq -r '.tags[]?'); do
+    if echo "$KEEP" | grep -qx "$tag"; then continue; fi
+    digest=$(curl -fsSI -H "$ACCEPT" "$REG/v2/$repo/manifests/$tag" \
+             | grep -i '^docker-content-digest:' | awk '{print $2}' | tr -d '\r')
+    [ -n "$digest" ] || continue
+    curl -fsS -X DELETE "$REG/v2/$repo/manifests/$digest" &gt;/dev/null &amp;&amp; echo "Đã xoá $repo:$tag"
+  done
+done
+
+<span class="cm"># Xoá các lớp (blob) không còn manifest nào tham chiếu</span>
+docker exec registry bin/registry garbage-collect /etc/docker/registry/config.yml --delete-untagged
+docker restart registry &gt;/dev/null   # registry giữ cache metadata trong RAM → khởi động lại cho sạch
+du -sh /var/lib/docker/volumes/datn-platform_registry_data 2&gt;/dev/null || true</code></pre></div></details>
+    <h3>Bootstrap (áp tay 1 lần)</h3>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/bootstrap/cluster-issuer.yaml</code><span class="d">ClusterIssuer Let's Encrypt · 21 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/bootstrap/cluster-issuer.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># =============================================================================</span>
+<span class="cm"># ClusterIssuer – "nơi cấp chứng chỉ" cho cert-manager (áp dụng 1 lần, sau khi cài cert-manager)</span>
+<span class="cm">#   kubectl apply -f cluster-issuer.yaml</span>
+<span class="cm"># Thử nghiệm nhiều lần thì đổi server sang staging để không dính rate-limit của Let's Encrypt:</span>
+<span class="cm">#   https://acme-staging-v02.api.letsencrypt.org/directory</span>
+<span class="cm"># =============================================================================</span>
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: ban@example.com                     # ĐỔI: email nhận cảnh báo hết hạn chứng chỉ
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/bootstrap/jenkins-ingress.yaml</code><span class="d">Service + Endpoints + Ingress cho Jenkins ngoài cluster · 56 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/bootstrap/jenkins-ingress.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># =============================================================================</span>
+<span class="cm"># Đưa Jenkins (chạy bằng Docker NGOÀI cluster, cổng 8080 của EC2) ra sau Traefik để có HTTPS</span>
+<span class="cm"># và để GitHub gửi webhook tới https://JENKINS_DOMAIN/github-webhook/</span>
+<span class="cm">#   kubectl apply -f jenkins-ingress.yaml      (áp dụng 1 lần)</span>
+<span class="cm">#</span>
+<span class="cm"># Cách làm: Service KHÔNG có selector + Endpoints khai báo tay IP riêng (private IP) của EC2.</span>
+<span class="cm"># Traefik coi Jenkins như một Service bình thường trong cluster.</span>
+<span class="cm"># ĐỔI: IP ở Endpoints (lệnh `hostname -I | awk '{print $1}'`) và tên miền ở Ingress.</span>
+<span class="cm"># Security Group KHÔNG mở cổng 8080 ra Internet – chỉ Traefik (trong máy) gọi tới.</span>
+<span class="cm"># =============================================================================</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins-host
+  namespace: datn
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: jenkins-host            # phải TRÙNG tên Service
+  namespace: datn
+subsets:
+  - addresses:
+      - ip: 172.31.10.20        # ĐỔI = private IP của EC2
+    ports:
+      - name: http
+        port: 8080
+        protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jenkins
+  namespace: datn
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - jenkins.datn.example.com
+      secretName: jenkins-tls
+  rules:
+    - host: jenkins.datn.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: jenkins-host, port: { number: 8080 } } }</code></pre></div></details>
+    <h3>Manifests (Jenkins apply mỗi lần deploy)</h3>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/kustomization.yaml</code><span class="d">Danh sách tài nguyên · 43 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/kustomization.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># =============================================================================</span>
+<span class="cm"># Kustomize "base" – trạng thái mong muốn của TOÀN BỘ hệ thống DATN trên k3s</span>
+<span class="cm"># Đặt trong repo tại: infrastructure/cicd/k8s/manifests/</span>
+<span class="cm">#</span>
+<span class="cm"># Image trong các file apps/*.yaml chỉ ghi tên (datn/work-service), KHÔNG ghi tag.</span>
+<span class="cm"># Mỗi lần deploy, Jenkins sinh một overlay nhỏ (.k8s-overlay/kustomization.yaml) trỏ về</span>
+<span class="cm"># thư mục này + khối `images:` lấy từ /opt/datn/state/deployed.env để gắn registry + tag.</span>
+<span class="cm">#</span>
+<span class="cm"># Xem thử kết quả (cần kubectl):  kubectl kustomize infrastructure/cicd/k8s/manifests</span>
+<span class="cm">#</span>
+<span class="cm"># Secret "datn-secrets" và ConfigMap "keycloak-realm" KHÔNG nằm ở đây (chứa bí mật / file lớn):</span>
+<span class="cm"># Jenkins tạo chúng bằng `kubectl create ... --dry-run=client -o yaml | kubectl apply -f -`.</span>
+<span class="cm"># =============================================================================</span>
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: datn
+
+resources:
+  - namespace.yaml
+  - config.yaml
+<span class="cm">  # ---- hạ tầng (StatefulSet + ổ đĩa bền vững) ----</span>
+  - infra/app-db.yaml
+  - infra/keycloak-db.yaml
+  - infra/keycloak.yaml
+  - infra/redis.yaml
+  - infra/kafka.yaml          # chưa có code publish – thiếu RAM thì comment dòng này
+  - infra/minio.yaml
+<span class="cm">  # ---- ứng dụng (Deployment, rolling update) ----</span>
+  - apps/identity-service.yaml
+  - apps/workspace-service.yaml
+  - apps/work-service.yaml
+  - apps/notification-service.yaml
+  - apps/api-gateway.yaml
+  - apps/frontend.yaml
+<span class="cm">  # ---- cửa vào HTTPS ----</span>
+  - ingress.yaml
+
+<span class="cm"># Gắn nhãn chung cho mọi object (không đụng tới selector → không gây lỗi selector bất biến)</span>
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: datn</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/namespace.yaml</code><span class="d">Namespace datn · 5 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/namespace.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code>apiVersion: v1
+kind: Namespace
+metadata:
+  name: datn</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/config.yaml</code><span class="d">ConfigMap datn-config · 33 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/config.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># =============================================================================</span>
+<span class="cm"># ConfigMap dùng chung cho các service Spring Boot (KHÔNG chứa bí mật).</span>
+<span class="cm"># Mỗi Deployment nạp toàn bộ bằng `envFrom`; key không liên quan tới service nào thì</span>
+<span class="cm"># Spring bỏ qua (vd gateway không có datasource nên SPRING_DATASOURCE_URL vô hại).</span>
+<span class="cm"># Tên host (app-db, keycloak, redis, ...) = tên Service trong namespace datn.</span>
+<span class="cm"># Giá trị phụ thuộc tên miền và mật khẩu nằm ở Secret "datn-secrets".</span>
+<span class="cm"># =============================================================================</span>
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: datn-config
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://app-db:5432/datn_main_db"
+  SPRING_JPA_SHOW_SQL: "false"
+  LOGGING_LEVEL_ORG_HIBERNATE_SQL: "WARN"
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: "http://keycloak:8080/realms/datn-realm/protocol/openid-connect/certs"
+  SPRING_DATA_REDIS_HOST: "redis"
+  SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_KAFKA_BOOTSTRAPSERVERS: "kafka:9092"
+  MINIO_ENDPOINT: "http://minio:9000"
+  MINIO_BUCKET_NAME: "work-attachments"
+  APP_SERVICES_IDENTITY_URL: "http://identity-service:8082"
+  APP_SERVICES_WORKSPACE_URL: "http://workspace-service:8087"
+  APP_SERVICES_NOTIFICATION_URL: "http://notification-service:9994"
+  KEYCLOAK_SERVERURL: "http://keycloak:8080"
+  KEYCLOAK_REALM: "datn-realm"
+  KEYCLOAK_ADMIN_CLIENTID: "admin-cli"
+  KEYCLOAK_ADMIN_REALM: "master"
+  KEYCLOAK_CLIENT_CLIENTID: "datn-backend"
+<span class="cm">  # Heap = 70% "limits.memory" của container</span>
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/ingress.yaml</code><span class="d">Ingress datn + auth · 44 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/ingress.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># =============================================================================</span>
+<span class="cm"># Ingress – cửa vào HTTPS (Traefik có sẵn trong k3s nghe cổng 80/443 của EC2)</span>
+<span class="cm"># cert-manager đọc annotation → tự xin chứng chỉ Let's Encrypt, lưu vào Secret "datn-tls".</span>
+<span class="cm"># ĐỔI 2 tên miền bên dưới cho khớp APP_DOMAIN / AUTH_DOMAIN trong prod.env.</span>
+<span class="cm">#</span>
+<span class="cm"># pathType Prefix so khớp THEO TỪNG ĐOẠN đường dẫn: "/work" khớp /work và /work/api/...</span>
+<span class="cm"># nhưng KHÔNG khớp /workspace/... → hai route không đè lên nhau.</span>
+<span class="cm"># =============================================================================</span>
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: datn
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - datn.example.com
+        - auth.datn.example.com
+      secretName: datn-tls
+  rules:
+    - host: datn.example.com
+      http:
+        paths:
+          - path: /identity
+            pathType: Prefix
+            backend: { service: { name: api-gateway, port: { number: 8081 } } }
+          - path: /work
+            pathType: Prefix
+            backend: { service: { name: api-gateway, port: { number: 8081 } } }
+          - path: /workspace
+            pathType: Prefix
+            backend: { service: { name: api-gateway, port: { number: 8081 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: frontend, port: { number: 80 } } }
+    - host: auth.datn.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: keycloak, port: { number: 8080 } } }</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/infra/app-db.yaml</code><span class="d">PostgreSQL ứng dụng · 67 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/infra/app-db.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># PostgreSQL của ứng dụng (datn_main_db) – StatefulSet 1 bản sao + ổ đĩa bền vững (PVC).</span>
+<span class="cm"># StatefulSet thay vì Deployment: Pod có tên cố định (app-db-0) và luôn gắn lại đúng PVC cũ.</span>
+<span class="cm"># PVC dùng StorageClass "local-path" có sẵn của k3s → dữ liệu nằm ở /var/lib/rancher/k3s/storage trên EC2.</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-db
+spec:
+  selector:
+    app: app-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: app-db
+spec:
+  serviceName: app-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-db
+  template:
+    metadata:
+      labels:
+        app: app-db
+        tier: infra
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: datn_main_db
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_PASSWORD } }
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d datn_main_db"]
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 512Mi }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 5Gi</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/infra/keycloak-db.yaml</code><span class="d">PostgreSQL Keycloak · 65 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/infra/keycloak-db.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># PostgreSQL riêng của Keycloak</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-db
+spec:
+  selector:
+    app: keycloak-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: keycloak-db
+spec:
+  serviceName: keycloak-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak-db
+  template:
+    metadata:
+      labels:
+        app: keycloak-db
+        tier: infra
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: keycloak
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_DB_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_DB_PASSWORD } }
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d keycloak"]
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { memory: 384Mi }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 2Gi</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/infra/keycloak.yaml</code><span class="d">Keycloak 24 production · 94 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/infra/keycloak.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># Keycloak 24 – chế độ production ("start"), đứng sau Traefik (TLS kết thúc ở Traefik).</span>
+<span class="cm"># Realm import từ ConfigMap "keycloak-realm" (Jenkins tạo từ infrastructure/keycloak/realm-export_08082026.json).</span>
+<span class="cm"># Realm chỉ được import ở lần chạy đầu; realm đã có trong DB thì Keycloak bỏ qua.</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+spec:
+  selector:
+    app: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate          # chỉ 1 bản → không để 2 Keycloak cùng chạy migrate DB lúc nâng cấp
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+        tier: infra
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:24.0.1
+          args: ["start", "--import-realm"]
+          env:
+            - name: AUTH_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: AUTH_DOMAIN } }
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: jdbc:postgresql://keycloak-db:5432/keycloak
+            - name: KC_DB_USERNAME
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_DB_USER } }
+            - name: KC_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_DB_PASSWORD } }
+            - name: KEYCLOAK_ADMIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_ADMIN_USER } }
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_ADMIN_PASSWORD } }
+<span class="cm">            # $(AUTH_DOMAIN) = Kubernetes tự thay bằng biến AUTH_DOMAIN khai báo phía trên</span>
+            - name: KC_HOSTNAME
+              value: "$(AUTH_DOMAIN)"
+            - name: KC_HOSTNAME_URL
+              value: "https://$(AUTH_DOMAIN)"
+            - name: KC_HOSTNAME_ADMIN_URL
+              value: "https://$(AUTH_DOMAIN)"
+            - name: KC_HOSTNAME_STRICT_BACKCHANNEL
+              value: "false"
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: realm
+              mountPath: /opt/keycloak/data/import/realm.json
+              subPath: realm.json
+              readOnly: true
+          startupProbe:
+            httpGet: { path: /health/started, port: 8080 }
+            periodSeconds: 5
+            failureThreshold: 60     # tối đa 5 phút (lần đầu "start" phải build + import realm)
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/live, port: 8080 }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits: { memory: 1Gi }
+      volumes:
+        - name: realm
+          configMap:
+            name: keycloak-realm</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/infra/redis.yaml</code><span class="d">Redis · 56 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/infra/redis.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        tier: infra
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["redis-server", "--appendonly", "yes", "--maxmemory", "200mb", "--maxmemory-policy", "allkeys-lru"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 1Gi</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/infra/kafka.yaml</code><span class="d">Kafka KRaft 1 node · 75 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/infra/kafka.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># Kafka 1 node (KRaft, không Zookeeper). work-service mới có bean producer, CHƯA có code publish;</span>
+<span class="cm"># thiếu RAM có thể bỏ file này khỏi kustomization.yaml.</span>
+<span class="cm">#</span>
+<span class="cm"># BẪY QUAN TRỌNG: Kubernetes tự bơm biến "service links" vào Pod, ví dụ Service tên "kafka"</span>
+<span class="cm"># sinh ra KAFKA_PORT=tcp://10.43.x.x:9092. Image apache/kafka biến MỌI biến KAFKA_* thành</span>
+<span class="cm"># cấu hình broker → nhận nhầm "port=tcp://..." → broker không khởi động được.</span>
+<span class="cm"># → BẮT BUỘC enableServiceLinks: false.</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: broker
+      port: 9092
+      targetPort: 9092
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+spec:
+  serviceName: kafka
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+        tier: infra
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: kafka
+          image: apache/kafka:3.8.0
+          ports:
+            - name: broker
+              containerPort: 9092
+          env:
+            - { name: KAFKA_NODE_ID, value: "1" }
+            - { name: KAFKA_PROCESS_ROLES, value: "broker,controller" }
+            - { name: KAFKA_LISTENERS, value: "PLAINTEXT://:9092,CONTROLLER://:9093" }
+            - { name: KAFKA_ADVERTISED_LISTENERS, value: "PLAINTEXT://kafka:9092" }
+            - { name: KAFKA_CONTROLLER_LISTENER_NAMES, value: "CONTROLLER" }
+            - { name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT" }
+            - { name: KAFKA_CONTROLLER_QUORUM_VOTERS, value: "1@localhost:9093" }
+            - { name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR, value: "1" }
+            - { name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: "1" }
+            - { name: KAFKA_NUM_PARTITIONS, value: "3" }
+            - { name: KAFKA_LOG_DIRS, value: "/var/lib/kafka/data" }
+            - { name: KAFKA_HEAP_OPTS, value: "-Xms256m -Xmx512m" }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kafka/data
+          readinessProbe:
+            tcpSocket: { port: 9092 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { memory: 1Gi }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 5Gi</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/infra/minio.yaml</code><span class="d">MinIO · 62 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/infra/minio.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># MinIO (file đính kèm). Image minio/minio đã bị gỡ khỏi Docker Hub → dùng bitnamilegacy/minio.</span>
+<span class="cm"># Bucket work-attachments do work-service tự tạo khi khởi động; tải file đi qua API work-service</span>
+<span class="cm"># nên MinIO KHÔNG cần Ingress.</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+spec:
+  selector:
+    app: minio
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: 9000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+spec:
+  serviceName: minio
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+        tier: infra
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: minio
+          image: bitnamilegacy/minio:latest
+          ports:
+            - name: s3
+              containerPort: 9000
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MINIO_ROOT_USER } }
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MINIO_ROOT_PASSWORD } }
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/minio/data
+          readinessProbe:
+            tcpSocket: { port: 9000 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 10Gi</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/apps/api-gateway.yaml</code><span class="d">API Gateway · 67 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/apps/api-gateway.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># api-gateway (:8081) – Spring Cloud Gateway, route theo application-prod.yml (SPRING_PROFILES_ACTIVE=prod)</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        tier: app
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: datn/api-gateway
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+          envFrom:
+            - configMapRef: { name: datn-config }
+          env:
+            - name: APP_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DOMAIN } }
+            - name: AUTH_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: AUTH_DOMAIN } }
+            - name: APP_FRONTEND_URL
+              value: "https://$(APP_DOMAIN)"
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI
+              value: "https://$(AUTH_DOMAIN)/realms/datn-realm"
+<span class="cm">          # Gateway đã có spring-boot-starter-actuator → kiểm tra sức khoẻ thật bằng HTTP</span>
+          startupProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/apps/identity-service.yaml</code><span class="d">Identity service · 81 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/apps/identity-service.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># identity-service (:8082) – đăng ký/đăng nhập, quản trị user qua Keycloak Admin API</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity-service
+spec:
+  selector:
+    app: identity-service
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity-service
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5          # giữ 5 ReplicaSet cũ cho `kubectl rollout undo`
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                  # bật Pod mới song song...
+      maxUnavailable: 0            # ...chỉ tắt Pod cũ khi Pod mới đã Ready → không downtime
+  selector:
+    matchLabels:
+      app: identity-service
+  template:
+    metadata:
+      labels:
+        app: identity-service
+        tier: app
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: datn/identity-service      # Jenkins/kustomize thay thành localhost:5000/datn/identity-service:&lt;TAG&gt;
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8082
+          envFrom:
+            - configMapRef: { name: datn-config }
+          env:
+            - name: APP_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DOMAIN } }
+            - name: AUTH_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: AUTH_DOMAIN } }
+            - name: APP_FRONTEND_URL
+              value: "https://$(APP_DOMAIN)"
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI
+              value: "https://$(AUTH_DOMAIN)/realms/datn-realm"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_USER } }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_PASSWORD } }
+            - name: KEYCLOAK_PUBLICURL
+              value: "https://$(AUTH_DOMAIN)"
+            - name: KEYCLOAK_ADMIN_USERNAME
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_ADMIN_USER } }
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_ADMIN_PASSWORD } }
+            - name: KEYCLOAK_CLIENT_CLIENTSECRET
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_CLIENT_SECRET } }
+<span class="cm">          # Chưa có actuator → dùng kiểm tra TCP (Spring Boot chỉ mở cổng khi đã khởi động xong)</span>
+          startupProbe:
+            tcpSocket: { port: 8082 }
+            periodSeconds: 5
+            failureThreshold: 48           # cho tối đa 4 phút để khởi động
+          readinessProbe:
+            tcpSocket: { port: 8082 }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 8082 }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits: { memory: 768Mi }</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/apps/work-service.yaml</code><span class="d">Work service · 74 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/apps/work-service.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># work-service (:8083) – project, task, sprint, board, file đính kèm (MinIO), Redis, Kafka</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: work-service
+spec:
+  selector:
+    app: work-service
+  ports:
+    - name: http
+      port: 8083
+      targetPort: 8083
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: work-service
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels:
+      app: work-service
+  template:
+    metadata:
+      labels:
+        app: work-service
+        tier: app
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: datn/work-service
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8083
+          envFrom:
+            - configMapRef: { name: datn-config }
+          env:
+            - name: APP_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DOMAIN } }
+            - name: AUTH_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: AUTH_DOMAIN } }
+            - name: APP_FRONTEND_URL
+              value: "https://$(APP_DOMAIN)"
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI
+              value: "https://$(AUTH_DOMAIN)/realms/datn-realm"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_USER } }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_PASSWORD } }
+            - name: MINIO_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MINIO_ROOT_USER } }
+            - name: MINIO_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MINIO_ROOT_PASSWORD } }
+          startupProbe:
+            tcpSocket: { port: 8083 }
+            periodSeconds: 5
+            failureThreshold: 60           # work-service khởi động lâu nhất (Flyway + seed template)
+          readinessProbe:
+            tcpSocket: { port: 8083 }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 8083 }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 150m, memory: 512Mi }
+            limits: { memory: 1Gi }</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/apps/workspace-service.yaml</code><span class="d">Workspace service · 70 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/apps/workspace-service.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># workspace-service (:8087) – workspace, thành viên, lời mời workspace</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: workspace-service
+spec:
+  selector:
+    app: workspace-service
+  ports:
+    - name: http
+      port: 8087
+      targetPort: 8087
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-service
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels:
+      app: workspace-service
+  template:
+    metadata:
+      labels:
+        app: workspace-service
+        tier: app
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: datn/workspace-service
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8087
+          envFrom:
+            - configMapRef: { name: datn-config }
+          env:
+            - name: APP_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DOMAIN } }
+            - name: AUTH_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: AUTH_DOMAIN } }
+            - name: APP_FRONTEND_URL
+              value: "https://$(APP_DOMAIN)"
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI
+              value: "https://$(AUTH_DOMAIN)/realms/datn-realm"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_USER } }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_PASSWORD } }
+          startupProbe:
+            tcpSocket: { port: 8087 }
+            periodSeconds: 5
+            failureThreshold: 48
+          readinessProbe:
+            tcpSocket: { port: 8087 }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 8087 }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits: { memory: 768Mi }</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/apps/notification-service.yaml</code><span class="d">Notification service · 72 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/apps/notification-service.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># notification-service (:9994) – chỉ gửi email SMTP, chỉ gọi nội bộ (KHÔNG có Ingress)</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+spec:
+  selector:
+    app: notification-service
+  ports:
+    - name: http
+      port: 9994
+      targetPort: 9994
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+        tier: app
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: datn/notification-service
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9994
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"
+            - name: MAIL_HOST
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MAIL_HOST } }
+            - name: MAIL_PORT
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MAIL_PORT } }
+            - name: MAIL_USERNAME
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MAIL_USERNAME } }
+            - name: MAIL_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MAIL_PASSWORD } }
+            - name: MAIL_SMTP_AUTH
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MAIL_SMTP_AUTH } }
+            - name: MAIL_SMTP_STARTTLS
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MAIL_SMTP_STARTTLS } }
+            - name: MAIL_FROM
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MAIL_FROM } }
+          startupProbe:
+            tcpSocket: { port: 9994 }
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            tcpSocket: { port: 9994 }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 9994 }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { memory: 512Mi }</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/kubenetes/files/manifests/apps/frontend.yaml</code><span class="d">Frontend Nginx · 50 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">kubenetes/files/manifests/apps/frontend.yaml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># frontend (:80) – Nginx phục vụ bundle React (build với nginx.prod.conf: chỉ file tĩnh)</span>
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  selector:
+    app: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 2                      # rất nhẹ (~10MB RAM) → chạy 2 bản cho dư dả
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        tier: app
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: datn/frontend
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 20m, memory: 16Mi }
+            limits: { memory: 128Mi }</code></pre></div></details>
+    <p class="small muted">File dùng chung ở <a href="../00_TONG_QUAN_CICD.html#common-files">Tổng quan · mục 9</a>.</p>
+  </section>
+
+  <footer>Hướng 2 · Docker + Kubernetes (k3s) · DATN-2026 · Cập nhật 12/11/2026 · Xem lại: <a href="../docker_only/HUONG_1_DOCKER_THUAN.html">Hướng 1 · Docker thuần</a></footer>
+</main>
+</div>
+<script>(function () {
+  var root = document.documentElement, KEY = 'datn-cicd-theme';
+  try { var saved = localStorage.getItem(KEY); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  document.querySelectorAll('[data-theme-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var cur = root.getAttribute('data-theme') ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      var next = cur === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem(KEY, next); } catch (e) {}
+    });
+  });
+
+  document.querySelectorAll('.code').forEach(function (box) {
+    var btn = box.querySelector('.copy'), pre = box.querySelector('pre');
+    if (!btn || !pre) return;
+    btn.addEventListener('click', function () {
+      var done = function (msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = 'Sao chép'; }, 1600); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(pre.textContent).then(function () { done('Đã chép ✓'); }, function () { done('Không chép được'); });
+      } else {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); done('Đã bôi đen – Ctrl+C');
+      }
+    });
+  });
+
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var byId = {};
+  links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      links.forEach(function (l) { l.classList.remove('active'); });
+      if (byId[e.target.id]) byId[e.target.id].classList.add('active');
+    });
+  }, { rootMargin: '-70px 0px -70% 0px' });
+  document.querySelectorAll('main section[id]').forEach(function (s) { obs.observe(s); });
+})();
+</script>
+</body>
+</html>

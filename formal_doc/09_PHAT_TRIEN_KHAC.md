@@ -101,7 +101,7 @@ flowchart LR
 | Được @mention | Người được nhắc |
 | Việc mình theo dõi đổi trạng thái / có bình luận | Watchers |
 | Sắp đến hạn (24h) / quá hạn | Assignee |
-| Lời mời team / dự án | Người được mời (kèm email — hiện chưa có) |
+| Lời mời Workspace / Dự án | Người được mời (✅ Đã triển khai gửi email qua NotificationClient + Mailpit/SMTP) |
 | Sprint bắt đầu / kết thúc | Thành viên dự án |
 | Dự án đổi health (tài liệu 06) | Lead, người theo dõi dự án |
 

@@ -1,357 +1,228 @@
-# 03 — Tài liệu nghiệp vụ: Workspace · Team · Member
+# 03 — Tài liệu nghiệp vụ: Không gian làm việc (Workspace) và Thành viên
 
-> Nguồn: workspace-service (`WorkspaceController`, `WorkspaceMemberController`, `WorkspaceServiceImpl`, `WorkspaceMemberServiceImpl`, `WorkspaceRoleGuard`, `CurrentUserResolver`), work-service (`TeamController`, `TeamSecurity`, `InvitationServiceImpl`, `ProjectMemberServiceImpl`, `WorkspaceAccessChecker`), frontend (`WorkspaceListPage`, `WorkspaceMembersPage`, `WorkspaceSettingsPage`, `TeamDetailPage`, `InvitationsPage`, `WorkspaceSwitcher`).
+> Nguồn: workspace-service (`WorkspaceController`, `WorkspaceMemberController`, `WorkspaceInvitationController`, `InternalWorkspaceController`, `WorkspaceServiceImpl`, `WorkspaceMemberServiceImpl`, `WorkspaceRoleGuard`, `CurrentUserResolver`), work-service (`ProjectMemberServiceImpl`, `WorkspaceAccessChecker`, `InvitationServiceImpl`), frontend (`WorkspaceListPage`, `WorkspaceMembersPage`, `WorkspaceSettingsPage`, `InvitationsPage`, `WorkspaceSwitcher`).
 
 ---
 
 ## Mục lục
 
-1. [Mô hình ba tầng thành viên](#1-mô-hình-ba-tầng-thành-viên)
-2. [Workspace](#2-workspace)
-3. [Thành viên Workspace](#3-thành-viên-workspace)
-4. [Team](#4-team)
-5. [Thành viên Team](#5-thành-viên-team)
-6. [Lời mời (Invitation)](#6-lời-mời-invitation)
-7. [Đồng bộ Team → Project](#7-đồng-bộ-team--project)
-8. [Kiểm tra quyền xuyên service](#8-kiểm-tra-quyền-xuyên-service)
-9. [Ma trận "Ai được làm gì"](#9-ma-trận-ai-được-làm-gì)
-10. [Kịch bản đầu – cuối](#10-kịch-bản-đầu--cuối)
+1. [Mô hình hai tầng thành viên trực tiếp](#1-mô-hình-hai-tầng-thành-viên-trực-tiếp)
+2. [Không gian làm việc (Workspace)](#2-không-gian-làm-việc-workspace)
+3. [Lời mời và Thành viên Workspace](#3-lời-mời-và-thành-viên-workspace)
+4. [Cơ chế Auto-cascade Workspace Member (`ensureMember`)](#4-cơ-chế-auto-cascade-workspace-member-ensuremember)
+5. [Lời mời tham gia Dự án (Project Invitation)](#5-lời-mời-tham-gia-dự-án-project-invitation)
+6. [Kiểm tra quyền xuyên service (Cross-service Authorization)](#6-kiểm-tra-quyền-xuyên-service-cross-service-authorization)
+7. [Ma trận "Ai được làm gì"](#7-ma-trận-ai-được-làm-gì)
+8. [Kịch bản đầu – cuối](#8-kịch-bản-đầu--cuối)
 
 ---
 
-## 1. Mô hình ba tầng thành viên
+## 1. Mô hình hai tầng thành viên trực tiếp
 
-Một người dùng có thể đồng thời mang **ba loại vai trò độc lập**, mỗi loại lưu ở một bảng khác nhau.
+Hệ thống DATN-2026 áp dụng mô hình phân cấp tổ chức 2 tầng tinh gọn và chuẩn mực kiểu Jira Cloud / Linear:
 
 ```mermaid
 flowchart TD
     U(("Người dùng"))
     U --> WM["workspace_members<br/>OWNER · ADMIN · MEMBER · GUEST"]
-    U --> TM["team_members<br/>LEADER · MEMBER · VIEWER"]
     U --> RA["role_assignments<br/>ADMINISTRATOR · MEMBER · VIEWER"]
-    WM -. "quyết định được tạo<br/>team / project không" .-> W["Workspace"]
-    TM -. "quyết định được tạo<br/>project cho team không" .-> T["Team"]
-    RA -. "quyết định thao tác<br/>trong dự án" .-> P["Project"]
+    WM -. "Xác định quyền truy cập tổ chức<br/>và quyền tạo dự án mới" .-> W["Workspace (Gốc tenant)"]
+    RA -. "Xác định quyền hạn thao tác chi tiết<br/>trong dự án (16 PermissionKey)" .-> P["Project (Dự án trực thuộc)"]
 ```
 
-| Tầng | Bảng | Service | Loại user id | Vai trò |
-|------|------|---------|--------------|---------|
-| Workspace | `workspace_members` | workspace-service | `users.id` | OWNER > ADMIN > MEMBER > GUEST |
-| Team | `team_members` (+ `teams.owner_id`) | work-service | Keycloak `sub` | LEADER, MEMBER, VIEWER |
-| Project | `role_assignments` | work-service | Keycloak `sub` | ADMINISTRATOR, MEMBER, VIEWER |
+| Tầng | Bảng dữ liệu | Service quản lý | Loại User ID | Các vai trò chuẩn |
+|------|--------------|-----------------|--------------|-------------------|
+| **Workspace** | `workspace_members` | `workspace-service` | `users.id` (D) | `OWNER` > `ADMIN` > `MEMBER` > `GUEST` |
+| **Project** | `role_assignments` | `work-service` | Keycloak `sub` (K) | `ADMINISTRATOR` > `MEMBER` > `VIEWER` |
 
-Ngoài ra còn **Global ADMIN** (realm role `ADMIN` của Keycloak) vượt qua mọi kiểm tra tầng Team và Project.
+> ℹ️ **Loại bỏ hoàn toàn tầng Team:**  
+> Kiến trúc trước đây có tầng `Team` trung gian (`teams` & `team_members`). Tầng này đã bị gỡ bỏ hoàn toàn ở Flyway V8 của `work-service` và V5 của `workspace-service`. Mô hình hiện tại liên kết Dự án trực tiếp vào Workspace, giúp người dùng vào tổ chức có thể tạo dự án tức thì mà không gặp rào cản phân cấp thừa.
 
 ---
 
-## 2. Workspace
+## 2. Không gian làm việc (Workspace)
 
 ### 2.1. Khái niệm
 
-Workspace là **gốc tenant**: ranh giới cô lập dữ liệu giữa các tổ chức. Mọi Team và Project đều thuộc đúng một workspace.
+Workspace đóng vai trò là **gốc Tenant (Organization)**: ranh giới cô lập dữ liệu giữa các tổ chức/doanh nghiệp khác nhau. Mọi dự án đều thuộc về đúng một Workspace.
 
-| Thuộc tính | Quy tắc |
-|------------|---------|
-| `name` | Bắt buộc |
-| `slug` | Duy nhất toàn hệ thống; bỏ trống thì tự sinh từ tên (bỏ dấu tiếng Việt, thêm hậu tố `-2`, `-3`... nếu trùng) |
-| `description`, `avatarUrl` | Tùy chọn |
-| `createdBy` | Chỉ để audit, **không** quyết định quyền |
+| Thuộc tính | Quy tắc nghiệp vụ |
+|------------|-------------------|
+| `name` | Bắt buộc, tên tổ chức / không gian làm việc |
+| `slug` | Duy nhất toàn hệ thống; nếu để trống hệ thống tự động sinh từ tên (chuyển chữ thường, bỏ dấu tiếng Việt, thêm hậu tố số nếu trùng) |
+| `description`, `avatarUrl` | Tùy chọn mô tả và ảnh đại diện |
+| `createdBy` | Lưu trữ `users.id` của người khởi tạo phục vụ audit log |
+| `deletedAt` | Hỗ trợ xóa mềm (Soft Delete) |
 
-### 2.2. Vai trò workspace
+### 2.2. Vai trò trong Workspace
 
-| Vai trò | Quyền |
-|---------|-------|
-| OWNER | Toàn quyền, kể cả xóa / khôi phục workspace và cấp vai trò OWNER |
-| ADMIN | Sửa thông tin workspace, quản lý thành viên (không động tới OWNER) |
-| MEMBER | Tạo Team, tạo Project (nếu là trưởng nhóm) |
-| GUEST | Chỉ xem; không tạo được gì |
+| Vai trò | Quyền hạn nghiệp vụ |
+|---------|---------------------|
+| `OWNER` | Chủ sở hữu Workspace: Toàn quyền quản trị cao nhất, được chuyển giao hoặc cấp quyền `OWNER` cho người khác, xóa mềm và khôi phục Workspace. |
+| `ADMIN` | Quản trị viên: Quản lý thông tin Workspace, mời thành viên, đổi vai trò thành viên (không được can thiệp vào các tài khoản có vai trò `OWNER`). |
+| `MEMBER` | Thành viên chính thức: Có quyền tạo dự án mới trong Workspace, tham gia vào các dự án được phân công. |
+| `GUEST` | Khách: Chỉ có quyền xem thông tin cơ bản; không được tạo dự án mới. |
 
-### 2.3. Vòng đời
+### 2.3. Bất biến "Luôn có ít nhất một OWNER"
 
-```mermaid
-stateDiagram-v2
-    [*] --> HoatDong : Tạo (người tạo = OWNER)
-    HoatDong --> HoatDong : Sửa (ADMIN+)
-    HoatDong --> ThungRac : Xóa mềm (OWNER)
-    ThungRac --> HoatDong : Khôi phục (OWNER)
-    HoatDong : Hoạt động
-    ThungRac : Thùng rác (deleted_at ≠ null)
-```
+Để bảo đảm an toàn dữ liệu và ngăn chặn tình huống Workspace "mồ côi" không có người quản trị, `WorkspaceMemberServiceImpl` áp dụng cơ chế khóa bi quan (`lockOwners` - `SELECT ... FOR UPDATE`):
+- Một `OWNER` không thể tự giáng cấp vai trò của chính mình nếu họ là `OWNER` duy nhất còn lại.
+- Một `OWNER` không thể rời (`leave`) hoặc bị xóa khỏi Workspace nếu không còn `OWNER` nào khác.
 
-- Xóa mềm **giữ nguyên** toàn bộ thành viên, nên khôi phục sẽ trả lại đúng OWNER cũ.
-- Workspace trong thùng rác bị loại khỏi danh sách `getWorkspaceIds` → dự án của nó không còn hiện trong danh sách.
+### 2.4. Workspace mặc định (Default Workspace)
 
-### 2.4. Workspace mặc định
+Hệ thống được thiết lập sẵn một Workspace hệ thống cố định có UUID:
+`a0000000-0000-0000-0000-000000000001`
+- Mọi người dùng mới đăng ký đều có quyền truy cập vào Workspace này với vai trò tối thiểu là `MEMBER`.
+- Đây là nơi lưu trữ các **Dự án mẫu hệ thống (System Templates)** dùng chung cho toàn bộ cộng đồng người dùng.
 
-Migration `V2__seed_default_workspace_and_backfill` tạo **Default Workspace** với UUID cố định `a0000000-0000-0000-0000-000000000001`:
-- Mọi user đang có được thêm vào với vai trò MEMBER; user đầu tiên là OWNER.
-- Mọi team/project trỏ tới workspace không tồn tại được kéo về workspace này.
-- Đây cũng là nơi chứa **mẫu hệ thống** (tài liệu 04).
+---
 
-### 2.5. Bất biến "luôn có ít nhất một OWNER"
+## 3. Lời mời và Thành viên Workspace
+
+### 3.1. Quy trình mời tham gia Workspace
+
+Quá trình thêm thành viên vào Workspace được chuẩn hóa theo cơ chế **Lời mời bất đồng bộ kèm thông báo email**:
 
 ```mermaid
 sequenceDiagram
-    participant A as OWNER A
-    participant B as OWNER B
-    participant S as WorkspaceMemberService
-    participant DB as DB
-    A->>S: leave()
-    S->>DB: SELECT ... FOR UPDATE (các hàng OWNER)
-    B->>S: leave()
-    S->>DB: SELECT ... FOR UPDATE (chờ)
-    S->>DB: count = 2 → xóa A → COMMIT
-    DB-->>S: B được chạy: count = 1
-    S-->>B: 400 "phải còn ít nhất một OWNER"
-```
-
-Khóa hàng (`lockOwners`) ngăn tình huống hai OWNER rời cùng lúc làm workspace "mồ côi".
-
----
-
-## 3. Thành viên Workspace
-
-### 3.1. Thêm thành viên
-
-```mermaid
-flowchart TD
-    A["POST /workspaces/{id}/members<br/>{identifier, role}"] --> B{"Người gọi ≥ ADMIN?"}
-    B -- "Không" --> X1["403"]
-    B -- "Có" --> C{"role = OWNER và<br/>người gọi không phải OWNER?"}
-    C -- "Có" --> X2["403"]
-    C -- "Không" --> D["Tra user theo email/username<br/>qua identity-service"]
-    D --> E{"Đã là thành viên?"}
-    E -- "Có" --> X3["400"]
-    E -- "Không" --> F["Thêm ngay (không qua lời mời)"]
-```
-
-> Khác với Team/Project, thêm vào Workspace là **trực tiếp**, người được thêm không cần chấp nhận.
-
-### 3.2. Đổi vai trò, xóa, rời
-
-| Thao tác | Ai làm | Bị chặn khi |
-|----------|--------|-------------|
-| Đổi vai trò | ADMIN+ | Tự đổi chính mình; động tới OWNER mà không phải OWNER; làm mất OWNER cuối |
-| Xóa thành viên | ADMIN+ | Tự xóa chính mình; xóa OWNER mà không phải OWNER; xóa OWNER cuối |
-| Rời workspace | Bản thân | Là OWNER cuối |
-
-### 3.3. Bảo mật ranh giới tenant
-
-Người không phải thành viên luôn nhận **404** (không phải 403) để không lộ việc workspace có tồn tại.
-
----
-
-## 4. Team
-
-### 4.1. Khái niệm
-
-Team là **nhóm người cố định** trong workspace, dùng để (1) xác định ai được tạo dự án và (2) tự động cấp quyền dự án cho cả nhóm.
-
-```mermaid
-flowchart LR
-    W["Workspace"] --> T1["Team Frontend"]
-    W --> T2["Team Backend"]
-    T1 --> P1["Project WEB"]
-    T1 --> P2["Project MOBILE"]
-    T2 --> P3["Project API"]
-```
-
-### 4.2. Trưởng nhóm: hai nguồn sự thật
-
-```mermaid
-flowchart LR
-    A["teams.owner_id = user"] --> L{{"Là trưởng nhóm"}}
-    B["team_members.role = LEADER"] --> L
-```
-
-Người tạo team được ghi vào **cả hai** chỗ. Các thành viên được nâng lên LEADER sau đó chỉ có ở chỗ thứ hai. Owner **không thể rời** team và **không thể bị xóa**; hiện chưa có chức năng chuyển quyền sở hữu.
-
-### 4.3. Các thao tác
-
-| Thao tác | Endpoint | Quyền |
-|----------|----------|-------|
-| Liệt kê team trong workspace | `GET /teams?workspaceId=` | Thành viên workspace |
-| Liệt kê mọi team | `GET /teams/all` | Global ADMIN |
-| Team của tôi (kèm `myRole`) | `GET /teams/my?workspaceId=` | Đăng nhập |
-| Xem team | `GET /teams/{id}` | Thành viên team |
-| Tạo team | `POST /teams` | MEMBER+ trong workspace |
-| Sửa tên/mô tả | `PUT /teams/{id}` | Trưởng nhóm |
-| Xóa team | `DELETE /teams/{id}` | Trưởng nhóm |
-| Rời team | `POST /teams/{id}/leave` | Thành viên (trừ owner) |
-
-### 4.4. Xóa team
-
-```mermaid
-flowchart TD
-    A["DELETE /teams/{id}"] --> B["Mọi project của team:<br/>team_id = NULL"]
-    B --> C["Xóa toàn bộ team_members"]
-    C --> D["Xóa team (cứng)"]
-    D --> E["⚠️ role_assignments<br/>trong project vẫn giữ nguyên"]
-```
-
-Dự án không bị xóa theo; chúng trở thành dự án "không team". Thành viên cũ vẫn giữ quyền trong dự án.
-
----
-
-## 5. Thành viên Team
-
-### 5.1. Mời thành viên
-
-```mermaid
-sequenceDiagram
-    participant L as Trưởng nhóm
-    participant TC as TeamController
+    actor A as Quản trị viên (ADMIN+)
+    participant WS as workspace-service
     participant ID as identity-service
-    participant IS as InvitationService
-    L->>TC: POST /teams/{id}/members {email|username|userId, role}
-    TC->>ID: by-identifier → keycloakId
-    TC->>IS: inviteToTeam(team, invitee, role)
-    IS->>IS: Đã là thành viên? Đã có lời mời PENDING?
-    IS-->>L: 201 Invitation PENDING
+    participant NS as notification-service
+    actor B as Người được mời
+    A->>WS: POST /workspaces/{id}/members {identifier, role}
+    WS->>ID: Tra cứu users.id theo email / username
+    WS->>WS: Kiểm tra: Đã là thành viên? Đã có lời mời PENDING?
+    WS->>WS: Tạo bản ghi workspace_invitations (status = PENDING)
+    WS->>NS: Gửi email lời mời kèm liên kết xác nhận
+    WS-->>A: 201 Created (WorkspaceInvitationResponse)
+    Note over B: Nhận email thông báo
+    B->>WS: POST /api/v1/workspace-invitations/{id}/accept
+    WS->>WS: Cập nhật status = ACCEPTED
+    WS->>WS: INSERT vào workspace_members
+    WS-->>B: Thành công tham gia Workspace
 ```
 
-### 5.2. Đổi vai trò và xóa
+### 3.2. Quản lý thành viên Workspace
 
-```mermaid
-flowchart LR
-    A["Đổi vai trò thành viên<br/>(trưởng nhóm, không tự đổi mình)"] --> B["Cập nhật team_members.role"]
-    B --> C["Đồng bộ lại vai trò<br/>ở MỌI project của team"]
-    D["Xóa / Rời team"] --> E["Xóa team_members"]
-    E --> F["Xóa role_assignments ở mọi<br/>project của team (trừ Lead)"]
-```
+| Thao tác | Endpoint | Quyền hạn yêu cầu | Ràng buộc an toàn |
+|----------|----------|:-----------------:|-------------------|
+| Xem danh sách | `GET /workspaces/{id}/members` | Thành viên Workspace | Hỗ trợ tìm kiếm theo tên/email và lọc theo vai trò |
+| Mời thành viên | `POST /workspaces/{id}/members` | `ADMIN` hoặc `OWNER` | Chỉ `OWNER` mới có quyền mời hoặc nâng cấp người khác lên vai trò `OWNER` |
+| Đổi vai trò | `PUT /workspaces/{id}/members/{userId}/role` | `ADMIN` hoặc `OWNER` | Không được tự đổi vai trò của chính mình; không được làm mất `OWNER` cuối cùng |
+| Xóa thành viên | `DELETE /workspaces/{id}/members/{userId}` | `ADMIN` hoặc `OWNER` | Không thể xóa `OWNER` cuối cùng; `ADMIN` không thể xóa `OWNER` |
+| Rời Workspace | `POST /workspaces/{id}/leave` | Bản thân người dùng | Bị chặn nếu đang là `OWNER` cuối cùng của Workspace |
 
 ---
 
-## 6. Lời mời (Invitation)
+## 4. Cơ chế Auto-cascade Workspace Member (`ensureMember`)
 
-### 6.1. Vòng đời
+Trong quy trình làm việc thực tế, một người dùng có thể được phân công làm Project Lead hoặc được mời vào một Dự án cụ thể trong khi họ chưa từng chủ động tham gia vào Workspace chứa dự án đó.
+
+Để loại bỏ hoàn toàn ma sát nghiệp vụ này, `work-service` và `workspace-service` phối hợp thông qua cơ chế **Auto-cascade (`ensureMember`)**:
+
+```mermaid
+flowchart TD
+    A["Hành động tại work-service:<br/>1. Tạo dự án và chỉ định leadUserId<br/>2. Gửi lời mời tham gia dự án"] --> B["Gọi Feign nội bộ:<br/>POST /workspace/api/v1/workspaces/{wsId}/members/ensure"]
+    B --> C["workspace-service: InternalWorkspaceController"]
+    C --> D{"Người dùng đã có trong workspace_members?"}
+    D -- "Đã có" --> OK["Bỏ qua, giữ nguyên vai trò hiện tại"]
+    D -- "Chưa có" --> E["Tự động INSERT vào workspace_members<br/>với vai trò MEMBER"]
+    E --> OK
+```
+
+Cơ chế này bảo đảm tính nhất quán dữ liệu: Bất kỳ ai là thành viên của Dự án thì nghiễm nhiên hợp lệ về mặt quyền hạn trong Workspace chứa dự án đó.
+
+---
+
+## 5. Lời mời tham gia Dự án (Project Invitation)
+
+Lời mời tham gia vào dự án cụ thể được quản lý độc lập tại `work-service`:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING : Mời
-    PENDING --> ACCEPTED : Người được mời chấp nhận
-    PENDING --> DECLINED : Người được mời từ chối
-    PENDING --> CANCELLED : Người mời / quản trị hủy
-    ACCEPTED --> [*]
+    [*] --> PENDING : Mời (POST /projects/{id}/members)
+    PENDING --> ACCEPTED : Người được mời chấp nhận (/invitations/{id}/accept)
+    PENDING --> DECLINED : Người được mời từ chối (/invitations/{id}/decline)
+    PENDING --> CANCELLED : Quản trị viên hủy lời mời
+    ACCEPTED --> [*] : Thêm bản ghi vào role_assignments
     DECLINED --> [*]
     CANCELLED --> [*]
 ```
 
-### 6.2. Khi chấp nhận
-
-```mermaid
-flowchart TD
-    A["POST /invitations/{id}/accept"] --> B{"type?"}
-    B -- "TEAM" --> C["Thêm team_members<br/>với team_role"]
-    C --> D["Đồng bộ vào mọi<br/>project của team"]
-    B -- "PROJECT" --> E["Thêm role_assignments<br/>với project_role_id"]
-```
-
-### 6.3. Ai được hủy lời mời
-
-```mermaid
-flowchart LR
-    G["Global ADMIN"] --> OK["Được hủy"]
-    I["Chính người mời"] --> OK
-    T["Trưởng nhóm (lời mời TEAM)"] --> OK
-    P["Có PROJECT_ADMIN (lời mời PROJECT)"] --> OK
-```
-
-### 6.4. Giao diện
-
-- `PendingInvitations` (trên header) và trang `/w/:id/invitations` liệt kê lời mời đang chờ của tôi.
-- Trang Team / Project liệt kê lời mời đang chờ của đích (`GET /invitations?teamId=` cho trưởng nhóm, `?projectId=` cho người có PROJECT_ADMIN).
-- Không gửi email, không có hạn hết hiệu lực.
+- **Gửi lời mời:** `POST /projects/{id}/members` yêu cầu quyền `PROJECT_ADMIN`. Lời mời được lưu vào bảng `invitations` (`type = 'PROJECT'`).
+- **Gửi email tự động:** `InvitationMailer` gửi email mời đến hòm thư người nhận thông qua `notification-service`.
+- **Chấp nhận lời mời:** Khi người dùng bấm chấp nhận, hệ thống ghi nhận quyền tương ứng vào bảng `role_assignments` và kích hoạt ngay quyền truy cập dự án cho người dùng.
 
 ---
 
-## 7. Đồng bộ Team → Project
+## 6. Kiểm tra quyền xuyên service (Cross-service Authorization)
 
-### 7.1. Bảng ánh xạ vai trò
-
-| TeamRole | → ProjectRole |
-|----------|---------------|
-| LEADER | ADMINISTRATOR |
-| MEMBER | MEMBER |
-| VIEWER | VIEWER |
-
-### 7.2. Các thời điểm đồng bộ
-
-```mermaid
-flowchart TD
-    E1["Tạo project gắn team"] --> S1["Thêm mọi thành viên team"]
-    E2["Đổi team của project"] --> S2["Thêm thành viên team mới<br/>(chưa có assignment)"]
-    E3["Chấp nhận lời mời TEAM"] --> S3["Thêm/ghi đè vai trò ở<br/>mọi project của team"]
-    E4["Đổi vai trò trong team"] --> S3
-    E5["Xóa / rời team"] --> S4["Gỡ assignment ở<br/>mọi project của team"]
-```
-
-> Lưu ý: đồng bộ theo sự kiện "đổi vai trò team" **ghi đè** vai trò dự án — nếu quản trị dự án đã chỉnh tay vai trò của người đó trong dự án, thay đổi tay sẽ bị mất.
-
----
-
-## 8. Kiểm tra quyền xuyên service
-
-work-service không có bảng `workspace_members`, nên mỗi lần cần kiểm tra vai trò workspace nó phải hỏi workspace-service.
+Vì `work-service` không lưu trữ bảng `workspace_members`, các thao tác cần xác thực cấp độ Workspace sẽ thực hiện kiểm tra xuyên service có hỗ trợ bộ nhớ đệm Redis:
 
 ```mermaid
 sequenceDiagram
     participant WK as work-service
-    participant R as Redis cache
+    participant R as Redis Cache (:6380)
     participant ID as identity-service
     participant WS as workspace-service
-    WK->>R: canonicalUserId(sub)?
-    alt chưa có cache
+    WK->>R: Tra cứu canonicalUserId(sub)
+    alt Chưa có trong Cache
         WK->>ID: GET /internal/users/{sub}
         ID-->>WK: users.id
+        WK->>R: Lưu Cache (TTL 1 giờ)
     end
-    WK->>R: wsRole(workspace, users.id)?
-    alt chưa có cache
-        WK->>WS: GET /internal/workspaces/{ws}/members/{uid}/role
-        WS-->>WK: "MEMBER"
+    WK->>R: Tra cứu vai trò Workspace: wsRole(workspaceId, users.id)
+    alt Chưa có trong Cache
+        WK->>WS: GET /internal/workspaces/{wsId}/members/{userId}/role
+        WS-->>WK: WorkspaceRole (ví dụ: "MEMBER")
+        WK->>R: Lưu Cache (TTL 10 phút)
     end
-    WK->>WK: so bậc với yêu cầu
+    WK->>WK: So sánh bậc vai trò với yêu cầu tối thiểu
 ```
 
-| Tình huống | Kết quả |
-|------------|---------|
-| workspace-service không phản hồi khi kiểm tra quyền | **403** (fail-closed) |
-| workspace-service lỗi khi lấy danh sách workspace | Danh sách **rỗng** (trang trống) |
-| Vai trò bị đổi ở workspace-service | work-service vẫn dùng giá trị cũ trong cache Redis tới **10 phút** (TTL mặc định) |
+- **Nguyên tắc an toàn (Fail-closed):** Nếu `workspace-service` gặp sự cố hoặc không phản hồi, `work-service` mặc định từ chối truy cập (HTTP 403 Forbidden).
+- Khi vai trò của thành viên trong Workspace thay đổi hoặc bị thu hồi, quyền trong cache sẽ tự động hết hạn sau tối đa 10 phút.
 
 ---
 
-## 9. Ma trận "Ai được làm gì"
+## 7. Ma trận "Ai được làm gì"
 
-| Hành động | Global ADMIN | WS OWNER | WS ADMIN | WS MEMBER | WS GUEST | Team LEADER | Team MEMBER |
-|-----------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| Tạo workspace | ✅ | ✅ | ✅ | ✅ | ✅ | — | — |
-| Sửa workspace | | ✅ | ✅ | | | | |
-| Xóa / khôi phục workspace | | ✅ | | | | | |
-| Quản lý thành viên workspace | | ✅ | ✅* | | | | |
-| Tạo team | ✅ | ✅ | ✅ | ✅ | | | |
-| Sửa / xóa team, mời vào team | ✅ | | | | | ✅ | |
-| Tạo project cho team | ✅ | | | | | ✅ (+ WS MEMBER+) | |
-| Tạo project không team | ✅ | | | | | | |
+| Hành động | Global ADMIN | WS OWNER | WS ADMIN | WS MEMBER | WS GUEST | Project ADMIN | Project MEMBER |
+|-----------|:------------:|:--------:|:--------:|:---------:|:--------:|:-------------:|:--------------:|
+| Tạo Workspace mới | ✅ | ✅ | ✅ | ✅ | ✅ | — | — |
+| Chỉnh sửa thông tin Workspace | ✅ | ✅ | ✅ | ❌ | ❌ | — | — |
+| Xóa mềm / Khôi phục Workspace | ✅ | ✅ | ❌ | ❌ | ❌ | — | — |
+| Mời / Đổi vai trò thành viên Workspace | ✅ | ✅ | ✅* | ❌ | ❌ | — | — |
+| Tạo Dự án mới trong Workspace | ✅ | ✅ | ✅ | ✅ | ❌ | — | — |
+| Cấu hình dự án (Workflow, Board, Roles) | ✅ | — | — | — | — | ✅ | ❌ |
+| Mời thành viên vào Dự án | ✅ | — | — | — | — | ✅ | ❌ |
+| Tạo / Cập nhật / Kéo thẻ công việc | ✅ | — | — | — | — | ✅ | ✅ |
+| Xem nội dung dự án, Backlog, Board | ✅ | — | — | — | — | ✅ | ✅ |
 
-\* ADMIN không được động tới hàng OWNER.
+*\* `WS ADMIN` không được thao tác trên các bản ghi có vai trò `OWNER`.*
 
 ---
 
-## 10. Kịch bản đầu – cuối
+## 8. Kịch bản đầu – cuối
 
 ```mermaid
 sequenceDiagram
-    actor An
-    actor Binh
+    actor An as An (Doanh nghiệp)
+    actor Binh as Bình (Thành viên)
     participant WS as workspace-service
     participant WK as work-service
-    An->>WS: Tạo workspace "Công ty A" → An = OWNER
-    An->>WS: Thêm Bình (MEMBER)
-    An->>WK: Tạo team "Dev" → An = owner + LEADER
-    An->>WK: Mời Bình vào team (MEMBER)
-    Binh->>WK: Chấp nhận lời mời
-    An->>WK: Tạo project "WEB" cho team Dev
-    Note over WK: An = ADMINISTRATOR<br/>Bình = MEMBER (đồng bộ từ team)
-    Binh->>WK: Tạo Task, kéo thẻ trên Board
+    participant NT as notification-service
+    An->>WS: Tạo Workspace "Công ty Alpha" → An trở thành OWNER
+    An->>WS: Mời Bình tham gia Workspace (vai trò MEMBER)
+    WS->>NT: Gửi email lời mời đến Bình
+    Binh->>WS: Bấm chấp nhận trong email → Bình trở thành WS MEMBER
+    An->>WK: Tạo dự án Scrum "E-Commerce Web" (Key: WEB)
+    Note over WK: An = ADMINISTRATOR của dự án WEB
+    An->>WK: Mời Bình vào dự án WEB với vai trò MEMBER
+    WK->>NT: Gửi email mời tham gia dự án WEB
+    Binh->>WK: Chấp nhận lời mời dự án
+    Note over WK: Bình được ghi vào role_assignments (role MEMBER)
+    Binh->>WK: Tạo Task, ước lượng Story Point, kéo thả thẻ trên Kanban/Scrum Board
 ```

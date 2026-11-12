@@ -1,45 +1,41 @@
 # Bộ tài liệu chính thức DATN-2026
 
 > Hệ thống quản lý công việc kiểu Jira — tài liệu phân tích hiện trạng và định hướng phát triển.
-> Lập dựa trên **toàn bộ mã nguồn** (backend 5 service, frontend React, migration SQL, docker-compose, realm Keycloak) tại nhánh `feat/sontx-template`, ngày 03/10/2026.
+> Cập nhật và chuẩn hóa đồng bộ với **toàn bộ mã nguồn thực tế** (backend Spring Boot 3.x / Java 21, frontend React 19, Flyway migrations V1..V8 của work-service, V1..V5 của workspace-service, docker-compose, realm Keycloak).
 
 ---
 
 ## 1. Danh sách tài liệu
 
-| # | Tài liệu | Nội dung chính | Dành cho |
-|---|----------|----------------|----------|
-| 01 | [Quan hệ giữa các thực thể](01_QUAN_HE_THUC_THE.md) | Sơ đồ ER chia theo từng cụm nghiệp vụ, khóa, ràng buộc, quy tắc xóa | Dev, BA |
-| 02 | [Nghiệp vụ — Project](02_NGHIEP_VU_PROJECT.md) | Vòng đời dự án, phân quyền, Work Item, Workflow, Sprint, Board, báo cáo | BA, Dev, Tester |
-| 03 | [Nghiệp vụ — Workspace · Team · Member](03_NGHIEP_VU_WORKSPACE_TEAM_MEMBER.md) | Ba tầng thành viên, vai trò, lời mời, đồng bộ quyền | BA, Dev, Tester |
-| 04 | [Nghiệp vụ — Template · Clone Project](04_NGHIEP_VU_TEMPLATE_CLONE.md) | Thư viện mẫu, ba kiểu nhân bản, engine clone, kiểm tra toàn vẹn | BA, Dev |
-| 05 | [Điểm chưa đúng so với hệ thống chuẩn](05_DIEM_CHUA_DUNG_SO_VOI_CHUAN.md) | Lỗ hổng nghiệp vụ, kiến trúc, bảo mật, tính năng thiếu — kèm mức độ & đề xuất | Cả nhóm, GVHD |
-| 06 | [Thiết kế tương lai — Quản lý tiến độ dự án](06_THIET_KE_QUAN_LY_TIEN_DO.md) | Milestone, sức khỏe dự án, Burn-up, Gantt, dự báo | BA, Dev |
-| 06A | [Kế hoạch triển khai — Quản lý tiến độ](06A_KE_HOACH_TRIEN_KHAI_TIEN_DO.md) | 6 bước (0–5), việc cần làm, migration, API, tiêu chí nghiệm thu, rủi ro | Dev |
-| 06B | [Kịch bản kiểm thử — Quản lý tiến độ](06B_KICH_BAN_TEST_TIEN_DO.md) | ~70 ca kiểm thử FE/đầu-cuối theo màn hình, ma trận vai trò, bộ tự động `tests/e2e/progress` | Tester, Dev |
-| 07 | [Thiết kế tương lai — Quản lý đóng góp thành viên](07_THIET_KE_QUAN_LY_DONG_GOP.md) | Worklog, sự kiện hoạt động, chỉ số đóng góp đa chiều | BA, Dev |
-| 08 | [Thiết kế tương lai — Community](08_THIET_KE_COMMUNITY.md) | Public project, bài đăng, tag, Remix/Clone kiểu Figma Community | BA, Dev |
-| 09 | [Các hướng phát triển khác](09_PHAT_TRIEN_KHAC.md) | Thông báo, realtime, tìm kiếm, tự động hóa, AI, tích hợp, vận hành | Cả nhóm |
+| # | Tài liệu | Nội dung chính | Trạng thái mã nguồn | Dành cho |
+|---|----------|----------------|:-------------------:|----------|
+| 01 | [Quan hệ giữa các thực thể](01_QUAN_HE_THUC_THE.md) | Sơ đồ ER chia theo từng cụm nghiệp vụ, khóa, ràng buộc, quy tắc xóa | ✅ Đã chuẩn hóa theo V8 (bỏ Team, liên kết trực tiếp Workspace → Project) | Dev, BA |
+| 02 | [Nghiệp vụ — Project](02_NGHIEP_VU_PROJECT.md) | Vòng đời dự án, phân quyền, Work Item, Workflow, Sprint, Board, báo cáo Agile | ✅ Chuẩn hóa theo kiến trúc 2 tầng Workspace → Project; làm rõ phần Tiến độ là định hướng | BA, Dev, Tester |
+| 03 | [Nghiệp vụ — Workspace · Member · Phân quyền](03_NGHIEP_VU_WORKSPACE_TEAM_MEMBER.md) | Hai tầng thành viên (Workspace & Project), lời mời qua email, auto-cascade member | ✅ Chuẩn hóa theo kiến trúc đã loại bỏ hoàn toàn tầng Team | BA, Dev, Tester |
+| 04 | [Nghiệp vụ — Template · Clone Project](04_NGHIEP_VU_TEMPLATE_CLONE.md) | Thư viện mẫu, ba kiểu nhân bản, clone engine, quick customization, kiểm tra toàn vẹn | ✅ Đồng bộ với CreateProjectFromTemplateRequest & Quick Customization | BA, Dev |
+| 08 | [Thiết kế tương lai — Community](08_THIET_KE_COMMUNITY.md) | Public project, bài đăng, tag, Remix/Clone kiểu Figma Community | 💡 Đề xuất thiết kế tương lai (chưa có code) | BA, Dev |
+| 09 | [Các hướng phát triển khác](09_PHAT_TRIEN_KHAC.md) | Thông báo, realtime, tìm kiếm JQL-lite, tự động hóa, AI, tích hợp | 💡 Định hướng mở rộng & lộ trình tương lai | Cả nhóm |
+
+> ℹ️ **Ghi chú về các tài liệu chuyên sâu:** Các tài liệu phân tích nâng cao trước đây (05 Lỗ hổng & kiểm toán, 06/06A/06B Quản lý tiến độ chi tiết, 07 Quản lý đóng góp) đã được chuyển giao và lưu trữ chi tiết tại thư mục chuyên đề `docs/services/work_service/` (`qly_tien_do/`, `qly_dong_gop/`, `new structure/`, `status_time_management/`).
+
+---
 
 ## 2. Thứ tự đọc gợi ý
 
 ```mermaid
 flowchart LR
-    A["01 Thực thể"] --> B["03 Workspace/Team"]
-    B --> C["02 Project"]
-    C --> D["04 Template/Clone"]
-    D --> E["05 Điểm chưa đúng"]
-    E --> F["06 Tiến độ"]
-    E --> G["07 Đóng góp"]
-    E --> H["08 Community"]
-    F --> I["09 Phát triển khác"]
-    G --> I
-    H --> I
+    A["01 Thực thể<br/>(Cơ sở dữ liệu)"] --> B["03 Workspace & Member<br/>(Tổ chức & lời mời)"]
+    B --> C["02 Project<br/>(Dự án, Agile, Task)"]
+    C --> D["04 Template / Clone<br/>(Dự án mẫu)"]
+    D --> E["08 Community<br/>(Định hướng cộng đồng)"]
+    E --> F["09 Phát triển khác<br/>(Realtime, AI, Tích hợp)"]
 ```
 
-- Đọc **01 → 03 → 02** để hiểu "ai sở hữu cái gì, ai được làm gì".
-- Đọc **04** khi làm việc với dự án mẫu.
-- **05** là tài liệu quan trọng nhất trước khi mở rộng: các thiết kế 06/07/08 đều giả định một số điểm trong 05 đã được sửa.
+- Đọc **01 → 03 → 02** để nắm vững kiến trúc dữ liệu và mô hình phân quyền 2 cấp ("ai sở hữu cái gì, ai được làm gì").
+- Đọc **04** khi làm việc với tính năng nhân bản và dự án mẫu.
+- Đọc **08, 09** khi định hướng mở rộng hoặc nghiên cứu các tính năng nâng cao.
+
+---
 
 ## 3. Bức tranh hệ thống trong một trang
 
@@ -47,46 +43,50 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    FE["Frontend React<br/>:5173"] --> GW["API Gateway<br/>:8081"]
+    FE["Frontend React 19<br/>:5173"] --> GW["API Gateway<br/>:8081"]
     GW -->|"/identity/**"| ID["identity-service<br/>:8082"]
     GW -->|"/work/**"| WK["work-service<br/>:8083"]
     GW -->|"/workspace/**"| WS["workspace-service<br/>:8087"]
-    ID -->|"REST"| NT["notification-service<br/>:9994"]
+    ID -->|"REST / Feign"| NT["notification-service<br/>:9994 (SMTP / Mailpit)"]
+    WS -->|"Feign"| NT
+    WK -->|"Feign"| NT
+    WK -->|"Internal Feign"| WS
+    WK -->|"Internal Feign"| ID
+    WS -->|"Internal Feign"| ID
 ```
 
 ### 3.2. Hạ tầng phụ trợ
 
 ```mermaid
 flowchart LR
-    KC["Keycloak :8088<br/>realm datn-realm"]
+    KC["Keycloak :8088 (dev: :9998)<br/>realm datn-realm"]
     PG[("PostgreSQL :5433<br/>datn_main_db")]
     RD[("Redis :6380")]
     MN[("MinIO :9000<br/>work-attachments")]
-    KF[["Kafka<br/>(chưa dùng)"]]
-    MP["Mailpit :8025"]
+    KF[["Kafka<br/>(đã có cấu hình outbox)"]]
+    MP["Mailpit :8025 / SMTP :1025<br/>(Email Dev)"]
 ```
 
-### 3.3. Phân cấp nghiệp vụ
+### 3.3. Phân cấp nghiệp vụ (Mô hình 2 cấp tinh gọn)
 
 ```mermaid
 flowchart TD
-    W["Workspace<br/>(gốc tenant)"] --> T["Team"]
-    W --> P["Project"]
-    T -. "tùy chọn" .-> P
-    P --> I["Work Item<br/>Epic › Task › Subtask"]
-    P --> S["Sprint"]
-    P --> B["Board"]
+    W["Workspace<br/>(Gốc tenant / Không gian làm việc)"] --> P["Project<br/>(Dự án trực thuộc Workspace)"]
+    P --> I["Work Item<br/>Cây phân cấp 3 tầng nghiêm ngặt:<br/>Epic (Level 1) › Task (Level 0) › Subtask (Level -1)"]
+    P --> S["Sprint<br/>(Chu kỳ Scrum)"]
+    P --> B["Board<br/>(Bảng Scrum / Kanban)"]
 ```
+
+---
 
 ## 4. Quy ước trong bộ tài liệu
 
 | Ký hiệu | Ý nghĩa |
 |---------|---------|
-| ✅ | Đã có trong mã nguồn và hoạt động |
-| ⚠️ | Có nhưng chưa đúng / chưa đầy đủ |
-| ❌ | Chưa có (chỉ có bảng hoặc chưa có gì) |
-| 🔴 / 🟠 / 🟡 | Mức độ nghiêm trọng: Cao / Trung bình / Thấp |
-| `sub` | Keycloak subject (id người dùng trong JWT) |
-| `users.id` | Khóa chính bảng `users` của identity-service |
+| ✅ | Đã có trong mã nguồn và hoạt động chính xác |
+| ⚠️ | Đang có nhưng cần lưu ý / cấu hình bổ sung |
+| 💡 / ❌ | Định hướng đề xuất / Chưa triển khai trong mã nguồn hiện tại |
+| `sub` | Keycloak subject UUID (ID người dùng trong JWT Bearer token) |
+| `users.id` | Khóa chính bảng `users` của `identity-service` |
 
-Tên bảng, tên lớp, tên endpoint được giữ nguyên tiếng Anh như trong mã nguồn để tra cứu dễ dàng.
+Tên bảng, tên lớp, tên thuộc tính và endpoint được giữ nguyên như trong mã nguồn Java/Spring Boot và React để tiện tra cứu trực tiếp.

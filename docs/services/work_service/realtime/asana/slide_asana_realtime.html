@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asana Reactive Queries</title>
+<link rel="stylesheet" href="../_assets/slide.css">
+</head>
+<body>
+<div class="deck">
+
+  <section class="slide cover" data-title="Bìa">
+    <div class="brand">Nghiên cứu Realtime · 4/4 · Asana</div>
+    <h1>Asana: đăng ký một câu truy vấn,<br>server tự đẩy kết quả mới</h1>
+    <p class="lead">Trường phái thứ ba, khác cả Jira (thông báo + refetch) lẫn Linear (bản sao CSDL ở client): <b>Reactive Query</b> do LunaDb vận hành.</p>
+    <div class="row"><span class="pill purple">Reactive query</span><span class="pill">LunaDb (Scala)</span><span class="pill">LunaServer (Node)</span><span class="pill">MySQL binlog / CDC</span><span class="pill">Redis cache</span></div>
+    <p class="src">Nguồn: blog kỹ thuật chính thức của Asana (2015, 2021, 2022). Giao thức truyền tải và cache phía client <b>không được công bố</b>.</p>
+  </section>
+
+  <section class="slide" data-title="Cơ chế">
+    <div class="kicker"><span class="tag">Cơ chế</span><span>Từ 2015</span></div>
+    <h2>Truy vấn chính là subscription</h2>
+    <div class="flow">
+      <div class="node"><b>Client</b><span class="tiny">khai báo đồ thị dữ liệu cần (giống GraphQL)</span></div><div class="arrow">→</div>
+      <div class="node purple"><b>LunaDb</b><span class="tiny">ghi nhớ truy vấn phụ thuộc index nào</span></div><div class="arrow">←</div>
+      <div class="node"><b>MySQL binlog</b><span class="tiny">mọi thay đổi DB</span></div>
+    </div>
+    <div class="flow">
+      <div class="node warn"><b>Index I đổi</b></div><div class="arrow">→</div>
+      <div class="node warn"><b>Vô hiệu các truy vấn dùng I</b></div><div class="arrow">→</div>
+      <div class="node good"><b>Đẩy kết quả mới</b><span class="tiny">tới mọi client đã đăng ký</span></div>
+    </div>
+    <div class="box accent"><p class="small">"Clients issue queries for graphs of related data … <b>automatically subscribing to any updates</b> to those query results." LunaDb "watches for changes in the underlying databases and <b>pushes query updates down</b> to all subscribed clients."</p></div>
+  </section>
+
+  <section class="slide" data-title="Cái giá">
+    <div class="kicker"><span class="tag">Đánh đổi</span><span>Mạnh nhất, nhưng tốn nhất ở phía server</span></div>
+    <h2>Realtime "miễn phí" cho frontend, đắt cho backend</h2>
+    <div class="grid g2">
+      <div class="box good">
+        <h3>Ưu</h3>
+        <ul class="clean small">
+          <li>Frontend chỉ <b>khai báo dữ liệu</b>, realtime tự có ở mọi màn hình.</li>
+          <li>Không phải viết tay "sự kiện X thì cập nhật màn Y".</li>
+          <li>Logic nghiệp vụ vẫn ở server (ghi đi qua LunaServer).</li>
+        </ul>
+      </div>
+      <div class="box bad">
+        <h3>Nhược</h3>
+        <ul class="clean small">
+          <li>Phải xây một CSDL/cache trung gian biết theo dõi phụ thuộc truy vấn.</li>
+          <li><b>Phi chuẩn hoá</b> dữ liệu thành bảng index: "a write to a single object value can cascade to many physical indices".</li>
+          <li>Gắn chặt binlog nên nâng cấp DB khó.</li>
+          <li>Hầu như không dùng read replica.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Bài học">
+    <div class="kicker"><span class="tag">Áp dụng cho DATN</span><span>→ xem myapp/</span></div>
+    <h2>"Reactive query của người nghèo" cho DATN</h2>
+    <table class="t">
+      <tr><th>Asana</th><th>DATN (đề xuất)</th></tr>
+      <tr><td>Client đăng ký <b>truy vấn</b></td><td>Client đăng ký <b>topic project</b> <code>/topic/projects/{id}</code></td></tr>
+      <tr><td>LunaDb biết truy vấn nào phụ thuộc index nào</td><td>Client có <b>bảng ánh xạ</b> màn hình và loại sự kiện (Board nghe ITEM_*, SPRINT_*…)</td></tr>
+      <tr><td>Server chạy lại truy vấn và đẩy kết quả</td><td>Client <b>tự gọi lại API</b> của màn hình (debounce, gộp sự kiện)</td></tr>
+      <tr><td>CDC từ binlog</td><td>Domain event trong service + <code>@TransactionalEventListener(AFTER_COMMIT)</code></td></tr>
+    </table>
+    <div class="box accent"><p class="small">Kết luận trùng với Jira: <b>sự kiện mỏng + bản đồ màn hình ↔ sự kiện + refetch</b> cho phần lớn giá trị với chi phí nhỏ nhất.</p></div>
+  </section>
+
+</div>
+<script src="../_assets/slide.js"></script>
+</body>
+</html>

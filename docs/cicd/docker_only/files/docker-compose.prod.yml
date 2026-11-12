@@ -1,0 +1,312 @@
+# =============================================================================
+# docker-compose.prod.yml – HƯỚNG 1 (Docker thuần): toàn bộ hệ thống DATN trên 1 EC2
+# Đặt trong repo tại: infrastructure/cicd/docker/docker-compose.prod.yml
+#
+# Jenkins chép file này sang /opt/datn/deploy rồi chạy:
+#   docker compose -p datn -f /opt/datn/deploy/docker-compose.prod.yml \
+#     --env-file <prod.env> --env-file /opt/datn/state/deployed.env up -d --remove-orphans
+#   - prod.env     : bí mật + tên miền (Jenkins Credential "datn-prod-env")
+#   - deployed.env : TAG image đang chạy của từng service (Jenkins tự ghi)
+#
+# Nguyên tắc:
+#   - KHÔNG publish cổng DB/Redis/Kafka/MinIO/service ra Internet. Cửa vào duy nhất là
+#     Caddy (80/443) nằm ở docker-compose.platform.yml, nối chung network "datn-net".
+#   - Mọi container đều có mem_limit để 1 service rò rỉ RAM không kéo sập cả máy.
+#   - `docker compose up -d` là KHAI BÁO: compose so cấu hình mới với container đang chạy
+#     và CHỈ tạo lại service nào thay đổi (ví dụ tag image mới) → service khác không bị restart.
+# =============================================================================
+name: datn
+
+# ---------- Khối cấu hình dùng lại (YAML anchor) ----------
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "3" }
+
+x-spring: &spring
+  restart: unless-stopped
+  networks: [datn-net]
+  logging: *logging
+  mem_limit: 768m
+
+# JWT: issuer là URL CÔNG KHAI của Keycloak (khớp claim "iss" trong token),
+# còn JWKS (khoá công khai) thì lấy qua mạng nội bộ cho nhanh.
+x-jwt-env: &jwt-env
+  SPRING_PROFILES_ACTIVE: prod
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI: https://${AUTH_DOMAIN}/realms/datn-realm
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/datn-realm/protocol/openid-connect/certs
+
+x-db-env: &db-env
+  SPRING_DATASOURCE_URL: jdbc:postgresql://app-db:5432/datn_main_db
+  SPRING_DATASOURCE_USERNAME: ${APP_DB_USER}
+  SPRING_DATASOURCE_PASSWORD: ${APP_DB_PASSWORD}
+  SPRING_JPA_SHOW_SQL: "false"
+  LOGGING_LEVEL_ORG_HIBERNATE_SQL: WARN
+
+x-svc-urls: &svc-urls
+  APP_FRONTEND_URL: https://${APP_DOMAIN}
+  APP_SERVICES_IDENTITY_URL: http://identity-service:8082
+  APP_SERVICES_WORKSPACE_URL: http://workspace-service:8087
+  APP_SERVICES_NOTIFICATION_URL: http://notification-service:9994
+
+services:
+
+  # ═══════════════════════════ HẠ TẦNG (ít khi đổi) ═══════════════════════════
+
+  app-db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: datn_main_db
+      POSTGRES_USER: ${APP_DB_USER}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - app_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER} -d datn_main_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+    logging: *logging
+    networks: [datn-net]
+
+  keycloak-db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: ${KC_DB_USER}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KC_DB_USER} -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 384m
+    logging: *logging
+    networks: [datn-net]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.1
+    restart: unless-stopped
+    # "start" = chế độ production. Realm chỉ được import ở lần chạy đầu (realm đã tồn tại thì bỏ qua).
+    command: ["start", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: ${KC_DB_USER}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KEYCLOAK_ADMIN: ${KC_ADMIN_USER}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      # Keycloak 24 (hostname v1): URL công khai CỐ ĐỊNH (cả https) → claim "iss" luôn là
+      # https://AUTH_DOMAIN/realms/datn-realm, kể cả khi identity-service gọi nội bộ qua http://keycloak:8080
+      KC_HOSTNAME: ${AUTH_DOMAIN}
+      KC_HOSTNAME_URL: https://${AUTH_DOMAIN}
+      KC_HOSTNAME_ADMIN_URL: https://${AUTH_DOMAIN}
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      # Đứng sau Caddy (TLS kết thúc ở Caddy) → tin header X-Forwarded-*
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - /opt/datn/deploy/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    mem_limit: 1g
+    logging: *logging
+    networks: [datn-net]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "200mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
+    logging: *logging
+    networks: [datn-net]
+
+  # Kafka hiện mới có bean producer, CHƯA có code publish. Thiếu RAM có thể xoá block này
+  # (work-service vẫn khởi động được, chỉ log cảnh báo khi không kết nối được broker).
+  kafka:
+    image: apache/kafka:3.8.0
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092     # tên trong Docker network, KHÔNG phải localhost
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    mem_limit: 1g
+    logging: *logging
+    networks: [datn-net]
+
+  # Image minio/minio đã bị gỡ khỏi Docker Hub → dùng bitnamilegacy/minio (giống compose cá nhân).
+  # Bucket work-attachments do work-service tự tạo lúc khởi động (MinioConfig) → không cần minio-init.
+  # File tải xuống đi qua API của work-service nên MinIO KHÔNG cần mở ra ngoài.
+  minio:
+    image: bitnamilegacy/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/bitnami/minio/data
+    mem_limit: 512m
+    logging: *logging
+    networks: [datn-net]
+
+  # ═══════════════════════════ ỨNG DỤNG (Jenkins deploy) ═══════════════════════════
+  # Tag image lấy từ deployed.env. Thiếu tag → compose báo lỗi ngay (cú pháp ${VAR:?}).
+
+  identity-service:
+    <<: *spring
+    image: datn/identity-service:${IDENTITY_SERVICE_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    environment:
+      <<: [*jwt-env, *db-env, *svc-urls]
+      KEYCLOAK_SERVERURL: http://keycloak:8080
+      KEYCLOAK_PUBLICURL: https://${AUTH_DOMAIN}
+      KEYCLOAK_REALM: datn-realm
+      KEYCLOAK_ADMIN_USERNAME: ${KC_ADMIN_USER}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      KEYCLOAK_ADMIN_CLIENTID: admin-cli
+      KEYCLOAK_ADMIN_REALM: master
+      KEYCLOAK_CLIENT_CLIENTID: datn-backend
+      KEYCLOAK_CLIENT_CLIENTSECRET: ${KC_CLIENT_SECRET}
+    depends_on:
+      app-db: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+    # Chưa có spring-boot-starter-actuator → kiểm tra "cổng đã mở". Spring Boot chỉ mở cổng
+    # khi khởi động xong nên đây là tín hiệu "đã sẵn sàng" đủ dùng.
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8082 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 40s
+
+  workspace-service:
+    <<: *spring
+    image: datn/workspace-service:${WORKSPACE_SERVICE_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    environment:
+      <<: [*jwt-env, *db-env, *svc-urls]
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+    depends_on:
+      app-db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8087 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 40s
+
+  work-service:
+    <<: *spring
+    image: datn/work-service:${WORK_SERVICE_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    mem_limit: 1g
+    environment:
+      <<: [*jwt-env, *db-env, *svc-urls]
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:9092
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_NAME: work-attachments
+    depends_on:
+      app-db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_started }
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8083 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 60s
+
+  notification-service:
+    <<: *spring
+    image: datn/notification-service:${NOTIFICATION_SERVICE_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    mem_limit: 512m
+    environment:
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS}
+      MAIL_FROM: ${MAIL_FROM}
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 9994 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  api-gateway:
+    <<: *spring
+    image: datn/api-gateway:${API_GATEWAY_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    mem_limit: 512m
+    environment:
+      <<: *jwt-env
+      APP_FRONTEND_URL: https://${APP_DOMAIN}
+    depends_on:
+      keycloak: { condition: service_healthy }
+    # gateway đã có actuator → kiểm tra sức khoẻ thật (busybox wget có sẵn trong alpine)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  frontend:
+    image: datn/frontend:${FRONTEND_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    restart: unless-stopped
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    logging: *logging
+    networks: [datn-net]
+
+volumes:
+  app_db_data:
+  keycloak_db_data:
+  redis_data:
+  kafka_data:
+  minio_data:
+
+# Network tạo sẵn 1 lần bằng `docker network create datn-net` (setup-ec2.sh)
+# để Caddy và Jenkins (ở compose khác) cùng nhìn thấy các container ứng dụng.
+networks:
+  datn-net:
+    external: true

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Realtime Work Service</title>
+<link rel="stylesheet" href="../_assets/slide.css">
+<link rel="stylesheet" href="demo.css">
+<style>
+  .t.dense { font-size: 13px; }
+  .t.dense td, .t.dense th { padding: 5px 7px; }
+  .src-tag { font-size: 11px; color: var(--muted); display: block; margin-top: 4px; }
+  .lvl { display: grid; grid-template-columns: 74px 1fr 1.25fr; gap: 8px; align-items: center; padding: 7px 10px; border-radius: 10px; }
+  .lvl b.n { font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <!-- ═════════════ PHẦN 1: KIẾN TRÚC ═════════════ -->
+
+  <section class="slide cover" data-title="Bìa">
+    <div class="brand">DATN-2026 · work-service · Kế hoạch</div>
+    <h1>Realtime bên trong Project</h1>
+    <p class="lead">Người khác thấy thay đổi trong <b>dưới 1 giây</b>, giao diện <b>không giật</b>, dữ liệu <b>không bị ghi đè âm thầm</b>. Học từ Jira, Linear, Trello, Asana và Figma.</p>
+    <div class="row">
+      <span class="pill accent">STOMP /ws-work</span><span class="pill">/topic/projects/{id}</span><span class="pill">AFTER_COMMIT</span>
+      <span class="pill purple">Sửa theo từng trường + expected</span><span class="pill">Idempotency-Key</span><span class="pill good">6 ví dụ tương tác</span>
+    </div>
+    <p class="small muted">Phần 1: Kiến trúc (slide 2–9) · Phần 2: UX &amp; chống xung đột (slide 10–21) · Phần 3: Lộ trình &amp; kiểm thử</p>
+    <p class="src">Tài liệu chi tiết: myapp/KE_HOACH_REALTIME_WORK_SERVICE.md · Phím: ← → chuyển slide, T sáng/tối, F toàn màn hình</p>
+  </section>
+
+  <section class="slide" data-title="Các app làm gì">
+    <div class="kicker"><span class="tag">Tổng hợp nghiên cứu</span><span>4 trường phái</span></div>
+    <h2>Các app khác làm realtime theo 4 cách</h2>
+    <table class="t">
+      <tr><th>App</th><th>Trường phái</th><th>Truyền tải</th><th>Backplane / bus</th><th>Client làm gì</th></tr>
+      <tr><td><b>Jira</b></td><td>Thông báo mỏng + refetch</td><td>Frontend PubSub (PubNub)</td><td>StreamHub (Kinesis + SQS)</td><td>Refetch, đệm khi đang thao tác</td></tr>
+      <tr><td><b>Linear</b></td><td>Local-first sync engine</td><td>WebSocket delta</td><td>Không công bố</td><td>Áp delta vào bản sao CSDL</td></tr>
+      <tr><td><b>Trello</b></td><td>Đẩy delta theo model</td><td>WebSocket</td><td>Redis → RabbitMQ → <b>Kafka</b></td><td>Cập nhật board/card</td></tr>
+      <tr><td><b>Asana</b></td><td>Reactive query</td><td>Không công bố</td><td>LunaDb đọc MySQL binlog</td><td>Nhận kết quả truy vấn mới</td></tr>
+      <tr style="background:var(--accent-soft)"><td><b>DATN</b></td><td><b>Jira + ý tưởng của Linear/Figma</b></td><td>WebSocket STOMP</td><td>Không cần (R1) → Redis (R2)</td><td>Tải lại im lặng, áp theo từng trường</td></tr>
+    </table>
+    <p class="small muted">Cả 4 app đều <b>kiểm quyền khi subscribe</b>. Jira, Trello và Asana đều để <b>logic nghiệp vụ ở server</b>.</p>
+  </section>
+
+  <section class="slide" data-title="Hiện trạng">
+    <div class="kicker"><span class="tag">Hiện trạng code</span><span>Đối chiếu 11/2026</span></div>
+    <h2>Đã có gì, còn thiếu gì, đang có rủi ro gì</h2>
+    <div class="grid g3">
+      <div class="box good">
+        <h3>✅ Đã có</h3>
+        <ul class="clean small">
+          <li>Route gateway <code>/work/ws-work/**</code>, gateway reactive</li>
+          <li><code>version</code> trong mọi response</li>
+          <li>Chuyển trạng thái kiểm "từ trạng thái hiện tại"</li>
+          <li>Bảng lịch sử thay đổi: ai đổi, trường nào, lúc nào</li>
+          <li>Redis, Kafka, bảng <code>outbox_events</code></li>
+        </ul>
+      </div>
+      <div class="box warn">
+        <h3>🧱 Thiếu hạ tầng</h3>
+        <ul class="clean small">
+          <li>Chưa có <code>spring-boot-starter-websocket</code></li>
+          <li>Gateway bắt JWT nên handshake WebSocket sẽ <b>401</b></li>
+          <li>Vite chưa có <code>ws: true</code>, nginx thiếu <code>/work/</code></li>
+          <li>Modal dùng <b>polling 5 giây</b></li>
+        </ul>
+      </div>
+      <div class="box bad">
+        <h3>⚠️ Rủi ro UX &amp; dữ liệu</h3>
+        <ul class="clean small">
+          <li>Sửa trường <b>không kiểm giá trị cũ</b> nên ghi đè âm thầm</li>
+          <li><code>fetchDetail</code> bật spinner cả modal và <b>nạp lại ô đang gõ</b></li>
+          <li>Lỗi 400 khi đổi trạng thái chỉ hiện toast, <b>không tải lại</b></li>
+          <li>Bỏ giao việc (gửi <code>null</code>) <b>không được lưu</b></li>
+          <li>Nút Gửi bình luận không khoá nên bấm đúp sẽ <b>tạo trùng</b></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Phạm vi">
+    <div class="kicker"><span class="tag">Phạm vi</span><span>Chỉ bên trong Project · thao tác bằng nút bấm</span></div>
+    <h2>Phần nào cần realtime?</h2>
+    <table class="t">
+      <tr><th>Chức năng</th><th>Ưu tiên</th><th>Jira / Linear</th><th>DATN làm</th></tr>
+      <tr><td>Modal chi tiết: trạng thái, giao việc, ưu tiên, hạn chót, điểm, sprint</td><td><span class="pill bad">P0</span></td><td>✅ / ✅</td><td>Áp theo từng trường, nháy + "ai đổi"</td></tr>
+      <tr><td>Modal chi tiết: bình luận, tệp, liên kết, lịch sử</td><td><span class="pill bad">P0</span></td><td>⚠️ / ✅</td><td>Bỏ polling, nghe theo itemId</td></tr>
+      <tr><td>Board / Backlog phía sau modal</td><td><span class="pill bad">P0</span></td><td>✅ / ✅</td><td>Tải lại im lặng, giữ vị trí cuộn</td></tr>
+      <tr><td>Sprint: bắt đầu, hoàn thành</td><td><span class="pill bad">P0</span></td><td>✅ / ✅</td><td>Board/Backlog đổi, banner</td></tr>
+      <tr><td>Thu hồi quyền khi bị xoá khỏi project</td><td><span class="pill bad">P0</span></td><td>—</td><td>ACCESS_REVOKED, chuyển trang 403</td></tr>
+      <tr><td>"Đang xem / đang sửa" (presence)</td><td><span class="pill warn">P1</span></td><td>❌ / ✅</td><td>Giảm xung đột từ trước khi xảy ra</td></tr>
+      <tr><td>Cấu hình: workflow, cột, loại công việc</td><td><span class="pill warn">P1</span></td><td>— / ✅</td><td>Banner + tải lại</td></tr>
+      <tr><td>Báo cáo; nhiều người cùng gõ một mô tả</td><td><span class="pill">Không cần</span></td><td>❌ / ✅</td><td>Tính khi mở; phát hiện xung đột + so sánh 2 bản</td></tr>
+    </table>
+  </section>
+
+  <section class="slide" data-title="Kiến trúc">
+    <div class="kicker"><span class="tag">Kiến trúc đề xuất</span><span>Quyết định D1–D7</span></div>
+    <h2>Luồng một sự kiện: đổi người thực hiện</h2>
+    <div class="flow">
+      <div class="node"><b>Tab A</b><span class="tiny">PATCH …/fields<br>X-Client-Id</span></div><div class="arrow">→</div>
+      <div class="node"><b>Gateway</b><span class="tiny">JWT</span></div><div class="arrow">→</div>
+      <div class="node accent"><b>updateFields()</b><span class="tiny">so expected rồi publish ITEM_UPDATED</span></div><div class="arrow">→</div>
+      <div class="node warn"><b>COMMIT</b><span class="tiny">rollback thì không phát</span></div><div class="arrow">→</div>
+      <div class="node accent"><b>Broadcaster</b><span class="tiny">AFTER_COMMIT<br>seq = INCR</span></div><div class="arrow">→</div>
+      <div class="node good"><b>/topic/projects /{id}</b><span class="tiny">simple broker</span></div><div class="arrow">→</div>
+      <div class="node"><b>Tab B, C…</b><span class="tiny">áp theo trường</span></div>
+    </div>
+    <div class="grid g3">
+      <div class="box"><h3>Vì sao STOMP?</h3><p class="small">Hai chiều (presence), nhiều kênh trên một kết nối, <code>ChannelInterceptor</code> kiểm quyền, có <code>/user/queue</code> để gửi riêng.</p></div>
+      <div class="box"><h3>Vì sao AFTER_COMMIT?</h3><p class="small">Không bao giờ báo một thay đổi đã rollback. Realtime lỗi cũng không làm hỏng nghiệp vụ.</p></div>
+      <div class="box"><h3>Vì sao không dùng Kafka cho UI?</h3><p class="small">UI luôn lấy lại dữ liệu từ DB nên không cần bền. Kafka thêm độ trễ của poller. Kafka để dành cho R3 (thông báo, automation).</p></div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Hợp đồng sự kiện">
+    <div class="kicker"><span class="tag">Hợp đồng sự kiện</span><span>Một topic cho mỗi project</span></div>
+    <h2>Phong bì sự kiện và các loại</h2>
+    <div class="grid g2">
+<pre class="code">SUB /topic/projects/6f1c…
+MESSAGE {
+  "seq": 1287,
+  "type": "ITEM_UPDATED",
+  "itemId": "a91e…",
+  "actorId": "&lt;keycloak sub&gt;",
+  "originClientId": "&lt;tab uuid&gt;",
+  "version": 7,
+  "changedFields": ["assigneeId"],
+  "patch": { "assigneeId": "…", "version": 7 }
+}</pre>
+      <div class="grid">
+        <div class="box"><p class="small mono">ITEM_CREATED · ITEM_UPDATED · ITEM_RANKED · ITEM_MOVED · ITEM_TRANSITIONED · ITEM_DELETED</p></div>
+        <div class="box"><p class="small mono">SPRINT_* · COMMENT_* · ATTACHMENT_* · LINK_*</p></div>
+        <div class="box"><p class="small mono">PROJECT_CONFIG_CHANGED · MEMBER_CHANGED · PROJECT_UPDATED/DELETED · ACCESS_REVOKED (riêng)</p></div>
+        <div class="box warn"><p class="small">🔒 <code>patch</code> chỉ chứa <b>ID / enum / số</b>. Không có mô tả hay nội dung bình luận: client cần thì gọi API có kiểm quyền.</p></div>
+        <div class="box accent"><p class="small"><code>changedFields</code> cho client biết <b>đúng ô nào</b> cần nháy, ô nào đang bị giữ.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Gắn vào code">
+    <div class="kicker"><span class="tag">Điểm gắn trong code</span><span>projectEventPublisher.publish(...)</span></div>
+    <h2>Mỗi service nghiệp vụ phát gì</h2>
+    <table class="t dense">
+      <tr><th>Class</th><th>Method</th><th>Sự kiện</th></tr>
+      <tr><td>WorkItemServiceImpl</td><td class="mono tiny">createWorkItem · createSubtask · updateWorkItem / updateFields (mới) · updateRank · deleteWorkItem</td><td class="mono tiny">ITEM_CREATED/UPDATED/RANKED/DELETED</td></tr>
+      <tr><td>WorkflowEngineServiceImpl</td><td class="mono tiny">executeTransition (+ cascadeAncestorStatusTransitions)</td><td class="mono tiny">ITEM_TRANSITIONED</td></tr>
+      <tr><td>BoardServiceImpl</td><td class="mono tiny">moveCard · create/update/delete · updateColumns · updateSwimlanes</td><td class="mono tiny">ITEM_MOVED · PROJECT_CONFIG_CHANGED</td></tr>
+      <tr><td>SprintServiceImpl</td><td class="mono tiny">create · update · delete · startSprint · completeSprint · add/removeItems</td><td class="mono tiny">SPRINT_*</td></tr>
+      <tr><td>WorkItemComment / Attachment / LinkServiceImpl</td><td class="mono tiny">addComment… · uploadAttachment… · createLink…</td><td class="mono tiny">COMMENT_* · ATTACHMENT_* · LINK_*</td></tr>
+      <tr><td>ProjectMemberServiceImpl, InvitationServiceImpl</td><td class="mono tiny">addMemberToProject · updateMemberRole · removeMemberFromProject · accept</td><td class="mono tiny">MEMBER_CHANGED · ACCESS_REVOKED</td></tr>
+      <tr><td>WorkflowServiceImpl, WorkItemTypeServiceImpl</td><td class="mono tiny">*Status · *Transition · *Workflow · *WorkItemType</td><td class="mono tiny">PROJECT_CONFIG_CHANGED</td></tr>
+    </table>
+    <p class="small muted">Thao tác dây chuyền (sprint kéo theo việc con) phát <b>một</b> sự kiện tổng kèm <code>itemIds</code>, không phát N sự kiện.</p>
+  </section>
+
+  <section class="slide" data-title="Bảo mật">
+    <div class="kicker"><span class="tag">Bảo mật</span><span>Kiểm ở 3 chỗ, giống Jira, Trello và Linear</span></div>
+    <h2>Xác thực ở CONNECT, phân quyền ở SUBSCRIBE</h2>
+    <div class="flow">
+      <div class="node"><b>Handshake</b><span class="tiny">/work/ws-work<br>gateway permitAll</span></div><div class="arrow">→</div>
+      <div class="node accent"><b>CONNECT</b><span class="tiny">Authorization: Bearer<br>JwtDecoder.decode()</span></div><div class="arrow">→</div>
+      <div class="node accent"><b>SUBSCRIBE</b><span class="tiny">hasPermission(project, sub, PROJECT_VIEW)</span></div><div class="arrow">→</div>
+      <div class="node good"><b>MESSAGE</b><span class="tiny">chỉ chứa ID</span></div><div class="arrow">→</div>
+      <div class="node"><b>Refetch REST</b><span class="tiny">kiểm quyền lần nữa</span></div>
+    </div>
+    <div class="grid g3">
+      <div class="box warn"><h3>Vì sao permitAll handshake?</h3><p class="small">Trình duyệt không đặt được header khi mở WebSocket. Token trên URL sẽ lộ vào log.</p></div>
+      <div class="box"><h3>Không có SecurityContext</h3><p class="small">Trong luồng STOMP phải đọc quyền từ <code>Principal</code>. userId luôn là Keycloak <b>sub</b>.</p></div>
+      <div class="box bad"><h3>Thu hồi quyền</h3><p class="small">Xoá thành viên thì gửi <code>ACCESS_REVOKED</code> và chủ động đóng session đó.</p></div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Độ tin cậy">
+    <div class="kicker"><span class="tag">Thứ tự · mất · trùng</span><span>Mượn lastSyncId (Linear) + jitter (Trello)</span></div>
+    <h2>Client tự phát hiện mất sự kiện</h2>
+    <div class="grid g2">
+      <table class="t">
+        <tr><th>Tình huống</th><th>Xử lý</th></tr>
+        <tr><td><code>seq</code> nhảy hơn 1</td><td>Đã hụt sự kiện, tải lại</td></tr>
+        <tr><td><code>seq</code> ≤ lastSeq</td><td>Trùng, bỏ qua</td></tr>
+        <tr><td><code>seq = -1</code></td><td>Redis lỗi, tải lại</td></tr>
+        <tr><td>version tới ≤ version đang hiển thị</td><td>Dữ liệu cũ, bỏ qua (xem ví dụ 6)</td></tr>
+        <tr><td>Kết nối lại</td><td>Chờ ngẫu nhiên (jitter) rồi tải lại toàn màn</td></tr>
+        <tr><td>Mất mà không có sự kiện sau</td><td>Tải lại khi tab được focus, và định kỳ 2–5 phút</td></tr>
+      </table>
+      <div class="grid">
+        <div class="box accent"><h3>Vì sao chấp nhận được?</h3><p class="small">Client luôn lấy lại dữ liệu từ DB, nơi giữ sự thật. Mất hay trùng một sự kiện chỉ làm <b>chậm</b>, không làm <b>sai</b>.</p></div>
+        <div class="box"><h3>Muốn bảo đảm tuyệt đối?</h3><p class="small">Ở R3, realtime đọc từ <code>outbox_events</code>, đổi lại phải chịu thêm độ trễ của poller.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════════ PHẦN 2: UX & CHỐNG XUNG ĐỘT ═════════════ -->
+
+  <section class="slide" data-title="Các app xử lý xung đột">
+    <div class="kicker"><span class="tag">Phần 2 · UX &amp; chống xung đột</span><span>Nghiên cứu</span></div>
+    <h2>Khi nhiều người cùng sửa, các sản phẩm làm gì?</h2>
+    <table class="t dense">
+      <tr><th>Nguồn</th><th>Cách làm</th><th>Hệ quả với người dùng</th></tr>
+      <tr><td><b>Jira</b></td><td>Không khoá, <b>không phát hiện</b> xung đột. Người lưu sau thắng. Form Sửa có thể xoá trắng trường người khác vừa nhập.</td><td><span class="pill bad">Than phiền nhiều năm</span> JRACLOUD-6146 (khoá), JRACLOUD-37142 (cảnh báo) vẫn ở trạng thái "Gathering Interest"</td></tr>
+      <tr><td><b>Linear</b></td><td>Server định thứ tự, người ghi sau thắng (LWW). Cập nhật tức thì.</td><td>Mượt, không hộp thoại, nhưng bị đè thì không được báo.</td></tr>
+      <tr><td><b>Figma</b> (2019)</td><td>LWW <b>theo từng thuộc tính</b>, khác thuộc tính thì không xung đột. Client <b>bỏ qua giá trị server</b> cho thuộc tính mình đang chờ xác nhận.</td><td><span class="pill good">Không nhấp nháy</span> "discard incoming changes from the server that conflict with unacknowledged property changes"</td></tr>
+      <tr><td><b>HTTP</b> RFC 9110</td><td><code>If-Match</code>: tài nguyên đã đổi thì trả <code>412</code>.</td><td>Chặn "lost update". DATN áp dụng ở mức <b>từng trường</b>.</td></tr>
+      <tr><td><b>Stripe</b></td><td><code>Idempotency-Key</code>: gửi lại cùng key thì nhận lại kết quả cũ.</td><td>Bấm đúp hay mạng chập chờn cũng không tạo trùng.</td></tr>
+      <tr><td><b>web.dev</b> (CLS)</td><td>Bố cục chỉ được phép dịch chuyển trong 500 ms sau thao tác rời rạc của <b>chính</b> người dùng.</td><td>Thay đổi do người khác mà làm xê dịch giao diện là dịch chuyển "ngoài ý muốn".</td></tr>
+      <tr><td><b>NN/g</b></td><td>Hộp thoại (modal) chỉ dành cho việc nghiêm trọng cần quyết định. Thông báo nhẹ dùng toast/banner. Lỗi phải ở lại tại chỗ.</td><td>Không bật popup cho mỗi thay đổi của người khác.</td></tr>
+    </table>
+  </section>
+
+  <section class="slide" data-title="7 nguyên tắc">
+    <div class="kicker"><span class="tag">Thiết kế cho DATN</span><span>Tổng hợp từ nghiên cứu</span></div>
+    <h2>7 nguyên tắc</h2>
+    <div class="grid g4">
+      <div class="box accent"><h3>① Từng trường</h3><p class="small">Khác trường thì cả hai đều được lưu. Cùng trường thì <b>phát hiện</b> bằng giá trị cũ (expected).</p><span class="src-tag">Figma · RFC 9110</span></div>
+      <div class="box accent"><h3>② Phản hồi ngay</h3><p class="small">Chọn giá trị là hiện ngay, vòng xoay nhỏ báo đang chờ. Không chờ server mới vẽ.</p><span class="src-tag">Linear · Figma</span></div>
+      <div class="box accent"><h3>③ Không đổi dưới tay</h3><p class="small">Menu hoặc ô nhập đang mở thì <b>hoãn</b> áp dữ liệu, chỉ hiện một dòng báo.</p><span class="src-tag">web.dev CLS · Jira</span></div>
+      <div class="box accent"><h3>④ Của mình được ưu tiên</h3><p class="small">Trường mình đang gửi thì tạm giữ giá trị server tới cho đến khi có kết quả.</p><span class="src-tag">Figma</span></div>
+      <div class="box accent"><h3>⑤ Mới thắng cũ</h3><p class="small">Dữ liệu có <code>version</code> nhỏ hơn bản đang hiển thị thì bỏ qua.</p><span class="src-tag">Linear syncId</span></div>
+      <div class="box accent"><h3>⑥ Báo đúng mức</h3><p class="small">Thang 5 mức. Không modal cho xung đột thường. <b>Không bao giờ làm mất chữ</b> đang gõ.</p><span class="src-tag">NN/g</span></div>
+      <div class="box accent"><h3>⑦ Tạo đúng một lần</h3><p class="small">Khoá nút khi đang gửi và gửi kèm <code>Idempotency-Key</code>.</p><span class="src-tag">Stripe</span></div>
+      <div class="box good"><h3>Kết quả</h3><p class="small">Thao tác thường: <b>0 popup</b>. Chỉ khi hai người đổi <b>cùng một trường</b> mới cần người dùng quyết định.</p></div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Thang thông báo">
+    <div class="kicker"><span class="tag">Báo đúng mức</span><span>Càng ít làm phiền càng tốt</span></div>
+    <h2>Thang thông báo 5 mức</h2>
+    <div class="grid" style="gap:6px">
+      <div class="lvl box"><b class="n">Mức 0</b><span class="small"><b>Im lặng</b>: thay đổi ở chỗ bạn không nhìn</span><span class="small muted">Board/Backlog phía sau modal tự tải lại, giữ nguyên vị trí cuộn</span></div>
+      <div class="lvl box accent"><b class="n">Mức 1</b><span class="small"><b>Nháy + ghi tên</b>: trường bạn đang xem bị đổi</span><span class="small muted">Nền vàng 1,5 giây kèm dòng "B · vừa xong" (ví dụ 1)</span></div>
+      <div class="lvl box purple"><b class="n">Mức 2</b><span class="small"><b>Báo tại chỗ</b>: trường bạn đang mở hoặc đang sửa bị đổi</span><span class="small muted">Một dòng trong menu, một dải phía trên ô sửa. Không đóng, không đổi nội dung (ví dụ 3, 4)</span></div>
+      <div class="lvl box warn"><b class="n">Mức 3</b><span class="small"><b>Hộp xung đột tại ô</b>: lưu của bạn bị 409</span><span class="small muted">Ngay dưới ô đó, nói rõ ai đổi, lúc nào, kèm 2–3 lựa chọn (ví dụ 2, 4)</span></div>
+      <div class="lvl box bad"><b class="n">Mức 4</b><span class="small"><b>Banner khoá</b>: công việc bị xoá, bạn mất quyền</span><span class="small muted">Chuyển sang chỉ đọc hoặc trang 403. Không cho sửa vào thứ đã không còn</span></div>
+    </div>
+    <div class="box"><p class="small"><b>Toast</b> chỉ dùng cho <b>lỗi</b> trong thao tác của chính mình. Bỏ các toast "Đã cập nhật…" khi đổi một trường, vì ô vừa đổi đã là phản hồi. <b>Không</b> toast cho thay đổi của người khác, để tránh dồn dập thông báo.</p></div>
+  </section>
+
+  <section class="slide" data-title="Bảng quyết định">
+    <div class="kicker"><span class="tag">Bảng quyết định</span><span>Mỗi loại thao tác một cách xử lý</span></div>
+    <h2>Thao tác nào, chống xung đột thế nào</h2>
+    <table class="t dense">
+      <tr><th>Thao tác</th><th>Hiển thị</th><th>Chống xung đột</th><th>Khi xung đột</th></tr>
+      <tr><td><b>Chuyển trạng thái</b></td><td>Chờ server (có thể chạy workflow guard)</td><td>Server kiểm "từ trạng thái" (đã có) + <code>expectedStatusId</code></td><td>409, menu tự làm mới: "B vừa chuyển sang Đang làm"</td></tr>
+      <tr><td><b>Chọn giá trị</b>: giao việc, ưu tiên, hạn chót, điểm, sprint</td><td>Hiện ngay, vòng xoay nhỏ</td><td><code>expected</code> của đúng trường đó</td><td>Quay về giá trị server, hộp tại ô: [Vẫn đổi] [Giữ]</td></tr>
+      <tr><td><b>Văn bản</b>: tiêu đề, mô tả</td><td>Soạn trong bản nháp riêng</td><td><code>expected</code> = bản gốc lúc bắt đầu sửa, cùng presence "đang sửa"</td><td>So sánh 2 bản: [Gộp &amp; lưu] [Dùng bản kia] [Sao chép bản của tôi]</td></tr>
+      <tr><td><b>Bình luận</b></td><td>Thêm vào cuối danh sách</td><td>Chỉ thêm mới nên không xung đột. Khoá nút + <code>Idempotency-Key</code></td><td>Đang đọc giữa danh sách thì hiện nút "N bình luận mới ↓"</td></tr>
+      <tr><td><b>Sửa / xoá bình luận của mình</b></td><td>Chờ server</td><td><code>expected</code> nội dung cũ; xoá thứ đã xoá thì coi như thành công</td><td>Báo "Bình luận đã bị xoá"</td></tr>
+      <tr><td><b>Tệp, liên kết, việc con</b></td><td>Chờ server</td><td>Khoá nút + <code>Idempotency-Key</code>; xoá lặp lại không lỗi</td><td>Không có xung đột thật</td></tr>
+      <tr><td><b>Công việc bị xoá</b> khi đang mở</td><td>—</td><td>Sự kiện <code>ITEM_DELETED</code></td><td>Mức 4: chuyển sang chỉ đọc kèm banner</td></tr>
+    </table>
+  </section>
+
+  <section class="slide" data-title="Giao thức">
+    <div class="kicker"><span class="tag">Giao thức sửa theo trường</span><span>Thay cho PUT /items/{id} khi sửa từng ô</span></div>
+    <h2>Gửi giá trị cũ, server so sánh</h2>
+    <div class="grid g2">
+      <div class="grid">
+<pre class="code">PATCH /api/v1/work/items/{id}/fields
+X-Client-Id: 3f9c…   Idempotency-Key: 81b2…
+{
+  "changes":  { "assigneeId": "minh" },
+  "expected": { "assigneeId": "nam"  },
+  "force": false
+}</pre>
+        <div class="box"><p class="small">Dùng <b>map</b> nên phân biệt được "không gửi" với "đặt rỗng": <code>{"assigneeId": null}</code> = bỏ giao việc, sửa luôn lỗi hiện tại.</p></div>
+      </div>
+      <div class="grid">
+<pre class="code">409 Conflict
+{
+  "code": "FIELD_CONFLICT",
+  "conflicts": [{
+    "field": "assigneeId",
+    "expected": "nam", "actual": "lan",
+    "changedBy": "&lt;sub của A&gt;",
+    "changedAt": "2026-11-12T10:21:04"
+  }],
+  "item": { …bản mới nhất, "version": 6 }
+}</pre>
+        <div class="box accent"><p class="small"><code>changedBy</code> và <code>changedAt</code> lấy từ <code>work_item_changelogs</code> (đã có). Kèm <code>item</code> để client vẽ lại mà <b>không cần gọi thêm</b>.</p></div>
+      </div>
+    </div>
+    <p class="small muted">Tất cả hoặc không: một trường xung đột thì không lưu trường nào. <code>force: true</code> chỉ gửi khi người dùng bấm "Vẫn đổi".</p>
+  </section>
+
+  <!-- ─── 6 VÍ DỤ TƯƠNG TÁC ─── -->
+
+  <section class="slide" data-title="Ví dụ 1 · khác trường">
+    <div class="kicker"><span class="tag">Ví dụ 1 / 6 · Tương tác</span><span>Nguyên tắc ① ② · thông báo mức 1</span></div>
+    <h2 style="font-size:21px">Hai người đổi hai trường khác nhau</h2>
+    <div class="demo" data-demo="fields"></div>
+  </section>
+
+  <section class="slide" data-title="Ví dụ 2 · cùng trường">
+    <div class="kicker"><span class="tag">Ví dụ 2 / 6 · Tương tác</span><span>Nguyên tắc ① ④ · thông báo mức 3</span></div>
+    <h2 style="font-size:21px">Hai người cùng giao lại một công việc</h2>
+    <div class="demo" data-demo="same" data-mode="new"></div>
+  </section>
+
+  <section class="slide" data-title="Ví dụ 3 · menu đang mở">
+    <div class="kicker"><span class="tag">Ví dụ 3 / 6 · Tương tác</span><span>Nguyên tắc ③ · thông báo mức 2</span></div>
+    <h2 style="font-size:21px">Đang mở menu trạng thái thì người khác đổi</h2>
+    <div class="demo" data-demo="menu" data-mode="naive"></div>
+  </section>
+
+  <section class="slide" data-title="Ví dụ 4 · đang sửa mô tả">
+    <div class="kicker"><span class="tag">Ví dụ 4 / 6 · Tương tác</span><span>Nguyên tắc ③ ⑥ · thông báo mức 2 → 3</span></div>
+    <h2 style="font-size:21px">Đang sửa mô tả thì người khác lưu</h2>
+    <div class="demo" data-demo="editor" data-mode="naive"></div>
+  </section>
+
+  <section class="slide" data-title="Ví dụ 5 · bình luận">
+    <div class="kicker"><span class="tag">Ví dụ 5 / 6 · Tương tác</span><span>Nguyên tắc ⑦ ③</span></div>
+    <h2 style="font-size:21px">Bấm đúp nút Gửi, và người đang đọc dở bình luận</h2>
+    <div class="demo" data-demo="comment"></div>
+  </section>
+
+  <section class="slide" data-title="Ví dụ 6 · sai thứ tự">
+    <div class="kicker"><span class="tag">Ví dụ 6 / 6 · Tương tác</span><span>Nguyên tắc ⑤</span></div>
+    <h2 style="font-size:21px">Kết quả trả về sai thứ tự</h2>
+    <div class="demo" data-demo="order"></div>
+  </section>
+
+  <section class="slide" data-title="Trạng thái phía client">
+    <div class="kicker"><span class="tag">Cài đặt phía client</span><span>WorkItemDetailModal.jsx</span></div>
+    <h2>Mỗi ô có 3 lớp: server · đang gửi · đang sửa</h2>
+    <div class="grid" style="grid-template-columns: 1.4fr 1fr">
+<pre class="code">// Hiển thị: đang sửa → đang gửi → server
+shown(f) = editing[f] ? draft[f]
+         : f in pending ? pending[f]
+         : server[f]
+
+onRemoteEvent(e):
+  if (e.originClientId == TAB_ID) return // tab mình
+  if (e.version &lt;= server.version) return // ⑤ cũ
+  item = await fetchSilent()       // không spinner
+  for f of e.changedFields:
+    if (f in pending)        keep(f)          // ④
+    else if (editing[f] || menuOpen[f])
+                             hintAt(f, e.actor) // ③
+    else { server[f] = item[f]; flash(f, e.actor) }
+  server.version = item.version</pre>
+      <div class="grid">
+        <div class="box"><h3>Khi bấm chọn giá trị</h3><p class="small"><code>pending[f] = mới</code>, rồi gửi <code>PATCH /fields</code> kèm <code>expected = server[f]</code>. Thành công thì áp response nếu version lớn hơn. Bị 409 thì <code>server = body.item</code> và hiện hộp xung đột.</p></div>
+        <div class="box"><h3>Khi đóng menu hoặc ô sửa</h3><p class="small">Áp phần đã hoãn, kèm nháy và ghi tên người đổi.</p></div>
+        <div class="box warn"><h3>Sửa 2 lỗi có sẵn</h3><p class="small"><code>fetchDetail</code> → <code>fetchSilent</code>: không <code>setLoading</code>, không <code>setDescriptionDraft</code> khi đang sửa. Lỗi 400/409 thì tự tải lại và giải thích.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════════ PHẦN 3 ═════════════ -->
+
+  <section class="slide" data-title="Lộ trình">
+    <div class="kicker"><span class="tag">Lộ trình</span><span>~9–12 ngày công</span></div>
+    <h2>R0 làm được ngay, kể cả trước khi có realtime</h2>
+    <div class="grid g4">
+      <div class="box warn"><span class="pill warn">R0 · 1,5–2 ngày</span><h3 style="margin-top:6px">An toàn dữ liệu &amp; UX</h3><ul class="clean small"><li><code>PATCH /fields</code> + expected + 409 kèm "ai/lúc nào"</li><li><code>expectedStatusId</code></li><li>Bỏ giao việc bằng <code>null</code></li><li>Tải lại im lặng, so version</li><li>Khoá nút khi đang gửi</li><li>400/409 thì tự tải lại</li></ul></div>
+      <div class="box accent"><span class="pill accent">R1 · 3–4 ngày</span><h3 style="margin-top:6px">Realtime lõi (P0)</h3><ul class="clean small"><li>STOMP, CONNECT/SUBSCRIBE</li><li>Publisher AFTER_COMMIT + seq</li><li>Modal: thông báo mức 1–2, hoãn khi đang mở</li><li>Board/Backlog tải lại im lặng</li><li>ACCESS_REVOKED</li></ul></div>
+      <div class="box purple"><span class="pill purple">R2 · 2–3 ngày</span><h3 style="margin-top:6px">Trải nghiệm (P1)</h3><ul class="clean small"><li>Presence "đang xem / đang sửa"</li><li>Idempotency-Key phía server (Redis)</li><li>Nút "N bình luận mới ↓"</li><li>Redis backplane</li></ul></div>
+      <div class="box good"><span class="pill good">R3 · 2–3 ngày</span><h3 style="margin-top:6px">Sự kiện bền</h3><ul class="clean small"><li>OutboxRelay gửi Kafka</li><li>Thông báo in-app / automation</li></ul></div>
+    </div>
+    <p class="small muted">R0 sửa được ngay 5 rủi ro ở slide 3 và không phụ thuộc WebSocket. Không cần migration Flyway cho R0–R2.</p>
+  </section>
+
+  <section class="slide" data-title="Kiểm thử">
+    <div class="kicker"><span class="tag">Nghiệm thu</span><span>2 trình duyệt · 2 user</span></div>
+    <h2>Kịch bản kiểm thử chính</h2>
+    <table class="t dense">
+      <tr><th>Mã</th><th>Kịch bản</th><th>Kỳ vọng</th></tr>
+      <tr><td>U1</td><td>A đổi Độ ưu tiên, B đổi Người thực hiện</td><td>Cả hai được lưu; mỗi bên thấy ô kia nháy kèm tên người đổi; không có popup</td></tr>
+      <tr><td>U2</td><td>A và B cùng đổi Người thực hiện</td><td>Người sau nhận hộp xung đột tại ô, có tên người đổi và giờ đổi; "Vẫn đổi" thì lưu</td></tr>
+      <tr><td>U3</td><td>A đang mở menu Trạng thái thì B chuyển trạng thái</td><td>Menu không đổi dưới con trỏ; có dòng báo; đóng menu mới cập nhật</td></tr>
+      <tr><td>U4</td><td>A đang gõ mô tả thì B lưu mô tả</td><td>Chữ của A còn nguyên; khi lưu thấy so sánh 2 bản</td></tr>
+      <tr><td>U5</td><td>Bấm Gửi bình luận 2 lần (giả lập mạng chậm 3G)</td><td>Chỉ có 1 bình luận</td></tr>
+      <tr><td>U6</td><td>Response cũ về sau response mới (DevTools throttling)</td><td>Màn hình giữ giá trị mới</td></tr>
+      <tr><td>T1</td><td>A đổi trạng thái thẻ</td><td>Board của B cập nhật trong ≤ 1 giây, không spinner, giữ vị trí cuộn</td></tr>
+      <tr><td>T4</td><td>Xoá B khỏi project</td><td>B chuyển trang 403; subscribe lại bị ERROR</td></tr>
+      <tr><td>T7</td><td>Thao tác bị rollback (WIP, workflow guard)</td><td>B không nhận sự kiện</td></tr>
+    </table>
+  </section>
+
+</div>
+<script src="demo.js"></script>
+<script src="../_assets/slide.js"></script>
+</body>
+</html>
