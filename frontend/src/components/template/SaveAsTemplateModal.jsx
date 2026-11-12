@@ -3,7 +3,7 @@ import { X, BookmarkPlus, AlertTriangle, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { templateApi } from '../../api.js';
 import { generateProjectKey, sanitizeProjectKey, validateProjectForm } from '../../utils/projectValidation.js';
-import { TEMPLATE_CATEGORIES } from '../../constants/templateConstants.js';
+import { TEMPLATE_CATEGORIES, formatIntegrityMessage } from '../../constants/templateConstants.js';
 import CustomSelect from '../common/CustomSelect.jsx';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
@@ -191,7 +191,7 @@ export default function SaveAsTemplateModal({ isOpen, onClose, project, onSaved 
               </div>
               <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
                 {warnings.slice(0, 6).map((w, i) => (
-                  <li key={i}>{w.message}</li>
+                  <li key={i}>{formatIntegrityMessage(w)}</li>
                 ))}
                 {warnings.length > 6 && <li>… và {warnings.length - 6} lưu ý khác</li>}
               </ul>

@@ -18,9 +18,9 @@ import {
 } from 'lucide-react';
 import { templateApi } from '../../api.js';
 import { STATUS_TOKENS, PRIORITY_TOKENS } from '../../constants/jiraTokens.js';
-import { categoryToken, PROJECT_TYPE_LABELS, formatOffset } from '../../constants/templateConstants.js';
+import { categoryToken, PROJECT_TYPE_LABELS, formatOffset, formatIntegrityMessage } from '../../constants/templateConstants.js';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
-import { getTypeDisplayName } from '../../constants/workConstants.js';
+import { getTypeDisplayName, toDisplayHierarchyLevel } from '../../constants/workConstants.js';
 
 const TABS = [
   { id: 'OVERVIEW', label: 'Tổng quan' },
@@ -585,7 +585,7 @@ function IntegrityBanner({ errors, warnings }) {
             <strong>Mẫu chưa thể sử dụng ({errors.length} lỗi):</strong>
             <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
               {errors.map((e, i) => (
-                <li key={i}>{e.message}</li>
+                <li key={i}>{formatIntegrityMessage(e)}</li>
               ))}
             </ul>
           </div>
@@ -616,7 +616,7 @@ function IntegrityBanner({ errors, warnings }) {
           {open && (
             <ul style={{ margin: '6px 0 0', paddingLeft: 26 }}>
               {warnings.map((w, i) => (
-                <li key={i}>{w.message}</li>
+                <li key={i}>{formatIntegrityMessage(w)}</li>
               ))}
             </ul>
           )}
@@ -787,7 +787,7 @@ function WorkflowTab({ p, customizations, onRenameStatus, onRenameType }) {
                   />
                 </div>
                 <span style={{ fontSize: 11, color: '#94A3B8' }}>
-                  {t.code} · cấp {t.hierarchyLevel}
+                  Cấp {toDisplayHierarchyLevel(t.hierarchyLevel)}
                 </span>
               </div>
             );

@@ -1,6 +1,7 @@
 /**
  * templateConstants.js - Nhãn & màu cho thư viện Dự án mẫu (khớp enum TemplateCategory của work-service).
  */
+import { translateServerMessage } from '../utils/serverMessageVi.js';
 
 export const TEMPLATE_CATEGORIES = {
   SOFTWARE: { label: 'Phần mềm', color: '#2563EB', bg: '#EFF6FF' },
@@ -34,4 +35,13 @@ export function addDays(isoDate, days) {
 export function formatOffset(days) {
   if (days == null) return '—';
   return `Ngày ${days}`;
+}
+
+// ─── Hiển thị báo cáo kiểm tra toàn vẹn mẫu (chỉ đổi câu chữ, BE giữ nguyên) ───
+// BE trả { code, message }; một số câu còn dùng cấp 0/-1 hoặc tiếng Anh (Epic/Sub-task).
+// Lỗi ITEM_HIERARCHY nhúng câu của StrictHierarchyValidator → dùng chung bộ dịch serverMessageVi.
+export function formatIntegrityMessage(issue) {
+  if (!issue) return '';
+  if (issue.code === 'NO_STANDARD_TYPE') return 'Thiếu loại công việc Cấp 2 (Tiêu chuẩn)';
+  return translateServerMessage(issue.message || '');
 }

@@ -6,6 +6,7 @@
  */
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { translateServerMessage } from './utils/serverMessageVi.js';
 
 // ─── Token storage (Lưu trữ localStorage duy trì phiên làm việc lâu dài) ───────
 let _userToken = localStorage.getItem('user_access_token') || null;
@@ -289,6 +290,11 @@ apiClient.interceptors.response.use(
     }
 
     const body = error.response?.data;
+    // Việt hóa câu lỗi của BE (chỉ hiển thị). Ghi đè luôn body.message vì nhiều call site
+    // đọc err.response.data.message thay vì err.message.
+    if (body && typeof body.message === 'string') {
+      body.message = translateServerMessage(body.message);
+    }
     const msg = body?.message || error.message || 'Lỗi kết nối máy chủ';
 
     // Call site tự xử lý lỗi bằng cách gửi { skipErrorToast: true }:
