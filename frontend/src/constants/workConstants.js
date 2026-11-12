@@ -92,6 +92,38 @@ export const getTypeDisplayName = (typeCodeOrName, isBusiness = false) => {
   return typeCodeOrName;
 };
 
+// Mô tả mặc định do BE seed (một số bằng tiếng Anh / còn chữ "Task") → hiển thị tiếng Việt.
+// Chỉ đổi khi khớp đúng câu mặc định; mô tả người dùng tự nhập giữ nguyên.
+const DEFAULT_TYPE_DESCRIPTIONS_VI = {
+  'a large body of work that can be broken down into smaller tasks': 'Hạng mục lớn bao quát nhiều công việc',
+  'a small piece of work that needs to be done': 'Công việc tiêu chuẩn',
+  'a sub-component of a parent task': 'Công việc con trực thuộc công việc cha',
+  'công việc con phụ thuộc của task': 'Công việc con trực thuộc công việc cha',
+};
+
+export const getTypeDescriptionDisplay = (description) => {
+  if (!description) return description;
+  return DEFAULT_TYPE_DESCRIPTIONS_VI[String(description).trim().toLowerCase()] || description;
+};
+
+// Sinh mã loại công việc (BE bắt buộc, duy nhất trong dự án) từ tên tiếng Việt,
+// để người dùng không phải nhập mã. VD: "Nghiệm thu" → "NGHIEM_THU", trùng thì thêm _2, _3...
+export const generateTypeCode = (name, existingCodes = []) => {
+  const base = String(name || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[đĐ]/g, 'D')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40) || 'LOAI';
+  const taken = new Set(existingCodes.map((c) => String(c || '').toUpperCase()));
+  if (!taken.has(base)) return base;
+  let i = 2;
+  while (taken.has(`${base}_${i}`)) i += 1;
+  return `${base}_${i}`;
+};
+
 export const getStatusDisplayName = (statusName) => {
   if (!statusName) return '';
   const s = String(statusName).trim().toUpperCase();
