@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tính năng Work Service</title>
+<style>
+  :root {
+    --bg: #2a211b;
+    --paper: #fbf8f3;
+    --card: #ffffff;
+    --ink: #1f1a17;
+    --muted: #6b625b;
+    --line: #e7dfd5;
+    --coffee: #8b5a2b;
+    --coffee-soft: #f4ebe1;
+    --blue: #2563eb;
+    --blue-soft: #eaf1fe;
+    --todo: #64748b;
+    --prog: #3b82f6;
+    --review: #f59e0b;
+    --done: #10b981;
+    --red: #dc2626;
+    --red-soft: #fdecec;
+    --green-soft: #e8f8f1;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    overflow: hidden;
+  }
+  #deck {
+    position: absolute; top: 50%; left: 50%;
+    width: 1280px; height: 720px;
+    transform-origin: center center;
+    background: var(--paper);
+    box-shadow: 0 20px 60px rgba(0,0,0,.35);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .slide {
+    position: absolute; inset: 0;
+    padding: 56px 72px 64px;
+    display: none; flex-direction: column;
+  }
+  .slide.active { display: flex; }
+  .kicker {
+    font-size: 14px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--coffee); margin-bottom: 8px;
+  }
+  h1 { font-size: 60px; line-height: 1.08; letter-spacing: -.02em; }
+  h2 { font-size: 36px; line-height: 1.15; letter-spacing: -.01em; margin-bottom: 6px; }
+  .lead { font-size: 19px; color: var(--muted); max-width: 980px; line-height: 1.45; }
+  .body { flex: 1; display: flex; gap: 28px; margin-top: 26px; min-height: 0; }
+  .col { flex: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .card h3 { font-size: 17px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .card h3 .n {
+    display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
+    background: var(--coffee); color: #fff; font-size: 13px;
+  }
+  ul.pts { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  ul.pts li { font-size: 17px; line-height: 1.4; padding-left: 20px; position: relative; }
+  ul.pts li::before {
+    content: ""; position: absolute; left: 2px; top: 9px; width: 8px; height: 8px;
+    border-radius: 2px; background: var(--coffee);
+  }
+  ul.sm li { font-size: 15px; gap: 6px; }
+  ul.sm li::before { top: 8px; width: 6px; height: 6px; }
+  b, strong { font-weight: 700; }
+  code {
+    font-family: Consolas, "Cascadia Mono", monospace; font-size: .88em;
+    background: var(--coffee-soft); padding: 1px 6px; border-radius: 4px; color: #5c3a17;
+  }
+  .tag {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+    padding: 2px 7px; border-radius: 999px; vertical-align: 2px; margin-left: 4px;
+    background: var(--blue-soft); color: var(--blue);
+  }
+  .demo {
+    margin-top: auto; padding: 12px 16px; border-radius: 10px;
+    background: var(--coffee-soft); border-left: 4px solid var(--coffee);
+    font-size: 15.5px; line-height: 1.45;
+  }
+  .demo b { color: var(--coffee); }
+  .foot {
+    position: absolute; left: 72px; right: 72px; bottom: 22px;
+    display: flex; justify-content: space-between; font-size: 13px; color: var(--muted);
+  }
+  #progress { position: absolute; left: 0; top: 0; height: 4px; background: var(--coffee); transition: width .25s; }
+
+  /* Title slide */
+  .title-slide { justify-content: center; background:
+      radial-gradient(1200px 500px at 85% 110%, #efe2d2 0%, transparent 60%), var(--paper); }
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 30px; }
+  .chip {
+    font-size: 15px; padding: 7px 14px; border-radius: 999px; background: #fff;
+    border: 1px solid var(--line); color: var(--ink);
+  }
+  .cup { position: absolute; right: 90px; top: 150px; opacity: .95; }
+
+  /* Feature map */
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 22px; flex: 1; }
+  .grid3 .card { padding: 14px 18px; }
+  .grid3 .card h3 { font-size: 16.5px; margin-bottom: 6px; }
+
+  /* Flow boxes */
+  .flow { display: flex; align-items: stretch; gap: 0; }
+  .flow .box {
+    flex: 1; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    font-size: 15px; line-height: 1.45;
+  }
+  .flow .box .h { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+  .flow .arrow { width: 34px; display: grid; place-items: center; color: var(--coffee); font-size: 26px; font-weight: 700; }
+  .box.hl { border: 2px solid var(--coffee); background: #fffaf4; }
+  .box.ok { border: 2px solid var(--done); background: var(--green-soft); }
+
+  /* Tables */
+  table { border-collapse: collapse; width: 100%; font-size: 15px; background: #fff; border-radius: 10px; overflow: hidden; }
+  th, td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { background: #f6f0e8; font-size: 13.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  td.c, th.c { text-align: center; }
+  .y { color: var(--done); font-weight: 800; }
+  .x { color: #c4b8ab; }
+  .neg { color: var(--red); font-weight: 700; }
+  .pos { color: #0f8a5f; font-weight: 700; }
+
+  /* People */
+  .person { display: flex; gap: 12px; align-items: center; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 17px; flex: none; }
+  .person .r { font-size: 13px; color: var(--muted); }
+
+  /* Steps list */
+  .steps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; }
+  .step { display: flex; gap: 10px; align-items: baseline; font-size: 16px; padding: 8px 12px; background: #fff; border: 1px solid var(--line); border-radius: 9px; }
+  .step .i { font-weight: 800; color: var(--coffee); min-width: 22px; }
+  .step .t { margin-left: auto; color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+  /* Hierarchy */
+  .lvl { border-radius: 10px; padding: 10px 14px; font-size: 15.5px; border: 1px solid var(--line); background: #fff; }
+  .lvl .k { font-weight: 800; margin-right: 6px; }
+  .lvl.l1 { border-left: 5px solid #9333ea; }
+  .lvl.l0 { border-left: 5px solid #3b82f6; margin-left: 26px; }
+  .lvl.lm { border-left: 5px solid #06b6d4; margin-left: 52px; }
+
+  .stat { text-align: center; }
+  .stat .v { font-size: 46px; font-weight: 800; color: var(--coffee); line-height: 1; }
+  .stat .l { font-size: 15px; color: var(--muted); margin-top: 6px; }
+
+  svg text { font-family: "Segoe UI", Roboto, Arial, sans-serif; }
+
+  #nav {
+    position: fixed; top: 18px; right: 18px; display: flex; gap: 8px; z-index: 5;
+  }
+  #nav button {
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); cursor: pointer;
+    background: rgba(255,255,255,.85); color: #6b625b; font-size: 20px; opacity: .45;
+  }
+  #nav button:hover { opacity: 1; }
+  .fib { display: flex; gap: 8px; }
+  .fib span {
+    flex: 1; text-align: center; padding: 8px 0 6px; border-radius: 10px;
+    background: var(--b); border: 2px solid var(--bd); color: var(--c);
+    font-size: 22px; font-weight: 800; line-height: 1.1;
+  }
+  .fib small { display: block; font-size: 11.5px; font-weight: 600; color: inherit; opacity: .9; }
+  .fib-scale { display: flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .fib-scale i {
+    flex: 1; height: 6px; border-radius: 3px;
+    background: linear-gradient(90deg, #22c55e, #a3e635, #facc15, #fb923c, #f97316, #dc2626);
+  }
+
+  .tri { display: grid; grid-template-columns: 1.15fr 1.1fr 0.9fr; gap: 22px; font-size: 15px; line-height: 1.4; }
+  .tri div { padding-left: 14px; border-left: 3px solid var(--coffee-soft); }
+  table.links td { font-size: 14.5px; line-height: 1.4; padding: 7px 12px; vertical-align: top; }
+  .lk {
+    display: inline-block; font-size: 13.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+    color: var(--c); background: var(--b); white-space: nowrap;
+  }
+
+  /* Contribution rules */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 22px; flex: 1; }
+  .grid2 .card { padding: 14px 18px; }
+  .grid2 .card h3 { font-size: 18px; margin-bottom: 10px; }
+  .grid2 ul.pts { gap: 10px; }
+  .grid2 ul.pts li { font-size: 16px; }
+  .grid2 .card.hl { border: 2px solid var(--coffee); background: #fffaf4; }
+  .eq { font-size: 18px; font-weight: 700; line-height: 1.5; margin: 2px 0 10px; }
+  .eq .op { color: var(--coffee); }
+  .late { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+  .late div { text-align: center; border-radius: 8px; padding: 6px 0; font-size: 12.5px; color: var(--muted); background: #fff; border: 1px solid var(--line); }
+  .late b { display: block; font-size: 19px; color: var(--ink); }
+
+  @media print {
+    body { overflow: visible; background: #fff; }
+    #deck { position: static; transform: none !important; box-shadow: none; width: 1280px; height: auto; }
+    .slide { position: relative; display: flex !important; height: 720px; page-break-after: always; }
+    #nav, #progress { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="deck">
+  <div id="progress"></div>
+
+  <!-- 1. TITLE -->
+  <section class="slide title-slide">
+    <div class="kicker">DATN-2026 · Work Service</div>
+    <h1>Quản lý công việc<br>kiểu Jira</h1>
+    <p class="lead" style="margin-top:18px">Các tính năng chính của <b>work-service</b>, minh họa qua dự án
+      <b>Mộc Coffee</b>: một quán cà phê khởi nghiệp, đi từ khảo sát mặt bằng đến khai trương.</p>
+    <div class="chips">
+      <span class="chip">Java 21 · Spring Boot 3.5</span>
+      <span class="chip">PostgreSQL + Flyway</span>
+      <span class="chip">Redis</span>
+      <span class="chip">MinIO</span>
+      <span class="chip">Keycloak OAuth2</span>
+      <span class="chip">React 19 + Vite</span>
+    </div>
+    <svg class="cup" width="250" height="250" viewBox="0 0 250 250" aria-hidden="true">
+      <path d="M95 40 q-14 18 0 36 q14 18 0 36" fill="none" stroke="#c9a77f" stroke-width="7" stroke-linecap="round"/>
+      <path d="M135 30 q-14 18 0 36 q14 18 0 36" fill="none" stroke="#c9a77f" stroke-width="7" stroke-linecap="round"/>
+      <path d="M40 120 h150 v40 a60 60 0 0 1 -60 60 h-30 a60 60 0 0 1 -60 -60 z" fill="#8b5a2b"/>
+      <path d="M190 132 h14 a24 24 0 0 1 0 48 h-18" fill="none" stroke="#8b5a2b" stroke-width="12"/>
+      <rect x="20" y="226" width="200" height="10" rx="5" fill="#d9c3a8"/>
+    </svg>
+    <div class="foot"><span>Dùng phím ← → hoặc Space để chuyển trang</span><span class="pg"></span></div>
+  </section>
+
+  <!-- 2. ARCHITECTURE -->
+  <section class="slide">
+    <div class="kicker">Bối cảnh</div>
+    <h2>work-service nằm ở đâu trong hệ thống</h2>
+    <p class="lead">Mọi request đi qua API Gateway; work-service là OAuth2 resource server, kiểm tra quyền theo từng dự án.</p>
+    <div class="body" style="align-items:center">
+      <svg width="1136" height="430" viewBox="0 0 1136 430" role="img" aria-label="Sơ đồ kiến trúc">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#8b5a2b"/>
+          </marker>
+        </defs>
+        <!-- Frontend -->
+        <rect x="0" y="150" width="200" height="90" rx="12" fill="#fff" stroke="#e7dfd5"/>
+        <text x="100" y="188" text-anchor="middle" font-size="18" font-weight="700">Frontend</text>
+        <text x="100" y="212" text-anchor="middle" font-size="14" fill="#6b625b">React 19 · :5173</text>
+        <!-- Gateway -->
+        <rect x="270" y="150" width="220" height="90" rx="12" fill="#fff" stroke="#e7dfd5"/>
+        <text x="380" y="182" text-anchor="middle" font-size="18" font-weight="700">API Gateway :8081</text>
+        <text x="380" y="205" text-anchor="middle" font-size="13.5" fill="#6b625b">JWT cookie / Bearer</text>
+        <text x="380" y="224" text-anchor="middle" font-size="13.5" fill="#6b625b">Token Relay → downstream</text>
+        <!-- Work service -->
+        <rect x="560" y="120" width="290" height="150" rx="14" fill="#fffaf4" stroke="#8b5a2b" stroke-width="2.5"/>
+        <text x="705" y="158" text-anchor="middle" font-size="21" font-weight="800" fill="#8b5a2b">work-service :8083</text>
+        <text x="705" y="186" text-anchor="middle" font-size="14.5">18 controller · 98 endpoint</text>
+        <text x="705" y="208" text-anchor="middle" font-size="14.5">Phân quyền 15 PermissionKey</text>
+        <text x="705" y="230" text-anchor="middle" font-size="14.5">Workflow engine · Clone engine</text>
+        <text x="705" y="252" text-anchor="middle" font-size="14.5">Báo cáo Agile · Sổ ghi công</text>
+        <!-- Right side services -->
+        <rect x="920" y="40" width="216" height="70" rx="12" fill="#fff" stroke="#e7dfd5"/>
+        <text x="1028" y="70" text-anchor="middle" font-size="16" font-weight="700">identity-service</text>
+        <text x="1028" y="92" text-anchor="middle" font-size="13" fill="#6b625b">Feign /internal (user info)</text>
+        <rect x="920" y="160" width="216" height="70" rx="12" fill="#fff" stroke="#e7dfd5"/>
+        <text x="1028" y="190" text-anchor="middle" font-size="16" font-weight="700">notification-service</text>
+        <text x="1028" y="212" text-anchor="middle" font-size="13" fill="#6b625b">Email lời mời (SMTP)</text>
+        <rect x="920" y="280" width="216" height="70" rx="12" fill="#fff" stroke="#e7dfd5"/>
+        <text x="1028" y="310" text-anchor="middle" font-size="16" font-weight="700">Keycloak</text>
+        <text x="1028" y="332" text-anchor="middle" font-size="13" fill="#6b625b">Issuer JWT · realm role</text>
+        <!-- Storage -->
+        <rect x="540" y="340" width="100" height="70" rx="10" fill="#fff" stroke="#e7dfd5"/>
+        <text x="590" y="370" text-anchor="middle" font-size="14.5" font-weight="700">PostgreSQL</text>
+        <text x="590" y="390" text-anchor="middle" font-size="12" fill="#6b625b">Flyway V1–V9</text>
+        <rect x="655" y="340" width="100" height="70" rx="10" fill="#fff" stroke="#e7dfd5"/>
+        <text x="705" y="370" text-anchor="middle" font-size="14.5" font-weight="700">Redis</text>
+        <text x="705" y="390" text-anchor="middle" font-size="12" fill="#6b625b">cache</text>
+        <rect x="770" y="340" width="100" height="70" rx="10" fill="#fff" stroke="#e7dfd5"/>
+        <text x="820" y="370" text-anchor="middle" font-size="14.5" font-weight="700">MinIO</text>
+        <text x="820" y="390" text-anchor="middle" font-size="12" fill="#6b625b">tệp đính kèm</text>
+        <!-- Arrows -->
+        <line x1="200" y1="195" x2="266" y2="195" stroke="#8b5a2b" stroke-width="2.5" marker-end="url(#ah)"/>
+        <line x1="490" y1="195" x2="556" y2="195" stroke="#8b5a2b" stroke-width="2.5" marker-end="url(#ah)"/>
+        <line x1="850" y1="150" x2="916" y2="85" stroke="#8b5a2b" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="850" y1="195" x2="916" y2="195" stroke="#8b5a2b" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="850" y1="240" x2="916" y2="305" stroke="#8b5a2b" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#ah)"/>
+        <line x1="620" y1="270" x2="600" y2="336" stroke="#8b5a2b" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="705" y1="270" x2="705" y2="336" stroke="#8b5a2b" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="790" y1="270" x2="810" y2="336" stroke="#8b5a2b" stroke-width="2" marker-end="url(#ah)"/>
+        <text x="233" y="182" text-anchor="middle" font-size="12" fill="#6b625b">/work/api/**</text>
+      </svg>
+    </div>
+    <div class="foot"><span>DATN-2026 · Work Service</span><span class="pg"></span></div>
+  </section>
+
+  <!-- 3. FEATURE MAP -->
+  <section class="slide">
+    <div class="kicker">Tổng quan</div>
+    <h2>Bản đồ tính năng đã có</h2>
+    <p class="lead">6 nhóm, tất cả đều có trong code. Nhãn <span class="tag">API</span> = có backend, chưa có nút trên giao diện.</p>
+    <div class="grid3">
+      <div class="card"><h3><span class="n">1</span>Dự án &amp; Mẫu</h3>
+        <ul class="pts sm">
+          <li>Tạo dự án: Scrum / Kanban / Business</li>
+          <li>Thư viện mẫu, Preview, kiểm tra toàn vẹn</li>
+          <li>Tùy chỉnh nhanh khi tạo từ mẫu</li>
+          <li>Nhân bản, xóa mềm &amp; khôi phục <span class="tag">API</span></li>
+        </ul></div>
+      <div class="card"><h3><span class="n">2</span>Thành viên &amp; Phân quyền</h3>
+        <ul class="pts sm">
+          <li>3 vai trò × 15 quyền, ma trận theo dự án</li>
+          <li>Mời thành viên qua email, chấp nhận / từ chối</li>
+          <li>Kiểm tra fail-closed ở backend (aspect)</li>
+          <li>Quyền "của mình": sửa/xóa bình luận, tệp</li>
+        </ul></div>
+      <div class="card"><h3><span class="n">3</span>Cấu hình quy trình</h3>
+        <ul class="pts sm">
+          <li>Loại công việc 3 cấp + loại tùy chỉnh</li>
+          <li>Trạng thái tùy chỉnh theo 3 nhóm</li>
+          <li>Workflow FSM: sơ đồ, bước chuyển</li>
+          <li>Condition · Validator · Post-function</li>
+        </ul></div>
+      <div class="card"><h3><span class="n">4</span>Công việc</h3>
+        <ul class="pts sm">
+          <li>Story point Fibonacci, hạn chót, ước lượng giờ</li>
+          <li>Bình luận · Tệp đính kèm · Lịch sử thay đổi</li>
+          <li>Liên kết: cản trở, gây ra, trùng lặp, liên quan</li>
+          <li>Tự lan truyền trạng thái cha ↔ con</li>
+        </ul></div>
+      <div class="card"><h3><span class="n">5</span>Agile</h3>
+        <ul class="pts sm">
+          <li>Kho việc (Backlog), sắp xếp LexoRank</li>
+          <li>Tạo nhanh, kéo thả Backlog ↔ giai đoạn</li>
+          <li>Giai đoạn / Sprint: tạo, bắt đầu, hoàn tất</li>
+        </ul></div>
+      <div class="card"><h3><span class="n">6</span>Báo cáo</h3>
+        <ul class="pts sm">
+          <li>Burndown · Velocity · CFD</li>
+          <li>Snapshot đóng băng khi đóng giai đoạn</li>
+          <li>Đóng góp: sổ ghi công, phạt trễ hạn</li>
+          <li>Xuất Excel · điều chỉnh điểm <span class="tag">API</span></li>
+        </ul></div>
+    </div>
+    <div class="foot"><span>DATN-2026 · Work Service</span><span class="pg"></span></div>
+  </section>
+
+  <!-- 4. DEMO STORY -->
+  <section class="slide">
+    <div class="kicker">Kịch bản demo</div>
+    <h2>Mộc Coffee: 60 ngày từ ý tưởng đến khai trương</h2>
+    <p class="lead">Không nhập tay: dự án sinh từ mẫu <b>"Xây dựng Cửa hàng F&amp;B"</b>, tùy chỉnh 2 điểm rồi chạy qua các tính năng chính.</p>
+    <div class="body">
+      <div class="col" style="flex:0 0 330px">
+        <div class="card person"><div class="avatar" style="background:#8b5a2b">A</div><div><b>An</b>, chủ quán<div class="r">Project Lead · ADMINISTRATOR</div></div></div>
+        <div class="card person"><div class="avatar" style="background:#2563eb">B</div><div><b>Bình</b>, barista trưởng<div class="r">MEMBER · người được giao việc</div></div></div>
+        <div class="card person"><div class="avatar" style="background:#64748b">C</div><div><b>Chi</b>, nhà đầu tư<div class="r">VIEWER · chỉ xem</div></div></div>
+      </div>
+      <div class="col">
+        <div class="steps">
+          <div class="step"><span class="i">1</span>Mẫu &amp; tùy chỉnh nhanh<span class="t">3′</span></div>
+          <div class="step"><span class="i">5</span>Chi tiết công việc<span class="t">2,5′</span></div>
+          <div class="step"><span class="i">2</span>Thành viên &amp; phân quyền<span class="t">2,5′</span></div>
+          <div class="step"><span class="i">6</span>Liên kết công việc<span class="t">2,5′</span></div>
+          <div class="step"><span class="i">3</span>Loại việc 3 cấp + Workflow<span class="t">2,5′</span></div>
+          <div class="step"><span class="i">7</span>Ghi nhận đóng góp<span class="t">4′</span></div>
+          <div class="step"><span class="i">4</span>Kho việc &amp; giai đoạn<span class="t">3′</span></div>
+          <div class="step"><span class="i">8</span>Báo cáo Agile<span class="t">2′</span></div>
+        </div>
+        <div class="demo">Mỗi phần: <b>Nguyên lý</b> (20–40 giây) → <b>Demo nhanh</b> → <b>Kết quả</b>. Tổng ~22 phút.</div>
+      </div>
+    </div>
+    <div class="foot"><span>DATN-2026 · Work Service</span><span class="pg"></span></div>
+  </section>
+
+  <!-- 5. TEMPLATE -->
+  <section class="slide">
+    <div class="kicker">Tính năng 1</div>
+    <h2>Dự án mẫu &amp; Tùy chỉnh nhanh</h2>
+    <div class="body" style="flex-direction:column; gap:20px">
+      <ul class="pts">
+        <li>Mẫu <b>là một Project</b> có <code>is_template = true</code>: tái dùng toàn bộ màn hình và quan hệ, không có mô hình song song.</li>
+        <li>Tạo từ mẫu = <b>deep-clone trong 1 transaction</b>: cấp ID mới, nối lại quan hệ, <b>dời mọi ngày theo offset</b>, đặt lại tiến độ.</li>
+        <li><b>Kiểm tra toàn vẹn</b> ở 4 thời điểm: lỗi ERROR thì khóa nút hoặc rollback, WARNING chỉ lưu ý.</li>
+      </ul>
+      <div class="flow">
+        <div class="box"><div class="h">Mẫu F&amp;B</div>26 công việc · 3 giai đoạn<br>4 trạng thái · 6 thành phần</div>
+        <div class="arrow">→</div>
+        <div class="box hl"><div class="h">Tùy chỉnh (2)</div>✕ "Thuê mặt bằng" <span style="color:var(--muted)">(+2 việc con tự bỏ)</span><br>✎ "Chốt menu signature"</div>
+        <div class="arrow">→</div>
+        <div class="box"><div class="h">ProjectCloneEngine</div>map ID · +offset ngày<br>reset "Cần làm" · validate</div>
+        <div class="arrow">→</div>
+        <div class="box ok"><div class="h">Mộc Coffee · MOC</div>23 công việc <code>MOC-1..23</code><br>lịch bắt đầu từ hôm nay</div>
+      </div>
+      <div class="demo"><b>Demo:</b> Tạo dự án → Chọn mẫu dự án → Preview → bỏ 1 việc cha (cascade), đổi tên 1 việc → <b>Dùng mẫu này (2 tùy chỉnh)</b> → Tạo dự án từ mẫu.</div>
+    </div>
+    <div class="foot"><span>DATN-2026 · Work Service</span><span class="pg"></span></div>
+  </section>
+
+  <!-- 6. PERMISSIONS -->
+  <section class="slide">
+    <div class="kicker">Tính năng 2</div>
+    <h2>Thành viên &amp; Phân quyền fail-closed</h2>
+    <div class="body">
+      <div class="col" style="flex:1.1">
+        <table>
+          <tr><th>Quyền (trích)</th><th class="c">Administrator</th><th class="c">Member</th><th class="c">Viewer</th></tr>
+          <tr><td><code>PROJECT_VIEW</code></td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+          <tr><td><code>ISSUE_CREATE / EDIT</code></td><td class="c y">✓</td><td class="c y">✓</td><td class="c x">–</td></tr>
+          <tr><td><code>ISSUE_TRANSITION</code></td><td class="c y">✓</td><td class="c y">✓</td><td class="c x">–</td></tr>
+          <tr><td><code>COMMENT_CREATE</code></td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+          <tr><td><code>SPRINT_MANAGE</code></td><td class="c y">✓</td><td class="c x">–</td><td class="c x">–</td></tr>
+          <tr><td><code>PROJECT_ADMIN</code></td><td class="c y">✓</td><td class="c x">–</td><td class="c x">–</td></tr>
+        </table>
+        <div style="font-size:13.5px;color:var(--muted)">Ma trận theo mẫu F&amp;B. Lead/người tạo có mọi quyền; Global ADMIN bỏ qua kiểm tra.</div>
+      </div>
+      <div class="col">
+        <ul class="pts">
+          <li><b>Mặc định từ chối</b>: không có <code>RoleAssignment</code> hoặc không xác định được dự án → 403.</li>
+          <li>3 lớp kiểm tra: <code>@RequireProjectPermission</code> (aspect), <code>@RequireWorkspaceAccess</code>, <code>ProjectAccessService</code> cho quyền "của mình".</li>
+          <li>Thêm thành viên = <b>lời mời</b>; chấp nhận mới được gán vai trò. Email qua notification-service.</li>
+          <li>Frontend chỉ ẩn nút; <b>backend mới là lớp bảo vệ</b>.</li>
+        </ul>
+        <div class="demo"><b>Demo:</b> mời Bình (Member), Chi (Viewer) → mail ở Mailpit → chấp nhận.</div>
+      </div>
+    </div>
+    <div class="foot"><span>DATN-2026 · Work Service</span><span class="pg"></span></div>
+  </section>
+
+  <!-- 7. HIERARCHY + FSM -->
+  <section class="slide">
+    <div class="kicker">Tính năng 3</div>
+    <h2>Loại công việc 3 cấp &amp; Workflow FSM</h2>
+    <div class="body" style="flex-direction:column; gap:16px">
+      <div style="display:flex; gap:28px">
+        <div class="col" style="flex:0 0 400px; gap:8px">
+          <div class="lvl l1"><span class="k">Cấp 1</span>Hạng mục lớn: không có cha</div>
+          <div class="lvl l0"><span class="k">Cấp 0</span>Công việc: đứng riêng hoặc thuộc hạng mục lớn</div>
+          <div class="lvl lm"><span class="k">Cấp −1</span>Công việc con: bắt buộc thuộc một công việc</div>
+        </div>
+        <ul class="pts sm col" style="justify-content:center">
+          <li>Chặn mọi cây sai: công việc con gắn thẳng vào hạng mục lớn, công việc con lồng trong công việc con.</li>
+          <li>Trạng thái tùy chỉnh, mỗi cái thuộc 1 trong 3 nhóm <b>TODO / IN PROGRESS / DONE</b> (3 khu bên dưới); báo cáo dựa trên nhóm.</li>
+          <li>Bước chuyển gắn: <b>Condition</b> (chỉ người được giao…), <b>Validator</b> (việc con xong, bắt buộc ước lượng…), <b>Post-function</b> (ghi audit).</li>
+        </ul>
+      </div>
+      <svg width="1136" height="282" viewBox="0 0 1136 282" role="img" aria-label="Workflow mở quán F&amp;B, chia 3 nhóm trạng thái">
+        <defs>
+          <marker id="fa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#6b625b"/>
+          </marker>
+        </defs>
+        <!-- 3 khu nhóm trạng thái -->
+        <line x1="295" y1="4" x2="295" y2="282" stroke="#b9a996" stroke-width="2" stroke-dasharray="9 7"/>
+        <line x1="875" y1="4" x2="875" y2="282" stroke="#b9a996" stroke-width="2" stroke-dasharray="9 7"/>
+        <text x="147" y="18" text-anchor="middle" font-size="13.5" font-weight="800" letter-spacing="1.5" fill="#64748b">TODO <tspan font-weight="500" letter-spacing="0" fill="#6b625b">· chưa làm</tspan></text>
+        <text x="585" y="18" text-anchor="middle" font-size="13.5" font-weight="800" letter-spacing="1.5" fill="#3b82f6">IN PROGRESS <tspan font-weight="500" letter-spacing="0" fill="#6b625b">· đang làm</tspan></text>
+        <text x="1005" y="18" text-anchor="middle" font-size="13.5" font-weight="800" letter-spacing="1.5" fill="#10b981">DONE <tspan font-weight="500" letter-spacing="0" fill="#6b625b">· đã xong</tspan></text>
+        <g transform="translate(0,30)">
+        <!-- arc above: Hoàn tất trực tiếp -->
+        <path d="M150 92 C 330 20, 850 20, 1012 92" fill="none" stroke="#6b625b" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#fa)"/>
+        <text x="300" y="34" text-anchor="middle" font-size="14" fill="#6b625b">Hoàn tất trực tiếp</text>
+        <!-- nodes -->
+        <rect x="40" y="96" width="220" height="56" rx="28" fill="#64748b"/>
+        <text x="150" y="130" text-anchor="middle" font-size="17" font-weight="700" fill="#fff">Cần làm</text>
+        <rect x="330" y="96" width="220" height="56" rx="28" fill="#3b82f6"/>
+        <text x="440" y="130" text-anchor="middle" font-size="17" font-weight="700" fill="#fff">Đang thực hiện</text>
+        <rect x="620" y="96" width="220" height="56" rx="28" fill="#f59e0b"/>
+        <text x="730" y="130" text-anchor="middle" font-size="17" font-weight="700" fill="#fff">Nghiệm thu / Đánh giá</text>
+        <rect x="910" y="96" width="210" height="56" rx="28" fill="#10b981"/>
+        <text x="1015" y="130" text-anchor="middle" font-size="17" font-weight="700" fill="#fff">Hoàn thành</text>
+        <!-- forward -->
+        <line x1="260" y1="124" x2="326" y2="124" stroke="#6b625b" stroke-width="2.2" marker-end="url(#fa)"/>
+        <line x1="550" y1="124" x2="616" y2="124" stroke="#8b5a2b" stroke-width="3" marker-end="url(#fa)"/>
+        <line x1="840" y1="124" x2="906" y2="124" stroke="#6b625b" stroke-width="2.2" marker-end="url(#fa)"/>
+        <text x="585" y="88" text-anchor="middle" font-size="13" font-weight="700" fill="#8b5a2b">Gửi nghiệm thu</text>
+        <text x="585" y="71" text-anchor="middle" font-size="12" fill="#8b5a2b">[chỉ người được giao]</text>
+        <!-- back arcs below -->
+        <path d="M700 152 C 660 196, 500 196, 460 156" fill="none" stroke="#6b625b" stroke-width="2" marker-end="url(#fa)"/>
+        <text x="580" y="204" text-anchor="middle" font-size="13.5" fill="#6b625b">Yêu cầu chỉnh sửa</text>
+        <path d="M1015 152 C 960 250, 480 250, 430 156" fill="none" stroke="#6b625b" stroke-width="2" marker-end="url(#fa)"/>
+        <text x="760" y="240" text-anchor="middle" font-size="13.5" fill="#6b625b">Mở lại công việc</text>
+        <!-- missing transition note -->
+        <text x="40" y="200" font-size="14" fill="#dc2626" font-weight="700">✕ Không có bước chuyển</text>
+        <text x="40" y="220" font-size="14" fill="#dc2626">Đang thực hiện → Hoàn thành</text>
+        </g>
+      </svg>
+    </div>
+    <div class="foot"><span>Workflow "Quy trình Mở mới Cửa hàng F&amp;B" của mẫu</span><span class="pg"></span></div>
+  </section>
+
+  <!-- 8. BACKLOG & SPRINT -->
+  <section class="slide">
+    <div class="kicker">Tính năng 4</div>
+    <h2>Kho việc &amp; Giai đoạn (Sprint)</h2>
+    <div class="body">
+      <div class="col">
+        <div class="card"><h3>Kho việc (Backlog)</h3>
+          <ul class="pts sm">
+            <li>Tạo nhanh ngay trong danh sách, kéo thả giữa Backlog ↔ giai đoạn.</li>
+            <li><b>LexoRank</b>: chèn giữa A và B chỉ sinh 1 chuỗi xếp hạng mới, <b>ghi 1 dòng</b>, không đánh số lại cả danh sách.</li>
+            <li>Story point thang <b>Fibonacci</b>: càng lớn càng khó ước lượng chính xác.</li>
+          </ul></div>
+        <div class="fib">
+          <span style="--b:#e9f8ee; --bd:#86efac; --c:#15803d">1<small>Rất nhỏ</small></span>
+          <span style="--b:#f1f8dc; --bd:#bef264; --c:#4d7c0f">2<small>Nhỏ</small></span>
+          <span style="--b:#fdf3c4; --bd:#facc15; --c:#a16207">3<small>Vừa</small></span>
+          <span style="--b:#fed7aa; --bd:#fb923c; --c:#9a3412">5<small>Khá lớn</small></span>
+          <span style="--b:#f97316; --bd:#ea580c; --c:#fff">8<small>Lớn</small></span>
+          <span style="--b:#dc2626; --bd:#b91c1c; --c:#fff">13<small>Rất lớn</small></span>
+        </div>
+        <div class="fib-scale"><span>nhẹ</span><i></i><span>nặng</span></div>
+        <div class="demo"><b>Demo:</b> tạo "Khảo sát 5 quán đối thủ" (3 điểm) → kéo vào Giai đoạn 1 → chỉ ra nút của Giai đoạn 2, 3 đang khóa → <b>Bắt đầu giai đoạn</b> 1.</div>
+      </div>
+      <div class="col" style="flex:1.15">
+        <svg width="100%" viewBox="0 0 604 120" role="img" aria-label="Vòng đời sprint">
+          <defs><marker id="sa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#8b5a2b"/></marker></defs>
+          <rect x="0" y="20" width="160" height="54" rx="27" fill="#fff" stroke="#64748b" stroke-width="2"/>
+          <text x="80" y="53" text-anchor="middle" font-size="16" font-weight="700">Dự kiến</text>
+          <rect x="220" y="20" width="160" height="54" rx="27" fill="#eaf1fe" stroke="#3b82f6" stroke-width="2"/>
+          <text x="300" y="53" text-anchor="middle" font-size="16" font-weight="700">Đang chạy</text>
+          <rect x="440" y="20" width="160" height="54" rx="27" fill="#e8f8f1" stroke="#10b981" stroke-width="2"/>
+          <text x="520" y="53" text-anchor="middle" font-size="16" font-weight="700">Đã đóng</text>
+          <line x1="160" y1="47" x2="216" y2="47" stroke="#8b5a2b" stroke-width="2.5" marker-end="url(#sa)"/>
+          <line x1="380" y1="47" x2="436" y2="47" stroke="#8b5a2b" stroke-width="2.5" marker-end="url(#sa)"/>
+          <text x="188" y="104" text-anchor="middle" font-size="13.5" fill="#6b625b">Bắt đầu</text>
+          <text x="410" y="104" text-anchor="middle" font-size="13.5" fill="#6b625b">Hoàn tất</text>
+          <text x="520" y="104" text-anchor="middle" font-size="13.5" fill="#6b625b">🔒 khóa</text>
+        </svg>
+        <table>
+          <tr><th>Bắt đầu</th><th>Hoàn tất</th></tr>
+          <tr><td>Chỉ <b>1</b> giai đoạn chạy mỗi lúc</td><td>Việc dở → Backlog hoặc giai đoạn khác</td></tr>
+          <tr><td>Bắt đầu <b>lần lượt</b>: chỉ giai đoạn đứng đầu kế hoạch</td><td>Chốt Velocity + snapshot đóng góp</td></tr>
+          <tr><td>Bắt buộc ngày kết thúc, tối đa <b>8 tuần</b></td><td>Không mở lại việc của giai đoạn đã đóng</td></tr>
+          <tr><td>Dự án mẫu <b>không</b> được bắt đầu</td><td></td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="foot"><span>DATN-2026 · Work Service</span><span class="pg"></span></div>
+  </section>
+
+  <!-- 9. WORK ITEM + LINKS -->
+  <section class="slide">
+    <div class="kicker">Tính năng 5 · 6</div>
+    <h2>Chi tiết công việc &amp; Liên kết công việc</h2>
+    <div class="body" style="flex-direction:column; gap:14px">
+      <div class="card" style="padding:12px 20px">
+        <h3>Chi tiết công việc</h3>
+        <div class="tri">
+          <div>Người thực hiện, ưu tiên, điểm, hạn chót, thành phần, ước lượng / còn lại.</div>
+          <div><b>Bình luận</b>, <b>tệp đính kèm</b>, <b>lịch sử thay đổi</b>: ai, lúc nào, cũ → mới.</div>
+          <div>Chỉ sửa/xóa bình luận, tệp <b>của chính mình</b>.</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:26px; flex:1; min-height:0">
+      <div class="col" style="gap:10px">
+        <table class="links">
+          <tr><th style="width:140px; white-space:nowrap">Loại liên kết</th><th>Tác dụng</th></tr>
+          <tr><td><span class="lk" style="--c:#dc2626; --b:#fdecec">Cản trở</span></td>
+              <td>Việc bị cản trở <b>không được bắt đầu hay hoàn thành</b> cho đến khi việc cản trở xong. Hiện nhãn đỏ "đang bị cản trở"; cảnh báo nếu việc cản trở có hạn chót muộn hơn lịch của việc này.</td></tr>
+          <tr><td><span class="lk" style="--c:#c2410c; --b:#fff1e6">Gây ra</span></td>
+              <td>Ghi nguyên nhân → hệ quả để truy vết (sự cố này gây ra việc kia). Không chặn chuyển trạng thái.</td></tr>
+          <tr><td><span class="lk" style="--c:#7c3aed; --b:#f3edff">Trùng lặp</span></td>
+              <td>Đánh dấu việc bị trùng → việc đó <b>tự chuyển Hoàn thành</b> với kết quả "Trùng lặp".</td></tr>
+          <tr><td><span class="lk" style="--c:#475569; --b:#eef2f6">Liên quan</span></td>
+              <td>Chỉ để tham chiếu qua lại, không ràng buộc gì.</td></tr>
+        </table>
+        <ul class="pts sm">
+          <li>Cản trở và Gây ra <b>không được tạo vòng lặp</b> (A → B → A): hệ thống từ chối ngay.</li>
+          <li>Không liên kết với chính nó, với cha/con ruột, với việc đã xóa. Mỗi liên kết ghi vào lịch sử của <b>cả hai</b> việc.</li>
+        </ul>
+      </div>
+      <div class="col" style="flex:0 0 400px; justify-content:center">
+        <svg width="400" viewBox="0 0 470 300" role="img" aria-label="Ví dụ phụ thuộc">
+          <defs><marker id="la" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#dc2626"/></marker></defs>
+          <rect x="10" y="40" width="190" height="80" rx="12" fill="#fff" stroke="#e7dfd5"/>
+          <text x="105" y="72" text-anchor="middle" font-size="15" font-weight="800" fill="#6b625b">MOC-2</text>
+          <text x="105" y="96" text-anchor="middle" font-size="14">Chốt mặt bằng</text>
+          <rect x="270" y="40" width="190" height="80" rx="12" fill="#fdecec" stroke="#fca5a5"/>
+          <text x="365" y="72" text-anchor="middle" font-size="15" font-weight="800" fill="#6b625b">🔒 MOC-7</text>
+          <text x="365" y="96" text-anchor="middle" font-size="14">Thiết kế 2D/3D</text>
+          <line x1="200" y1="80" x2="266" y2="80" stroke="#dc2626" stroke-width="2.5" marker-end="url(#la)"/>
+          <text x="233" y="68" text-anchor="middle" font-size="12" fill="#dc2626" font-weight="700">cản trở</text>
+          <path d="M365 120 C 365 200, 105 200, 105 124" fill="none" stroke="#c4b8ab" stroke-width="2" stroke-dasharray="6 5"/>
+          <text x="235" y="206" text-anchor="middle" font-size="14" fill="#dc2626" font-weight="700">✕ MOC-7 cản trở MOC-2</text>
+          <text x="235" y="228" text-anchor="middle" font-size="13.5" fill="#6b625b">→ bị từ chối: tạo vòng lặp phụ thuộc</text>
+          <text x="235" y="270" text-anchor="middle" font-size="14" fill="#6b625b">Chuyển MOC-7 sang Đang thực hiện → bị chặn</text>
+          <text x="235" y="292" text-anchor="middle" font-size="14" fill="#6b625b">MOC-2 xong → MOC-7 tự được giải phóng</text>
+        </svg>
+      </div>
+      </div>
+    </div>
+    <div class="foot"><span>DATN-2026 · Work Service</span><span class="pg"></span></div>
+  </section>
+
+  <!-- 10. CONTRIBUTION -->
+  <section class="slide">
+    <div class="kicker">Tính năng 7</div>
+    <h2>Ghi nhận đóng góp: sổ ghi công chỉ ghi thêm</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="n">1</span>Ghi điểm thế nào</h3>
+        <ul class="pts sm">
+          <li>Việc chuyển sang <b>Hoàn thành</b> → người <b>đang được giao</b> nhận điểm của việc.</li>
+          <li>Việc có việc con → việc cha <b>0 điểm</b>, điểm tính ở việc con (không tính 2 lần).</li>
+          <li>Việc xong mà chưa giao cho ai → không ai nhận, hệ thống cảnh báo.</li>
+          <li>Mỗi lần cộng/trừ là <b>1 dòng mới</b> trong sổ; không sửa, không xóa dòng cũ.</li>
+        </ul></div>
+      <div class="card"><h3><span class="n">2</span>Khi mở lại việc</h3>
+        <ul class="pts sm">
+          <li>Việc đã Hoàn thành bị mở lại → ghi 1 dòng <b>trừ đúng số điểm</b> đã cộng lần trước, trừ vào người đã nhận.</li>
+          <li>Hoàn thành lại → cộng lại, trễ hạn tính theo <b>ngày hoàn thành mới</b>.</li>
+          <li>Xóa việc đã có điểm → trừ hết phần điểm đã cộng.</li>
+        </ul></div>
+      <div class="card"><h3><span class="n">3</span>Khi chuyển việc cho người khác</h3>
+        <ul class="pts sm">
+          <li>Việc <b>chưa xong</b>: chưa ai có điểm; ai đang được giao <b>lúc hoàn thành</b> thì người đó nhận.</li>
+          <li>Việc <b>đã xong</b> rồi mới đổi người: điểm <b>vẫn ở người cũ</b>.</li>
+          <li>Sau đó nếu mở lại: người cũ bị trừ; hoàn thành lại thì <b>người mới</b> nhận.</li>
+        </ul></div>
+      <div class="card hl"><h3><span class="n">4</span>Công thức tính điểm</h3>
+        <div class="eq">Điểm nhận <span class="op">=</span> Điểm của việc <span class="op">×</span> (100% <span class="op">−</span> Phạt trễ hạn)</div>
+        <div style="font-size:15px; margin:-4px 0 10px">Phạt trễ hạn = <b>10% mỗi ngày trễ</b>, tối đa <b>50%</b>.</div>
+        <div class="late">
+          <div><b>100%</b>đúng hạn</div><div><b>90%</b>trễ 1 ngày</div><div><b>80%</b>trễ 2 ngày</div><div><b>50%</b>trễ từ 5 ngày</div>
+        </div>
+        <div style="font-size:15px">Ví dụ: việc 5 điểm, trễ 2 ngày → 5 × 80% = <b>4 điểm</b>.</div>
+      </div>
+    </div>
+    <div class="foot"><span>DATN-2026 · Work Service</span><span class="pg"></span></div>
+  </section>
+
+  <!-- 11. REPORTS -->
+  <section class="slide">
+    <div class="kicker">Tính năng 8</div>
+    <h2>Báo cáo Agile</h2>
+    <p class="lead">Trạng thái từng ngày được dựng lại bằng cách <b>phát lại lịch sử thay đổi</b>; đóng giai đoạn thì <b>đóng băng snapshot</b>.</p>
+    <div class="body" style="align-items:flex-start">
+      <div class="col card">
+        <h3>Burndown</h3>
+        <svg width="320" height="140" viewBox="0 0 320 140" aria-hidden="true">
+          <line x1="20" y1="10" x2="20" y2="120" stroke="#e7dfd5"/><line x1="20" y1="120" x2="310" y2="120" stroke="#e7dfd5"/>
+          <line x1="20" y1="20" x2="300" y2="118" stroke="#c4b8ab" stroke-width="2" stroke-dasharray="6 5"/>
+          <polyline points="20,20 70,20 110,40 150,40 190,62 230,70 270,96 300,104" fill="none" stroke="#8b5a2b" stroke-width="3"/>
+          <circle cx="150" cy="40" r="5" fill="#f59e0b"/>
+        </svg>
+        <ul class="pts sm"><li>Điểm còn lại / ngày so với đường lý tưởng.</li><li>Đánh dấu <b>thay đổi phạm vi</b> khi thêm việc giữa chừng.</li></ul>
+      </div>
+      <div class="col card">
+        <h3>Velocity</h3>
+        <svg width="320" height="140" viewBox="0 0 320 140" aria-hidden="true">
+          <line x1="20" y1="120" x2="310" y2="120" stroke="#e7dfd5"/>
+          <rect x="50" y="40" width="34" height="80" fill="#e7dfd5"/><rect x="88" y="62" width="34" height="58" fill="#8b5a2b"/>
+          <rect x="160" y="30" width="34" height="90" fill="#e7dfd5"/><rect x="198" y="44" width="34" height="76" fill="#8b5a2b"/>
+        </svg>
+        <ul class="pts sm"><li>Điểm <b>cam kết</b> và <b>hoàn thành</b> mỗi giai đoạn đã đóng.</li><li>Cơ sở ước lượng năng lực nhóm.</li></ul>
+      </div>
+      <div class="col card">
+        <h3>CFD (Cumulative Flow)</h3>
+        <svg width="320" height="140" viewBox="0 0 320 140" aria-hidden="true">
+          <path d="M20 120 L300 120 L300 30 L20 100 Z" fill="#10b981" opacity=".85"/>
+          <path d="M20 100 L300 30 L300 18 L20 60 Z" fill="#f59e0b" opacity=".85"/>
+          <path d="M20 60 L300 18 L300 10 L20 30 Z" fill="#3b82f6" opacity=".85"/>
+          <path d="M20 30 L300 10 L20 10 Z" fill="#64748b" opacity=".6"/>
+        </svg>
+        <ul class="pts sm"><li>Số việc theo nhóm trạng thái theo thời gian.</li><li>Dải nào phình ra là chỗ đang <b>ùn ứ</b>.</li></ul>
+      </div>
+    </div>
+    <div class="foot"><span>Hình minh họa dạng biểu đồ, không phải số liệu thật</span><span class="pg"></span></div>
+  </section>
+
+  <!-- 12. SUMMARY -->
+  <section class="slide" style="justify-content:center">
+    <div class="kicker">Tổng kết</div>
+    <h2 style="font-size:44px">Work Service trong số liệu</h2>
+    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:18px; margin-top:34px">
+      <div class="card stat"><div class="v">18</div><div class="l">controller</div></div>
+      <div class="card stat"><div class="v">98</div><div class="l">endpoint REST</div></div>
+      <div class="card stat"><div class="v">15</div><div class="l">quyền / dự án</div></div>
+      <div class="card stat"><div class="v">9</div><div class="l">migration Flyway</div></div>
+      <div class="card stat"><div class="v">3</div><div class="l">mẫu dự án dựng sẵn</div></div>
+    </div>
+    <p class="lead" style="margin-top:40px; font-size:22px">Cảm ơn Hội đồng đã lắng nghe. Mời Hội đồng đặt câu hỏi.</p>
+    <div class="foot"><span>DATN-2026 · Work Service</span><span class="pg"></span></div>
+  </section>
+</div>
+
+<div id="nav">
+  <button id="prev" aria-label="Trang trước">‹</button>
+  <button id="next" aria-label="Trang sau">›</button>
+</div>
+
+<script>
+  (function () {
+    var deck = document.getElementById('deck');
+    var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+    var progress = document.getElementById('progress');
+    var total = slides.length;
+    var idx = 0;
+
+    slides.forEach(function (s, i) {
+      var pg = s.querySelector('.pg');
+      if (pg) pg.textContent = String(i + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0');
+    });
+
+    function fit() {
+      var s = Math.min(window.innerWidth / 1280, window.innerHeight / 720) * 0.97;
+      deck.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+    }
+
+    function show(i) {
+      idx = Math.max(0, Math.min(total - 1, i));
+      slides.forEach(function (s, k) { s.classList.toggle('active', k === idx); });
+      progress.style.width = ((idx + 1) / total * 100) + '%';
+      if (location.hash !== '#' + (idx + 1)) history.replaceState(null, '', '#' + (idx + 1));
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); show(idx + 1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(idx - 1); }
+      else if (e.key === 'Home') show(0);
+      else if (e.key === 'End') show(total - 1);
+    });
+    document.getElementById('prev').onclick = function () { show(idx - 1); };
+    document.getElementById('next').onclick = function () { show(idx + 1); };
+    window.addEventListener('resize', fit);
+
+    var start = parseInt((location.hash || '').replace('#', ''), 10);
+    fit();
+    show(isNaN(start) ? 0 : start - 1);
+  })();
+</script>
+</body>
+</html>
