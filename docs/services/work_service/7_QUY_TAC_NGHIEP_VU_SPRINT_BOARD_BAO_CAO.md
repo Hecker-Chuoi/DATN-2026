@@ -121,12 +121,13 @@
 | Mã | Quy tắc |
 | :--- | :--- |
 | **BR-B01** | Backlog gồm công việc của dự án **chưa thuộc Sprint nào**. |
-| **BR-B02** | Màn hình Backlog hiển thị: Sprint `ACTIVE` (nếu có) → các Sprint `FUTURE` theo thứ tự kế hoạch (ngày bắt đầu dự kiến tăng dần, chưa có ngày xếp cuối, trùng ngày thì tạo trước đứng trước) → khối Backlog. **Sprint đã đóng không xuất hiện** (chúng thuộc màn hình Báo cáo). Vì vậy nút *Bắt đầu* chỉ sáng ở khối `FUTURE` **trên cùng** (BR-S15); các khối khác hiện nút bị khoá kèm lý do. |
+| **BR-B02** | Màn hình Backlog hiển thị: Sprint `ACTIVE` (nếu có) → các Sprint `FUTURE` theo thứ tự kế hoạch (ngày bắt đầu dự kiến tăng dần, chưa có ngày xếp cuối, trùng ngày thì tạo trước đứng trước) → khu **đã hoàn tất** (BR-B08) → khối Backlog. Sprint đã đóng không nằm lẫn trong các khối kế hoạch. Vì vậy nút *Bắt đầu* chỉ sáng ở khối `FUTURE` **trên cùng** (BR-S15); các khối khác hiện nút bị khoá kèm lý do. |
 | **BR-B03** | **Sub-task không đứng thành hàng riêng** trên Backlog — chúng cuộn theo công việc cha (xem BR-S33). |
 | **BR-B04** | Thứ tự công việc do người dùng quyết định bằng kéo thả, và **kéo một thẻ chỉ được cập nhật đúng thẻ đó** — không đụng tới các thẻ xung quanh. |
 | **BR-B05** | Bộ lọc (tìm kiếm, Epic, người thực hiện, việc của tôi, mới cập nhật) chỉ **thu hẹp hiển thị**, không làm thay đổi dữ liệu. |
 | **BR-B06** | Cho phép tạo nhanh công việc ngay trong từng khối; công việc tạo trong khối Sprint nào sẽ thuộc Sprint đó. |
 | **BR-B07** | Toàn bộ màn hình được nạp trong **một lần gọi duy nhất** để không nhảy giao diện khi tải. |
+| **BR-B08** | **Sprint / Giai đoạn đã hoàn tất (`CLOSED`) không biến mất** khỏi Kho việc: chúng nằm trong khu riêng *"Giai đoạn đã hoàn tất"* ngay **trên khối Backlog**, đóng gần nhất xếp trước, mỗi khối mặc định thu gọn. Khu này **chỉ để xem lại**: không kéo thả vào/ra, không tạo việc mới (backend vốn chặn thêm/bớt việc ở Sprint CLOSED). Mỗi khối hiện ngày hoàn tất, số liệu chốt lúc đóng (số việc và điểm hoàn thành, lấy từ snapshot — trùng với Báo cáo) và nút *Xem báo cáo* mở thẳng báo cáo tiến độ của giai đoạn đó. Công việc DONE vẫn giữ `sprintId` của giai đoạn đã đóng nên Velocity / Báo cáo đóng góp không bị ảnh hưởng. |
 
 ---
 
@@ -213,7 +214,7 @@
 | Sprint — hoàn tất | BR-S20 → BR-S28 | 🟢 Đã xong | Đã kiểm thử thật: việc DONE ở lại, việc dở sang Sprint 2, snapshot ghi đúng |
 | Sprint — liên tầng | BR-S30 → BR-S34 | 🟢 Đã xong | Có unit test cascade Sub-task |
 | Sprint — thêm/bớt việc | BR-S40 → BR-S43 | 🟢 Đã xong | Đã kiểm thử thật nhật ký hai lớp |
-| Backlog | BR-B01 → BR-B07 | 🟢 Đã xong | API 1-lần-gọi đã kiểm thử thật; màn hình Backlog chạy được trên trình duyệt (tạo → bắt đầu Sprint) |
+| Backlog | BR-B01 → BR-B08 | 🟢 Đã xong | API 1-lần-gọi đã kiểm thử thật; màn hình Backlog chạy được trên trình duyệt (tạo → bắt đầu Sprint) |
 | Board — hiển thị | BR-K01 → BR-K04 | 🟢 Đã xong | Bảng SCRUM lọc theo Sprint đang chạy; cảnh báo trạng thái chưa gán cột |
 | Board — kéo thả | BR-K10 → BR-K15 | 🟢 Đã xong | Đã kiểm thử thật: đổi cột đi qua workflow (changelog STATUS), sắp xếp cùng cột bỏ qua workflow, phiên bản cũ → 409 |
 | Board — WIP | BR-K20 → BR-K24 | 🟢 Đã xong | Đã kiểm thử thật chặn ở 1/1 và cờ bỏ qua giới hạn |
