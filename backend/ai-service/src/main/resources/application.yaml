@@ -1,0 +1,67 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: ai-service
+
+  # ─── PostgreSQL (datn_main_db, dùng chung với identity/work/workspace) ───
+  datasource:
+    url: jdbc:postgresql://localhost:5433/datn_main_db
+    username: postgres
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+
+  # ─── Flyway: history table riêng để không đụng flyway_work_schema_history ───
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    table: flyway_ai_schema_history
+    locations: classpath:db/migration
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+
+  # ─── OAuth2 Resource Server (Keycloak) ───
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:8088/realms/datn-realm/protocol/openid-connect/certs
+          issuer-uri: http://localhost:8088/realms/datn-realm
+
+  # ─── Redis: đếm lượt gọi Gemini theo ngày ───
+  data:
+    redis:
+      host: localhost
+      port: 6380
+      timeout: 2000ms
+
+  mvc:
+    async:
+      request-timeout: 300000   # SSE tối đa 5 phút
+
+# ─── Cấu hình agent ───
+ai:
+  agent:
+    model: gemini-2.5-flash
+    light-model: gemini-2.5-flash-lite
+    gemini-api-key: ${GEMINI_API_KEY:}
+    max-output-tokens: 4096
+    max-iterations: 8
+    max-tool-result-chars: 20000
+    history-char-budget: 120000
+    daily-request-limit-per-user: 40
+    retry-429: 2
+    title-with-llm: false        # bật = đặt tiêu đề bằng light-model (tốn thêm 1 request mỗi hội thoại)
+    work-service-url: http://localhost:8083
+    tools-api-key: ${AI_TOOLS_API_KEY:}
+
+logging:
+  level:
+    root: INFO
+    com.datn.aiservice: DEBUG

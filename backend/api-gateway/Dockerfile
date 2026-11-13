@@ -10,6 +10,7 @@ COPY api-gateway/pom.xml ./api-gateway/
 COPY work-service/pom.xml ./work-service/
 COPY workspace-service/pom.xml ./workspace-service/
 COPY notification-service/pom.xml ./notification-service/
+COPY ai-service/pom.xml ./ai-service/
 COPY workspace-service/pom.xml ./workspace-service/
 
 # Copy source code of common & api-gateway
