@@ -578,4 +578,115 @@ export const jqlApi = {
   search: (jqlQuery) => apiClient.post(`${WORK_BASE}/jql/search`, { jql: jqlQuery }),
 };
 
+// ─── 8. AI Agent API (ai-service qua gateway /ai/**) ─────────────────────────
+const AI_BASE = '/ai/api/v1/ai/agent';
+
+/** Làm mới user token một lần (dùng cho fetch SSE – không đi qua interceptor axios). */
+async function refreshUserToken() {
+  const refreshToken = userTokenStore.getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const r = await axios.post('/identity/api/v1/auth/refresh', { refreshToken }, { headers: { 'Content-Type': 'application/json' } });
+    const token = r.data?.data?.access_token || r.data?.data?.accessToken || r.data?.access_token;
+    if (token) {
+      userTokenStore.set(token, r.data?.data?.refresh_token);
+      return token;
+    }
+  } catch {
+    // rơi xuống dưới
+  }
+  userTokenStore.clear();
+  return null;
+}
+
+/**
+ * Đọc SSE bằng fetch + ReadableStream (axios không stream được trên trình duyệt).
+ * handlers: { text_delta, tool_started, tool_finished, interaction_required, notice, done, error } – mỗi hàm nhận data đã parse JSON.
+ */
+async function streamSse(url, body, handlers, signal) {
+  const doFetch = (token) =>
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+      credentials: 'include',
+      signal,
+    });
+
+  let res = await doFetch(userTokenStore.get());
+  if (res.status === 401) {
+    const token = await refreshUserToken();
+    if (!token) {
+      redirectToSessionExpired(false);
+      throw new Error('Phiên đăng nhập đã hết hạn');
+    }
+    res = await doFetch(token);
+  }
+  if (!res.ok) {
+    let msg = 'Không kết nối được trợ lý AI';
+    try {
+      const j = await res.json();
+      if (j?.message) msg = translateServerMessage(j.message);
+    } catch {
+      // body không phải JSON
+    }
+    const err = new Error(msg);
+    err.status = res.status;
+    throw err;
+  }
+
+  const dispatch = (chunk) => {
+    let event = 'message';
+    let data = '';
+    for (const line of chunk.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data += line.slice(5).trim();
+    }
+    if (!data) return;
+    let parsed;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      parsed = { text: data };
+    }
+    handlers?.[event]?.(parsed);
+  };
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true }).replace(/\r/g, '');
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      dispatch(buf.slice(0, idx));
+      buf = buf.slice(idx + 2);
+    }
+  }
+  if (buf.trim()) dispatch(buf);
+}
+
+export const aiApi = {
+  createConversation: (data) => apiClient.post(`${AI_BASE}/conversations`, data || {}),
+  listConversations: (projectId) => apiClient.get(`${AI_BASE}/conversations`, { params: projectId ? { projectId } : {} }),
+  getMessages: (id) => apiClient.get(`${AI_BASE}/conversations/${id}/messages`),
+  updateConversation: (id, data) => apiClient.patch(`${AI_BASE}/conversations/${id}`, data),
+  /** body: { text, context: { workspaceId, projectId, workItemId, timezone } } */
+  streamMessage: (id, body, handlers, signal) => streamSse(`${AI_BASE}/conversations/${id}/messages`, body, handlers, signal),
+  /** body: ASK_USER { selectedValues, freeText } | APPROVE_ACTION { approved, editedInput } (+ context) */
+  answerInteraction: (id, interactionId, body, handlers, signal) =>
+    streamSse(`${AI_BASE}/conversations/${id}/interactions/${interactionId}`, body, handlers, signal),
+  listMemories: () => apiClient.get(`${AI_BASE}/memories`),
+  updateMemory: (id, data) => apiClient.patch(`${AI_BASE}/memories/${id}`, data),
+  deleteMemory: (id) => apiClient.delete(`${AI_BASE}/memories/${id}`),
+  getSettings: () => apiClient.get(`${AI_BASE}/settings`),
+  updateSettings: (data) => apiClient.put(`${AI_BASE}/settings`, data),
+};
+
 export default apiClient;

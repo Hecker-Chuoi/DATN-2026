@@ -24,6 +24,7 @@ import toast from 'react-hot-toast';
 import { projectApi, sprintApi } from '../api.js';
 import { useProjectPermission } from '../hooks/useProjectPermission.js';
 import { ProjectProvider } from '../context/ProjectContext.jsx';
+import { useAiPanel } from '../context/AiChatContext.jsx';
 import { isScrumProject } from '../utils/projectType.js';
 import { wsPath } from '../utils/workspacePath.js';
 import CreateWorkItemModal from '../components/items/CreateWorkItemModal.jsx';
@@ -117,6 +118,19 @@ export default function ProjectDetailPage() {
     setSelectedItemId(itemId);
     setIsDetailModalOpen(true);
   };
+
+  // Trợ lý AI: cho phép mở modal từ mã (AUTH-12) và biết công việc đang mở để hiểu "việc này"
+  const aiPanel = useAiPanel();
+  useEffect(() => {
+    if (!aiPanel) return undefined;
+    return aiPanel.registerItemOpener(handleOpenDetailModal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiPanel]);
+  useEffect(() => {
+    if (!aiPanel) return undefined;
+    aiPanel.setWorkItemId(isDetailModalOpen ? selectedItemId : null);
+    return () => aiPanel.setWorkItemId(null);
+  }, [aiPanel, isDetailModalOpen, selectedItemId]);
 
   const handleOpenCreateItem = (prefill) => {
     setCreatePrefill(prefill || null);
