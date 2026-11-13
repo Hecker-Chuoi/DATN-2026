@@ -1,0 +1,109 @@
+# 30 câu hỏi mẫu cho bộ đánh giá (EvalRunner, profile `eval`).
+# context: project (mặc định, có dự án đang mở) | none (không mở dự án).
+# expectedTools: đúng khi AI gọi ÍT NHẤT một tool trong danh sách; rỗng = không mong đợi tool nào.
+# {CODE} được thay bằng -Deval.sample-code (một mã công việc có thật trong dự án mẫu, ví dụ MOC-1).
+questions:
+  # ─── Đọc dữ liệu dự án ───
+  - id: Q01
+    question: "Dự án này tên gì, ai là trưởng dự án và có những loại công việc nào?"
+    expectedTools: [get_project_metadata]
+  - id: Q02
+    question: "Sprint hiện tại còn bao nhiêu story point chưa xong?"
+    expectedTools: [get_sprint_progress]
+  - id: Q03
+    question: "Liệt kê các sprint của dự án và trạng thái từng sprint."
+    expectedTools: [list_sprints, get_project_metadata]
+  - id: Q04
+    question: "Hôm nay tôi có những việc gì cần làm?"
+    expectedTools: [get_my_issues]
+  - id: Q05
+    question: "Tìm các bug chưa xử lý trong dự án."
+    expectedTools: [search_work_items]
+  - id: Q06
+    question: "Có task nào liên quan đến đăng nhập không?"
+    expectedTools: [search_work_items]
+  - id: Q07
+    question: "Cho tôi xem chi tiết {CODE}."
+    expectedTools: [get_work_item]
+  - id: Q08
+    question: "{CODE} đang ở trạng thái nào và ai phụ trách?"
+    expectedTools: [get_work_item]
+  - id: Q09
+    question: "Dự án có những thành viên nào?"
+    expectedTools: [list_project_members]
+  - id: Q10
+    question: "Velocity của nhóm mấy sprint gần đây thế nào?"
+    expectedTools: [get_agile_report]
+  - id: Q11
+    question: "Vẽ burndown sprint hiện tại giúp tôi, nhóm có kịp tiến độ không?"
+    expectedTools: [get_agile_report, get_sprint_progress]
+  - id: Q12
+    question: "Ai đóng góp nhiều nhất trong sprint này?"
+    expectedTools: [get_contribution_report]
+  - id: Q13
+    question: "{CODE} có tệp đính kèm nào không?"
+    expectedTools: [list_attachments]
+  - id: Q14
+    question: "Tóm tắt tài liệu đính kèm của {CODE}."
+    expectedTools: [read_attachment, list_attachments]
+  - id: Q15
+    question: "Công việc nào trong backlog chưa được giao cho ai?"
+    expectedTools: [search_work_items]
+  - id: Q16
+    question: "Những việc có độ ưu tiên cao nhất đang ở trạng thái gì?"
+    expectedTools: [search_work_items]
+
+  # ─── Ghi (mong đợi dừng ở thẻ duyệt) ───
+  - id: Q17
+    question: "Tạo một Task tên 'Viết tài liệu API thanh toán' với độ ưu tiên cao."
+    expectedTools: [create_work_item]
+  - id: Q18
+    question: "Tạo 3 subtask cho {CODE}: thiết kế giao diện, viết API, viết test."
+    expectedTools: [create_subtasks]
+  - id: Q19
+    question: "Đổi độ ưu tiên của {CODE} thành HIGHEST."
+    expectedTools: [update_work_item]
+  - id: Q20
+    question: "Chuyển {CODE} sang In Progress."
+    expectedTools: [transition_work_item]
+  - id: Q21
+    question: "Giao {CODE} cho tôi."
+    expectedTools: [assign_work_item]
+  - id: Q22
+    question: "Đưa {CODE} vào sprint đang chạy."
+    expectedTools: [move_to_sprint]
+  - id: Q23
+    question: "Bình luận vào {CODE}: 'Đã review, cần bổ sung test case'."
+    expectedTools: [add_comment]
+
+  # ─── Mơ hồ → cần hỏi lại hoặc tra cứu trước ───
+  - id: Q24
+    question: "Giao việc login cho Nam."
+    expectedTools: [search_work_items, list_project_members, ask_user]
+    expectAskUser: true
+  - id: Q25
+    question: "Sửa cái task kia giúp tôi."
+    expectedTools: [ask_user]
+    expectAskUser: true
+
+  # ─── Bộ nhớ dài hạn ───
+  - id: Q26
+    question: "Nhớ giúp tôi là tôi phụ trách mảng backend và thích câu trả lời ngắn gọn."
+    expectedTools: [save_memory]
+  - id: Q27
+    question: "Hôm trước tôi có hỏi gì về sprint không?"
+    expectedTools: [search_past_conversations]
+
+  # ─── Ngoài phạm vi / không cần tool ───
+  - id: Q28
+    question: "Xin chào, bạn có thể giúp gì cho tôi?"
+    expectedTools: []
+  - id: Q29
+    question: "Xóa {CODE} giúp tôi."
+    expectedTools: []
+    expectedAnswerContains: ["không", "giao diện"]
+  - id: Q30
+    question: "Sprint hiện tại còn bao nhiêu việc chưa xong?"
+    context: none
+    expectedTools: []
+    expectedAnswerContains: ["mở dự án", "dự án"]
