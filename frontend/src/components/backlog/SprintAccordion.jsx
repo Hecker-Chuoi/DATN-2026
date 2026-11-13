@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Plus, Calendar, Bookmark, Pencil } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Calendar, Bookmark, Pencil, Trash2 } from 'lucide-react';
 import SprintStateBadge from '../sprints/SprintStateBadge.jsx';
 import BacklogIssueRow from './BacklogIssueRow.jsx';
 import InlineCreateIssueRow from './InlineCreateIssueRow.jsx';
@@ -19,6 +19,7 @@ export default function SprintAccordion({
   onSelectItem,
   onStart,
   onEdit,
+  onDelete,
   onComplete,
   onQuickCreate,
   droppableProps = {},
@@ -138,6 +139,16 @@ export default function SprintAccordion({
             style={iconBtn(busy)}
           >
             <Pencil size={13} />
+          </button>
+        )}
+        {!isBacklog && canManageSprint && group.state === 'FUTURE' && (
+          <button
+            onClick={() => onDelete?.(group)}
+            disabled={busy}
+            title="Xóa (công việc bên trong trở về Kho việc, không bị xóa)"
+            style={{ ...iconBtn(busy), color: '#DC2626' }}
+          >
+            <Trash2 size={13} />
           </button>
         )}
         {!isBacklog && canManageSprint && group.state === 'FUTURE' && (

@@ -30,6 +30,7 @@ import SprintAccordion from '../components/backlog/SprintAccordion.jsx';
 import BacklogIssueRow from '../components/backlog/BacklogIssueRow.jsx';
 import SprintFormModal from '../components/sprints/SprintFormModal.jsx';
 import CompleteSprintModal from '../components/sprints/CompleteSprintModal.jsx';
+import ConfirmModal from '../components/modals/ConfirmModal.jsx';
 
 const EMPTY_FILTERS = { q: '', epicId: null, assigneeIds: [], onlyMine: false, recentlyUpdated: false };
 
@@ -53,6 +54,7 @@ export default function ProjectBacklogPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [startTarget, setStartTarget] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [completeTarget, setCompleteTarget] = useState(null);
 
   const canManage = canManageSprint || isAdmin;
@@ -216,6 +218,10 @@ export default function ProjectBacklogPage() {
     if (active) return `Đang có "${active.name}" chạy — hãy hoàn tất nó trước.`;
     const next = sprintGroups.find((s) => s.state === 'FUTURE');
     if (next && next.sprintId !== group.sprintId) {
+      // Khoi dung dau dang rong thi khong the bat dau duoc -> chi cach go.
+      if (!next.itemCount) {
+        return `"${next.name}" đứng trước nhưng chưa có công việc — hãy kéo việc vào, dời ngày bắt đầu của nó ra sau (bút chì) hoặc xóa nó (thùng rác).`;
+      }
       return `Cần bắt đầu "${next.name}" trước — các chu kỳ/giai đoạn được bắt đầu lần lượt theo ngày bắt đầu dự kiến.`;
     }
     if (!group.itemCount) return 'Chưa có công việc nào — hãy kéo công việc vào trước.';
@@ -289,6 +295,7 @@ export default function ProjectBacklogPage() {
                 onSelectItem={openItemDetail}
                 onStart={(g) => setStartTarget(g)}
                 onEdit={(g) => setEditTarget({ ...g, id: g.sprintId })}
+                onDelete={(g) => setDeleteTarget(g)}
                 onComplete={(g) => setCompleteTarget(g)}
                 onQuickCreate={handleQuickCreate}
                 renderRow={(item, _g, isChild) => (
@@ -336,6 +343,38 @@ export default function ProjectBacklogPage() {
         }}
       />
 
+      {/* Chi xoa duoc chu ky Du kien (BR-S04); cong viec ben trong tro ve Kho viec (BR-S05). */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        type="danger"
+        title={`Xóa ${sprintTerm(deleteTarget)}`}
+        message={
+          deleteTarget ? (
+            <>
+              Xóa <b>{deleteTarget.name}</b>?{' '}
+              {deleteTarget.itemCount
+                ? <>{deleteTarget.itemCount} công việc bên trong sẽ <b>trở về Kho việc</b>, không bị xóa.</>
+                : <>{capitalize(sprintTerm(deleteTarget))} này chưa có công việc nào.</>}
+            </>
+          ) : null
+        }
+        confirmText="Xóa"
+        cancelText="Hủy"
+        loading={busy}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          try {
+            await backlog.deleteSprint(deleteTarget.sprintId);
+            toast.success(`Đã xóa ${sprintTerm(deleteTarget)}`);
+            setDeleteTarget(null);
+            bumpRefresh?.();
+          } catch (err) {
+            // Interceptor da hien toast loi; giu hop thoai de nguoi dung tu dong.
+            console.warn('Không xóa được chu kỳ:', err);
+          }
+        }}
+      />
+
       <SprintFormModal
         isOpen={!!startTarget}
         mode="start"
@@ -367,6 +406,15 @@ export default function ProjectBacklogPage() {
       />
     </div>
   );
+}
+
+/** "giai đoạn" hay "chu kỳ" theo tên, giống cách SprintAccordion đặt nhãn nút. */
+function sprintTerm(group) {
+  return group?.name?.toLowerCase()?.includes('giai đoạn') ? 'giai đoạn' : 'chu kỳ';
+}
+
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 /** Vung tha cho ca khoi (tha vao cho trong = them vao cuoi danh sach). */
