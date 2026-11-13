@@ -55,6 +55,10 @@ public class CardMappingContext {
     @Builder.Default
     private Map<UUID, List<String>> labelsByItemId = Collections.emptyMap();
 
+    /** The dang "Tam hoan thanh" - co yeu cau xac nhan hoan thanh dang cho (BR-W03). */
+    @Builder.Default
+    private Set<UUID> completionPendingItemIds = Collections.emptySet();
+
     public boolean isSubtaskType(UUID typeId) {
         WorkItemType type = typeId == null ? null : typeById.get(typeId);
         return type != null && Boolean.TRUE.equals(type.getIsSubtask());

@@ -152,6 +152,7 @@
 | **BR-K13** | Giao diện phải **vô hiệu hoá trước** các cột không thể tới được, thay vì để người dùng kéo rồi mới báo lỗi. |
 | **BR-K14** | Thẻ phải di chuyển **tức thì trên giao diện** rồi mới đồng bộ với máy chủ. Nếu máy chủ từ chối, thẻ **trượt về đúng vị trí cũ** kèm thông báo. |
 | **BR-K15** | Nếu thẻ vừa bị người khác thay đổi (xung đột phiên bản) → lỗi **409**, thẻ trượt về và bảng tự tải lại. |
+| **BR-K16** | Người **không phải Admin dự án** kéo thẻ vào cột thuộc nhóm DONE → thẻ **ở lại cột cũ**, gắn nhãn *"Chờ duyệt HT"* và tạo yêu cầu **"Tạm hoàn thành"** chờ Admin xác nhận (xem BR-W03 trong [8_QUY_TAC_GIAO_VIEC_VA_XAC_NHAN_HOAN_THANH.md](8_QUY_TAC_GIAO_VIEC_VA_XAC_NHAN_HOAN_THANH.md)). |
 
 ### 5.3. Giới hạn WIP
 

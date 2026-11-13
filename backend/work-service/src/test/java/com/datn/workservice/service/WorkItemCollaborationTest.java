@@ -68,6 +68,8 @@ class WorkItemCollaborationTest {
     private io.minio.MinioClient minioClient;
     @Mock
     private ProjectAccessService projectAccessService;
+    @Mock
+    private WorkItemCompletionGate completionGate;
 
     private WorkItemAuditServiceImpl auditService;
     private WorkItemCommentServiceImpl commentService;
@@ -149,7 +151,8 @@ class WorkItemCollaborationTest {
                 statusRepository,
                 cycleDetector,
                 auditService,
-                identityClient
+                identityClient,
+                completionGate
         );
     }
 

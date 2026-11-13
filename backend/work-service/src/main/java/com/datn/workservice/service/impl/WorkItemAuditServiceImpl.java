@@ -50,7 +50,8 @@ public class WorkItemAuditServiceImpl implements WorkItemAuditService {
             Map.entry("PARENT", "Công việc cha (Parent)"),
             Map.entry("RESOLUTION", "Kết quả xử lý (Resolution)"),
             Map.entry("ATTACHMENT", "Tệp đính kèm (Attachment)"),
-            Map.entry("LINK", "Liên kết công việc (Issue Link)")
+            Map.entry("LINK", "Liên kết công việc (Issue Link)"),
+            Map.entry("COMPLETION", "Xác nhận hoàn thành")
     );
 
     @Override
@@ -167,6 +168,14 @@ public class WorkItemAuditServiceImpl implements WorkItemAuditService {
         if (workItemId == null || fieldName == null || userId == null) return;
         WorkItemChangelog logEntry = buildChangelog(workItemId, fieldName, oldValue, newValue, userId);
         changelogRepository.save(logEntry);
+    }
+
+    @Override
+    @Transactional
+    public void recordAssigneeChange(UUID workItemId, UUID oldAssigneeId, UUID newAssigneeId, UUID userId) {
+        if (workItemId == null || userId == null || Objects.equals(oldAssigneeId, newAssigneeId)) return;
+        changelogRepository.save(buildChangelog(workItemId, "ASSIGNEE",
+                resolveUserName(oldAssigneeId), resolveUserName(newAssigneeId), userId));
     }
 
     @Override

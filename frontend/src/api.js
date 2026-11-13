@@ -427,6 +427,17 @@ export const workItemApi = {
     return apiClient.post(`${WORK_BASE}/projects/${projectId}/items`, projectIdOrData);
   },
   update: (id, data) => apiClient.put(`${WORK_BASE}/items/${id}`, data),
+  // Giao / hủy giao việc (assigneeId = null là hủy giao) — luôn được ghi vào Lịch sử
+  changeAssignee: (id, assigneeId) =>
+    apiClient.put(`${WORK_BASE}/items/${id}/assignee`, { assigneeId: assigneeId || null }),
+  // "Tạm hoàn thành" → Admin dự án xác nhận / từ chối
+  listCompletionRequests: (projectId) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/completion-requests`),
+  getCompletionHistory: (id) => apiClient.get(`${WORK_BASE}/items/${id}/completion-requests`),
+  approveCompletion: (id) => apiClient.post(`${WORK_BASE}/items/${id}/completion/approve`),
+  rejectCompletion: (id, reason) =>
+    apiClient.post(`${WORK_BASE}/items/${id}/completion/reject`, { reason: reason || null }),
+  cancelCompletion: (id) => apiClient.delete(`${WORK_BASE}/items/${id}/completion`),
   updateRank: (id, data) =>
     apiClient.patch(
       `${WORK_BASE}/items/${id}/rank`,

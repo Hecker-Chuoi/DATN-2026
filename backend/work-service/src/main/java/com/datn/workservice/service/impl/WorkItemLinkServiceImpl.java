@@ -14,6 +14,7 @@ import com.datn.workservice.enums.WorkItemResolution;
 import com.datn.workservice.repository.*;
 import com.datn.workservice.service.DependencyCycleDetector;
 import com.datn.workservice.service.WorkItemAuditService;
+import com.datn.workservice.service.WorkItemCompletionGate;
 import com.datn.workservice.service.WorkItemLinkService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
     private final DependencyCycleDetector dependencyCycleDetector;
     private final WorkItemAuditService auditService;
     private final IdentityClient identityClient;
+    private final WorkItemCompletionGate completionGate;
 
     @Override
     @Transactional(readOnly = true)
@@ -163,13 +165,25 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
         if (linkType == LinkType.DUPLICATES) {
             Status sourceStatus = statusRepository.findById(sourceItem.getStatusId()).orElse(null);
             if (sourceStatus == null || sourceStatus.getCategory() != StatusCategory.DONE) {
-                List<Status> doneStatuses = statusRepository.findByCategory(StatusCategory.DONE);
-                if (!doneStatuses.isEmpty()) {
+                // Ưu tiên trạng thái DONE của chính dự án, chỉ dùng trạng thái toàn cục khi dự án không có
+                List<Status> doneStatuses = statusRepository.findByProjectId(sourceItem.getProjectId()).stream()
+                        .filter(s -> s.getCategory() == StatusCategory.DONE)
+                        .toList();
+                if (doneStatuses.isEmpty()) {
+                    doneStatuses = statusRepository.findByCategory(StatusCategory.DONE);
+                }
+                if (!doneStatuses.isEmpty() && !completionGate.canConfirmCompletion(sourceItem.getProjectId(), userId)) {
+                    // BR-W03: không phải Admin dự án -> chỉ tạo yêu cầu "Tạm hoàn thành" với kết quả DUPLICATE
+                    completionGate.submit(sourceItem, null, sourceStatus, doneStatuses.get(0),
+                            WorkItemResolution.DUPLICATE.name(), false,
+                            "Trùng lặp với " + targetItem.getCode(), userId);
+                } else if (!doneStatuses.isEmpty()) {
                     Status doneStatus = doneStatuses.get(0);
                     sourceItem.setStatusId(doneStatus.getId());
                     sourceItem.setResolution(WorkItemResolution.DUPLICATE);
                     sourceItem.setResolvedAt(LocalDateTime.now());
                     workItemRepository.save(sourceItem);
+                    completionGate.onStatusChanged(sourceItem, doneStatus, true, userId);
                     auditService.recordCustomEvent(
                             sourceItemId,
                             "STATUS",

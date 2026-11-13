@@ -18,6 +18,8 @@ import com.datn.workservice.repository.LabelRepository;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.SprintRepository;
 import com.datn.workservice.repository.StatusRepository;
+import com.datn.workservice.enums.CompletionRequestStatus;
+import com.datn.workservice.repository.WorkItemCompletionRequestRepository;
 import com.datn.workservice.repository.WorkItemLabelMapRepository;
 import com.datn.workservice.repository.WorkItemLinkRepository;
 import com.datn.workservice.repository.WorkItemRepository;
@@ -60,6 +62,7 @@ public class WorkItemCardMapper {
     private final LabelRepository labelRepository;
     private final SprintRepository sprintRepository;
     private final ProjectRepository projectRepository;
+    private final WorkItemCompletionRequestRepository completionRequestRepository;
     private final IdentityClient identityClient;
 
     /** Tuy chon de bo bot truy van khi man hinh khong can toi. */
@@ -146,6 +149,12 @@ public class WorkItemCardMapper {
                 ? fetchUsers(collect(items, WorkItem::getAssigneeId))
                 : Collections.emptyMap();
 
+        // 10. The dang "Tam hoan thanh" - cho Admin du an xac nhan (BR-W03)
+        Set<UUID> completionPendingItemIds = completionRequestRepository
+                .findByWorkItemIdInAndStatus(itemIds, CompletionRequestStatus.PENDING).stream()
+                .map(r -> r.getWorkItemId())
+                .collect(Collectors.toSet());
+
         return CardMappingContext.builder()
                 .statusById(statusById)
                 .statusByLowerName(statusByLowerName)
@@ -157,6 +166,7 @@ public class WorkItemCardMapper {
                 .projectKeyById(projectKeyById)
                 .userById(userById)
                 .labelsByItemId(labelsByItemId)
+                .completionPendingItemIds(completionPendingItemIds)
                 .build();
     }
 
@@ -230,6 +240,7 @@ public class WorkItemCardMapper {
                 .dueDate(item.getDueDate())
                 .isOverdue(isOverdue(item, status))
                 .labels(ctx.getLabelsByItemId().get(item.getId()))
+                .completionPending(ctx.getCompletionPendingItemIds().contains(item.getId()))
                 .rank(item.getRank())
                 .version(item.getVersion())
                 .build();

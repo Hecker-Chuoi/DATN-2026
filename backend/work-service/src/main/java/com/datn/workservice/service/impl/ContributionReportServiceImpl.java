@@ -51,6 +51,13 @@ public class ContributionReportServiceImpl implements ContributionReportService 
     @Override
     @Transactional
     public void handleWorkItemStatusTransition(WorkItem item, Status oldStatus, Status newStatus, UUID actorId) {
+        handleWorkItemStatusTransition(item, oldStatus, newStatus, actorId, LocalDate.now());
+    }
+
+    @Override
+    @Transactional
+    public void handleWorkItemStatusTransition(WorkItem item, Status oldStatus, Status newStatus, UUID actorId,
+                                               LocalDate completedOn) {
         if (item == null || oldStatus == null || newStatus == null) return;
 
         boolean wasDone = oldStatus.getCategory() == StatusCategory.DONE;
@@ -78,7 +85,8 @@ public class ContributionReportServiceImpl implements ContributionReportService 
                     .filter(e -> "REOPENED".equals(e.getEntryType()))
                     .toList();
 
-            LocalDate today = LocalDate.now();
+            // Ngày báo hoàn thành (khi đi qua bước "Tạm hoàn thành" là ngày gửi yêu cầu, không phải ngày Admin duyệt)
+            LocalDate today = completedOn != null ? completedOn : LocalDate.now();
             boolean isLate = item.getDueDate() != null && today.isAfter(item.getDueDate());
 
             if (isLate) {

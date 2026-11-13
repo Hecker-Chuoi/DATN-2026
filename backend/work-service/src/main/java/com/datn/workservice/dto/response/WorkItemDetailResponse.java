@@ -102,6 +102,12 @@ public class WorkItemDetailResponse {
     // Available transitions from current status
     private List<AvailableTransitionResponse> availableTransitions;
 
+    // "Tạm hoàn thành" (BR-W03..BR-W08)
+    private Boolean completionPending;
+    private CompletionRequestResponse completionRequest;
+    /** Người dùng hiện tại có quyền xác nhận / từ chối hoàn thành (Admin dự án) hay không. */
+    private Boolean canConfirmCompletion;
+
     // Counts
     private Integer commentCount;
     private Integer attachmentCount;

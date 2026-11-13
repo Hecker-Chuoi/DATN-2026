@@ -26,4 +26,10 @@ public class AvailableTransitionResponse {
     private String toStatusColorHex;
     private Boolean hasScreen;
     private List<String> requiredFields;
+
+    /**
+     * true: người dùng hiện tại không có quyền xác nhận Hoàn thành, thực hiện bước chuyển này chỉ
+     * tạo yêu cầu "Tạm hoàn thành" chờ Admin dự án duyệt (BR-W03).
+     */
+    private Boolean requiresApproval;
 }

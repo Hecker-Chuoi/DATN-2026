@@ -47,6 +47,7 @@ import CustomSelect from '../common/CustomSelect.jsx';
 import StoryPointsPicker from '../common/StoryPointsPicker.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import ResolveSubtasksModal from '../modals/ResolveSubtasksModal.jsx';
+import CompletionPendingPanel from './CompletionPendingPanel.jsx';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
@@ -115,6 +116,10 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
   const [showResolveSubtasksModal, setShowResolveSubtasksModal] = useState(false);
   const [pendingTransitionId, setPendingTransitionId] = useState(null);
   const [isResolvingSubtasks, setIsResolvingSubtasks] = useState(false);
+  // "Tạm hoàn thành" (chờ Admin dự án xác nhận)
+  const [completionBusy, setCompletionBusy] = useState(false);
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
 
   // Collaboration state
   const [comments, setComments] = useState([]);
@@ -289,7 +294,12 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
       setShowStatusDropdown(false);
       const res = await workItemApi.executeTransition(currentId, transitionId, { comment: '', resolveAllSubtasks });
       if (res && res.data) {
-        toast.success(resolveAllSubtasks ? 'Đã hoàn thành tất cả công việc con và công việc cha!' : 'Đã chuyển trạng thái thành công');
+        if (res.data.completionApprovalRequested) {
+          // Không phải Admin dự án: trạng thái chưa đổi, chỉ tạo yêu cầu "Tạm hoàn thành"
+          toast.success('Đã gửi yêu cầu xác nhận hoàn thành. Công việc ở trạng thái Tạm hoàn thành cho tới khi Admin dự án duyệt.', { duration: 5000 });
+        } else {
+          toast.success(resolveAllSubtasks ? 'Đã hoàn thành tất cả công việc con và công việc cha!' : 'Đã chuyển trạng thái thành công');
+        }
         setShowResolveSubtasksModal(false);
         setPendingTransitionId(null);
         fetchDetail(currentId);
@@ -320,17 +330,68 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
   };
 
   const handleUpdateAssignee = async (newAssigneeId) => {
+    if ((newAssigneeId || null) === (item?.assigneeId || null)) return;
     try {
-      const res = await workItemApi.update(currentId, { assigneeId: newAssigneeId || null });
+      // Endpoint riêng: hỗ trợ cả HỦY giao (null) và luôn ghi vào Lịch sử
+      const res = await workItemApi.changeAssignee(currentId, newAssigneeId || null);
       if (res && res.data) {
         setItem(res.data);
-        toast.success('Đã cập nhật người thực hiện');
+        toast.success(newAssigneeId ? 'Đã giao việc' : 'Đã hủy giao việc');
         fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
       console.error('Failed to update assignee:', err);
-      toast.error('Lỗi khi cập nhật người thực hiện');
+      toast.error(err.response?.data?.message || err.message || 'Lỗi khi cập nhật người thực hiện');
+    }
+  };
+
+  // ─── "Tạm hoàn thành" → Admin dự án xác nhận / từ chối ───────────────────
+  const refreshAfterCompletionAction = (updated) => {
+    fetchDetail(currentId);
+    fetchChangelogs(currentId);
+    fetchComments(currentId);
+    if (onItemUpdated) onItemUpdated(updated || item);
+  };
+
+  const handleApproveCompletion = async () => {
+    setCompletionBusy(true);
+    try {
+      const res = await workItemApi.approveCompletion(currentId);
+      toast.success('Đã xác nhận hoàn thành công việc');
+      refreshAfterCompletionAction(res?.data);
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Không thể xác nhận hoàn thành');
+    } finally {
+      setCompletionBusy(false);
+    }
+  };
+
+  const handleRejectCompletion = async () => {
+    setCompletionBusy(true);
+    try {
+      await workItemApi.rejectCompletion(currentId, rejectReason.trim());
+      toast.success('Đã từ chối yêu cầu xác nhận hoàn thành');
+      setShowRejectForm(false);
+      setRejectReason('');
+      refreshAfterCompletionAction();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Không thể từ chối yêu cầu');
+    } finally {
+      setCompletionBusy(false);
+    }
+  };
+
+  const handleCancelCompletion = async () => {
+    setCompletionBusy(true);
+    try {
+      await workItemApi.cancelCompletion(currentId);
+      toast.success('Đã rút lại yêu cầu xác nhận hoàn thành');
+      refreshAfterCompletionAction();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Không thể hủy yêu cầu');
+    } finally {
+      setCompletionBusy(false);
     }
   };
 
@@ -2130,8 +2191,18 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                               }}
                               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
                               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                              title={t.requiresApproval ? 'Bạn không phải Admin dự án: công việc sẽ ở trạng thái Tạm hoàn thành cho tới khi Admin xác nhận' : undefined}
                             >
-                              {t.name} (➔ {getStatusDisplayName(t.toStatusName)})
+                              {t.requiresApproval ? (
+                                <>
+                                  <div>{t.name} (➔ Tạm hoàn thành)</div>
+                                  <div style={{ fontSize: 11, fontWeight: 500, color: '#B45309', marginTop: 2 }}>
+                                    Gửi yêu cầu – chờ Admin dự án xác nhận
+                                  </div>
+                                </>
+                              ) : (
+                                <>{t.name} (➔ {getStatusDisplayName(t.toStatusName)})</>
+                              )}
                             </div>
                           );
                         })
@@ -2144,6 +2215,26 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   )}
                 </div>
               </div>
+
+              {/* "Tạm hoàn thành" – chờ Admin dự án xác nhận */}
+              {item?.completionPending && item?.completionRequest && (
+                <CompletionPendingPanel
+                  request={item.completionRequest}
+                  canConfirm={Boolean(item.canConfirmCompletion)}
+                  isRequester={item.completionRequest.requestedBy === myId}
+                  busy={completionBusy}
+                  showRejectForm={showRejectForm}
+                  rejectReason={rejectReason}
+                  onRejectReasonChange={setRejectReason}
+                  onToggleRejectForm={(v) => {
+                    setShowRejectForm(v);
+                    if (!v) setRejectReason('');
+                  }}
+                  onApprove={handleApproveCompletion}
+                  onReject={handleRejectCompletion}
+                  onCancel={handleCancelCompletion}
+                />
+              )}
 
               {/* Priority Section */}
               <div>
