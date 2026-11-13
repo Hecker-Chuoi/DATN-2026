@@ -18,7 +18,6 @@ import {
   Plus,
   Trash2,
   BookmarkPlus,
-  Award,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi, sprintApi } from '../api.js';
@@ -413,9 +412,9 @@ export default function ProjectDetailPage() {
           {[
             { to: 'board', label: 'Bảng tiến độ', icon: Kanban, visible: true },
             { to: 'backlog', label: 'Kho việc & Kế hoạch', icon: ListTodo, visible: isScrumProject(project) },
-            { to: 'contributions', label: 'Đóng góp', icon: Award, visible: true },
-            { to: 'reports', label: 'Báo cáo', icon: BarChart3, visible: true },
             { to: 'members', label: 'Thành viên & Vai trò', icon: Users, visible: true },
+            // "Báo cáo" gop ca Dong gop lan Tien do (2 tab ben trong ProjectReportsPage).
+            { to: 'reports', label: 'Báo cáo', icon: BarChart3, visible: true },
             { to: 'workflow', label: 'Cấu hình Dự án', icon: Settings, visible: true },
           ]
             .filter((tab) => tab.visible)
