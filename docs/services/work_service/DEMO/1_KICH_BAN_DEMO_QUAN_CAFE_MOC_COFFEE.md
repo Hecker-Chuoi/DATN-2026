@@ -288,7 +288,7 @@ Nếu bị giới hạn 15 phút: giữ Phần 1, 3, 6, 7; các phần còn lạ
 |---|---|
 | Ô trạng thái không có bước chuyển mong muốn | Việc đang ở trạng thái không có mũi tên đó (ví dụ Đang thực hiện → Hoàn thành). Đi đúng theo sơ đồ: Gửi nghiệm thu → Nghiệm thu đạt chuẩn. |
 | Không thấy email lời mời | Mở Mailpit http://localhost:8025; gửi mail là bất đồng bộ, chờ 2–3 giây. |
-| Nút "Bắt đầu giai đoạn" bị khóa | Rê chuột xem lý do: đang có giai đoạn khác chạy; **chưa tới lượt** (phải bắt đầu giai đoạn đứng trên trước; muốn đổi thứ tự thì bấm bút chì sửa ngày bắt đầu dự kiến); hoặc giai đoạn chưa có việc. |
+| Nút "Bắt đầu giai đoạn" bị khóa | Rê chuột xem lý do: đang có giai đoạn khác chạy; **chưa tới lượt** (phải bắt đầu giai đoạn đứng trên trước; muốn đổi thứ tự thì bấm bút chì sửa ngày bắt đầu dự kiến; giai đoạn đứng trên rỗng và không cần nữa thì bấm thùng rác để xóa); hoặc giai đoạn chưa có việc. |
 | Burndown/CFD gần như phẳng | Bình thường khi demo trong 1 ngày → dùng dự án Phương án B. |
 | 401 liên tục | Token hết hạn → đăng nhập lại (interceptor tự refresh, nhưng refresh token cũng có hạn). |
 | Mã công việc khác bảng dự kiến | Gọi theo **tên** công việc; bảng mã chỉ để tham khảo. |

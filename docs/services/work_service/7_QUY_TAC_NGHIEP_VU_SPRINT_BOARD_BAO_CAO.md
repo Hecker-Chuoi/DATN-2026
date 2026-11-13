@@ -251,6 +251,6 @@
 1. **Sprint không mở lại được.** Jira cho phép; ở đây thì không, vì snapshot đã chốt. Nếu nghiệp vụ cần, phải bổ sung quy tắc xử lý snapshot cũ.
 2. **Quản trị Sprint mặc định chỉ dành cho Project Administrator.** Nếu muốn có vai trò *Scrum Master* riêng thì cần thêm vai trò mới, không nên nới quyền của Member.
 3. **Một dự án một Sprint ACTIVE.** Mô hình đa nhóm (nhiều nhóm chạy Sprint song song trong một dự án) chưa được hỗ trợ.
-4. **Thứ tự Sprint suy ra từ ngày bắt đầu dự kiến**, chưa có cột thứ tự riêng hay thao tác "Di chuyển lên/xuống" như Jira. Muốn đổi thứ tự thì sửa ngày (nút bút chì trên khối Sprint). Nếu sau này cần sắp xếp thủ công độc lập với ngày, phải thêm cột thứ tự vào `sprints` (migration mới) và bổ sung vào bộ nhân bản dự án mẫu.
+4. **Thứ tự Sprint suy ra từ ngày bắt đầu dự kiến**, chưa có cột thứ tự riêng hay thao tác "Di chuyển lên/xuống" như Jira. Muốn đổi thứ tự thì sửa ngày (nút bút chì trên khối Sprint); Sprint đứng đầu còn rỗng mà không cần nữa thì xoá (nút thùng rác). Nếu sau này cần sắp xếp thủ công độc lập với ngày, phải thêm cột thứ tự vào `sprints` (migration mới) và bổ sung vào bộ nhân bản dự án mẫu.
 5. **Board chưa gắn với Sprint cụ thể.** Board SCRUM luôn lấy Sprint đang chạy; muốn xem Sprint khác phải chỉ định rõ khi truy vấn.
 6. **Phân luồng theo truy vấn tuỳ biến (JQL)** phụ thuộc Giai đoạn 8, hiện hạ cấp về một luồng.

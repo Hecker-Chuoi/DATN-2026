@@ -91,6 +91,7 @@ Logic nằm ở `backend/work-service/src/main/java/com/datn/workservice/service
 ### 3.3 Xoá Sprint — `delete()`
 - **Chỉ xoá được Sprint `FUTURE`.** Sprint ACTIVE phải đóng; Sprint CLOSED phải giữ để lưu vết báo cáo.
 - Các item bên trong được đặt `sprintId = null` (trả về Backlog), mỗi item ghi 2 dòng lịch sử `SPRINT` và `SPRINT_SCOPE`.
+- Giao diện: nút thùng rác trên khối Sprint `FUTURE` (chỉ người có `SPRINT_MANAGE`) mở `ConfirmModal`, báo số công việc sẽ trở về Backlog. Đây cũng là một cách gỡ khi Sprint đứng đầu kế hoạch còn rỗng và đang chặn các Sprint sau (BR-S15).
 
 ### 3.4 Bắt đầu Sprint — `startSprint()`
 
@@ -207,7 +208,7 @@ BacklogResponse
 |---|---|
 | `frontend/src/pages/ProjectBacklogPage.jsx` | Trang chính, kéo thả bằng `@dnd-kit`, mở các modal. |
 | `frontend/src/hooks/useProjectBacklog.js` | Nạp dữ liệu, bọc các thao tác ghi (`run` = khoá nút + reload im lặng). |
-| `frontend/src/components/backlog/SprintAccordion.jsx` | Một khối Sprint/Backlog có thể thu gọn, nút Sửa (bút chì) / Bắt đầu / Hoàn tất; tooltip nêu lý do khi nút Bắt đầu bị khoá. |
+| `frontend/src/components/backlog/SprintAccordion.jsx` | Một khối Sprint/Backlog có thể thu gọn, nút Sửa (bút chì) / Xoá (thùng rác) / Bắt đầu / Hoàn tất; tooltip nêu lý do khi nút Bắt đầu bị khoá. |
 | `frontend/src/components/backlog/BacklogIssueRow.jsx`, `InlineCreateIssueRow.jsx`, `BacklogToolbar.jsx` | Hàng công việc, tạo nhanh, thanh lọc. |
 | `frontend/src/components/sprints/SprintFormModal.jsx` | Dùng cho `mode="create"`, `mode="edit"` và `mode="start"`. |
 | `frontend/src/components/sprints/CompleteSprintModal.jsx` | Chọn đích cho việc chưa xong (`BACKLOG` hoặc một Sprint FUTURE). |
@@ -282,7 +283,7 @@ Các điểm dưới đây là quan sát từ code, **chưa được sửa**:
 2. **Đổi Sprint qua `updateWorkItem` bị lỏng.** Không kiểm tra Sprint cùng dự án hay đã CLOSED, không tính lại rank, không đưa về Backlog được (`sprintId = null` bị bỏ qua), và chỉ cascade một tầng Sub-task. Đường chuẩn vẫn là API `/sprints/{id}/items`.
 3. **Đóng Sprint có thể phá bất biến cha–con.** Việc chia completed/incomplete xét từng item độc lập: Sub-task chưa xong của một cha DONE sẽ bị chuyển đi một mình, còn Sub-task DONE của một cha chưa xong bị cascade kéo ra khỏi Sprint đã đóng.
 4. ~~`update()` luôn truyền `projectHasActiveSprint = true` vào `toResponse`~~ — **đã sửa 13/11/2026** khi bổ sung BR-S15: `update()` tính lại Sprint được phép bắt đầu.
-5. **Hook có `deleteSprint` nhưng UI chưa dùng** — chưa có nút xoá Sprint trên màn hình Backlog. (Nút **sửa** đã có từ 13/11/2026.)
+5. ~~Hook có `updateSprint` / `deleteSprint` nhưng UI chưa dùng~~ — **đã có từ 13/11/2026**: nút sửa (bút chì) và xoá (thùng rác) trên khối Sprint `FUTURE`.
 6. **`sprintApi.getReport` gọi `/sprints/{id}/report`**, nhưng backend chưa có endpoint này.
 7. Tập status DONE khi đóng Sprint lấy bằng `statusRepository.findByCategory(DONE)` trên **toàn hệ thống**, không lọc theo dự án. Kết quả vẫn đúng vì chỉ dùng để so khớp `statusId`, nhưng truy vấn thừa.
 
