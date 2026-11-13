@@ -53,6 +53,10 @@ spring:
         enable.idempotence: true
         acks: all
 
+# ─── Khóa nội bộ cho ai-service gọi /internal/ai-tools/** (cùng giá trị với AI_TOOLS_API_KEY của ai-service) ───
+ai-tools:
+  api-key: ${AI_TOOLS_API_KEY:}
+
 # ─── MinIO Object Storage (Attachments) ───
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}

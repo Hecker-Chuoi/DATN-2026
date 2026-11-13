@@ -31,6 +31,14 @@ spring:
           filters:
             - StripPrefix=1
 
+        # Trợ lý AI (ai-service). SSE text/event-stream đi qua gateway không bị buffer.
+        - id: ai-service
+          uri: http://localhost:8084
+          predicates:
+            - Path=/ai/api/**, /ai/actuator/**
+          filters:
+            - StripPrefix=1
+
       globalcors:
         cors-configurations:
           '[/**]':
