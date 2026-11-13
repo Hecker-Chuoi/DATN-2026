@@ -59,7 +59,7 @@ ai:
     retry-429: 2
     title-with-llm: false        # bật = đặt tiêu đề bằng light-model (tốn thêm 1 request mỗi hội thoại)
     work-service-url: http://localhost:8083
-    tools-api-key: ${AI_TOOLS_API_KEY:}
+    tools-api-key: ${AI_TOOLS_API_KEY:AQ.Ab8RN6JfFDjF2P7tFiAEMa3-nXm33NwG-vglDh9wnZSAUN0Dew}
 
 logging:
   level:
