@@ -17,7 +17,8 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { Plus } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import { useProjectContext } from '../context/ProjectContext.jsx';
@@ -37,9 +38,13 @@ const EMPTY_FILTERS = { q: '', epicId: null, assigneeIds: [], onlyMine: false, r
 /** Khoa container: "backlog" hoac "sprint:<id>". */
 const keyOf = (g) => (g.sprintId == null ? 'backlog' : `sprint:${g.sprintId}`);
 
+/** Vung tha cua khu "da hoan tat": chi de chan tha nham, khong bao gio nhan cong viec. */
+const CLOSED_AREA_ID = 'closed-area';
+
 export default function ProjectBacklogPage() {
   const { projectId, project, members, canManageSprint, isAdmin, openItemDetail, bumpRefresh, refreshKey } =
     useProjectContext();
+  const navigate = useNavigate();
 
   const backlog = useProjectBacklog(projectId);
   const { data, loading, error, busy, setData, reload } = backlog;
@@ -72,8 +77,14 @@ export default function ProjectBacklogPage() {
   }, [data]);
 
   const visibleGroups = useMemo(
-    () => groups.map((g) => ({ ...g, items: (g.items || []).filter((i) => i.hierarchyLevel !== 1).filter((i) => matches(i, filters, currentUserId)) })),
+    () => groups.map((g) => filterGroup(g, filters, currentUserId)),
     [groups, filters, currentUserId]
+  );
+
+  // Chu ky / giai doan da hoan tat: giu lai de xem (BR-B08), chi doc, khong tham gia keo tha.
+  const closedGroups = useMemo(
+    () => (data?.closedSprints || []).map((g) => filterGroup(g, filters, currentUserId)),
+    [data, filters, currentUserId]
   );
 
   const types = project?.workItemTypes || [];
@@ -116,6 +127,10 @@ export default function ProjectBacklogPage() {
   const handleDragEnd = async ({ active, over }) => {
     setActiveItem(null);
     if (!over) return;
+    if (over.id === CLOSED_AREA_ID) {
+      toast.error('Chu kỳ / giai đoạn đã hoàn tất chỉ để xem lại, không thể thêm công việc.');
+      return;
+    }
 
     const fromKey = findGroupKeyByItem(active.id);
     if (!fromKey) return;
@@ -204,7 +219,11 @@ export default function ProjectBacklogPage() {
     bumpRefresh?.();
   };
 
-  const suggestedName = `Chu kỳ ${(data?.sprints?.length || 0) + 1}`;
+  // Dem ca chu ky da hoan tat, neu khong sau khi dong "Chu kỳ 1" se goi y trung ten.
+  const suggestedName = `Chu kỳ ${(data?.sprints?.length || 0) + (data?.closedSprints?.length || 0) + 1}`;
+
+  const openSprintReport = (g) =>
+    navigate(`../reports?tab=progress&view=burndown&sprint=${g.sprintId}`);
 
   /**
    * Ly do nut "Bat dau" bi khoa, de hien tooltip. Quyet dinh khoa/mo van do backend (canStart);
@@ -242,7 +261,32 @@ export default function ProjectBacklogPage() {
     );
   }
 
-  const hasAnySprint = (data?.sprints || []).length > 0;
+  const hasAnySprint = (data?.sprints || []).length + (data?.closedSprints || []).length > 0;
+
+  const renderGroup = (group) => (
+    <DroppableGroup key={keyOf(group)} group={group}>
+      {(isOver, droppableProps) => (
+        <SprintAccordion
+          group={group}
+          canManageSprint={canManage}
+          types={types}
+          busy={busy}
+          startBlockedReason={startBlockedReason(group)}
+          isOver={isOver}
+          droppableProps={droppableProps}
+          onSelectItem={openItemDetail}
+          onStart={(g) => setStartTarget(g)}
+          onEdit={(g) => setEditTarget({ ...g, id: g.sprintId })}
+          onDelete={(g) => setDeleteTarget(g)}
+          onComplete={(g) => setCompleteTarget(g)}
+          onQuickCreate={handleQuickCreate}
+          renderRow={(item, _g, isChild) => (
+            <SortableRow key={item.id} item={item} onSelect={openItemDetail} isChild={isChild} />
+          )}
+        />
+      )}
+    </DroppableGroup>
+  );
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px 40px 24px' }}>
@@ -281,30 +325,16 @@ export default function ProjectBacklogPage() {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveItem(null)}
       >
-        {visibleGroups.map((group) => (
-          <DroppableGroup key={keyOf(group)} group={group}>
-            {(isOver, droppableProps) => (
-              <SprintAccordion
-                group={group}
-                canManageSprint={canManage}
-                types={types}
-                busy={busy}
-                startBlockedReason={startBlockedReason(group)}
-                isOver={isOver}
-                droppableProps={droppableProps}
-                onSelectItem={openItemDetail}
-                onStart={(g) => setStartTarget(g)}
-                onEdit={(g) => setEditTarget({ ...g, id: g.sprintId })}
-                onDelete={(g) => setDeleteTarget(g)}
-                onComplete={(g) => setCompleteTarget(g)}
-                onQuickCreate={handleQuickCreate}
-                renderRow={(item, _g, isChild) => (
-                  <SortableRow key={item.id} item={item} onSelect={openItemDetail} isChild={isChild} />
-                )}
-              />
-            )}
-          </DroppableGroup>
-        ))}
+        {/* Thu tu: dang chay -> du kien -> da hoan tat (luu tru) -> Backlog (BR-B02, BR-B08) */}
+        {visibleGroups.filter((g) => g.sprintId != null).map(renderGroup)}
+
+        <ClosedSprintsSection
+          groups={closedGroups}
+          onSelectItem={openItemDetail}
+          onOpenReport={openSprintReport}
+        />
+
+        {visibleGroups.filter((g) => g.sprintId == null).map(renderGroup)}
 
         <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.18,0.67,0.6,1.22)' }}>
           {activeItem ? (
@@ -417,6 +447,53 @@ function capitalize(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
+/**
+ * Khu luu tru cac chu ky / giai doan da hoan tat (BR-B08), nam ngay tren khoi Backlog.
+ * Khong xoa di sau khi hoan tat: cong viec DONE van giu sprintId cua chung va la nguon cua
+ * Bao cao (tien do, nang suat, dong gop). Moi khoi mac dinh thu gon de trang gon.
+ */
+function ClosedSprintsSection({ groups, onSelectItem, onOpenReport }) {
+  const [open, setOpen] = useState(true);
+  // Dang ky vung tha de tha nham vao day thi bi chan (xem handleDragEnd), khong roi sang khoi ben canh.
+  const { setNodeRef } = useDroppable({ id: CLOSED_AREA_ID });
+  if (!groups.length) return null;
+
+  const phases = groups.filter((g) => sprintTerm(g) === 'giai đoạn').length;
+  const title =
+    phases === groups.length ? 'Giai đoạn đã hoàn tất'
+      : phases === 0 ? 'Chu kỳ đã hoàn tất'
+        : 'Chu kỳ / giai đoạn đã hoàn tất';
+
+  return (
+    <section ref={setNodeRef} style={{ marginBottom: 14 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={closedHeaderBtn} aria-expanded={open}>
+        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        <CheckCircle2 size={15} color="#00875A" />
+        <span style={{ fontWeight: 700, fontSize: 14, color: SURFACE.text }}>{title}</span>
+        <span style={{ fontSize: 12, color: SURFACE.textMuted }}>({groups.length})</span>
+        <span style={{ fontSize: 12, color: SURFACE.textLight, fontWeight: 400 }}>
+          — chỉ để xem lại; công việc và số liệu được giữ nguyên cho Báo cáo
+        </span>
+      </button>
+      {open && (
+        <div style={{ marginLeft: 7, paddingLeft: 12, borderLeft: '2px solid #ABF5D1' }}>
+          {groups.map((g) => (
+            <SprintAccordion
+              key={g.sprintId}
+              group={g}
+              readOnly
+              defaultOpen={false}
+              canManageSprint={false}
+              onSelectItem={onSelectItem}
+              onOpenReport={onOpenReport}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** Vung tha cho ca khoi (tha vao cho trong = them vao cuoi danh sach). */
 function DroppableGroup({ group, children }) {
   const { setNodeRef, isOver } = useDroppable({ id: keyOf(group) });
@@ -451,6 +528,14 @@ function SortableRow({ item, onSelect, isChild }) {
   );
 }
 
+/** Bo hang Epic va ap bo loc (BR-B05: chi thu hep hien thi). */
+function filterGroup(g, f, currentUserId) {
+  return {
+    ...g,
+    items: (g.items || []).filter((i) => i.hierarchyLevel !== 1).filter((i) => matches(i, f, currentUserId)),
+  };
+}
+
 function matches(item, f, currentUserId) {
   if (f.q) {
     const n = f.q.trim().toLowerCase();
@@ -473,6 +558,11 @@ const linkBtn = { border: 'none', background: 'transparent', color: '#2563EB', c
 const createSprintBtn = {
   display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6,
   border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+};
+const closedHeaderBtn = {
+  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', width: '100%',
+  padding: '6px 2px', marginBottom: 8, border: 'none', background: 'transparent',
+  color: SURFACE.textMuted, cursor: 'pointer', textAlign: 'left',
 };
 const emptyHint = {
   padding: '12px 14px', borderRadius: 8, backgroundColor: '#EFF6FF',

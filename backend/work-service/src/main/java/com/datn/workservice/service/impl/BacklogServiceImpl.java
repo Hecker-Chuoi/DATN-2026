@@ -10,10 +10,12 @@ import com.datn.workservice.dto.response.SprintResponse;
 import com.datn.workservice.dto.response.StatusResponse;
 import com.datn.workservice.entity.Project;
 import com.datn.workservice.entity.Sprint;
+import com.datn.workservice.entity.SprintReportSnapshot;
 import com.datn.workservice.entity.WorkItem;
 import com.datn.workservice.enums.SprintState;
 import com.datn.workservice.enums.StatusCategory;
 import com.datn.workservice.repository.ProjectRepository;
+import com.datn.workservice.repository.SprintReportSnapshotRepository;
 import com.datn.workservice.repository.SprintRepository;
 import com.datn.workservice.repository.StatusRepository;
 import com.datn.workservice.repository.WorkItemRepository;
@@ -52,6 +54,12 @@ public class BacklogServiceImpl implements BacklogService {
     private final StatusRepository statusRepository;
     private final WorkItemCardMapper cardMapper;
     private final SprintService sprintService;
+    private final SprintReportSnapshotRepository snapshotRepository;
+
+    /** Khu luu tru: dong gan nhat truoc; Sprint thieu ngay dong (du lieu cu) xep cuoi theo ke hoach. */
+    private static final Comparator<Sprint> CLOSED_ORDER = Comparator
+            .comparing(Sprint::getCompletedDate, Comparator.nullsLast(Comparator.<LocalDateTime>reverseOrder()))
+            .thenComparing(SprintSequence.PLAN_ORDER);
 
     @Override
     @Transactional(readOnly = true)
@@ -59,17 +67,28 @@ public class BacklogServiceImpl implements BacklogService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
 
-        // Sprint da dong khong hien tren Backlog - chung thuoc man hinh Bao cao.
-        // Thu tu hien thi trung voi thu tu ke hoach (BR-B02, BR-S15): khoi FUTURE tren cung
-        // chinh la giai doan duy nhat duoc bat dau tiep.
+        // Khoi ke hoach: ACTIVE + FUTURE. Thu tu hien thi trung voi thu tu ke hoach (BR-B02, BR-S15):
+        // khoi FUTURE tren cung chinh la giai doan duy nhat duoc bat dau tiep.
         List<Sprint> sprints = sprintRepository
                 .findByProjectIdAndStateIn(projectId, EnumSet.of(SprintState.ACTIVE, SprintState.FUTURE))
                 .stream()
                 .sorted(SprintSequence.DISPLAY_ORDER)
                 .toList();
-        List<UUID> sprintIds = sprints.stream().map(Sprint::getId).toList();
+
+        // Sprint da dong nam o khu luu tru rieng (BR-B08), dong gan nhat truoc. Tach khoi danh sach
+        // tren de khong anh huong canStart / thu tu ke hoach.
+        List<Sprint> closedSprints = sprintRepository
+                .findByProjectIdAndState(projectId, SprintState.CLOSED)
+                .stream()
+                .sorted(CLOSED_ORDER)
+                .toList();
+
+        List<UUID> sprintIds = new ArrayList<>(sprints.size() + closedSprints.size());
+        sprints.forEach(s -> sprintIds.add(s.getId()));
+        closedSprints.forEach(s -> sprintIds.add(s.getId()));
 
         // Dung 2 truy van cho toan bo cong viec, roi dung chung mot context anh xa.
+        // Sprint da dong chi con cong viec DONE (viec do dang da bi chuyen di luc dong).
         List<WorkItem> sprintItems = sprintIds.isEmpty()
                 ? List.of()
                 : workItemRepository.findBySprintIdInAndDeletedAtIsNull(sprintIds);
@@ -106,6 +125,17 @@ public class BacklogServiceImpl implements BacklogService {
                 .map(s -> toGroup(s, bySprint.getOrDefault(s.getId(), List.of()), startableId))
                 .toList();
 
+        Map<UUID, SprintReportSnapshot> snapshotBySprint = closedSprints.isEmpty()
+                ? Map.of()
+                : snapshotRepository.findBySprintIdIn(closedSprints.stream().map(Sprint::getId).toList())
+                        .stream()
+                        .collect(Collectors.toMap(SprintReportSnapshot::getSprintId, s -> s, (a, b) -> a));
+
+        List<BacklogGroupResponse> closedGroups = closedSprints.stream()
+                .map(s -> toClosedGroup(s, bySprint.getOrDefault(s.getId(), List.of()),
+                        snapshotBySprint.get(s.getId())))
+                .toList();
+
         BacklogGroupResponse backlogGroup = toGroup(null, backlogRows, startableId);
 
         SprintResponse activeSprint = sprints.stream()
@@ -119,6 +149,7 @@ public class BacklogServiceImpl implements BacklogService {
                 .projectKey(project.getKey())
                 .activeSprint(activeSprint)
                 .sprints(sprintGroups)
+                .closedSprints(closedGroups)
                 .backlog(backlogGroup)
                 .epics(buildEpics(cards))
                 .statuses(buildStatuses(projectId))
@@ -183,6 +214,7 @@ public class BacklogServiceImpl implements BacklogService {
                 .state(isBacklog ? null : sprint.getState())
                 .startDate(isBacklog ? null : sprint.getStartDate())
                 .endDate(isBacklog ? null : sprint.getEndDate())
+                .completedDate(isBacklog ? null : sprint.getCompletedDate())
                 .items(items)
                 .itemCount(items.size())
                 .totalStoryPoints(total)
@@ -196,6 +228,23 @@ public class BacklogServiceImpl implements BacklogService {
                         && !items.isEmpty() && Objects.equals(sprint.getId(), startableSprintId))
                 .canComplete(!isBacklog && sprint.getState() == SprintState.ACTIVE)
                 .build();
+    }
+
+    /**
+     * Khoi Sprint da dong: giong toGroup (canStart/canComplete tu nhien = false) va kem so lieu
+     * chot luc dong lay tu snapshot - cung nguon voi Velocity/Bao cao nen hai man khop nhau.
+     * Snapshot co the thieu (du lieu cu dong truoc khi co snapshot) thi bo trong cac truong do.
+     */
+    private BacklogGroupResponse toClosedGroup(Sprint sprint, List<BoardCardResponse> items,
+                                               SprintReportSnapshot snapshot) {
+        BacklogGroupResponse group = toGroup(sprint, items, null);
+        if (snapshot != null) {
+            group.setItemsAtClose(snapshot.getTotalItems());
+            group.setCompletedItemsAtClose(snapshot.getCompletedItems());
+            group.setStoryPointsAtClose(snapshot.getTotalStoryPoints());
+            group.setCompletedStoryPointsAtClose(snapshot.getCompletedStoryPoints());
+        }
+        return group;
     }
 
     /** Epic suy ra tu chinh cac the da anh xa, khong ton them truy van. */

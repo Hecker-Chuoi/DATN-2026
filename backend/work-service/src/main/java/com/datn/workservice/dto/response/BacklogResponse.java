@@ -29,6 +29,12 @@ public class BacklogResponse {
     /** ACTIVE truoc, roi cac Sprint FUTURE theo ngay bat dau. Khong gom Sprint da dong. */
     private List<BacklogGroupResponse> sprints;
 
+    /**
+     * Sprint / Giai doan da dong, dong gan nhat truoc. Chi de xem lai (khong keo tha, khong tao
+     * viec) - giu tren man Backlog de khong "mat" giai doan sau khi hoan tat (BR-B08).
+     */
+    private List<BacklogGroupResponse> closedSprints;
+
     private BacklogGroupResponse backlog;
 
     private List<EpicOptionResponse> epics;
