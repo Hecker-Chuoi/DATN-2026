@@ -6,15 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Cấu trúc monorepo
 
-- `backend/` — Maven multi-module (Java 21, Spring Boot 3.5.4, Spring Cloud 2025.0.0): `common`, `api-gateway` (:8081), `identity-service` (:8082), `work-service` (:8083), `notification-service` (:9994, chỉ gửi email qua SMTP, không đi qua gateway).
+- `backend/` — Maven multi-module (Java 21, Spring Boot 3.5.4, Spring Cloud 2025.0.0): `common`, `api-gateway` (:8081), `identity-service` (:8082), `work-service` (:8083), `workspace-service` (:8087), `ai-service` (:8084, trợ lý AI dùng Gemini, route `/ai/**`), `notification-service` (:9994, chỉ gửi email qua SMTP, không đi qua gateway).
 - `frontend/` — React 19 + Vite 8, JS/JSX thuần (không TypeScript, không Tailwind, không thư viện UI/state). Dev server :5173.
 - `infrastructure/` (ở root) — toàn bộ docker-compose, Keycloak realm export, hướng dẫn setup. Các file này từng nằm ở `backend/environment/`; sau khi chuyển ra root, `context:` trong compose trỏ tới `../backend` và `../frontend`.
-- `docs/` — đặc tả kiến trúc, DB, luồng đăng nhập, kịch bản test (`docs/services/work_service/*`). `community-service`, `integration-notification-service`, `ai-service` chỉ tồn tại trong docs, chưa có code.
+- `docs/` — đặc tả kiến trúc, DB, luồng đăng nhập, kịch bản test (`docs/services/work_service/*`). `community-service`, `integration-notification-service` chỉ tồn tại trong docs, chưa có code. Trợ lý AI: `docs/ai-agent/AI_AGENT.html` (kiến trúc, bảng tool → endpoint → quyền, SSE, cách chạy) và `docs/ai-agent/PLAN.md` (kế hoạch + nhật ký thực thi).
 
 ## Lệnh thường dùng
 
 ### Backend
-Máy hiện tại **không có Maven và chỉ có JDK 17** (`JAVA_HOME=D:\jdk-17`), trong khi dự án cần JDK 21. `backend/mvnw` cũng hỏng vì `.mvn/` bị gitignore ở root. Vì vậy build/test backend chỉ chắc chắn chạy được qua Docker:
+Máy hiện tại không có Maven trên PATH và `JAVA_HOME=D:\jdk-17`, nhưng có sẵn JDK 21 của IntelliJ tại `C:\Users\anh.nvt\.jdks\ms-21.0.12` và Maven 3.9.16 do wrapper tải về. Compile/test backend không cần cài gì thêm (đặt JAVA_HOME cho riêng lệnh đó):
+
+```bash
+cd backend
+export JAVA_HOME="C:\\Users\\anh.nvt\\.jdks\\ms-21.0.12"
+/c/Users/anh.nvt/.m2/wrapper/dists/apache-maven-3.9.16/56ba1f9f/bin/mvn.cmd -q -o -pl ai-service -am compile   # -o offline; bỏ -o khi thêm dependency mới
+```
+`backend/mvnw` hỏng vì `.mvn/` bị gitignore ở root. Cách khác là build qua Docker:
 
 ```bash
 cd infrastructure
@@ -24,10 +31,11 @@ docker compose -f docker-compose.tuananh.yml --profile app up -d --build # thêm
 Ba file `docker-compose.yml` / `.app.yml` / `.infra.yml` là bản gốc của nhóm (cổng 808x, image `minio/minio` đã bị gỡ khỏi Docker Hub) — **không đổi cổng/minio**; đã có notification-service + Mailpit (chỉ thêm, không sửa phần cũ).
 
 **Cổng dùng chung (808x) vs cá nhân (999x):** mọi `application.yml`, `vite.config.js`, `nginx.conf`, realm export dùng cổng 808x của nhóm. Máy này bị trùng cổng 808x nên dùng lớp phủ cá nhân, không sửa file chung:
-- Backend: profile `tuananh` (`application-tuananh.y*ml` trong 4 service) → gateway 9991, identity 9992, work 9993, workspace 9997, notification 9994 (không cần profile), Keycloak 9998. Profile này ghi đè TOÀN BỘ `routes` của gateway: thêm service mới phải thêm route vào cả hai file. Chạy từ IDE với `-Dspring.profiles.active=tuananh`; `docker-compose.tuananh.yml` đã set `SPRING_PROFILES_ACTIVE`.
+- Backend: profile `tuananh` (`application-tuananh.y*ml` trong 5 service) → gateway 9991, identity 9992, work 9993, ai 9995, workspace 9997, notification 9994 (không cần profile), Keycloak 9998. Profile này ghi đè TOÀN BỘ `routes` của gateway: thêm service mới phải thêm route vào cả hai file. Chạy từ IDE với `-Dspring.profiles.active=tuananh`; `docker-compose.tuananh.yml` đã set `SPRING_PROFILES_ACTIVE`.
+- Trợ lý AI cần 2 biến môi trường (không commit): `GEMINI_API_KEY` (ai-service) và `AI_TOOLS_API_KEY` (cùng giá trị ở ai-service **và** work-service; work-service dùng nó để nhận lời gọi `/internal/ai-tools/**` từ ai-service). Thiếu `GEMINI_API_KEY` thì app vẫn boot, chỉ lượt chat báo lỗi.
 - Frontend: `frontend/.env.local` (gitignored) đặt `VITE_GATEWAY_URL` và `VITE_KEYCLOAK_URL`; `vite.config.js` và `App.jsx` đọc hai biến này, mặc định 8081/8088.
 - Keycloak Admin Console cá nhân: http://localhost:9998 (nhóm: 8088). Google Console cần có cả hai redirect URI.
-Dockerfile mỗi service dùng build context là `backend/` (compose khai báo `context: ..`) và phải COPY đủ **6 pom** (common, identity, gateway, work, workspace, notification) + `common/src` vì parent pom liệt kê mọi module. Thêm module mới = sửa cả 4 Dockerfile còn lại (quên là `mvn` trong image fail ngay: `Child module ... does not exist`).
+Dockerfile mỗi service dùng build context là `backend/` (compose khai báo `context: ..`) và phải COPY đủ **7 pom** (common, identity, gateway, work, workspace, notification, ai) + `common/src` vì parent pom liệt kê mọi module. Thêm module mới = sửa cả 5 Dockerfile còn lại (quên là `mvn` trong image fail ngay: `Child module ... does not exist`).
 
 Email dev: compose infra có **Mailpit** (SMTP :1025, xem mail tại http://localhost:8025). SMTP thật cấu hình qua env `MAIL_HOST/PORT/USERNAME/PASSWORD/SMTP_AUTH/STARTTLS/FROM` của notification-service.
 
@@ -78,10 +86,11 @@ Frontend → API Gateway (:8081) → service. Gateway (`api-gateway/src/main/res
 - work-service dùng JPA Specification (`specification/*`) cho filter động, Redis :6380, MinIO :9000 (bucket `work-attachments`).
 
 ## Trạng thái hiện tại cần biết trước khi sửa
-- Migration work-service: V1, V2 (`authz_hardening`), V3 (`add_project_id_to_statuses`), V4 (`invitations`), V5 (`phase6_sprint_board_agile`), V6 (`project_templates`), V7 (`seed_default_templates`); thêm mới dùng V8 trở đi. workspace-service (Flyway riêng `flyway_workspace_schema_history`, `ddl-auto: validate`): V1–V4 (`workspace_invitations`); thêm mới dùng V5. identity-service không dùng Flyway (`ddl-auto: update` tự tạo `verification_tokens`).
+- Migration work-service: V1–V9 (`V9__contribution_management`); thêm mới dùng V10 trở đi. workspace-service (Flyway riêng `flyway_workspace_schema_history`, `ddl-auto: validate`): V1–V4 (`workspace_invitations`); thêm mới dùng V5. ai-service (Flyway riêng `flyway_ai_schema_history`, `ddl-auto: validate`): V1 (`ai_agent_core`, 6 bảng `ai_*`); thêm mới dùng V2. identity-service không dùng Flyway (`ddl-auto: update` tự tạo `verification_tokens`).
+- **Trợ lý AI** (`backend/ai-service`, package `com.datn.aiservice`): vòng lặp agent ở `agent/AgentOrchestrator`; tool của work-service khai báo trong `resources/agent-tools.yml` (một lớp `RemoteAgentTool` chung, gọi `POST /internal/ai-tools/{path}` kèm `X-API-Key` + `X-User-Id`); phía work-service là `controller/internal/InternalAiToolController` + `service/ai/AiToolService` (kiểm `hasPermission(projectId, userId, key)` cho từng tool) + `security/AiToolApiKeyFilter` (dựng Jwt giả chỉ có `sub`, nên Global ADMIN không bypass khi đi qua AI – chủ ý). Thêm tool mới = thêm mục trong yml + một method/endpoint ở work-service. Frontend: `components/ai/*`, `hooks/useAiChat.js`, `context/AiChatContext.jsx`, `aiApi` trong `src/api.js` (SSE đọc bằng `fetch`).
 - **Dự án mẫu** = `Project` có `is_template=true`; tạo dự án từ mẫu / lưu thành mẫu / nhân bản đều đi qua `service/template/ProjectCloneEngine` (deep-clone + ánh xạ ID + dời ngày) và `TemplateIntegrityValidator`. Thêm bảng con mới của project thì phải bổ sung vào `ProjectBlueprint`, loader và engine, nếu không mẫu sẽ bỏ sót bảng đó. Chi tiết: `docs/services/work_service/template/`.
 - Thành viên Workspace (vai trò MEMBER, ADMIN, OWNER) hoặc Global ADMIN đều có thể tạo dự án trong Workspace đó. Đã loại bỏ hoàn toàn tầng trung gian Team (Flyway V8), kiến trúc phẳng 2 cấp gồm Workspace -> Projects -> Tasks.
-- `work-service` **chưa có trong bất kỳ docker-compose nào**, và compose chỉ set env `SPRING_CLOUD_GATEWAY_ROUTES_0_*` (identity) nên gateway trong container mất route `/work/**`. `frontend/nginx.conf` cũng chỉ proxy `/identity/`, thiếu `/work/`.
+- `work-service` **chưa có trong bất kỳ docker-compose nào**, và compose chỉ set env `SPRING_CLOUD_GATEWAY_ROUTES_0_*` (identity) nên gateway trong container mất route `/work/**` và `/ai/**`. `frontend/nginx.conf` chỉ proxy `/identity/` và `/ai/`, thiếu `/work/`. `ai-service` có trong `docker-compose.tuananh.yml` (profile `app`, trỏ work-service về `host.docker.internal:9993`).
 - `frontend/src/api/workServiceApi.js` là bản trùng lặp của `src/api.js`, không ai import; dùng `src/api.js`.
 - Client secret `datn-backend` phải khớp giữa `identity-service/application.yaml`, compose và realm export (`infrastructure/keycloak/realm-export_08082026.json`). Import realm: `POST http://localhost:8088/admin/realms` với token admin-cli của realm master.
 
