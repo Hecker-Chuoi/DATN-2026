@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertCircle, LogOut, Trash2, UserPlus, Users } from 'lucide-react';
+import { AlertCircle, CheckCircle2, LogOut, Mail, Search, Trash2, UserPlus, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workspaceApi } from '../api/workspaceServiceApi';
 import { userApi } from '../api';
@@ -50,6 +50,32 @@ const dangerHint = {
   fontSize: 12,
 };
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Tra người dùng theo email, chỉ chấp nhận khi email trùng khớp 100%
+ * (không phân biệt hoa thường). Ưu tiên endpoint by-email, lỗi thì
+ * fallback sang search rồi tự lọc khớp tuyệt đối.
+ */
+async function findUserByExactEmail(email) {
+  const target = email.toLowerCase();
+  const isExact = (u) => u?.email && u.email.trim().toLowerCase() === target;
+
+  try {
+    const res = await userApi.getByEmail(email, { skipErrorToast: true });
+    if (isExact(res?.data)) return res.data;
+  } catch {
+    // thử fallback bên dưới
+  }
+  try {
+    const res = await userApi.search(email, { skipErrorToast: true });
+    const list = Array.isArray(res?.data) ? res.data : [];
+    return list.find(isExact) || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Route /w/:workspaceId/members - quản trị thành viên workspace.
  *
@@ -72,7 +98,10 @@ export default function WorkspaceMembersPage() {
   const [error, setError] = useState('');
   const [myUserId, setMyUserId] = useState(null);
 
-  const [identifier, setIdentifier] = useState('');
+  // Mời 2 bước: tìm đúng email -> xác nhận người dùng -> chọn vai trò & gửi lời mời.
+  const [searchEmail, setSearchEmail] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [foundUser, setFoundUser] = useState(null);
   const [newRole, setNewRole] = useState('MEMBER');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
@@ -123,20 +152,51 @@ export default function WorkspaceMembersPage() {
   const isLastOwner = owners.length === 1;
   const iAmLastOwner = isLastOwner && myUserId && owners[0]?.userId === myUserId;
 
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    if (!identifier.trim()) {
-      setAddError('Nhập email hoặc tên đăng nhập của người cần mời');
+  const resetInvite = () => {
+    setSearchEmail('');
+    setFoundUser(null);
+    setNewRole('MEMBER');
+    setAddError('');
+  };
+
+  const handleSearch = async () => {
+    const email = searchEmail.trim();
+    if (!email) {
+      setAddError('Nhập email của người cần mời');
       return;
     }
+    if (!EMAIL_REGEX.test(email)) {
+      setAddError('Định dạng email không hợp lệ. Vui lòng nhập đúng email (ví dụ: user@example.com)');
+      return;
+    }
+    try {
+      setSearching(true);
+      setAddError('');
+      setFoundUser(null);
+      const user = await findUserByExactEmail(email);
+      if (!user) {
+        setAddError('Không tìm thấy người dùng nào có email này. Vui lòng kiểm tra lại chính xác từng ký tự.');
+        return;
+      }
+      if (members.some((m) => m.userId === user.id)) {
+        setAddError('Người dùng này đã là thành viên của không gian làm việc.');
+        return;
+      }
+      setFoundUser(user);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleInvite = async () => {
+    if (!foundUser) return;
     try {
       setAdding(true);
       setAddError('');
       // Backend tạo lời mời, chưa thêm vào bảng thành viên: chỉ cần reload block lời mời chờ.
-      await workspaceApi.addMember(workspaceId, { identifier: identifier.trim(), role: newRole });
+      await workspaceApi.addMember(workspaceId, { identifier: foundUser.email, role: newRole });
       toast.success('Đã gửi lời mời. Người được mời cần chấp nhận để trở thành thành viên.');
-      setIdentifier('');
-      setNewRole('MEMBER');
+      resetInvite();
       setInviteTick((t) => t + 1);
     } catch (err) {
       // Interceptor của api.js đã toast lỗi; ở đây chỉ hiển thị inline để không
@@ -215,7 +275,11 @@ export default function WorkspaceMembersPage() {
 
         {canManageMembers && (
           <form
-            onSubmit={handleAdd}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (foundUser) handleInvite();
+              else handleSearch();
+            }}
             style={{
               background: '#FFFFFF',
               border: '1px solid #E2E8F0',
@@ -228,47 +292,163 @@ export default function WorkspaceMembersPage() {
               Mời thành viên
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-              <input
-                type="text"
-                value={identifier}
-                onChange={(e) => {
-                  setIdentifier(e.target.value);
-                  if (addError) setAddError('');
-                }}
-                placeholder="Email hoặc tên đăng nhập"
-                style={{ ...inputStyle, flex: 1, minWidth: 220 }}
-              />
-              <CustomSelect
-                value={newRole}
-                onChange={(val) => setNewRole(val)}
-                options={ALL_ROLES.map((r) => ({
-                  value: r,
-                  label: roleLabel(r),
-                  disabled: r === 'OWNER' && !isOwner,
-                }))}
-                width={150}
-              />
+              <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+                <Mail
+                  size={15}
+                  color="#94A3B8"
+                  style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }}
+                />
+                <input
+                  type="email"
+                  value={searchEmail}
+                  onChange={(e) => {
+                    setSearchEmail(e.target.value);
+                    if (addError) setAddError('');
+                    if (foundUser) setFoundUser(null);
+                  }}
+                  placeholder="Nhập chính xác email (ví dụ: user@example.com)"
+                  style={{ ...inputStyle, width: '100%', paddingLeft: 32, boxSizing: 'border-box' }}
+                />
+              </div>
               <button
-                type="submit"
-                disabled={adding || !identifier.trim()}
+                type="button"
+                onClick={handleSearch}
+                disabled={searching || !searchEmail.trim()}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  background: adding || !identifier.trim() ? '#94A3B8' : '#2563EB',
+                  background: searching || !searchEmail.trim() ? '#94A3B8' : '#2563EB',
                   color: '#FFFFFF',
                   border: 'none',
                   padding: '8px 16px',
                   borderRadius: 6,
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: adding || !identifier.trim() ? 'not-allowed' : 'pointer',
+                  whiteSpace: 'nowrap',
+                  cursor: searching || !searchEmail.trim() ? 'not-allowed' : 'pointer',
                 }}
               >
-                <UserPlus size={14} />
-                <span>{adding ? 'Đang gửi...' : 'Mời'}</span>
+                <Search size={14} />
+                <span>{searching ? 'Đang tìm...' : 'Tìm kiếm'}</span>
               </button>
             </div>
+            <div style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
+              Chỉ người dùng có email trùng khớp 100% trong hệ thống mới được tìm thấy.
+            </div>
+
+            {foundUser && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  background: '#F0FDF4',
+                  border: '1px solid #86EFAC',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 220 }}>
+                  <div
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: '50%',
+                      background: '#2563EB',
+                      color: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 700,
+                      fontSize: 15,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {(foundUser.fullName || foundUser.username || foundUser.email || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
+                        {foundUser.fullName || foundUser.username || foundUser.email}
+                      </span>
+                      {foundUser.username && foundUser.username !== foundUser.email && (
+                        <span style={{ fontSize: 12, color: '#64748B' }}>@{foundUser.username}</span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        fontSize: 12,
+                        color: '#15803D',
+                        marginTop: 2,
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      <CheckCircle2 size={13} style={{ flexShrink: 0 }} />
+                      <span>{foundUser.email}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <CustomSelect
+                    value={newRole}
+                    onChange={(val) => setNewRole(val)}
+                    options={ALL_ROLES.map((r) => ({
+                      value: r,
+                      label: roleLabel(r),
+                      disabled: r === 'OWNER' && !isOwner,
+                    }))}
+                    width={150}
+                  />
+                  <button
+                    type="submit"
+                    disabled={adding}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      background: adding ? '#94A3B8' : '#2563EB',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      padding: '8px 16px',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      cursor: adding ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <UserPlus size={14} />
+                    <span>{adding ? 'Đang gửi...' : 'Gửi lời mời'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetInvite}
+                    title="Nhập email khác"
+                    style={{
+                      background: '#FFFFFF',
+                      border: '1px solid #CBD5E1',
+                      borderRadius: 6,
+                      color: '#475569',
+                      padding: '7px 12px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Đổi email
+                  </button>
+                </div>
+              </div>
+            )}
+
             {addError && (
               <div style={{ ...dangerHint, marginTop: 10 }}>
                 <AlertCircle size={14} />
