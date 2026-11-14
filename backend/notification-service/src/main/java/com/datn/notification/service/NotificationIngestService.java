@@ -12,6 +12,7 @@ import com.datn.notification.dto.NotificationResponse;
 import com.datn.notification.dto.PushMessage;
 import com.datn.notification.entity.Notification;
 import com.datn.notification.repository.NotificationRepository;
+import com.datn.notification.service.NotificationPreferenceService.Delivery;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,6 +41,8 @@ import java.util.UUID;
  *   <li>Bỏ người thao tác (R1), mỗi người chỉ giữ lý do mạnh nhất (R3).</li>
  *   <li>Gộp vào thông báo chưa đọc cùng nhóm trong cửa sổ gộp (R4), hoặc chèn mới.</li>
  *   <li>Chống trùng bằng {@code dedup_key} UNIQUE: Kafka giao lại hay job chạy lại đều không sinh bản sao (R6).</li>
+ *   <li>Áp cài đặt bật / tắt của người nhận ({@link NotificationPreferenceService}): tắt trong ứng dụng thì không
+ *       hiện (nếu vẫn bật email thì lưu một bản ẩn để chống gửi email trùng), tắt email thì không gửi mail.</li>
  *   <li>Sau commit: đẩy WebSocket, gửi email nếu loại có cấu hình email.</li>
  * </ol>
  */
@@ -54,6 +57,7 @@ public class NotificationIngestService {
     private final UserDirectory users;
     private final NotificationPushService pushService;
     private final NotificationMailer mailer;
+    private final NotificationPreferenceService preferenceService;
     private final Duration groupWindow;
     private final Clock clock;
 
@@ -63,18 +67,21 @@ public class NotificationIngestService {
                                      UserDirectory users,
                                      NotificationPushService pushService,
                                      NotificationMailer mailer,
+                                     NotificationPreferenceService preferenceService,
                                      @Value("${app.notifications.group-window-minutes:10}") long groupWindowMinutes) {
-        this(repository, catalog, users, pushService, mailer, Duration.ofMinutes(groupWindowMinutes), Clock.systemUTC());
+        this(repository, catalog, users, pushService, mailer, preferenceService,
+                Duration.ofMinutes(groupWindowMinutes), Clock.systemUTC());
     }
 
     NotificationIngestService(NotificationRepository repository, NotificationCatalog catalog, UserDirectory users,
                               NotificationPushService pushService, NotificationMailer mailer,
-                              Duration groupWindow, Clock clock) {
+                              NotificationPreferenceService preferenceService, Duration groupWindow, Clock clock) {
         this.repository = repository;
         this.catalog = catalog;
         this.users = users;
         this.pushService = pushService;
         this.mailer = mailer;
+        this.preferenceService = preferenceService;
         this.groupWindow = groupWindow;
         this.clock = clock;
     }
@@ -94,10 +101,15 @@ public class NotificationIngestService {
             return 0;
         }
 
-        Map<String, RecipientReason> recipients = strongestReasons(event);
+        Map<UUID, RecipientReason> recipients = new LinkedHashMap<>();
+        strongestReasons(event).forEach((userId, reason) -> {
+            UUID id = parseUuid(userId);
+            if (id != null) recipients.put(id, reason);
+        });
         if (recipients.isEmpty()) {
             return 0;
         }
+        Map<UUID, Delivery> deliveries = preferenceService.resolve(spec, parseUuid(event.getProjectId()), recipients);
 
         String actorName = event.getActorId() == null ? "Hệ thống" : users.displayName(event.getActorId());
         LocalDate today = LocalDate.now(clock.withZone(RenderContext.ZONE));
@@ -105,19 +117,21 @@ public class NotificationIngestService {
 
         // Không bắt lỗi UNIQUE ở đây: flush lỗi làm transaction rollback-only. Hai bản cùng dedup_key
         // hiếm khi chen nhau (mỗi partition một consumer); nếu có, Kafka giao lại và existsByDedupKey bỏ qua.
-        for (String userId : recipients.keySet()) {
-            UUID recipientId = parseUuid(userId);
-            if (recipientId == null) continue;
-            changed += deliver(spec, event, recipientId, actorName, today) ? 1 : 0;
+        for (UUID recipientId : recipients.keySet()) {
+            Delivery delivery = deliveries.getOrDefault(recipientId, new Delivery(true, spec.email() != null));
+            if (!delivery.any()) continue; // người nhận đã tắt nhóm này / tắt tiếng dự án
+            changed += deliver(spec, event, recipientId, actorName, today, delivery) ? 1 : 0;
         }
         return changed;
     }
 
-    private boolean deliver(NotificationSpec spec, NotificationEvent event, UUID recipientId, String actorName, LocalDate today) {
+    /** @return true nếu có thông báo hiện ra (tạo mới hoặc gộp); bản ẩn chỉ để gửi email thì trả false. */
+    private boolean deliver(NotificationSpec spec, NotificationEvent event, UUID recipientId, String actorName,
+                            LocalDate today, Delivery delivery) {
         String groupKey = spec.groupKey(event);
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS); // Postgres lưu tới micro giây
 
-        if (groupKey != null) {
+        if (groupKey != null && delivery.inApp()) {
             Optional<Notification> existing = repository
                     .findFirstByRecipientIdAndGroupKeyAndReadAtIsNullAndDeletedAtIsNullAndUpdatedAtAfterOrderByUpdatedAtDesc(
                             recipientId, groupKey, now.minus(groupWindow));
@@ -162,14 +176,18 @@ public class NotificationIngestService {
                 .sourceEventId(event.getEventId())
                 .createdAt(now)
                 .updatedAt(now)
+                // Tắt trong ứng dụng nhưng bật email: lưu bản ẩn (như đã xoá) để dedup_key chặn email trùng
+                .deletedAt(delivery.inApp() ? null : now)
                 .build();
         repository.saveAndFlush(n);
 
-        pushService.pushAfterCommit(recipientId, PushMessage.of("CREATED", NotificationResponse.from(n)));
-        if (spec.email() != null) {
+        if (delivery.inApp()) {
+            pushService.pushAfterCommit(recipientId, PushMessage.of("CREATED", NotificationResponse.from(n)));
+        }
+        if (delivery.email() && spec.email() != null) {
             mailer.sendAfterCommit(spec.email(), ctx, rendered.link());
         }
-        return true;
+        return delivery.inApp();
     }
 
     /** Gộp vào thông báo chưa đọc cùng nhóm: nội dung lấy theo sự kiện mới nhất, đếm số người thao tác khác nhau. */

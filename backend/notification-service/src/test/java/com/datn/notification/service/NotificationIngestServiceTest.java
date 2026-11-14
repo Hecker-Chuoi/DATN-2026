@@ -9,7 +9,11 @@ import com.datn.notification.dto.PushMessage;
 import com.datn.notification.entity.Notification;
 import com.datn.notification.enums.NotificationCategory;
 import com.datn.notification.enums.NotificationSeverity;
+import com.datn.notification.entity.NotificationPreference;
+import com.datn.notification.entity.ProjectMute;
+import com.datn.notification.repository.NotificationPreferenceRepository;
 import com.datn.notification.repository.NotificationRepository;
+import com.datn.notification.repository.ProjectMuteRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,13 +58,20 @@ class NotificationIngestServiceTest {
     @Mock UserDirectory users;
     @Mock NotificationPushService push;
     @Mock NotificationMailer mailer;
+    @Mock NotificationPreferenceRepository preferenceRepository;
+    @Mock ProjectMuteRepository muteRepository;
 
     private NotificationIngestService service;
 
     @BeforeEach
     void setUp() {
-        service = new NotificationIngestService(repository, new NotificationCatalog(), users, push, mailer,
+        NotificationCatalog catalog = new NotificationCatalog();
+        NotificationPreferenceService preferences = new NotificationPreferenceService(
+                preferenceRepository, muteRepository, catalog, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new NotificationIngestService(repository, catalog, users, push, mailer, preferences,
                 Duration.ofMinutes(10), Clock.fixed(NOW, ZoneOffset.UTC));
+        when(preferenceRepository.findByUserIdInAndCategory(anyCollection(), any())).thenReturn(List.of());
+        when(muteRepository.findByProjectIdAndUserIdIn(any(), anyCollection())).thenReturn(List.of());
         when(users.displayName(ACTOR)).thenReturn("An");
         when(users.displayName(CHI)).thenReturn("Chi");
         when(repository.existsByDedupKey(anyString())).thenReturn(false);
@@ -234,5 +245,72 @@ class NotificationIngestServiceTest {
         NotificationEvent e = event(NotificationType.TASK_ASSIGNED, "e1", ACTOR, "not-a-uuid", RecipientReason.NEW_ASSIGNEE);
         assertThat(service.ingest(e)).isZero();
         verify(repository, never()).saveAndFlush(any());
+    }
+
+    // ─────────────────────────── Cài đặt bật / tắt (tài liệu 3 §10.1) ───────────────────────────
+
+    private void prefer(String user, NotificationCategory category, boolean inApp, boolean email) {
+        when(preferenceRepository.findByUserIdInAndCategory(anyCollection(), eq(category))).thenReturn(List.of(
+                NotificationPreference.builder().userId(UUID.fromString(user)).category(category)
+                        .inApp(inApp).email(email).updatedAt(NOW).build()));
+    }
+
+    @Test
+    void categoryOff_noNotificationNoPushNoMail() {
+        prefer(BINH, NotificationCategory.COMMENT, false, false);
+        assertThat(service.ingest(event(NotificationType.COMMENT_ADDED, "p1", ACTOR, BINH, RecipientReason.ASSIGNEE))).isZero();
+        verify(repository, never()).saveAndFlush(any());
+        verify(push, never()).pushAfterCommit(any(), any());
+        verify(mailer, never()).sendAfterCommit(any(), any(), any());
+    }
+
+    @Test
+    void mentionStillDelivered_whenCommentsOff_butEmailFollowsSetting() {
+        prefer(BINH, NotificationCategory.COMMENT, false, false);
+        assertThat(service.ingest(event(NotificationType.COMMENT_MENTION, "p2", ACTOR, BINH, RecipientReason.MENTIONED))).isEqualTo(1);
+        verify(repository).saveAndFlush(any());
+        verify(push).pushAfterCommit(eq(UUID.fromString(BINH)), any());
+        verify(mailer, never()).sendAfterCommit(any(), any(), any());
+    }
+
+    @Test
+    void emailOff_keepsInApp() {
+        prefer(BINH, NotificationCategory.TASK, true, false);
+        assertThat(service.ingest(event(NotificationType.TASK_ASSIGNED, "p3", ACTOR, BINH, RecipientReason.NEW_ASSIGNEE))).isEqualTo(1);
+        verify(push).pushAfterCommit(eq(UUID.fromString(BINH)), any());
+        verify(mailer, never()).sendAfterCommit(any(), any(), any());
+    }
+
+    @Test
+    void inAppOff_emailOn_storesHiddenCopyForDedup_andSendsMailOnly() {
+        prefer(BINH, NotificationCategory.REMINDER, false, true);
+        NotificationEvent e = event(NotificationType.TASK_DUE_SOON, "p4", null, BINH, RecipientReason.ASSIGNEE);
+        e.getData().put("dueDate", "2026-11-15");
+        e.getData().put("daysLeft", 1);
+
+        assertThat(service.ingest(e)).isZero(); // không có gì hiện ra trong chuông
+
+        ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
+        verify(repository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getDeletedAt()).isEqualTo(NOW);
+        verify(push, never()).pushAfterCommit(any(), any());
+        verify(mailer).sendAfterCommit(any(), any(), any());
+    }
+
+    @Test
+    void mutedProject_skipsFollowUp_keepsDirect() {
+        when(muteRepository.findByProjectIdAndUserIdIn(any(), anyCollection())).thenReturn(List.of(ProjectMute.builder()
+                .userId(UUID.fromString(BINH)).projectId(UUID.fromString("22222222-2222-2222-2222-222222222222"))
+                .createdAt(NOW).build()));
+
+        assertThat(service.ingest(event(NotificationType.TASK_STATUS_CHANGED, "p5", ACTOR, BINH, RecipientReason.ASSIGNEE))).isZero();
+        assertThat(service.ingest(event(NotificationType.TASK_ASSIGNED, "p6", ACTOR, BINH, RecipientReason.NEW_ASSIGNEE))).isEqualTo(1);
+    }
+
+    @Test
+    void actionRequiredStaysVisible_evenWhenCategoryOff() {
+        prefer(BINH, NotificationCategory.APPROVAL, false, false);
+        assertThat(service.ingest(event(NotificationType.COMPLETION_REQUESTED, "p7", ACTOR, BINH, RecipientReason.PROJECT_MANAGER)))
+                .isEqualTo(1);
     }
 }

@@ -100,7 +100,8 @@ public class NotificationController {
         return ResponseEntity.ok(ApiResponse.success(Map.of("deleted", deleted, "counts", service.counts(me))));
     }
 
-    private static UUID me(Jwt jwt) {
+    /** Keycloak sub của người gọi (dùng chung cho các controller cùng gói). */
+    static UUID me(Jwt jwt) {
         if (jwt == null || jwt.getSubject() == null) {
             throw new UnauthorizedException("Chưa đăng nhập");
         }
