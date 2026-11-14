@@ -4,6 +4,7 @@ import com.datn.common.dto.ApiResponse;
 import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.client.IdentityClient;
+import com.datn.workservice.client.IdentityUsers;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.request.CreateWorkItemLinkRequest;
 import com.datn.workservice.dto.response.WorkItemLinkResponse;
@@ -325,9 +326,8 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
         try {
             ApiResponse<List<UserResponse>> res = identityClient.getUsersByIds(new ArrayList<>(userIds));
             if (res != null && res.getData() != null) {
-                return res.getData().stream()
-                        .filter(u -> u.getId() != null)
-                        .collect(Collectors.toMap(UserResponse::getId, u -> u, (a, b) -> a));
+                // Map theo cả id của identity lẫn Keycloak sub (bảng work-service lưu sub)
+                return IdentityUsers.indexByAnyId(res.getData());
             }
         } catch (Exception e) {
             log.warn("Failed to fetch user batch for links: {}", e.getMessage());

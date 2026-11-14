@@ -2,6 +2,7 @@ package com.datn.workservice.service.mapper;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.workservice.client.IdentityClient;
+import com.datn.workservice.client.IdentityUsers;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.response.BoardCardResponse;
 import com.datn.workservice.entity.Label;
@@ -348,9 +349,8 @@ public class WorkItemCardMapper {
         try {
             ApiResponse<List<UserResponse>> res = identityClient.getUsersByIds(new ArrayList<>(userIds));
             if (res != null && res.getData() != null) {
-                return res.getData().stream()
-                        .filter(u -> u.getId() != null)
-                        .collect(Collectors.toMap(UserResponse::getId, Function.identity(), (a, b) -> a));
+                // Map theo cả id của identity lẫn Keycloak sub (bảng work-service lưu sub)
+                return IdentityUsers.indexByAnyId(res.getData());
             }
         } catch (Exception e) {
             log.warn("Khong lay duoc thong tin nguoi dung cho the Board: {}", e.getMessage());
