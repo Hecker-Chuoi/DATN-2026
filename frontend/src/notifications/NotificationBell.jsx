@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Bell, X } from 'lucide-react';
+import { Bell, Settings, X } from 'lucide-react';
 import { useNotifications } from './NotificationContext.jsx';
 import NotificationPanel from './NotificationPanel.jsx';
 import { ACTION_COLOR } from './notificationFormat.jsx';
@@ -95,6 +95,15 @@ export default function NotificationBell() {
         >
           <div style={{ display: 'flex', alignItems: 'center', padding: '12px 12px 8px 14px' }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', flex: 1 }}>Thông báo</span>
+            <button
+              type="button"
+              aria-label="Cài đặt thông báo"
+              title="Cài đặt thông báo"
+              onClick={() => { setOpen(false); navigate(wsPath(workspaceId, '/notifications?tab=settings')); }}
+              style={{ border: 'none', background: 'none', color: '#94A3B8', cursor: 'pointer', display: 'flex', padding: 4, borderRadius: 6 }}
+            >
+              <Settings size={16} />
+            </button>
             <button
               type="button"
               aria-label="Đóng"

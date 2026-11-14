@@ -602,6 +602,15 @@ export const notificationApi = {
   remove: (id) => apiClient.delete(`${NOTIF_BASE}/${id}`),
   restore: (id) => apiClient.post(`${NOTIF_BASE}/${id}/restore`),
   removeAllRead: () => apiClient.delete(NOTIF_BASE, { params: { filter: 'read' } }),
+
+  // ─── Cài đặt bật / tắt (theo nhóm × kênh) và tắt tiếng dự án ───
+  preferences: (config = {}) => apiClient.get(`${NOTIF_BASE}/preferences`, config),
+  /** categories: [{ category, inApp?, email? }] — trường bỏ trống giữ nguyên */
+  savePreferences: (categories) => apiClient.put(`${NOTIF_BASE}/preferences`, { categories }),
+  /** until: ISO string hoặc null (tắt đến khi bật lại) */
+  muteProject: (projectId, projectName, until = null) =>
+    apiClient.put(`${NOTIF_BASE}/preferences/projects/${projectId}/mute`, { projectName, until }),
+  unmuteProject: (projectId) => apiClient.delete(`${NOTIF_BASE}/preferences/projects/${projectId}/mute`),
 };
 
 /** Chạy ngay job thông báo (chỉ Global ADMIN, dùng khi demo). */

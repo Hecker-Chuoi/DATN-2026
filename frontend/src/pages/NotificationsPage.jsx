@@ -1,7 +1,8 @@
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { Bell, Trash2 } from 'lucide-react';
 import { useNotifications } from '../notifications/NotificationContext.jsx';
 import NotificationPanel from '../notifications/NotificationPanel.jsx';
+import NotificationSettings from '../notifications/NotificationSettings.jsx';
 import { CATEGORY_META } from '../notifications/notificationFormat.jsx';
 import CustomSelect from '../components/common/CustomSelect.jsx';
 
@@ -9,11 +10,15 @@ const CATEGORY_ORDER = ['TASK', 'APPROVAL', 'COMMENT', 'REMINDER', 'DEPENDENCY',
 
 /**
  * Trang thông báo đầy đủ: lọc theo trạng thái (tab), nhóm và dự án; đánh dấu đã đọc / xoá từng cái,
- * đánh dấu tất cả đã đọc, xoá mọi thông báo đã đọc.
+ * đánh dấu tất cả đã đọc, xoá mọi thông báo đã đọc. Tab "Cài đặt" (?tab=settings): bật / tắt theo nhóm × kênh.
  */
 export default function NotificationsPage() {
   const { projects = [] } = useOutletContext() || {};
   const { counts, category, projectId, load, removeAllRead } = useNotifications();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') === 'settings' ? 'settings' : 'list';
+  const setTab = (t) => setSearchParams(t === 'settings' ? { tab: 'settings' } : {}, { replace: true });
+  const projectNames = Object.fromEntries(projects.map((p) => [p.id, p.name]));
 
   const projectOptions = [
     { value: '', label: 'Tất cả dự án' },
@@ -30,6 +35,11 @@ export default function NotificationsPage() {
             {counts.total > 99 ? '99+' : counts.total} chưa đọc
           </span>
         )}
+        <div role="tablist" aria-label="Thông báo" style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
+          <PageTab active={tab === 'list'} onClick={() => setTab('list')}>Danh sách</PageTab>
+          <PageTab active={tab === 'settings'} onClick={() => setTab('settings')}>Cài đặt</PageTab>
+        </div>
+        {tab === 'list' && (
         <button
           type="button"
           onClick={() => {
@@ -45,10 +55,15 @@ export default function NotificationsPage() {
         >
           <Trash2 size={14} /> Xoá tất cả đã đọc
         </button>
+        )}
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <div style={{ width: '100%', maxWidth: 880, margin: '0 auto', padding: '20px 32px 32px', display: 'flex', flexDirection: 'column', gap: 14, boxSizing: 'border-box' }}>
+          {tab === 'settings' ? (
+            <NotificationSettings projectNames={projectNames} />
+          ) : (
+          <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <div role="group" aria-label="Lọc theo nhóm" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
               <Chip active={!category} onClick={() => load({ category: '' })}>Mọi nhóm</Chip>
@@ -76,9 +91,28 @@ export default function NotificationsPage() {
           <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', paddingTop: 10, background: '#FFFFFF' }}>
             <NotificationPanel />
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+function PageTab({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      style={{
+        border: 'none', background: active ? '#EFF6FF' : 'transparent', color: active ? '#1D4ED8' : '#64748B',
+        fontSize: 13, fontWeight: active ? 600 : 500, padding: '5px 12px', borderRadius: 7, cursor: 'pointer',
+      }}
+    >
+      {children}
+    </button>
   );
 }
 

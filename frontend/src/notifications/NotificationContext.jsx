@@ -279,6 +279,64 @@ export function NotificationProvider({ children }) {
     }
   }, []);
 
+  // ─── Cài đặt bật / tắt + tắt tiếng dự án (tải khi cần, dùng chung cho màn cài đặt và nút ở trang dự án) ───
+  const [preferences, setPreferences] = useState(null);
+  const prefsRequest = useRef(null);
+
+  const loadPreferences = useCallback((force = false) => {
+    if (prefsRequest.current && !force) return prefsRequest.current;
+    const request = notificationApi.preferences({ skipErrorToast: true })
+      .then((res) => {
+        setPreferences(res?.data || null);
+        return res?.data || null;
+      })
+      .catch(() => {
+        prefsRequest.current = null;
+        return null;
+      });
+    prefsRequest.current = request;
+    return request;
+  }, []);
+
+  /** patch: { inApp?, email? } — đổi ngay trên giao diện, lỗi thì tải lại từ server. */
+  const savePreference = useCallback(async (category, patch) => {
+    setPreferences((p) => p && {
+      ...p,
+      categories: p.categories.map((c) => (c.category === category ? { ...c, ...patch } : c)),
+    });
+    try {
+      const res = await notificationApi.savePreferences([{ category, ...patch }]);
+      if (res?.data) setPreferences(res.data);
+      return true;
+    } catch {
+      loadPreferences(true);
+      return false;
+    }
+  }, [loadPreferences]);
+
+  const muteProject = useCallback(async (projectId, projectName) => {
+    try {
+      const res = await notificationApi.muteProject(projectId, projectName);
+      if (res?.data) setPreferences(res.data);
+      toast.success('Đã tắt thông báo của dự án. Bạn vẫn nhận thông báo gửi đích danh (được giao việc, được nhắc tên…).',
+        { duration: 5000 });
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const unmuteProject = useCallback(async (projectId) => {
+    try {
+      const res = await notificationApi.unmuteProject(projectId);
+      if (res?.data) setPreferences(res.data);
+      toast.success('Đã bật lại thông báo của dự án');
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   /**
    * Bấm vào thông báo: đánh dấu đã đọc rồi mở đường dẫn.
    * Link "/browse/{mã}" được tra ngay tại đây rồi chuyển thẳng tới trang dự án, để không phải
@@ -303,8 +361,10 @@ export function NotificationProvider({ children }) {
   const value = useMemo(() => ({
     counts, items, filter, category, projectId, nextCursor, loading, loaded, connected,
     load, loadMore, refreshCounts, markRead, markAllRead, remove, removeAllRead, open, subscribe,
+    preferences, loadPreferences, savePreference, muteProject, unmuteProject,
   }), [counts, items, filter, category, projectId, nextCursor, loading, loaded, connected,
-    load, loadMore, refreshCounts, markRead, markAllRead, remove, removeAllRead, open, subscribe]);
+    load, loadMore, refreshCounts, markRead, markAllRead, remove, removeAllRead, open, subscribe,
+    preferences, loadPreferences, savePreference, muteProject, unmuteProject]);
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 }

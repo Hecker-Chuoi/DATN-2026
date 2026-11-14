@@ -30,6 +30,7 @@ import WorkItemDetailModal from '../components/items/WorkItemDetailModal.jsx';
 import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
 import SaveAsTemplateModal from '../components/template/SaveAsTemplateModal.jsx';
 import AccessDenied from '../components/common/AccessDenied.jsx';
+import ProjectMuteButton from '../notifications/ProjectMuteButton.jsx';
 
 export default function ProjectDetailPage() {
   const { projectId, workspaceId } = useParams();
@@ -246,6 +247,7 @@ export default function ProjectDetailPage() {
           >
             <Star size={15} fill={isStarred ? '#EAB308' : 'none'} />
           </button>
+          {project && <ProjectMuteButton projectId={projectId} projectName={project.name} />}
           {canDelete && (
             <div style={{ position: 'relative' }} ref={actionMenuRef}>
               <button
