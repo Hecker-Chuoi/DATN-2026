@@ -13,8 +13,8 @@
 | N3: WebSocket STOMP, đồng bộ nhiều tab | Xong | Hỏi định kỳ 30 giây chỉ chạy khi mất WebSocket |
 | N4: job theo lịch, email | Xong | Một mẫu email chung `notification.html` thay vì mỗi loại một mẫu |
 | N5: loại P1 / P2, gộp, workspace-service G8–G11 | Xong | Đủ **53/53** loại trong danh mục |
-| N5: cài đặt bật / tắt từng loại (`notification_preferences`) | **Chưa làm** | Mọi người nhận mọi loại theo danh mục |
-| Redis làm backplane WebSocket / khoá job | **Chưa làm** | Chạy một instance mỗi service; relay outbox đã an toàn nhiều instance nhờ `FOR UPDATE SKIP LOCKED`, job theo lịch thì chưa |
+| N5: cài đặt bật / tắt từng loại (`notification_preferences`) | **Chưa làm**, kế hoạch ở §10.1 | Mọi người nhận mọi loại theo danh mục |
+| Redis làm backplane WebSocket / khoá job | **Chưa làm**, kế hoạch ở §10.2 | Chạy một instance mỗi service; relay outbox đã an toàn nhiều instance nhờ `FOR UPDATE SKIP LOCKED`, job theo lịch thì chưa |
 
 Tên lớp khác thiết kế: `NotificationTemplateRegistry` → `catalog/NotificationCatalog`; `NotificationQueryService` →
 `service/NotificationService`; các `*Job` của work-service gộp vào `notification/NotificationJobService` +
@@ -103,7 +103,47 @@ WebSocket: `ws(s)://<host>/notification/ws`, token gửi trong header của fram
 4. **Mở giao diện bằng `http://localhost:5173`.** `api-gateway/config/CorsConfig.java` chỉ cho Origin `localhost:5173` và
    `localhost:3000`; mở bằng `127.0.0.1` hoặc cổng khác thì mọi request ghi (POST/PATCH/DELETE) và **cả WebSocket** bị 403.
 5. Docker: notification-service trong container đọc `kafka:9092`; Kafka của compose hiện chỉ quảng bá `localhost:9092`,
-   cần thêm listener nội bộ thì container mới nhận được sự kiện.
+   cần thêm listener nội bộ thì container mới nhận được sự kiện (chi tiết §6.2). Chạy service trên máy (`start-dev.ps1`) thì không bị.
+
+### 6.1. Deploy tất cả trên một server
+
+Đã thử gateway thật với header nginx gửi khi deploy (request ghi và WebSocket có token hợp lệ):
+
+| Cách truy cập | Gateway như hiện tại | Thêm `server.forward-headers-strategy: framework` |
+|---|---|---|
+| Dev `http://localhost:5173` | Qua | Qua |
+| `http://<domain hoặc IP>` cổng 80 | Qua | Qua |
+| `https://<domain>` cổng 443 | **403** (cả WebSocket) | Qua |
+| `http://<domain>:8080` (cổng khác 80) | **403** (cả WebSocket) | Qua (nginx gửi thêm `X-Forwarded-Port`) |
+
+Lý do: trình duyệt gửi `Origin` thật, còn gateway nhận request từ nginx qua `http`, cổng 8081 nên tưởng là gọi chéo
+nguồn và đối chiếu với danh sách cứng trong `CorsConfig` (chỉ `localhost:5173`, `localhost:3000`). Nếu deploy HTTPS
+hoặc cổng khác 80 thì cần:
+- `api-gateway/application.yml`: `server.forward-headers-strategy: framework` (chỉ an toàn khi cổng 8081 của gateway
+  không mở ra Internet, mọi request đều đi qua nginx);
+- `frontend/nginx.conf`: thêm `proxy_set_header X-Forwarded-Port $server_port;` cạnh `X-Forwarded-Proto`;
+- notification-service: `APP_FRONTEND_URL` = địa chỉ thật người dùng mở (là Origin được phép mở WebSocket và gốc link trong email).
+
+### 6.2. Kafka khi service chạy trong Docker
+
+Kafka trả cho client địa chỉ nó "quảng bá" (`KAFKA_ADVERTISED_LISTENERS`). Hiện chỉ có `localhost:9092`: service
+trên máy host dùng tốt, nhưng container khác nhận về `localhost` (chính nó) nên lỗi
+`Connection to node 1 (localhost/127.0.0.1:9092) could not be established`. Cách sửa đã thử trên một Kafka riêng
+(container khác gửi và nhận được; máy host vẫn dùng `localhost:9092` như cũ):
+
+```yaml
+kafka:
+  networks: [app-net]          # docker-compose.infra.yml: kafka đang ở mạng mặc định, các service ở app-net
+  environment:
+    KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,INTERNAL://:29092
+    KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:29092
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT
+# service trong container: SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+```
+
+`docker-compose.yml` (bản gộp của nhóm) hiện **không có** service `kafka`; work-service và workspace-service chưa có trong
+compose nào. Container Kafka đang chạy được tạo với project `environment`, nên áp dụng bằng
+`docker compose -p environment -f docker-compose.infra.yml up -d kafka` (dữ liệu nằm trong volume, không mất).
 
 Chạy job bằng tay (cần token có realm role `ADMIN`):
 
@@ -148,3 +188,66 @@ job = all | due-reminders | sprint-deadlines | completion-reminders | project-di
 - Sự kiện lỗi (VD: JSON hỏng) không chặn hàng đợi: thử lại 3 lần cách nhau 2 giây rồi chuyển sang topic `notification-events.DLT`.
 - Job theo lịch chạy lại trong ngày không tạo trùng (mỗi mốc nhắc có `dedupKey` riêng); thông báo người dùng đã xoá không hiện lại (R6).
 - Tên người thao tác lấy từ identity-service; identity không chạy thì nội dung ghi "Một thành viên" thay vì tên.
+
+## 10. Kế hoạch cho phần chưa làm
+
+### 10.1. Cài đặt bật / tắt thông báo (ước lượng 1,5–2 ngày)
+
+**Người dùng chỉnh gì.** Theo **nhóm** (9 nhóm, không bắt chỉnh từng loại trong 53 loại) × **kênh** (Trong ứng dụng,
+Email), cộng **tắt tiếng một dự án**. Chưa có dòng cài đặt nào thì theo mặc định của danh mục (trong ứng dụng: bật hết;
+email: 7 loại đang gửi).
+
+**Không cho tắt** (khoá, hiện biểu tượng ổ khoá):
+- Trong ứng dụng của 6 loại "Cần xử lý" (C1, C4, E3, E6, G1, G8): tắt đi thì người duyệt không biết có việc chờ.
+- Trong ứng dụng của nhóm Thành viên & quyền (bị xoá khỏi dự án / không gian, đổi vai trò): liên quan quyền truy cập.
+- Được nhắc tên (D1) và được giao việc (A1): chỉ cho tắt email, vẫn hiện trong chuông.
+
+**Tắt tiếng dự án** bỏ mọi thông báo của dự án đó (nhắc hạn, đổi trạng thái, bình luận ở việc mình theo dõi, tổng hợp…)
+**trừ** thông báo gửi đích danh, tức lý do nhận `MENTIONED`, `NEW_ASSIGNEE`, `TARGET_USER`, `REQUESTER`, `INVITEE`, và các
+loại bị khoá ở trên.
+
+**Dữ liệu** (notification-service, Flyway `V2__notification_preferences.sql`):
+
+```sql
+notification_preferences (user_id UUID, category VARCHAR(32), in_app BOOLEAN, email BOOLEAN, updated_at TIMESTAMPTZ,
+                          PRIMARY KEY (user_id, category))
+notification_project_mutes (user_id UUID, project_id UUID, muted_until TIMESTAMPTZ NULL, created_at TIMESTAMPTZ,
+                            PRIMARY KEY (user_id, project_id))   -- muted_until NULL = tắt đến khi bật lại
+```
+
+**Áp dụng ở đâu.** Chỉ ở `NotificationIngestService`, ngay trước khi tạo / gộp thông báo cho từng người nhận: tra một lần
+cài đặt của mọi người nhận trong sự kiện (`findAllByUserIdIn`), tính "trong ứng dụng" và "email" thực tế theo danh mục +
+cài đặt + khoá + tắt tiếng dự án. Tắt trong ứng dụng thì không lưu; tắt email thì không gửi mail. Bên phát (work-service,
+workspace-service) không đổi gì. Việc đóng "Cần xử lý" (R9) vẫn chạy bình thường.
+
+**API** `/api/v1/notifications/preferences`: `GET` (9 nhóm, mỗi nhóm `inApp`, `email`, `locked`, kèm danh sách dự án đang tắt
+tiếng), `PUT` (lưu cả bảng), `PUT` / `DELETE /projects/{projectId}/mute`.
+
+**Giao diện.** Tab "Cài đặt" trên trang Thông báo (và nút bánh răng ở bảng nổi): bảng 9 dòng × 2 công tắc, dòng bị khoá có
+chú thích lý do. Menu "…" ở đầu trang dự án thêm "Tắt thông báo dự án này" / "Bật lại thông báo".
+
+**Kiểm thử.** Unit cho phần tính cài đặt thực tế (mặc định, đã tắt, bị khoá, tắt tiếng dự án với từng lý do nhận); test
+ingest (tắt trong ứng dụng thì không lưu, tắt email thì không gửi); test controller; E2E: tắt nhóm Bình luận → bình luận mới
+không vào chuông nhưng nhắc tên vẫn vào; tắt tiếng dự án → nhắc hạn của dự án không vào, được giao việc vẫn vào.
+
+### 10.2. Redis khi chạy nhiều instance (ước lượng 1 ngày, chỉ cần khi scale ngang)
+
+Deploy một server, mỗi service một instance thì **chưa cần**. Khi chạy từ 2 instance trở lên sẽ gặp hai vấn đề:
+
+1. **WebSocket lệch instance.** Broker STOMP hiện là bộ nhớ trong của từng instance. Kafka giao mỗi sự kiện cho đúng một
+   instance (consumer group), nhưng trình duyệt có thể đang nối WebSocket vào instance khác, nên không nhận được đẩy ngay
+   (chỉ thấy khi tải lại hoặc khi hỏi định kỳ).
+   **Cách làm:** `NotificationPushService` sau khi commit không gửi thẳng mà publish `{recipientId, message}` lên kênh Redis
+   `notif:push`; mọi instance đăng ký kênh này (`RedisMessageListenerContainer`) và gọi `convertAndSendToUser` tại chỗ
+   (instance không giữ phiên của người đó thì lệnh này không làm gì). Bật bằng `app.notifications.push-mode: local | redis`,
+   mặc định `local`. Phương án khác là STOMP broker relay sang RabbitMQ (chuẩn của Spring) nhưng phải thêm RabbitMQ vào hạ
+   tầng; Redis đã có sẵn (:6380, work-service đang dùng) nên chọn Redis. Không cần sticky session vì dùng WebSocket thuần
+   (không SockJS).
+2. **Job chạy trùng.** `@Scheduled` chạy trên mọi instance: job nhắc hạn 08:00 (đã có `dedupKey` nên không trùng thông báo,
+   nhưng tốn gấp đôi truy vấn và sự kiện), dọn outbox 03:30, dọn thông báo 03:00.
+   **Cách làm:** ShedLock (`@SchedulerLock(name = …, lockAtMostFor = "10m")`) với provider Redis. `OutboxRelay` không cần vì
+   đã dùng `FOR UPDATE SKIP LOCKED`.
+
+**Kiểm thử.** Chạy 2 instance notification-service (9994, 9995) sau gateway có cân bằng tải: trình duyệt nối vào instance A,
+dừng consumer của A để sự kiện rơi vào B, thông báo vẫn đẩy tới ngay. Chạy 2 instance work-service: log cho thấy job 08:00 chỉ
+chạy một lần.
