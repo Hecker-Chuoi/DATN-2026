@@ -3,7 +3,7 @@
 > Thuộc bộ tài liệu `docs/services/notification/`. Bản tương tác (lọc, tìm kiếm, xem trước chuông thông báo): [danh_muc_thong_bao.html](danh_muc_thong_bao.html).
 > Kiến trúc, dữ liệu, API và lộ trình: [2_KIEN_TRUC_VA_THIET_KE.md](2_KIEN_TRUC_VA_THIET_KE.md).
 > Phạm vi: thông báo **gửi riêng cho từng người** (chuông trong ứng dụng + email) phát sinh trong Không gian làm việc và Dự án. Khác với realtime trong [KE_HOACH_REALTIME_WORK_SERVICE.md](../work_service/realtime/myapp/KE_HOACH_REALTIME_WORK_SERVICE.md): realtime cập nhật màn hình đang mở và không lưu lại.
-> Đối chiếu source code nhánh `develop` tới commit `f303aa9` (14/11/2026). Trạng thái: **đề xuất, chưa triển khai.**
+> Đối chiếu source code nhánh `develop` tới commit `f303aa9` (14/11/2026). Trạng thái: **đã triển khai** (trừ cài đặt bật / tắt từng loại và Redis), xem [3_TRIEN_KHAI_VA_KIEM_THU.md](3_TRIEN_KHAI_VA_KIEM_THU.md).
 > Ví dụ nội dung dùng dữ liệu kịch bản demo [Mộc Coffee](../work_service/DEMO/1_KICH_BAN_DEMO_QUAN_CAFE_MOC_COFFEE.md): An là Trưởng dự án, Bình là Thành viên, Chi là Người xem, mã dự án `MOC`.
 
 ---

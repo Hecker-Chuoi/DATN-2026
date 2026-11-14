@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Cấu trúc monorepo
 
-- `backend/` — Maven multi-module (Java 21, Spring Boot 3.5.4, Spring Cloud 2025.0.0): `common`, `api-gateway` (:8081), `identity-service` (:8082), `work-service` (:8083), `notification-service` (:9994, chỉ gửi email qua SMTP, không đi qua gateway).
+- `backend/` — Maven multi-module (Java 21, Spring Boot 3.5.4, Spring Cloud 2025.0.0): `common`, `api-gateway` (:8081), `identity-service` (:8082), `work-service` (:8083), `notification-service` (:9994, thông báo trong ứng dụng qua Kafka + WebSocket và email SMTP; REST/WebSocket đi qua gateway `/notification/**`, riêng `/internal/**` gửi email nội bộ thì không).
 - `frontend/` — React 19 + Vite 8, JS/JSX thuần (không TypeScript, không Tailwind, không thư viện UI/state). Dev server :5173.
 - `infrastructure/` (ở root) — toàn bộ docker-compose, Keycloak realm export, hướng dẫn setup. Các file này từng nằm ở `backend/environment/`; sau khi chuyển ra root, `context:` trong compose trỏ tới `../backend` và `../frontend`.
 - `docs/` — đặc tả kiến trúc, DB, luồng đăng nhập, kịch bản test (`docs/services/work_service/*`). `community-service`, `integration-notification-service`, `ai-service` chỉ tồn tại trong docs, chưa có code.
@@ -38,14 +38,14 @@ mvn -pl work-service test -Dtest=ProjectPermissionGuardTest           # một cl
 mvn -pl work-service test -Dtest=LexoRankServiceTest#tenMethod        # một method
 mvn -q -o validate -pl identity-service,api-gateway,work-service -am  # kiểm tra pom nhanh
 ```
-Test backend là unit thuần (JUnit 5, Mockito, AssertJ, MockMvc standalone), không cần DB/Keycloak. Gần như toàn bộ test nằm ở `work-service/src/test`.
+Test backend là unit thuần (JUnit 5, Mockito, AssertJ, MockMvc standalone), không cần DB/Keycloak. Test nằm ở `work-service`, `notification-service` và `workspace-service` (`src/test`).
 
 ### Frontend
 Cần Node `^20.19` hoặc `>=22.12` (Vite 8 dùng `util.styleText`); Node 20.11 sẽ lỗi ngay khi `npm run dev`.
 ```bash
 cd frontend
 npm install
-npm run dev      # vite, proxy /identity và /work -> http://127.0.0.1:8081 (gateway)
+npm run dev      # vite, proxy /identity, /work, /workspace, /notification/ (có ws) -> http://127.0.0.1:8081 (gateway)
 npm run build
 npm run lint     # eslint flat config
 ```
@@ -54,15 +54,22 @@ Không có test frontend.
 ## Kiến trúc
 
 ### Luồng request
-Frontend → API Gateway (:8081) → service. Gateway (`api-gateway/src/main/resources/application.yml`) route `/identity/api/**` → :8082 và `/work/api/**`, `/work/ws-work/**` → :8083, đều `StripPrefix=1`. Frontend dùng hai hằng `AUTH_BASE = /identity/api/v1/auth` và `WORK_BASE = /work/api/v1/work` trong `frontend/src/api.js`.
+Frontend → API Gateway (:8081) → service. Gateway (`api-gateway/src/main/resources/application.yml`) route `/identity/api/**` → :8082, `/work/api/**`, `/work/ws-work/**` → :8083, `/workspace/api/**` → :8087 và `/notification/api/**`, `/notification/ws/**` → :9994, đều `StripPrefix=1`. Frontend dùng các hằng `AUTH_BASE = /identity/api/v1/auth`, `WORK_BASE = /work/api/v1/work`, `NOTIF_BASE = /notification/api/v1/notifications` trong `frontend/src/api.js`. `api-gateway/config/CorsConfig.java` chỉ cho Origin `localhost:5173` và `localhost:3000`: mở frontend bằng `127.0.0.1` hoặc cổng khác thì request ghi và cả WebSocket bị 403.
 
 ### Xác thực
 - Keycloak :8088, realm `datn-realm`, client `datn-backend`, realm role `ADMIN`/`USER`/`USER_CREATE`. Cả 3 service là OAuth2 resource server với cùng issuer.
 - Gateway nhận JWT từ header `Authorization` **hoặc** cookie httpOnly `access_token` (`CookieOrBearerTokenConverter`), rồi `TokenRelayFilter` chuyển thành Bearer cho downstream.
 - Frontend (`src/api.js`) giữ hai bộ token trong `localStorage` (`user_*` và `admin_*`), chọn theo path `/admin`; interceptor tự refresh khi 401, bóc wrapper `["java.util.ArrayList", [...]]` của Jackson, và tự decode JWT (không dùng `keycloak-js`).
-- `identity-service` mở `/internal/**` không cần token để `work-service` gọi qua Feign (`work-service/.../client/IdentityClient.java`). `identity-service` gọi `notification-service` bằng RestTemplate (`client/NotificationClient.java`, fail-safe: lỗi mail chỉ log). Kafka/outbox/WebSocket mới có bean/entity, chưa có code publish.
+- `identity-service` mở `/internal/**` không cần token để `work-service` gọi qua Feign (`work-service/.../client/IdentityClient.java`). `identity-service` gọi `notification-service` bằng RestTemplate (`client/NotificationClient.java`, fail-safe: lỗi mail chỉ log) cho email xác thực / đặt lại mật khẩu. Thông báo trong ứng dụng: xem mục **Thông báo** bên dưới.
 - **Xác thực email**: đăng ký tạo Keycloak user `enabled=false` + `users.status=INACTIVE`, gửi link `{app.frontend-url}/verify-email?token=` (bảng `verification_tokens`, `AccountVerificationService`). Login bị chặn 403 khi INACTIVE (`UserService.assertEmailVerified`). Quên mật khẩu: `/auth/forgot-password` → link `/reset-password?token=` (30 phút) → `/auth/reset-password`. User Google không qua bước này.
-- **Lời mời**: `POST /projects/{id}/members` (work-service, bảng `invitations` V4, accept tại `/invitations/{id}/accept`) và `POST /workspaces/{id}/members` (workspace-service, bảng `workspace_invitations` V4, accept tại `/api/v1/workspace-invitations/{id}/accept`, ADMIN xem lời mời chờ tại `/workspaces/{id}/members/invitations`) đều KHÔNG thêm trực tiếp mà tạo lời mời; chấp nhận mới có `role_assignments`/`workspace_members`. Cả hai service gửi email lời mời qua Feign `client/NotificationClient` + `service/InvitationMailer` (`@Async`, fail-safe), link `{app.frontend-url}/invitations` → route phẳng `/invitations` redirect vào `/w/:id/invitations`. Frontend gộp 2 loại (WORKSPACE/PROJECT) ở `WorkspaceLayout.fetchInvitations`; `WorkspaceListPage` hiện lời mời workspace cho user chưa có workspace nào.
+- **Lời mời**: `POST /projects/{id}/members` (work-service, bảng `invitations` V4, accept tại `/invitations/{id}/accept`) và `POST /workspaces/{id}/members` (workspace-service, bảng `workspace_invitations` V4, accept tại `/api/v1/workspace-invitations/{id}/accept`, ADMIN xem lời mời chờ tại `/workspaces/{id}/members/invitations`) đều KHÔNG thêm trực tiếp mà tạo lời mời; chấp nhận mới có `role_assignments`/`workspace_members`. Lời mời phát thông báo G1 (dự án) / G8 (workspace) qua outbox; notification-service hiện trong chuông và gửi email, link `/invitations` → route phẳng `/invitations` redirect vào `/w/:id/invitations`. Frontend gộp 2 loại (WORKSPACE/PROJECT) ở `WorkspaceLayout.fetchInvitations`; `WorkspaceListPage` hiện lời mời workspace cho user chưa có workspace nào.
+
+### Thông báo
+- Luồng: nghiệp vụ ghi `outbox_events` **cùng transaction** → `OutboxRelay` (work-service, mỗi giây, `FOR UPDATE SKIP LOCKED`; cũng gửi hộ sự kiện workspace-service ghi vào bảng dùng chung) → Kafka `notification-events` → notification-service lưu bảng `notifications`, đẩy STOMP `/user/queue/notifications`, gửi email. Lỗi lặp lại → `notification-events.DLT`.
+- Hợp đồng sự kiện ở `common/.../notification` (`NotificationEvent`, `NotificationType` 53 loại, `RecipientReason`). Bên phát tính người nhận (Keycloak `sub`), bên nhận dựng nội dung tiếng Việt ở `catalog/NotificationCatalog`. Phát từ `WorkItemNotifier` / `ProjectNotifier` (work-service), `WorkspaceNotificationPublisher` (workspace-service); job nhắc hạn 08:00 ở `NotificationJobService` (chạy tay: `POST /api/v1/work/admin/notification-jobs/{job}/run`, cần realm role ADMIN).
+- Frontend: `src/notifications/` (`NotificationProvider` đặt trong `AuthedShell` của `App.jsx`), trang `/w/:id/notifications`, link công việc dạng `/browse/{mã}[?comment=]` → `?item=` của trang dự án. Bình luận nhắc tên lưu dạng `@[Tên](keycloak-sub)` (`MentionTextarea`, `MentionParser`).
+- Thêm loại mới / đường đổi trạng thái mới: xem `docs/services/notification/3_TRIEN_KHAI_VA_KIEM_THU.md` §8.
+- Có class mới trong `common` thì service chạy bằng `spring-boot:run -pl <module>` phải `install -pl common` trước (`start-dev.ps1` đã làm), nếu không lỗi `NoClassDefFoundError`. Đóng gói fat jar nhớ `clean package ... -am`.
 
 ### Hai loại userId — bẫy lớn nhất
 `identity-service` có bảng `users` với `id` riêng, còn **mọi bảng của `work-service` dùng Keycloak `sub`** làm `user_id` (`SecurityUtils.getCurrentUserId()`). Khi nhận id từ identity phải quy đổi qua `ProjectMemberServiceImpl.canonicalUserId()` trước khi ghi. Migration `V2__authz_hardening.sql` đã rewrite dữ liệu cũ sang chuẩn này. Khi debug quyền/membership không khớp, kiểm tra điểm này trước.
@@ -74,15 +81,15 @@ Frontend → API Gateway (:8081) → service. Gateway (`api-gateway/src/main/res
 - Realm role `ADMIN` (global admin) bypass toàn bộ kiểm tra project.
 
 ### Dữ liệu
-- Một DB Postgres `datn_main_db` (:5433) dùng chung cho identity và work; cả hai đều `ddl-auto: update`. work-service còn chạy Flyway (`work-service/src/main/resources/db/migration`, bảng lịch sử `flyway_work_schema_history`). Thêm migration mới phải chọn version chưa dùng.
+- Một DB Postgres `datn_main_db` (:5433) dùng chung cho identity, work, workspace và notification; identity và work dùng `ddl-auto: update`. Bảng `outbox_events` dùng chung cho work-service và workspace-service. work-service còn chạy Flyway (`work-service/src/main/resources/db/migration`, bảng lịch sử `flyway_work_schema_history`). Thêm migration mới phải chọn version chưa dùng.
 - work-service dùng JPA Specification (`specification/*`) cho filter động, Redis :6380, MinIO :9000 (bucket `work-attachments`).
 
 ## Trạng thái hiện tại cần biết trước khi sửa
 - Migration work-service: V1, V2 (`authz_hardening`), V3 (`add_project_id_to_statuses`), V4 (`invitations`), V5 (`phase6_sprint_board_agile`), V6 (`project_templates`), V7 (`seed_default_templates`), V8 (`drop_team_and_restructure_projects`), V9 (`contribution_management`), V10 (`work_item_completion_requests`); thêm mới dùng V11 trở đi.
-- **"Tạm hoàn thành"**: chỉ Admin dự án (`PROJECT_ADMIN`) mới đưa công việc vào nhóm DONE; người khác chỉ tạo yêu cầu chờ duyệt (`WorkItemCompletionGate`, chặn ngay trong `WorkflowEngineServiceImpl.executeTransition`). Mọi đường đổi trạng thái mới phải gọi `completionGate.onStatusChanged(...)`. Giao/hủy giao qua `PUT /items/{id}/assignee` (luôn ghi lịch sử). Chi tiết: `docs/services/work_service/8_QUY_TAC_GIAO_VIEC_VA_XAC_NHAN_HOAN_THANH.md`. workspace-service (Flyway riêng `flyway_workspace_schema_history`, `ddl-auto: validate`): V1–V4 (`workspace_invitations`); thêm mới dùng V5. identity-service không dùng Flyway (`ddl-auto: update` tự tạo `verification_tokens`).
+- **"Tạm hoàn thành"**: chỉ Admin dự án (`PROJECT_ADMIN`) mới đưa công việc vào nhóm DONE; người khác chỉ tạo yêu cầu chờ duyệt (`WorkItemCompletionGate`, chặn ngay trong `WorkflowEngineServiceImpl.executeTransition`). Mọi đường đổi trạng thái mới phải gọi `completionGate.onStatusChanged(...)`. Giao/hủy giao qua `PUT /items/{id}/assignee` (luôn ghi lịch sử). Chi tiết: `docs/services/work_service/8_QUY_TAC_GIAO_VIEC_VA_XAC_NHAN_HOAN_THANH.md`. workspace-service (Flyway riêng `flyway_workspace_schema_history`, `ddl-auto: validate`): V1–V4 (`workspace_invitations`); thêm mới dùng V5. identity-service không dùng Flyway (`ddl-auto: update` tự tạo `verification_tokens`). notification-service: Flyway riêng `flyway_notification_schema_history`, `ddl-auto: validate`, V1 (`notifications`); thêm mới dùng V2.
 - **Dự án mẫu** = `Project` có `is_template=true`; tạo dự án từ mẫu / lưu thành mẫu / nhân bản đều đi qua `service/template/ProjectCloneEngine` (deep-clone + ánh xạ ID + dời ngày) và `TemplateIntegrityValidator`. Thêm bảng con mới của project thì phải bổ sung vào `ProjectBlueprint`, loader và engine, nếu không mẫu sẽ bỏ sót bảng đó. Chi tiết: `docs/services/work_service/template/`.
 - Thành viên Workspace (vai trò MEMBER, ADMIN, OWNER) hoặc Global ADMIN đều có thể tạo dự án trong Workspace đó. Đã loại bỏ hoàn toàn tầng trung gian Team (Flyway V8), kiến trúc phẳng 2 cấp gồm Workspace -> Projects -> Tasks.
-- `work-service` **chưa có trong bất kỳ docker-compose nào**, và compose chỉ set env `SPRING_CLOUD_GATEWAY_ROUTES_0_*` (identity) nên gateway trong container mất route `/work/**`. `frontend/nginx.conf` cũng chỉ proxy `/identity/`, thiếu `/work/`.
+- `work-service` **chưa có trong bất kỳ docker-compose nào**, và compose chỉ set env `SPRING_CLOUD_GATEWAY_ROUTES_0_*` (identity) nên gateway trong container mất route `/work/**`. `frontend/nginx.conf` đã proxy `/identity/`, `/work/`, `/workspace/`, `/notification/` (có nâng cấp WebSocket). Kafka trong compose chỉ quảng bá `localhost:9092`, nên notification-service chạy trong container (`kafka:9092`) cần thêm listener nội bộ mới nhận được sự kiện.
 - `frontend/src/api/workServiceApi.js` là bản trùng lặp của `src/api.js`, không ai import; dùng `src/api.js`.
 - Client secret `datn-backend` phải khớp giữa `identity-service/application.yaml`, compose và realm export (`infrastructure/keycloak/realm-export_08082026.json`). Import realm: `POST http://localhost:8088/admin/realms` với token admin-cli của realm master.
 

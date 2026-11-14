@@ -8,8 +8,8 @@ import java.util.UUID;
 /**
  * Thông điệp đẩy xuống trình duyệt qua {@code /user/queue/notifications}.
  *
- * kind: CREATED, UPDATED (gộp hoặc "Cần xử lý" đã được giải quyết), READ, UNREAD, READ_ALL,
- * DELETED, RESTORED.
+ * kind: CREATED, UPDATED (gộp hoặc "Cần xử lý" đã được giải quyết), READ / UNREAD (kèm ids; "đọc tất cả"
+ * cũng gửi READ với danh sách id), DELETED (kèm ids), RESTORED. Mọi thông điệp kèm số chưa đọc / cần xử lý.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record PushMessage(

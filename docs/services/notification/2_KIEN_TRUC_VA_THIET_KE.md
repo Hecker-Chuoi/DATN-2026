@@ -2,7 +2,7 @@
 
 > Thuộc bộ tài liệu `docs/services/notification/`. Danh mục 53 loại thông báo: [1_DANH_MUC_LOAI_THONG_BAO.md](1_DANH_MUC_LOAI_THONG_BAO.md) · bản tương tác: [danh_muc_thong_bao.html](danh_muc_thong_bao.html).
 > Liên quan: [KE_HOACH_REALTIME_WORK_SERVICE.md](../work_service/realtime/myapp/KE_HOACH_REALTIME_WORK_SERVICE.md) (giai đoạn R3 "Sự kiện bền" chính là phần vận chuyển của tài liệu này), [8_QUY_TAC_GIAO_VIEC_VA_XAC_NHAN_HOAN_THANH.md](../work_service/8_QUY_TAC_GIAO_VIEC_VA_XAC_NHAN_HOAN_THANH.md).
-> Đối chiếu source code nhánh `develop` tới commit `f303aa9` (14/11/2026). Trạng thái: **đề xuất, chưa triển khai.**
+> Đối chiếu source code nhánh `develop` tới commit `f303aa9` (14/11/2026). Trạng thái: **đã triển khai** (trừ cài đặt bật / tắt từng loại và Redis), xem [3_TRIEN_KHAI_VA_KIEM_THU.md](3_TRIEN_KHAI_VA_KIEM_THU.md).
 
 ---
 
