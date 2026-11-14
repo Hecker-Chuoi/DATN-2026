@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useOutletContext, NavLink, Outlet } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext, useSearchParams, NavLink, Outlet } from 'react-router-dom';
 import {
   FolderKanban,
   Kanban,
@@ -47,6 +47,13 @@ export default function ProjectDetailPage() {
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
+
+  // Link từ thông báo: ?item={id}[&comment={id}] mở sẵn chi tiết công việc (và cuộn tới bình luận)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedItemId = searchParams.get('item');
+  const linkedCommentId = searchParams.get('comment');
+  const modalItemId = linkedItemId || selectedItemId;
+  const modalOpen = Boolean(linkedItemId) || isDetailModalOpen;
 
   const outletContext = useOutletContext() || {};
   const currentUser = outletContext.currentUser;
@@ -482,11 +489,20 @@ export default function ProjectDetailPage() {
 
       {/* ─── Work Item Detail Modal (2 Columns Jira Spec) ─── */}
       <WorkItemDetailModal
-        itemId={selectedItemId}
-        isOpen={isDetailModalOpen}
+        itemId={modalItemId}
+        isOpen={modalOpen}
+        focusCommentId={linkedItemId ? linkedCommentId : null}
         onClose={() => {
           setIsDetailModalOpen(false);
           setSelectedItemId(null);
+          if (linkedItemId || linkedCommentId) {
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.delete('item');
+              next.delete('comment');
+              return next;
+            }, { replace: true });
+          }
         }}
         onItemUpdated={handleItemUpdated}
         members={members}

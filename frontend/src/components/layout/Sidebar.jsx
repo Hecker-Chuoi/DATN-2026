@@ -12,12 +12,15 @@ import {
   Mail,
   LogOut,
   LayoutGrid,
-  ListTodo
+  ListTodo,
+  Bell
 } from 'lucide-react';
 import WorkspaceSwitcher from '../workspace/WorkspaceSwitcher.jsx';
 import { useWorkspaceRole } from '../../hooks/useWorkspaceRole.js';
 import { wsPath } from '../../utils/workspacePath.js';
 import { isScrumProject } from '../../utils/projectType.js';
+import NotificationBell from '../../notifications/NotificationBell.jsx';
+import { useNotifications } from '../../notifications/NotificationContext.jsx';
 
 const PROJECT_COLORS = [
   '#2563EB', // Blue
@@ -41,6 +44,7 @@ export default function Sidebar({
   const location = useLocation();
   const { workspaceId } = useParams();
   const { canCreateProject, canManageWorkspace } = useWorkspaceRole();
+  const { counts: notificationCounts } = useNotifications();
   const [expandedProjects, setExpandedProjects] = useState({});
 
   useEffect(() => {
@@ -93,6 +97,8 @@ export default function Sidebar({
           <WorkspaceSwitcher currentUser={currentUser} onLogout={onLogout} />
         </div>
 
+        <NotificationBell />
+
         {canCreateProject && (
           <button
             onClick={() => onOpenCreateProject && onOpenCreateProject()}
@@ -138,6 +144,14 @@ export default function Sidebar({
           icon={<CheckCircle2 size={17} color="#10B981" />}
           label="Công việc của tôi"
           active={location.pathname === ws('/my-issues')}
+        />
+        <NavItem
+          to={ws('/notifications')}
+          icon={<Bell size={17} color="#DC2626" />}
+          label="Thông báo"
+          badge={notificationCounts.total}
+          badgeColor="#DC2626"
+          active={location.pathname === ws('/notifications')}
         />
         <NavItem
           to={ws('/invitations')}
@@ -416,7 +430,7 @@ export default function Sidebar({
   );
 }
 
-function NavItem({ to, icon, label, active, badge = 0 }) {
+function NavItem({ to, icon, label, active, badge = 0, badgeColor = '#F59E0B' }) {
   return (
     <NavLink
       to={to}
@@ -453,13 +467,13 @@ function NavItem({ to, icon, label, active, badge = 0 }) {
           style={{
             fontSize: 11,
             fontWeight: 700,
-            backgroundColor: '#F59E0B',
+            backgroundColor: badgeColor,
             color: '#FFFFFF',
             padding: '1px 7px',
             borderRadius: 10,
           }}
         >
-          {badge}
+          {badge > 99 ? '99+' : badge}
         </span>
       )}
     </NavLink>

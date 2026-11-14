@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { userTokenStore, adminTokenStore, authApi, userApi, isSessionValid } from './api.js';
 import { PermissionProvider } from './context/PermissionContext.jsx';
@@ -30,6 +30,9 @@ import InvitationsPage from './pages/InvitationsPage.jsx';
 import VerifyEmailPage from './pages/VerifyEmailPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
+import NotificationsPage from './pages/NotificationsPage.jsx';
+import BrowseItemRedirect from './pages/BrowseItemRedirect.jsx';
+import { NotificationProvider } from './notifications/NotificationContext.jsx';
 
 // Keycloak public URL (đổi qua .env.local: VITE_KEYCLOAK_URL) – mặc định cổng 8088 dùng chung của nhóm
 const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8088';
@@ -41,14 +44,33 @@ const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8088
  * chọn workspace nên không có sidebar) cũng đọc được danh sách workspace.
  * CreateWorkspaceModal cũng mount ở đây, một instance duy nhất dùng chung cho cả
  * switcher trong Sidebar và trang danh sách.
+ * NotificationProvider đặt ở đây để kết nối WebSocket thông báo không bị ngắt khi đổi
+ * workspace hoặc đi qua trang /browse/:code.
  */
 function AuthedShell() {
   return (
     <WorkspaceProvider>
-      <Outlet />
-      <CreateWorkspaceModal />
+      <NotificationProvider>
+        <Outlet />
+        <CreateWorkspaceModal />
+      </NotificationProvider>
     </WorkspaceProvider>
   );
+}
+
+/**
+ * Chưa đăng nhập mà mở link công việc / thông báo (thường từ email): nhớ đích để đăng nhập xong quay lại.
+ */
+function LoginRedirect() {
+  const location = useLocation();
+  if (location.pathname.startsWith('/browse/') || location.pathname === '/notifications') {
+    try {
+      sessionStorage.setItem('redirect_after_login', location.pathname + location.search);
+    } catch {
+      // chặn site data: bỏ qua
+    }
+  }
+  return <Navigate to="/login" replace />;
 }
 
 function App() {
@@ -210,7 +232,7 @@ function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* ─── 2. User Work Management Portal (`/w/:workspaceId/**`) ─── */}
-        <Route element={isUserAuth ? <AuthedShell /> : <Navigate to="/login" replace />}>
+        <Route element={isUserAuth ? <AuthedShell /> : <LoginRedirect />}>
           {/* Chưa chọn workspace -> không có sidebar */}
           <Route path="/workspaces" element={<WorkspaceListPage />} />
 
@@ -221,6 +243,9 @@ function App() {
           <Route path="/my-issues" element={<WorkspaceRedirect sub="/my-issues" />} />
           <Route path="/profile" element={<WorkspaceRedirect sub="/profile" />} />
           <Route path="/invitations" element={<WorkspaceRedirect sub="/invitations" />} />
+          <Route path="/notifications" element={<WorkspaceRedirect sub="/notifications" />} />
+          {/* Link trong thông báo / email: tra mã công việc rồi mở đúng dự án */}
+          <Route path="/browse/:code" element={<BrowseItemRedirect />} />
 
           <Route
             path="/w/:workspaceId"
@@ -244,6 +269,7 @@ function App() {
             <Route path="settings" element={<WorkspaceSettingsPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="invitations" element={<InvitationsPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
             <Route path="403" element={<AccessDenied status={403} title="Bạn không có quyền truy cập" message="Bạn không có quyền xem nội dung này. Hãy liên hệ người quản trị để được cấp quyền." />} />
             <Route path="404" element={<AccessDenied status={404} />} />
           <Route

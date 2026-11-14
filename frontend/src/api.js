@@ -418,7 +418,7 @@ export const workItemApi = {
   listByProject: (projectId, params) =>
     apiClient.get(`${WORK_BASE}/projects/${projectId}/items`, { params }),
   getById: (id) => apiClient.get(`${WORK_BASE}/items/${id}`),
-  getByCode: (code) => apiClient.get(`${WORK_BASE}/items/code/${code}`),
+  getByCode: (code, config = {}) => apiClient.get(`${WORK_BASE}/items/code/${encodeURIComponent(code)}`, config),
   create: (projectIdOrData, maybeData) => {
     if (maybeData) {
       return apiClient.post(`${WORK_BASE}/projects/${projectIdOrData}/items`, maybeData);
@@ -587,6 +587,27 @@ export const versionApi = {
 // ─── 7. JQL & Search API ──────────────────────────────────────────────────────
 export const jqlApi = {
   search: (jqlQuery) => apiClient.post(`${WORK_BASE}/jql/search`, { jql: jqlQuery }),
+};
+
+// ─── 8. Notification API (notification-service qua gateway) ───────────────────
+// Thiết kế: docs/services/notification/2_KIEN_TRUC_VA_THIET_KE.md §6
+const NOTIF_BASE = '/notification/api/v1/notifications';
+
+export const notificationApi = {
+  /** params: { filter: 'all'|'unread'|'action', category, projectId, cursor, size } */
+  list: (params, config = {}) => apiClient.get(NOTIF_BASE, { params, ...config }),
+  counts: (config = {}) => apiClient.get(`${NOTIF_BASE}/unread-count`, { skipErrorToast: true, ...config }),
+  setRead: (id, read = true) => apiClient.patch(`${NOTIF_BASE}/${id}`, { read }),
+  readAll: (params) => apiClient.post(`${NOTIF_BASE}/read-all`, null, { params }),
+  remove: (id) => apiClient.delete(`${NOTIF_BASE}/${id}`),
+  restore: (id) => apiClient.post(`${NOTIF_BASE}/${id}/restore`),
+  removeAllRead: () => apiClient.delete(NOTIF_BASE, { params: { filter: 'read' } }),
+};
+
+/** Chạy ngay job thông báo (chỉ Global ADMIN, dùng khi demo). */
+export const notificationJobApi = {
+  run: (job = 'all', projectId) =>
+    apiClient.post(`${WORK_BASE}/admin/notification-jobs/${job}/run`, null, { params: projectId ? { projectId } : {} }),
 };
 
 export default apiClient;
