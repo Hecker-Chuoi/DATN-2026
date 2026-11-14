@@ -51,6 +51,8 @@ import CompletionPendingPanel from './CompletionPendingPanel.jsx';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
+import MentionTextarea from '../common/MentionTextarea.jsx';
+import { renderMentions } from '../../utils/mentions.jsx';
 
 const TYPE_ICONS = {
   EPIC: { icon: Bookmark, color: '#6554C0', label: 'Hạng mục lớn' },
@@ -85,7 +87,7 @@ const LINK_TYPE_OPTIONS = [
   },
 ];
 
-export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [], sprints = [], canManageSprint = true }) {
+export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [], sprints = [], canManageSprint = true, focusCommentId = null }) {
   const { handleBackdropClick } = useModalBackdrop();
   const [currentId, setCurrentId] = useState(initialItemId);
   const [item, setItem] = useState(null);
@@ -149,6 +151,34 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
   useEffect(() => {
     setCurrentId(initialItemId);
   }, [initialItemId]);
+
+  // Mở từ thông báo bình luận (?comment=): chuyển sang tab Bình luận, cuộn tới và làm nổi bình luận đó
+  const [prevFocusCommentId, setPrevFocusCommentId] = useState(null);
+  if (focusCommentId !== prevFocusCommentId) {
+    setPrevFocusCommentId(focusCommentId);
+    if (focusCommentId) setActiveTab('comments');
+  }
+  const focusDoneRef = useRef(null);
+  useEffect(() => {
+    if (!isOpen) {
+      focusDoneRef.current = null;
+      return;
+    }
+    if (!focusCommentId || focusDoneRef.current === focusCommentId || activeTab !== 'comments') return;
+    const el = document.getElementById(`comment-${focusCommentId}`);
+    if (!el) return;
+    focusDoneRef.current = focusCommentId;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const prev = { boxShadow: el.style.boxShadow, backgroundColor: el.style.backgroundColor, transition: el.style.transition };
+    el.style.transition = 'box-shadow 0.4s ease, background-color 0.4s ease';
+    el.style.boxShadow = '0 0 0 2px #F59E0B';
+    el.style.backgroundColor = '#FFFBEB';
+    setTimeout(() => {
+      el.style.boxShadow = prev.boxShadow;
+      el.style.backgroundColor = prev.backgroundColor;
+      setTimeout(() => { el.style.transition = prev.transition; }, 450);
+    }, 2600);
+  }, [isOpen, focusCommentId, comments, activeTab]);
 
   const fetchDetail = async (idToFetch = currentId) => {
     if (!idToFetch) return;
@@ -1605,11 +1635,13 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     )}
                     {canComment && (
                     <form onSubmit={handleAddComment} style={{ marginBottom: 20 }}>
-                      <textarea
+                      <MentionTextarea
                         rows={3}
                         value={commentDraft}
-                        onChange={(e) => setCommentDraft(e.target.value)}
-                        placeholder="Thêm bình luận trao đổi (Hỗ trợ Markdown)..."
+                        onChange={setCommentDraft}
+                        members={members}
+                        excludeUserId={myId}
+                        placeholder="Thêm bình luận trao đổi… Gõ @ để nhắc tên thành viên"
                         style={{
                           width: '100%',
                           fontSize: 13,
@@ -1654,6 +1686,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         comments.map((c) => (
                           <div
                             key={c.id}
+                            id={`comment-${c.id}`}
                             style={{
                               padding: 14,
                               backgroundColor: '#F8FAFC',
@@ -1690,10 +1723,12 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
                             {editingCommentId === c.id ? (
                               <div style={{ marginTop: 8 }}>
-                                <textarea
+                                <MentionTextarea
                                   rows={3}
                                   value={editingCommentDraft}
-                                  onChange={(e) => setEditingCommentDraft(e.target.value)}
+                                  onChange={setEditingCommentDraft}
+                                  members={members}
+                                  excludeUserId={myId}
                                   style={{
                                     width: '100%',
                                     fontSize: 13,
@@ -1737,7 +1772,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                 </div>
                               </div>
                             ) : (
-                              <div style={{ color: '#334155', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{c.body}</div>
+                              <div style={{ color: '#334155', lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{renderMentions(c.body, myId)}</div>
                             )}
 
                             {/* Comment Actions */}
@@ -1787,11 +1822,13 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                             {/* Inline Reply Form */}
                             {replyParentId === c.id && (
                               <div style={{ marginTop: 10, paddingLeft: 12, borderLeft: '2px solid #BFDBFE' }}>
-                                <textarea
+                                <MentionTextarea
                                   rows={2}
                                   value={replyDraft}
-                                  onChange={(e) => setReplyDraft(e.target.value)}
-                                  placeholder={`Trả lời ${c.authorName}...`}
+                                  onChange={setReplyDraft}
+                                  members={members}
+                                  excludeUserId={myId}
+                                  placeholder={`Trả lời ${c.authorName}… (gõ @ để nhắc tên)`}
                                   autoFocus
                                   style={{
                                     width: '100%',
@@ -1844,6 +1881,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                 {c.replies.map((reply) => (
                                   <div
                                     key={reply.id}
+                                    id={`comment-${reply.id}`}
                                     style={{
                                       padding: 10,
                                       backgroundColor: '#FFFFFF',
@@ -1873,7 +1911,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                       </div>
                                       <span style={{ fontSize: 10, color: '#94A3B8' }}>{formatRelativeTime(reply.createdAt)}</span>
                                     </div>
-                                    <div style={{ color: '#334155', fontSize: 12, lineHeight: 1.4 }}>{reply.body}</div>
+                                    <div style={{ color: '#334155', fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{renderMentions(reply.body, myId)}</div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: 10, color: '#64748B' }}>
                                       {canDeleteComment(reply) && (
                                       <button
