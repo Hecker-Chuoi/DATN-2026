@@ -13,8 +13,8 @@
 | N3: WebSocket STOMP, đồng bộ nhiều tab | Xong | Hỏi định kỳ 30 giây chỉ chạy khi mất WebSocket |
 | N4: job theo lịch, email | Xong | Một mẫu email chung `notification.html` thay vì mỗi loại một mẫu |
 | N5: loại P1 / P2, gộp, workspace-service G8–G11 | Xong | Đủ **53/53** loại trong danh mục |
-| N5: cài đặt bật / tắt từng loại (`notification_preferences`) | **Chưa làm**, kế hoạch ở §10.1 | Mọi người nhận mọi loại theo danh mục |
-| Redis làm backplane WebSocket / khoá job | **Chưa làm**, kế hoạch ở §10.2 | Chạy một instance mỗi service; relay outbox đã an toàn nhiều instance nhờ `FOR UPDATE SKIP LOCKED`, job theo lịch thì chưa |
+| N5: cài đặt bật / tắt (`notification_preferences`) | Xong (§10.1) | Theo nhóm × kênh, tắt tiếng dự án; một số loại bị khoá |
+| Redis làm backplane WebSocket / khoá job | Xong (§10.2), **mặc định tắt** | Bật `app.cluster.redis-enabled=true` khi chạy từ 2 instance; relay outbox vốn đã an toàn nhờ `FOR UPDATE SKIP LOCKED` |
 
 Tên lớp khác thiết kế: `NotificationTemplateRegistry` → `catalog/NotificationCatalog`; `NotificationQueryService` →
 `service/NotificationService`; các `*Job` của work-service gộp vào `notification/NotificationJobService` +
@@ -72,6 +72,10 @@ notification-service: NotificationEventListener → NotificationIngestService
 | | `app.frontend-url` | `http://localhost:5173` | Gốc đường dẫn trong email; cũng là Origin được phép mở WebSocket |
 | | `app.services.identity.url` | `http://localhost:8082` | Lấy tên / email người dùng |
 | | `spring.kafka.consumer.properties.session.timeout.ms` | `10000` | Instance mới nhận partition nhanh sau khi service bị tắt đột ngột |
+| | `app.notifications.cleanup-cron` | `0 0 3 * * *` | Giờ chạy job dọn dẹp |
+| | `app.cluster.redis-enabled` (env `APP_CLUSTER_REDIS_ENABLED`) | `false` | Chạy nhiều instance: đẩy WebSocket qua Redis Pub/Sub, khoá job dọn dẹp |
+| | `spring.data.redis.host` / `port` (env `SPRING_DATA_REDIS_HOST` / `PORT`) | `localhost` / `6380` | Chỉ dùng khi bật chế độ cụm (kết nối lười) |
+| work-service | `app.cluster.redis-enabled` | `false` | Chạy nhiều instance: khoá job nhắc hạn 08:00 (Redis :6380 có sẵn) |
 
 Flyway của notification-service dùng bảng lịch sử riêng `flyway_notification_schema_history`, `ddl-auto: validate`;
 thêm migration mới dùng **V2** trở đi.
@@ -87,6 +91,9 @@ thêm migration mới dùng **V2** trở đi.
 | DELETE | `/{id}` | Xoá mềm (hoàn tác được trong 30 ngày) |
 | POST | `/{id}/restore` | Hoàn tác xoá |
 | DELETE | `?filter=read` | Xoá mọi thông báo đã đọc |
+| GET | `/preferences` | 9 nhóm (`inApp`, `email`, `inAppLocked`, `emailAvailable`, `alwaysInApp`) + dự án đang tắt tiếng |
+| PUT | `/preferences` body `{"categories":[{"category":"COMMENT","inApp":false}]}` | Lưu cài đặt; trường bỏ trống = giữ nguyên |
+| PUT / DELETE | `/preferences/projects/{projectId}/mute` body `{"projectName","until"}` | Tắt / bật lại thông báo một dự án (`until` null = đến khi bật lại) |
 
 WebSocket: `ws(s)://<host>/notification/ws`, token gửi trong header của frame STOMP `CONNECT`
 (không đặt trên URL), đăng ký `/user/queue/notifications`. Thông điệp: `CREATED`, `UPDATED`, `READ` / `UNREAD` (kèm `ids`),
@@ -164,10 +171,12 @@ job = all | due-reminders | sprint-deadlines | completion-reminders | project-di
 
 | Mức | Nội dung | Kết quả |
 |---|---|---|
-| Unit | notification-service 113 test, work-service 274 test, workspace-service 46 test | Đạt; mỗi commit build và test được độc lập |
+| Unit | notification-service 148 test, work-service 286 test, workspace-service 46 test | Đạt; mỗi commit build và test được độc lập |
 | Tích hợp notification-service | Kafka + Postgres thật: bảo mật REST / WebSocket, chống trùng, gộp, đóng "Cần xử lý", đẩy WebSocket, REST đọc / xoá / hoàn tác / đọc tất cả, R6, DLT (33 kiểm tra) | Đạt, cả gọi thẳng lẫn qua gateway |
 | Tích hợp work-service | Job theo lịch trên dự án mẫu (đúng số, đúng người, chạy lại không trùng), thao tác thật (giao việc, nhắc tên, từ chối xác nhận, xoá việc), outbox PROCESSED | Đạt |
 | Giao diện end-to-end | Edge headless qua gateway và đủ 5 service, 3 người dùng (52 kiểm tra, mục 7.1) | Đạt |
+| Giao diện cài đặt | Bật / tắt theo nhóm, loại bị khoá vẫn tới, tắt trong ứng dụng nhưng bật email (bản ẩn, không gửi trùng khi job chạy lại), tắt / bật tiếng dự án từ trang dự án và màn cài đặt, lối tắt từ bảng nổi (24 kiểm tra) | Đạt |
+| Nhiều instance | 2 notification-service + Redis: trình duyệt nối vào instance 19995 nhận đủ 12/12 thông báo kể cả phần instance 19994 xử lý; đối chứng tắt Redis chỉ nhận phần của 19995; job dọn dẹp mỗi lượt chỉ chạy một instance | Đạt |
 
 ### 7.1. Kịch bản giao diện
 
@@ -197,9 +206,18 @@ job = all | due-reminders | sprint-deadlines | completion-reminders | project-di
 - Job theo lịch chạy lại trong ngày không tạo trùng (mỗi mốc nhắc có `dedupKey` riêng); thông báo người dùng đã xoá không hiện lại (R6).
 - Tên người thao tác lấy từ identity-service; identity không chạy thì nội dung ghi "Một thành viên" thay vì tên.
 
-## 10. Kế hoạch cho phần chưa làm
+## 10. Cài đặt bật / tắt và chạy nhiều instance (đã làm)
 
-### 10.1. Cài đặt bật / tắt thông báo (ước lượng 1,5–2 ngày)
+Đã triển khai theo kế hoạch dưới đây, với các điểm khác:
+- **Tắt "trong ứng dụng" nhưng vẫn bật email**: vẫn lưu một bản ẩn (đánh dấu đã xoá) để `dedup_key` chặn gửi email trùng khi
+  Kafka giao lại hoặc job chạy lại; bản ẩn không hiện, không đếm, không đẩy WebSocket.
+- **Nút tắt tiếng dự án** là biểu tượng chuông cạnh nút "Yêu thích" ở đầu trang dự án (menu "…" chỉ hiện với quản trị dự án).
+- **Khoá job** tự viết gọn (`cluster/ClusterJobLock`: `SET NX PX` + script Lua nhả khoá đúng chủ) thay vì thêm thư viện ShedLock;
+  Redis lỗi thì job vẫn chạy (an toàn vì đều chạy lại được). **Job dọn outbox 03:30 không khoá**: chỉ là một câu `DELETE`
+  có điều kiện, hai instance cùng chạy cũng vô hại.
+- Thêm loại mới mà phải luôn hiện trong chuông: bổ sung vào `ALWAYS_IN_APP_LABELS` của `NotificationPreferenceService`.
+
+### 10.1. Cài đặt bật / tắt thông báo
 
 **Người dùng chỉnh gì.** Theo **nhóm** (9 nhóm, không bắt chỉnh từng loại trong 53 loại) × **kênh** (Trong ứng dụng,
 Email), cộng **tắt tiếng một dự án**. Chưa có dòng cài đặt nào thì theo mặc định của danh mục (trong ứng dụng: bật hết;
@@ -214,7 +232,7 @@ email: 7 loại đang gửi).
 **trừ** thông báo gửi đích danh, tức lý do nhận `MENTIONED`, `NEW_ASSIGNEE`, `TARGET_USER`, `REQUESTER`, `INVITEE`, và các
 loại bị khoá ở trên.
 
-**Dữ liệu** (notification-service, Flyway `V2__notification_preferences.sql`):
+**Dữ liệu** (notification-service, Flyway `V2__notification_preferences.sql`; thực tế thêm cột `project_name` để màn cài đặt hiện tên dự án):
 
 ```sql
 notification_preferences (user_id UUID, category VARCHAR(32), in_app BOOLEAN, email BOOLEAN, updated_at TIMESTAMPTZ,
@@ -238,7 +256,7 @@ chú thích lý do. Menu "…" ở đầu trang dự án thêm "Tắt thông bá
 ingest (tắt trong ứng dụng thì không lưu, tắt email thì không gửi); test controller; E2E: tắt nhóm Bình luận → bình luận mới
 không vào chuông nhưng nhắc tên vẫn vào; tắt tiếng dự án → nhắc hạn của dự án không vào, được giao việc vẫn vào.
 
-### 10.2. Redis khi chạy nhiều instance (ước lượng 1 ngày, chỉ cần khi scale ngang)
+### 10.2. Redis khi chạy nhiều instance (chỉ cần khi scale ngang)
 
 Deploy một server, mỗi service một instance thì **chưa cần**. Khi chạy từ 2 instance trở lên sẽ gặp hai vấn đề:
 
