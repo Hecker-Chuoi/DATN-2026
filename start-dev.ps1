@@ -21,6 +21,19 @@ $services = @(
     @{ Name = "Notification Service"; Port = 9994; Module = "notification-service" }
 )
 
+# `spring-boot:run -pl <module>` (không -am) lấy module common từ ~/.m2, nên phải cài bản mới nhất trước,
+# nếu không service sẽ lỗi NoClassDefFoundError khi common có class mới (vd. com.datn.common.notification).
+Write-Host "`nĐang cài module common (mvn install -pl common)..." -ForegroundColor Cyan
+Push-Location $backendDir
+& .\mvnw.cmd -q install -pl common -DskipTests
+$commonExit = $LASTEXITCODE
+Pop-Location
+if ($commonExit -ne 0) {
+    Write-Host "  [LỖI] Không cài được module common. Hãy tắt các service đang chạy (.\stop-dev.ps1) rồi thử lại." -ForegroundColor Red
+    exit 1
+}
+Write-Host "  [OK] Đã cài module common" -ForegroundColor Green
+
 Write-Host "`n=======================================================" -ForegroundColor Cyan
 Write-Host "  Đang mở các cửa sổ Terminal riêng cho từng Service..." -ForegroundColor Cyan
 Write-Host "=======================================================" -ForegroundColor Cyan
