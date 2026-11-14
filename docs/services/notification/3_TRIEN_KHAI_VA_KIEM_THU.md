@@ -109,8 +109,7 @@ WebSocket: `ws(s)://<host>/notification/ws`, token gửi trong header của fram
 3. Frontend `npm run dev`: Vite proxy `/notification/` (có dấu `/` cuối để không nuốt route giao diện `/notifications`, bật `ws`).
 4. **Mở giao diện bằng `http://localhost:5173`.** `api-gateway/config/CorsConfig.java` chỉ cho Origin `localhost:5173` và
    `localhost:3000`; mở bằng `127.0.0.1` hoặc cổng khác thì mọi request ghi (POST/PATCH/DELETE) và **cả WebSocket** bị 403.
-5. Docker: notification-service trong container đọc `kafka:9092`; Kafka của compose hiện chỉ quảng bá `localhost:9092`,
-   cần thêm listener nội bộ thì container mới nhận được sự kiện (chi tiết §6.2). Chạy service trên máy (`start-dev.ps1`) thì không bị.
+5. Docker: service trong container đọc Kafka qua listener nội bộ `kafka:29092`; service chạy trên máy dùng `localhost:9092` (§6.2).
 
 ### 6.1. Deploy tất cả trên một server
 
@@ -139,33 +138,34 @@ dev qua Vite (`localhost:5173`) không đổi.
 Khi deploy vẫn phải đặt cho notification-service `APP_FRONTEND_URL` = địa chỉ thật người dùng mở (là Origin được phép
 mở WebSocket và gốc link trong email).
 
-### 6.2. Kafka khi service chạy trong Docker
+### 6.2. Kafka khi service chạy trong Docker (đã sửa)
 
-Kafka trả cho client địa chỉ nó "quảng bá" (`KAFKA_ADVERTISED_LISTENERS`). Hiện chỉ có `localhost:9092`: service
-trên máy host dùng tốt, nhưng container khác nhận về `localhost` (chính nó) nên lỗi
-`Connection to node 1 (localhost/127.0.0.1:9092) could not be established`. Cách sửa đã thử trên một Kafka riêng
-(container khác gửi và nhận được; máy host vẫn dùng `localhost:9092` như cũ):
+Kafka trả cho client địa chỉ nó "quảng bá" (`KAFKA_ADVERTISED_LISTENERS`). Trước đây chỉ có `localhost:9092`: service
+trên máy dùng tốt, nhưng container khác nhận về `localhost` (chính nó) nên lỗi
+`Connection to node 1 (localhost/127.0.0.1:9092) could not be established`. Đã sửa trong cả 4 file compose:
 
 ```yaml
 kafka:
-  networks: [app-net]          # docker-compose.infra.yml: kafka đang ở mạng mặc định, các service ở app-net
   environment:
     KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,INTERNAL://:29092
     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:29092
     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT
+    KAFKA_LOG_DIRS: /var/lib/kafka/data      # trước đây ghi vào /tmp/kafka-logs TRONG container
+  volumes:
+    - kafka_data:/var/lib/kafka/data
+  networks: [app-net]                        # infra.yml: kafka từng nằm riêng ở mạng mặc định
 # service trong container: SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
 ```
 
-`docker-compose.yml` (bản gộp của nhóm) hiện **không có** service `kafka`; work-service và workspace-service chưa có trong
-compose nào. Container Kafka đang chạy được tạo với project `environment`, nên áp dụng bằng
-`docker compose -p environment -f docker-compose.infra.yml up -d kafka` (dữ liệu nằm trong volume, không mất).
-
-Chạy job bằng tay (cần token có realm role `ADMIN`):
-
-```
-POST /work/api/v1/work/admin/notification-jobs/{job}/run[?projectId=…]
-job = all | due-reminders | sprint-deadlines | completion-reminders | project-digest
-```
+- Service chạy trên máy (`start-dev.ps1`, IDE) vẫn dùng `localhost:9092`, không phải đổi gì.
+- `docker-compose.yml` (bản gộp) trước đây **không có** service `kafka`: đã thêm. work-service và workspace-service vẫn chưa
+  có trong compose nào.
+- **Dữ liệu Kafka**: trước đây nằm trong container nên mỗi lần tạo lại container (kể cả `docker compose down` rồi `up`) là mất
+  topic và offset. Lần áp dụng cấu hình này cũng đã làm mất dữ liệu cũ của Kafka (lúc đó outbox không còn sự kiện chờ,
+  thông báo đã lưu trong DB vẫn còn). Từ nay dữ liệu nằm ở volume `kafka_data`; đã thử ghi message, ép tạo lại container
+  và đọc lại được.
+- Container Kafka đang chạy thuộc project `environment`: áp dụng thay đổi bằng
+  `docker compose -p environment -f docker-compose.infra.yml up -d kafka`.
 
 ## 7. Kiểm thử đã chạy
 
