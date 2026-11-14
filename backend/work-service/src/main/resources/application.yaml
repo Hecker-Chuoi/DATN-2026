@@ -62,6 +62,9 @@ minio:
 
 # ─── Microservices Internal Endpoints ───
 app:
+  cluster:
+    # Chạy từ 2 instance trở lên: khoá job theo lịch bằng Redis để chỉ một instance chạy (tài liệu thông báo 3 §10.2)
+    redis-enabled: ${APP_CLUSTER_REDIS_ENABLED:false}
   frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
   services:
     identity:
