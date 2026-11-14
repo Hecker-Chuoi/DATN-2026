@@ -39,6 +39,7 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
     private final WorkItemAuditService auditService;
     private final IdentityClient identityClient;
     private final WorkItemCompletionGate completionGate;
+    private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @Override
     @Transactional(readOnly = true)
@@ -191,6 +192,9 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
                             "Tự động hoàn thành với kết quả DUPLICATE do phát hiện trùng lặp với " + targetItem.getCode(),
                             userId
                     );
+                    // A9 (+ B2 cho các việc nó đang chặn, vì nó vừa vào nhóm DONE)
+                    workItemNotifier.markedDuplicate(sourceItem, targetItem, userId);
+                    workItemNotifier.blockerCleared(sourceItem, "DONE", userId);
                 }
             }
         }
@@ -204,6 +208,9 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
 
         WorkItemLink saved = workItemLinkRepository.save(link);
         log.info("Created link '{}' between {} and {} by user {}", linkType, sourceItem.getCode(), targetItem.getCode(), userId);
+        if (linkType == LinkType.BLOCKS) {
+            workItemNotifier.blocked(sourceItem, targetItem, userId); // B1
+        }
 
         // Audit Trail on both items
         String relDesc = resolveRelationshipDescription(linkType, true);
@@ -272,6 +279,11 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
 
         workItemLinkRepository.delete(link);
         log.info("Deleted link ID {} on WorkItem {}", linkId, workItemId);
+        // B2: gỡ liên kết "chặn" thì công việc bị chặn có thể đã được bắt đầu
+        workItemNotifier.linkRemoved(link,
+                workItemRepository.findById(link.getSourceItemId()).orElse(null),
+                workItemRepository.findById(link.getTargetItemId()).orElse(null),
+                userId);
 
         // Audit trail
         auditService.recordCustomEvent(

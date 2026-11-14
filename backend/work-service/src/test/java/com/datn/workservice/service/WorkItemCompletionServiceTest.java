@@ -46,6 +46,7 @@ class WorkItemCompletionServiceTest {
     @Mock private StatusRepository statusRepository;
     @Mock private WorkItemCommentRepository commentRepository;
     @Mock private IdentityClient identityClient;
+    @Mock private com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @InjectMocks private WorkItemCompletionServiceImpl completionService;
 

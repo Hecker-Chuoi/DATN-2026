@@ -47,6 +47,7 @@ public class ContributionReportServiceImpl implements ContributionReportService 
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final ProjectMemberService projectMemberService;
     private final IdentityClient identityClient;
+    private final com.datn.workservice.notification.ProjectNotifier projectNotifier;
 
     @Override
     @Transactional
@@ -641,6 +642,9 @@ public class ContributionReportServiceImpl implements ContributionReportService 
                 .build();
 
         ContributionLedgerEntry saved = ledgerRepository.save(entry);
+        // I1
+        projectRepository.findById(projectId).ifPresent(p -> projectNotifier.contributionAdjusted(
+                p, request.getUserId(), request.getPoints(), request.getReason(), leaderUserId));
 
         UserResponse user = fetchUser(request.getUserId());
         UserResponse leader = fetchUser(leaderUserId);
@@ -695,6 +699,11 @@ public class ContributionReportServiceImpl implements ContributionReportService 
 
         snapshotRepository.saveAll(snapshots);
         log.info("Đã đóng băng thành công snapshot đóng góp cho Sprint '{}' ({} thành viên)", sprint.getName(), snapshots.size());
+
+        // I2: mỗi thành viên thấy điểm được ghi nhận của mình
+        Map<UUID, BigDecimal> pointsByUser = new LinkedHashMap<>();
+        snapshots.forEach(s -> { if (s.getUserId() != null) pointsByUser.put(s.getUserId(), s.getTotalPoints()); });
+        projectRepository.findById(projectId).ifPresent(p -> projectNotifier.contributionFrozen(p, sprint, pointsByUser));
     }
 
     @Override

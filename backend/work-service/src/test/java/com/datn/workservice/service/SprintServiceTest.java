@@ -63,6 +63,9 @@ class SprintServiceTest {
 
     @Spy private LexoRankService lexoRankService = new LexoRankService();
 
+    @org.mockito.Mock
+    private com.datn.workservice.notification.ProjectNotifier projectNotifier;
+
     @InjectMocks private SprintServiceImpl sprintService;
 
     private UUID projectId;

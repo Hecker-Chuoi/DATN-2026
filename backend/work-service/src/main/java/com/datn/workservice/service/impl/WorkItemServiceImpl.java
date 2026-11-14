@@ -58,6 +58,7 @@ public class WorkItemServiceImpl implements WorkItemService {
     private final com.datn.workservice.service.ProjectMemberService projectMemberService;
     private final com.datn.workservice.service.WorkItemCompletionGate completionGate;
     private final com.datn.workservice.service.WorkItemCompletionService completionService;
+    private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @Override
     @Transactional
@@ -135,6 +136,9 @@ public class WorkItemServiceImpl implements WorkItemService {
                 "Đã tạo công việc " + saved.getCode() + ": " + saved.getSummary(),
                 userId
         );
+
+        // A1: được giao ngay khi tạo
+        workItemNotifier.created(saved, userId);
 
         return getWorkItemDetail(saved.getId());
     }
@@ -357,6 +361,8 @@ public class WorkItemServiceImpl implements WorkItemService {
 
         // Record diff in audit trail
         workItemAuditService.recordDiff(oldState, saved, userId);
+        // A1/A2, A4, A5, A10
+        workItemNotifier.updated(oldState, saved, userId);
 
         // Update labels if specified
         if (request.getLabelIds() != null) {
@@ -399,6 +405,7 @@ public class WorkItemServiceImpl implements WorkItemService {
         workItemRepository.save(item);
         // BR-W02: giao / hủy giao đều phải để lại dấu vết
         workItemAuditService.recordAssigneeChange(itemId, oldAssignee, newAssignee, userId);
+        workItemNotifier.assigneeChanged(item, oldAssignee, newAssignee, userId);
         log.info("WorkItem '{}': người thực hiện {} -> {} (bởi {})", item.getCode(), oldAssignee, newAssignee, userId);
 
         return getWorkItemDetail(itemId);
@@ -427,6 +434,8 @@ public class WorkItemServiceImpl implements WorkItemService {
         // Soft delete
         item.setDeletedAt(LocalDateTime.now());
         workItemRepository.save(item);
+        // A6, và B2 cho các việc nó đang chặn
+        workItemNotifier.deleted(item, userId);
 
         try {
             contributionReportService.handleWorkItemDeleted(item, userId);

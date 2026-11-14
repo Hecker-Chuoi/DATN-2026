@@ -70,6 +70,8 @@ class WorkItemCollaborationTest {
     private ProjectAccessService projectAccessService;
     @Mock
     private WorkItemCompletionGate completionGate;
+    @Mock
+    private com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     private WorkItemAuditServiceImpl auditService;
     private WorkItemCommentServiceImpl commentService;
@@ -130,7 +132,8 @@ class WorkItemCollaborationTest {
                 commentRepository,
                 workItemRepository,
                 identityClient,
-                projectAccessService
+                projectAccessService,
+                workItemNotifier
         );
 
         cycleDetector = new DependencyCycleDetector(linkRepository, workItemRepository);
@@ -152,7 +155,8 @@ class WorkItemCollaborationTest {
                 cycleDetector,
                 auditService,
                 identityClient,
-                completionGate
+                completionGate,
+                workItemNotifier
         );
     }
 

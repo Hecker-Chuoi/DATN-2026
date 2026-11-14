@@ -52,7 +52,7 @@ class InvitationServiceTest {
     @Mock
     private IdentityClient identityClient;
     @Mock
-    private InvitationMailer mailer;
+    private com.datn.workservice.notification.ProjectNotifier projectNotifier;
 
     @InjectMocks
     private InvitationServiceImpl invitationService;
@@ -159,7 +159,8 @@ class InvitationServiceTest {
         assertThat(response.getId()).isEqualTo(invitationId);
         assertThat(response.getInviteeUserId()).isEqualTo(inviteeUserId);
         assertThat(response.getType()).isEqualTo(InvitationType.PROJECT);
-        verify(mailer, times(1)).send(any());
+        // G1: thông báo + email lời mời đi qua notification-service (outbox), không gửi mail trực tiếp nữa
+        verify(projectNotifier, times(1)).invitationCreated(eq(project), any(Invitation.class), eq(projectRole.getName()), eq(inviterUserId));
     }
 
     @Test

@@ -78,6 +78,7 @@ public class SprintServiceImpl implements SprintService {
     private final BurndownCalculator burndownCalculator;
     private final OutboxRecorder outboxRecorder;
     private final com.datn.workservice.service.ContributionReportService contributionReportService;
+    private final com.datn.workservice.notification.ProjectNotifier projectNotifier;
 
     // ───────────────────────────── CRUD ─────────────────────────────
 
@@ -157,6 +158,7 @@ public class SprintServiceImpl implements SprintService {
         LocalDateTime start = request.getStartDate() != null ? request.getStartDate() : sprint.getStartDate();
         LocalDateTime end = request.getEndDate() != null ? request.getEndDate() : sprint.getEndDate();
         validateDateRange(start, end);
+        LocalDateTime oldEnd = sprint.getEndDate();
         sprint.setStartDate(start);
         sprint.setEndDate(end);
 
@@ -164,6 +166,7 @@ public class SprintServiceImpl implements SprintService {
 
         // Doi ngay bat dau co the doi thu tu ke hoach (BR-S15) -> tinh lai Sprint duoc phep bat dau.
         List<WorkItem> items = workItemRepository.findBySprintIdAndDeletedAtIsNullOrderByRankAsc(sprintId);
+        projectNotifier.sprintDatesChanged(projectOrNull(sprint.getProjectId()), sprint, oldEnd, items, userId); // E8
         return toResponse(sprint, items, loadStatusMap(), loadTypeMap(items),
                 resolveStartableSprintId(sprint.getProjectId()),
                 snapshotRepository.existsBySprintId(sprintId));
@@ -188,6 +191,7 @@ public class SprintServiceImpl implements SprintService {
         workItemRepository.saveAll(items);
         sprintRepository.delete(sprint);
         log.info("Xoa Sprint '{}', tra {} cong viec ve Backlog", sprint.getName(), items.size());
+        projectNotifier.sprintDeleted(projectOrNull(sprint.getProjectId()), sprint, items, userId); // E9
     }
 
     // ─────────────────────────── Lifecycle ───────────────────────────
@@ -270,6 +274,7 @@ public class SprintServiceImpl implements SprintService {
 
         // Sprint vua chuyen sang ACTIVE -> khong con Sprint nao duoc bat dau.
         List<WorkItem> items = workItemRepository.findBySprintIdAndDeletedAtIsNullOrderByRankAsc(sprintId);
+        projectNotifier.sprintStarted(project, sprint, items, userId); // E1 (+ đóng E6)
         return toResponse(sprint, items, loadStatusMap(), loadTypeMap(items), null, false);
     }
 
@@ -346,6 +351,9 @@ public class SprintServiceImpl implements SprintService {
         payload.put("movedToSprintId", targetSprintId);
         payload.put("closedBy", userId);
         outboxRecorder.record("SPRINT", sprint.getId(), "SPRINT_COMPLETED", payload);
+        // E2 (+ đóng E3 nếu chu kỳ từng quá hạn)
+        projectNotifier.sprintCompleted(projectOrNull(sprint.getProjectId()), sprint, completed, incomplete,
+                targetSprintName, userId);
 
         // Đóng băng số liệu đóng góp của Sprint vào snapshot
         try {
@@ -429,6 +437,7 @@ public class SprintServiceImpl implements SprintService {
             changed.add(item);
         }
         moveItemsToSprint(changed, sprintId, sprint.getName(), null, userId);
+        projectNotifier.sprintScopeChanged(projectOrNull(sprint.getProjectId()), sprint, changed, true, userId); // E5
         return toCards(changed);
     }
 
@@ -450,6 +459,7 @@ public class SprintServiceImpl implements SprintService {
             changed.add(item);
         }
         moveItemsToSprint(changed, null, "Backlog", sprint.getName(), userId);
+        projectNotifier.sprintScopeChanged(projectOrNull(sprint.getProjectId()), sprint, changed, false, userId); // E7
         return toCards(changed);
     }
 
@@ -545,6 +555,11 @@ public class SprintServiceImpl implements SprintService {
         if (items.isEmpty()) return List.of();
         CardMappingContext ctx = cardMapper.buildContext(items, WorkItemCardMapper.Options.backlog());
         return cardMapper.mapAll(items, ctx);
+    }
+
+    /** Tra dự án cho phần thông báo: không ném lỗi để thông báo không bao giờ làm hỏng nghiệp vụ. */
+    private Project projectOrNull(UUID projectId) {
+        return projectId == null ? null : projectRepository.findById(projectId).orElse(null);
     }
 
     private Project requireProject(UUID projectId) {

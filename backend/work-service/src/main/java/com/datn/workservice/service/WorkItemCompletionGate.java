@@ -36,6 +36,7 @@ public class WorkItemCompletionGate {
     private final WorkItemCompletionRequestRepository requestRepository;
     private final WorkItemChangelogRepository changelogRepository;
     private final ProjectMemberService projectMemberService;
+    private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     /**
      * Người dùng có được XÁC NHẬN hoàn thành trong dự án hay không: Global ADMIN, Lead/người tạo dự án
@@ -93,6 +94,8 @@ public class WorkItemCompletionGate {
 
         log.info("WorkItem '{}': user {} gửi yêu cầu xác nhận hoàn thành → '{}'",
                 item.getCode(), requesterId, targetStatus.getName());
+        // C1: báo mọi Quản lý dự án (yêu cầu cũ bị thay thế được notification-service tự đóng)
+        workItemNotifier.completionRequested(item, request, targetStatus);
         return request;
     }
 
@@ -108,11 +111,13 @@ public class WorkItemCompletionGate {
             if (enteredDone) {
                 close(req, CompletionRequestStatus.APPROVED, actorId, "Đã xác nhận hoàn thành");
                 recordChangelog(item.getId(), PENDING_LABEL, "Admin đã xác nhận hoàn thành", actorId);
+                workItemNotifier.completionApproved(item, req, actorId); // C2
             } else {
                 String statusName = newStatus != null ? newStatus.getName() : "trạng thái khác";
                 close(req, CompletionRequestStatus.CANCELLED, actorId,
                         "Trạng thái đổi sang '" + statusName + "' trước khi được xác nhận");
                 recordChangelog(item.getId(), PENDING_LABEL, "Yêu cầu tự hủy do chuyển sang '" + statusName + "'", actorId);
+                workItemNotifier.completionCancelled(item, req, "AUTO_STATUS_CHANGED", statusName, actorId); // C5
             }
             requestRepository.save(req);
         });

@@ -32,6 +32,7 @@ class WorkItemCompletionGateTest {
     @Mock private WorkItemCompletionRequestRepository requestRepository;
     @Mock private WorkItemChangelogRepository changelogRepository;
     @Mock private ProjectMemberService projectMemberService;
+    @Mock private com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @InjectMocks private WorkItemCompletionGate gate;
 

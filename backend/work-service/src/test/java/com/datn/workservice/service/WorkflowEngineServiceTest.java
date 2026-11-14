@@ -68,6 +68,9 @@ class WorkflowEngineServiceTest {
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
+    @Mock
+    private com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
+
     @InjectMocks
     private WorkflowEngineServiceImpl workflowEngineService;
 

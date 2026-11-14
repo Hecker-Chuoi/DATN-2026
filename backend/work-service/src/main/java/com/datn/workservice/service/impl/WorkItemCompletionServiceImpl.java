@@ -40,6 +40,7 @@ public class WorkItemCompletionServiceImpl implements WorkItemCompletionService 
     private final StatusRepository statusRepository;
     private final WorkItemCommentRepository commentRepository;
     private final IdentityClient identityClient;
+    private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @Override
     @Transactional(readOnly = true)
@@ -98,6 +99,7 @@ public class WorkItemCompletionServiceImpl implements WorkItemCompletionService 
                     .build());
         }
         log.info("Admin {} từ chối yêu cầu hoàn thành '{}'", adminId, item.getCode());
+        workItemNotifier.completionRejected(item, request, trimmed, adminId); // C3
         return toResponses(List.of(request), false).get(0);
     }
 
@@ -117,6 +119,8 @@ public class WorkItemCompletionServiceImpl implements WorkItemCompletionService 
         requestRepository.save(request);
         completionGate.recordChangelog(workItemId, WorkItemCompletionGate.PENDING_LABEL,
                 "Đã hủy yêu cầu xác nhận hoàn thành", userId);
+        // C5 cho người gửi (Admin rút lại), hoặc chỉ đóng C1 của Quản lý (người gửi tự rút lại)
+        workItemNotifier.completionCancelled(item, request, "CANCELLED_BY_ADMIN", null, userId);
         return toResponses(List.of(request), false).get(0);
     }
 

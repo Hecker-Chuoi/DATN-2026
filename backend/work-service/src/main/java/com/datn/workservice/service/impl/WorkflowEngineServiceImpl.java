@@ -53,6 +53,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
     private final WorkItemCompletionGate completionGate;
     private final WorkItemAuditService workItemAuditService;
     private final ObjectMapper objectMapper;
+    private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @Override
     @Transactional(readOnly = true)
@@ -286,6 +287,8 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                             }
                         }
                         log.info("Auto-resolved {} descendant work items for parent WorkItem '{}'", incompleteDescendants.size(), workItem.getCode());
+                        // A8: mỗi người thực hiện việc con nhận một thông báo
+                        workItemNotifier.subtasksAutoResolved(workItem, incompleteDescendants, currentUserId);
                     } else {
                         throw new BadRequestException("Không thể hoàn thành công việc này vì còn " + incompleteDescendants.size() + " nhiệm vụ con (Sub-task) chưa hoàn thành");
                     }
@@ -360,6 +363,12 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
         Optional<WorkItemCompletionRequest> closedRequest = statusChanged
                 ? completionGate.onStatusChanged(saved, toStatus, enteringDone, currentUserId)
                 : Optional.empty();
+
+        // A3 (+ B2 khi vào DONE). Người gửi yêu cầu vừa được đóng đã nhận C2/C5 nên không nhận thêm A3.
+        if (statusChanged) {
+            workItemNotifier.statusChanged(saved, oldStatus, toStatus, currentUserId,
+                    closedRequest.map(com.datn.workservice.notification.WorkItemNotifier::requesterOf).orElse(Set.of()));
+        }
 
         // 8. Cascade Ancestor Status Transitions (Auto-reopen on active child & Auto-start on IN_PROGRESS)
         cascadeAncestorStatusTransitions(workItem, toStatus, currentUserId);
@@ -581,6 +590,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                 }
                 workItem.setAssigneeId(newAssignee);
                 workItemAuditService.recordAssigneeChange(workItem.getId(), oldAssignee, newAssignee, currentUserId);
+                workItemNotifier.assigneeChanged(workItem, oldAssignee, newAssignee, currentUserId);
             }
         }
         if (fields.containsKey("fixVersionId")) {
@@ -664,6 +674,8 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                         }
                         log.info("Cascading reopen: Ancestor WorkItem '{}' automatically reopened from '{}' to '{}' because descendant '{}' is in non-DONE status '{}'",
                                 parent.getCode(), oldStatusName, targetReopenStatus.getName(), triggerItem.getCode(), toStatus.getName());
+                        // A7
+                        workItemNotifier.parentReopened(parent, triggerItem, targetReopenStatus, toStatus, currentUserId);
                     }
                 }
                 // Rule 2: Descendant moved to IN_PROGRESS, but ancestor is still in TODO
