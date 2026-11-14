@@ -1,5 +1,9 @@
 server:
   port: 8081
+  # Sau nginx (deploy): đọc X-Forwarded-Proto/Host để biết địa chỉ thật người dùng mở (https, cổng khác 80).
+  # Không có dòng này, CorsConfig coi request từ https://<domain> là gọi chéo nguồn và trả 403 (cả WebSocket).
+  # Chỉ an toàn khi cổng gateway KHÔNG mở ra Internet (mọi request đều đi qua nginx).
+  forward-headers-strategy: framework
 
 spring:
   application:

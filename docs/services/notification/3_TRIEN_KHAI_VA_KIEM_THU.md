@@ -117,12 +117,20 @@ WebSocket: `ws(s)://<host>/notification/ws`, token gửi trong header của fram
 | `http://<domain>:8080` (cổng khác 80) | **403** (cả WebSocket) | Qua (nginx gửi thêm `X-Forwarded-Port`) |
 
 Lý do: trình duyệt gửi `Origin` thật, còn gateway nhận request từ nginx qua `http`, cổng 8081 nên tưởng là gọi chéo
-nguồn và đối chiếu với danh sách cứng trong `CorsConfig` (chỉ `localhost:5173`, `localhost:3000`). Nếu deploy HTTPS
-hoặc cổng khác 80 thì cần:
-- `api-gateway/application.yml`: `server.forward-headers-strategy: framework` (chỉ an toàn khi cổng 8081 của gateway
-  không mở ra Internet, mọi request đều đi qua nginx);
-- `frontend/nginx.conf`: thêm `proxy_set_header X-Forwarded-Port $server_port;` cạnh `X-Forwarded-Proto`;
-- notification-service: `APP_FRONTEND_URL` = địa chỉ thật người dùng mở (là Origin được phép mở WebSocket và gốc link trong email).
+nguồn và đối chiếu với danh sách cứng trong `CorsConfig` (chỉ `localhost:5173`, `localhost:3000`).
+
+**Đã sửa:**
+- `api-gateway/application.yml`: `server.forward-headers-strategy: framework`. Chỉ an toàn khi cổng 8081 của gateway
+  **không mở ra Internet**, mọi request đều đi qua nginx.
+- `frontend/nginx.conf`: gửi `X-Forwarded-Proto` và `X-Forwarded-Host` (= `$http_host`, giữ cả cổng khi Docker map
+  8080→80). Nếu phía trước còn proxy / CDN làm HTTPS (Cloudflare, nginx của máy chủ) thì giữ nguyên giá trị nó gửi.
+
+Đã thử qua nginx thật (`nginx:alpine` với chính file này) tới gateway thật: `http://domain`, `http://domain:8080`,
+`https://domain` (proxy phía trước) và WebSocket qua HTTPS đều qua; Origin lạ (`https://evil.com`) vẫn bị 403;
+dev qua Vite (`localhost:5173`) không đổi.
+
+Khi deploy vẫn phải đặt cho notification-service `APP_FRONTEND_URL` = địa chỉ thật người dùng mở (là Origin được phép
+mở WebSocket và gốc link trong email).
 
 ### 6.2. Kafka khi service chạy trong Docker
 
