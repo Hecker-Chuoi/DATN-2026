@@ -60,6 +60,12 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        # Service bị tắt đột ngột (kill, nút Stop của IDE) không kịp rời consumer group: Kafka phải chờ hết
+        # session timeout (mặc định 45 giây) mới giao partition cho instance mới, thông báo đến trễ chừng ấy.
+        # 10 giây là đủ an toàn: heartbeat chạy ở luồng riêng, không phụ thuộc thời gian xử lý message.
+        session.timeout.ms: 10000
+        heartbeat.interval.ms: 3000
     producer:
       # Chỉ dùng để chuyển sự kiện lỗi sang notification-events.DLT
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
