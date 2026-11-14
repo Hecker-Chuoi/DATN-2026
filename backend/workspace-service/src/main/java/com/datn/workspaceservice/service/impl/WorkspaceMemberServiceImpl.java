@@ -18,7 +18,6 @@ import com.datn.workspaceservice.enums.WorkspaceRole;
 import com.datn.workspaceservice.repository.WorkspaceInvitationRepository;
 import com.datn.workspaceservice.repository.WorkspaceMemberRepository;
 import com.datn.workspaceservice.repository.WorkspaceRepository;
-import com.datn.workspaceservice.service.InvitationMailer;
 import com.datn.workspaceservice.service.WorkspaceMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,8 +47,8 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceInvitationRepository invitationRepository;
     private final IdentityClient identityClient;
-    private final InvitationMailer mailer;
     private final JdbcTemplate jdbcTemplate;
+    private final com.datn.workspaceservice.notification.WorkspaceNotificationPublisher notifications;
 
     @Override
     @Transactional(readOnly = true)
@@ -148,7 +147,8 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         log.info("Workspace invitation created: workspace={}, invitee={}, by={}, role={}",
                 workspaceId, targetUserId, currentUserId, request.getRole());
         WorkspaceInvitationResponse res = toInvitationResponse(saved);
-        mailer.send(res);
+        // G8: thông báo trong ứng dụng + email lời mời (notification-service gửi, template invite-member)
+        notifications.invitationReceived(saved, currentUserId);
         return res;
     }
 
@@ -184,7 +184,9 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         inv.setStatus(InvitationStatus.ACCEPTED);
         inv.setRespondedAt(LocalDateTime.now());
         log.info("Workspace invitation {} accepted by {}", invitationId, userId);
-        return toInvitationResponse(invitationRepository.save(inv));
+        WorkspaceInvitation saved = invitationRepository.save(inv);
+        notifications.invitationAnswered(saved, true, userId); // G11 (+ đóng G8)
+        return toInvitationResponse(saved);
     }
 
     @Override
@@ -193,7 +195,9 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         WorkspaceInvitation inv = requirePendingForInvitee(invitationId, userId);
         inv.setStatus(InvitationStatus.DECLINED);
         inv.setRespondedAt(LocalDateTime.now());
-        return toInvitationResponse(invitationRepository.save(inv));
+        WorkspaceInvitation saved = invitationRepository.save(inv);
+        notifications.invitationAnswered(saved, false, userId); // G11 (+ đóng G8)
+        return toInvitationResponse(saved);
     }
 
     @Override
@@ -207,7 +211,9 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         }
         inv.setStatus(InvitationStatus.CANCELLED);
         inv.setRespondedAt(LocalDateTime.now());
-        return toInvitationResponse(invitationRepository.save(inv));
+        WorkspaceInvitation saved = invitationRepository.save(inv);
+        notifications.invitationCancelled(saved, userId); // chỉ đóng G8
+        return toInvitationResponse(saved);
     }
 
     @Override
@@ -238,8 +244,10 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
             assertNotLastOwner(workspaceId, target);
         }
 
+        WorkspaceRole oldRole = target.getRole();
         target.setRole(newRole);
         WorkspaceMember saved = memberRepository.save(target);
+        notifications.roleChanged(workspaceId, targetUserId, oldRole, newRole, currentUserId); // G10
 
         log.info("Đã đổi vai trò user {} trong workspace {} thành {}", targetUserId, workspaceId, newRole);
         return toResponse(saved, hydrateUsers(List.of(saved)).get(targetUserId));
@@ -267,6 +275,7 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         memberRepository.delete(target);
         cleanupProjectMemberships(workspaceId, targetUserId);
         log.info("Đã xóa user {} khỏi workspace {}", targetUserId, workspaceId);
+        notifications.memberRemoved(workspaceId, targetUserId, currentUserId); // G9
     }
 
     @Override

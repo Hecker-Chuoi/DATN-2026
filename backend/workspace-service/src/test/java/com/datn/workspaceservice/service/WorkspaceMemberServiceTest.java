@@ -16,7 +16,6 @@ import com.datn.workspaceservice.enums.WorkspaceRole;
 import com.datn.workspaceservice.repository.WorkspaceInvitationRepository;
 import com.datn.workspaceservice.repository.WorkspaceMemberRepository;
 import com.datn.workspaceservice.repository.WorkspaceRepository;
-import com.datn.workspaceservice.service.InvitationMailer;
 import com.datn.workspaceservice.service.impl.WorkspaceMemberServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -55,7 +54,7 @@ class WorkspaceMemberServiceTest {
     @Mock
     private WorkspaceInvitationRepository invitationRepository;
     @Mock
-    private InvitationMailer mailer;
+    private com.datn.workspaceservice.notification.WorkspaceNotificationPublisher notifications;
     @Mock
     private IdentityClient identityClient;
 

@@ -48,6 +48,9 @@ class WorkspaceLastOwnerGuardTest {
     @Mock
     private IdentityClient identityClient;
 
+    @Mock
+    private com.datn.workspaceservice.notification.WorkspaceNotificationPublisher notifications;
+
     @InjectMocks
     private WorkspaceMemberServiceImpl service;
 
