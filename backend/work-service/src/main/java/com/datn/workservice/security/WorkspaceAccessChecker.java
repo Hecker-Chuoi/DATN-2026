@@ -32,7 +32,6 @@ public class WorkspaceAccessChecker {
     private static final List<String> RANKS = List.of("OWNER", "ADMIN", "MEMBER", "GUEST");
 
     private final WorkspaceClient workspaceClient;
-    private final CanonicalUserResolver canonicalUserResolver;
 
     /**
      * @return tên vai trò, hoặc null nếu không phải thành viên
@@ -42,8 +41,8 @@ public class WorkspaceAccessChecker {
     public String getRole(UUID workspaceId, UUID userId) {
         if (workspaceId == null || userId == null) return null;
         try {
-            UUID canonicalId = canonicalUserResolver.resolve(userId);
-            ApiResponse<String> response = workspaceClient.getMemberRole(workspaceId, canonicalId);
+            // user id toàn hệ thống là Keycloak sub (workspace-service cũng lưu sub từ V6)
+            ApiResponse<String> response = workspaceClient.getMemberRole(workspaceId, userId);
             return response == null ? null : response.getData();
         } catch (Exception e) {
             log.error("Không gọi được workspace-service để kiểm tra quyền trên workspace {}: {}",
@@ -55,8 +54,7 @@ public class WorkspaceAccessChecker {
     /**
      * Người gọi phải là thành viên workspace với bậc tối thiểu minRole.
      * <p>
-     * userId truyền vào có thể là id lấy từ JWT (Keycloak sub) hoặc users.id.
-     * getRole đã tự động chuẩn hóa sang users.id qua canonicalUserResolver.
+     * userId là Keycloak sub (SecurityUtils.getCurrentUserId()).
      */
     public void requireAtLeast(UUID workspaceId, UUID userId, String minRole) {
         if (workspaceId == null) {
@@ -89,7 +87,7 @@ public class WorkspaceAccessChecker {
     public List<UUID> getWorkspaceIds(UUID userId) {
         try {
             ApiResponse<List<UUID>> response =
-                    workspaceClient.getWorkspaceIds(canonicalUserResolver.resolve(userId));
+                    workspaceClient.getWorkspaceIds(userId);
             if (response == null || response.getData() == null) {
                 return List.of();
             }

@@ -90,7 +90,7 @@ public class UserService {
 
         // 5. Gửi email xác thực (fail-safe: lỗi gửi mail không chặn đăng ký, người dùng có thể gửi lại)
         accountVerificationService.sendEmailVerification(user);
-        workspaceClient.createDefaultWorkspace(user.getId());
+        workspaceClient.createDefaultWorkspace(user.getKeycloakId());
 
         return UserResponse.from(user);
     }
@@ -198,7 +198,7 @@ public class UserService {
                     newUser = userRepository.save(newUser);
                     log.info("Google login: created new user '{}' (keycloakId='{}', userId='{}')",
                             newUser.getUsername(), keycloakId, newUser.getId());
-                    workspaceClient.createDefaultWorkspace(newUser.getId());
+                    workspaceClient.createDefaultWorkspace(newUser.getKeycloakId());
                     return UserResponse.from(newUser);
                 });
 
@@ -402,7 +402,7 @@ public class UserService {
         user = userRepository.save(user);
         keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
         log.info("Admin created user: username='{}', keycloakId='{}', userId='{}'", user.getUsername(), keycloakId, user.getId());
-        workspaceClient.createDefaultWorkspace(user.getId());
+        workspaceClient.createDefaultWorkspace(user.getKeycloakId());
 
         return UserResponse.from(user);
     }

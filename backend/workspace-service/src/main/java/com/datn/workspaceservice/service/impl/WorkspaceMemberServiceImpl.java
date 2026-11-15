@@ -6,6 +6,7 @@ import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ForbiddenException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workspaceservice.client.IdentityClient;
+import com.datn.workspaceservice.client.IdentityUsers;
 import com.datn.workspaceservice.client.dto.UserResponse;
 import com.datn.workspaceservice.dto.request.AddWorkspaceMemberRequest;
 import com.datn.workspaceservice.dto.response.WorkspaceInvitationResponse;
@@ -35,8 +36,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -413,11 +412,17 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
             log.warn("Không tra được user theo identifier [{}]: {}", identifier, e.getMessage());
             throw new ResourceNotFoundException("Không tìm thấy người dùng: " + identifier);
         }
-        if (response == null || response.getData() == null || response.getData().getId() == null) {
+        if (response == null || response.getData() == null) {
             throw new ResourceNotFoundException("Không tìm thấy người dùng: " + identifier);
         }
-        // Luôn lưu users.id, không bao giờ lưu keycloakId - xem CurrentUserResolver.
-        return response.getData().getId();
+        // Quy ước toàn hệ thống: lưu Keycloak sub (xem CurrentUserResolver), không lưu users.id của identity.
+        String keycloakId = response.getData().getKeycloakId();
+        try {
+            return UUID.fromString(keycloakId);
+        } catch (Exception e) {
+            log.warn("Người dùng [{}] chưa liên kết tài khoản Keycloak hợp lệ: {}", identifier, keycloakId);
+            throw new ResourceNotFoundException("Không tìm thấy người dùng: " + identifier);
+        }
     }
 
     /**
@@ -443,11 +448,8 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
             if (response == null || response.getData() == null) {
                 return Collections.emptyMap();
             }
-            return response.getData().stream()
-                    .filter(u -> u.getId() != null)
-                    // Chỉ khóa theo users.id. KHÔNG khóa kép theo cả keycloakId như
-                    // ProjectMemberServiceImpl phải làm - ở đây id đã được chuẩn hóa.
-                    .collect(Collectors.toMap(UserResponse::getId, Function.identity(), (a, b) -> a));
+            // Bảng lưu Keycloak sub, còn identity trả users.id kèm keycloakId: tra được theo cả hai
+            return IdentityUsers.indexByAnyId(response.getData());
         } catch (Exception e) {
             log.debug("Không hydrate được thông tin user từ identity-service: {}", e.getMessage());
             return Collections.emptyMap();

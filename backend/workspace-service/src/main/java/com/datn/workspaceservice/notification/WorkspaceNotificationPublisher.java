@@ -3,8 +3,6 @@ package com.datn.workspaceservice.notification;
 import com.datn.common.notification.NotificationEvent;
 import com.datn.common.notification.NotificationType;
 import com.datn.common.notification.RecipientReason;
-import com.datn.workspaceservice.client.IdentityClient;
-import com.datn.workspaceservice.client.dto.UserResponse;
 import com.datn.workspaceservice.entity.Workspace;
 import com.datn.workspaceservice.entity.WorkspaceInvitation;
 import com.datn.workspaceservice.enums.WorkspaceRole;
@@ -30,8 +28,7 @@ import static com.datn.common.notification.NotificationType.*;
  * Thông báo nhóm G8–G11 (không gian làm việc). Ghi sự kiện vào bảng outbox_events (dùng chung DB với
  * work-service) trong CÙNG transaction với nghiệp vụ; OutboxRelay của work-service gửi lên Kafka.
  *
- * workspace-service lưu user theo users.id của identity-service, còn thông báo dùng Keycloak sub,
- * nên mọi id được đổi sang sub qua {@code GET /internal/users/{id}} trước khi ghi.
+ * Mọi user id đều là Keycloak sub (quy ước toàn hệ thống), nên ghi thẳng vào sự kiện, không phải đổi.
  * Lỗi trong phần thông báo chỉ ghi log, không làm hỏng nghiệp vụ.
  */
 @Slf4j
@@ -42,7 +39,6 @@ public class WorkspaceNotificationPublisher {
     public static final String SOURCE = "workspace-service";
 
     private final JdbcTemplate jdbcTemplate;
-    private final IdentityClient identityClient;
     private final WorkspaceRepository workspaceRepository;
     private final ObjectMapper objectMapper;
 
@@ -87,13 +83,12 @@ public class WorkspaceNotificationPublisher {
         try {
             Workspace ws = workspaceId == null ? null : workspaceRepository.findById(workspaceId).orElse(null);
             if (ws == null) return;
-            String actorSub = toSub(actorUserId);
+            String actorSub = actorUserId == null ? null : actorUserId.toString();
 
             List<NotificationEvent.Recipient> rs = new ArrayList<>();
             recipients.forEach((userId, reason) -> {
-                String sub = toSub(userId);
-                if (sub != null && !sub.equalsIgnoreCase(Objects.toString(actorSub, ""))) {
-                    rs.add(new NotificationEvent.Recipient(sub, reason.name()));
+                if (userId != null && !Objects.equals(userId, actorUserId)) {
+                    rs.add(new NotificationEvent.Recipient(userId.toString(), reason.name()));
                 }
             });
             if (rs.isEmpty() && !type.isInternal()) return;
@@ -120,20 +115,6 @@ public class WorkspaceNotificationPublisher {
             log.debug("Ghi outbox thông báo {} ({} người nhận)", type, rs.size());
         } catch (Exception e) {
             log.warn("Không phát được thông báo {}: {}", type, e.getMessage());
-        }
-    }
-
-    /** users.id (hoặc sub) → Keycloak sub; null nếu không tra được. */
-    String toSub(UUID userId) {
-        if (userId == null) return null;
-        try {
-            var res = identityClient.getUserById(userId);
-            UserResponse u = res == null ? null : res.getData();
-            if (u == null) return null;
-            return u.getKeycloakId() != null && !u.getKeycloakId().isBlank() ? u.getKeycloakId() : null;
-        } catch (Exception e) {
-            log.warn("Không đổi được user {} sang Keycloak sub: {}", userId, e.getMessage());
-            return null;
         }
     }
 }
