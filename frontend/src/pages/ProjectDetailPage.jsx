@@ -68,8 +68,9 @@ export default function ProjectDetailPage() {
   const { isAdmin, canCreateIssue, canManageSprint, permissions, forbidden, notFound } = useProjectPermission(projectId);
 
   const isSystemAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN');
-  const isProjectLead = !!(currentUser && project?.leadUserId === currentUser.id);
-  const isProjectCreator = !!(currentUser && project?.createdBy === currentUser.id);
+  // leadUserId / createdBy là Keycloak sub; currentUser (từ /users/me) mang users.id riêng kèm keycloakId
+  const isProjectLead = !!(currentUser?.keycloakId && project?.leadUserId === currentUser.keycloakId);
+  const isProjectCreator = !!(currentUser?.keycloakId && project?.createdBy === currentUser.keycloakId);
   const canDelete = isAdmin || isSystemAdmin || isProjectLead || isProjectCreator;
 
   useEffect(() => {

@@ -243,14 +243,17 @@ export default function ProjectMembersTab({ projectId, project, isAdmin, onMembe
         return;
       }
 
+      // user id toàn hệ thống là Keycloak sub; identity trả users.id riêng kèm keycloakId
+      const userSub = matchedUser.keycloakId || matchedUser.id;
+
       // Kiểm tra xem đã là thành viên trong dự án chưa
-      const isAlreadyMember = members.some((m) => m.userId === matchedUser.id);
+      const isAlreadyMember = members.some((m) => m.userId === userSub);
       if (isAlreadyMember) {
         setSearchError('Người dùng này đã là thành viên của dự án.');
         return;
       }
 
-      setFoundUser(matchedUser);
+      setFoundUser({ ...matchedUser, id: userSub });
     } catch (err) {
       console.error('Lỗi khi tìm kiếm người dùng:', err);
       setSearchError('Đã có lỗi xảy ra khi tìm kiếm người dùng. Vui lòng thử lại.');

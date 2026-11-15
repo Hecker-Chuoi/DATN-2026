@@ -138,7 +138,8 @@ export default function WorkspaceMembersPage() {
           userApi
             .me()
             .then((res) => {
-              if (!cancelled) setMyUserId(res?.data?.id || null);
+              // user id toàn hệ thống là Keycloak sub (không phải users.id của identity)
+              if (!cancelled) setMyUserId(res?.data?.keycloakId || null);
             })
             .catch(() => {});
         }
@@ -178,7 +179,7 @@ export default function WorkspaceMembersPage() {
         setAddError('Không tìm thấy người dùng nào có email này. Vui lòng kiểm tra lại chính xác từng ký tự.');
         return;
       }
-      if (members.some((m) => m.userId === user.id)) {
+      if (members.some((m) => m.userId === (user.keycloakId || user.id))) {
         setAddError('Người dùng này đã là thành viên của không gian làm việc.');
         return;
       }
