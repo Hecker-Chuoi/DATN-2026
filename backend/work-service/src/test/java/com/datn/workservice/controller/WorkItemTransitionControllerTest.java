@@ -67,7 +67,6 @@ class WorkItemTransitionControllerTest {
         Jwt jwt = Jwt.withTokenValue("mock-token")
                 .header("alg", "none")
                 .claim("sub", currentUserId.toString())
-                .claim("user_id", currentUserId.toString())
                 .build();
 
         lenient().when(securityContext.getAuthentication()).thenReturn(authentication);

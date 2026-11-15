@@ -132,32 +132,6 @@ public class KeycloakService {
     }
 
     /**
-     * Sets or updates a custom user attribute in Keycloak (e.g. 'user_id' -> Database UUID).
-     */
-    public void setUserAttribute(String keycloakUserId, String attributeName, String attributeValue) {
-        if (keycloakUserId == null || attributeName == null || attributeValue == null) {
-            return;
-        }
-        try {
-            RealmResource realmResource = getRealmResource();
-            UserResource userResource = realmResource.users().get(keycloakUserId);
-            UserRepresentation user = userResource.toRepresentation();
-            Map<String, List<String>> attributes = user.getAttributes();
-            if (attributes == null) {
-                attributes = new HashMap<>();
-            } else {
-                attributes = new HashMap<>(attributes);
-            }
-            attributes.put(attributeName, List.of(attributeValue));
-            user.setAttributes(attributes);
-            userResource.update(user);
-            log.info("Successfully set attribute '{}'='{}' for Keycloak user '{}'", attributeName, attributeValue, keycloakUserId);
-        } catch (Exception ex) {
-            log.warn("Could not set attribute on Keycloak user '{}': {}", keycloakUserId, ex.getMessage());
-        }
-    }
-
-    /**
      * Exchanges username & password for a Keycloak JWT token pair
      * using Direct Access Grant (Resource Owner Password Credentials).
      *

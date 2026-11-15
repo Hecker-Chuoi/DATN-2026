@@ -84,7 +84,6 @@ public class UserService {
                 .build();
 
         user = userRepository.save(user);
-        keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
         log.info("Registered new user (pending email verification): username='{}', keycloakId='{}', userId='{}'",
                 user.getUsername(), keycloakId, user.getId());
 
@@ -203,7 +202,6 @@ public class UserService {
                 });
 
         if (response != null && response.getId() != null) {
-            keycloakService.setUserAttribute(keycloakId, "user_id", response.getId().toString());
             keycloakService.assignRealmRoles(keycloakId, Set.of("USER"));
         }
 
@@ -232,10 +230,6 @@ public class UserService {
             log.info("Linking new Keycloak ID '{}' to existing user '{}' with email '{}'", keycloakId, user.getUsername(), email);
             user.setKeycloakId(keycloakId);
             user = userRepository.save(user);
-        }
-
-        if (user != null && user.getId() != null) {
-            keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
         }
 
         return UserResponse.from(user);
@@ -400,7 +394,6 @@ public class UserService {
                 .build();
  
         user = userRepository.save(user);
-        keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
         log.info("Admin created user: username='{}', keycloakId='{}', userId='{}'", user.getUsername(), keycloakId, user.getId());
         workspaceClient.createDefaultWorkspace(user.getKeycloakId());
 
