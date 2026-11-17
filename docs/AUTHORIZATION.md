@@ -27,7 +27,7 @@ câu hỏi khác nhau — hiểu nhầm ranh giới giữa chúng là nguồn g�
 ┌────────────────────────────────▼─────────────────────────────────────────┐
 │  Service (identity :8082 · work :8083 · workspace :8087)                 │
 │  Tầng 3 — Xác thực lại JWT một lần nữa (resource server độc lập)         │
-│  Tầng 4 — "Người gọi này THỰC SỰ là ai?"  (sub → users.id)               │
+│  Tầng 4 — "Người gọi này THỰC SỰ là ai?"  (user id = Keycloak sub)       │
 │  Tầng 5 — "Người này được làm gì TRONG phạm vi này?"                     │
 └──────────────────────────────────────────────────────────────────────────┘
                                  ▲
@@ -40,7 +40,7 @@ câu hỏi khác nhau — hiểu nhầm ranh giới giữa chúng là nguồn g�
 **Điểm cần nắm trước tiên:** tầng 1–3 chỉ trả lời *xác thực* (authentication). Toàn bộ
 *phân quyền* (authorization) thực sự nằm ở tầng 5, và nó **không dùng role của Keycloak**.
 Role `ADMIN`/`USER` trong Keycloak chỉ phục vụ cổng quản trị hệ thống, hoàn toàn tách biệt
-với vai trò trong Workspace/Team/Project.
+với vai trò trong Workspace/Project.
 
 ---
 
@@ -133,61 +133,37 @@ workspace-service không dùng `hasRole` ở bất kỳ đâu.
 
 ---
 
-## 5. TẦNG 4 — DANH TÍNH CHUẨN (phần tinh tế nhất)
+## 5. TẦNG 4 — DANH TÍNH CHUẨN
 
-### 5.1. Vấn đề: một người dùng, hai định danh
+### 5.1. Quy ước: user id toàn hệ thống là Keycloak `sub`
 
-| Định danh | Nguồn | Tính chất |
+| Định danh | Nguồn | Dùng ở đâu |
 | :--- | :--- | :--- |
-| Keycloak `sub` | claim `sub` trong JWT | **Có thể đổi** |
-| `users.id` | bảng `users` của identity-service | **Bất biến** |
+| Keycloak `sub` | claim `sub` trong JWT (Keycloak tự sinh khi tạo tài khoản) | **Mọi bảng nghiệp vụ**: work-service, workspace-service, notification-service, sự kiện outbox |
+| `users.id` | bảng `users` của identity-service | **Chỉ bên trong identity-service** (`user_roles`, `verification_tokens`…); `users.keycloak_id` nối sang `sub` |
 
-`UserService.getCurrentUser` **ghi đè `user.keycloakId`** khi email trùng khớp với một tài
-khoản Keycloak khác (dòng log: *"Linking new Keycloak ID…"*). Nên `keycloak_id` là mutable.
-**Một bảng phân quyền khóa theo id mutable sẽ âm thầm mất quyền khi id đó đổi.**
+Mỗi service lấy người gọi thẳng từ `sub` của JWT đã xác thực, **không gọi identity-service**:
+work-service `SecurityUtils.getCurrentUserId()`, workspace-service `CurrentUserResolver`,
+notification-service `NotificationController.me()`. Id nhận từ bên ngoài có thể là `users.id`
+(VD: kết quả tìm người dùng của identity) thì đổi sang `sub` trước khi ghi:
+`ProjectMemberServiceImpl.canonicalUserId()`, lời mời workspace lấy `keycloakId`, `createDefaultWorkspace`.
+Tra tên hàng loạt qua `POST /internal/users/batch` dùng `IdentityUsers.indexByAnyId` (identity trả `users.id`
+kèm `keycloakId`).
 
-→ Quy ước toàn hệ thống: **`workspace_members.user_id` luôn là `users.id`, không bao giờ là
-`sub`.**
+**Lịch sử:** work-service dùng `sub` từ đầu (V2 `authz_hardening` chuẩn hoá dữ liệu cũ); workspace-service từng dùng
+`users.id` nên `workspace_members` bị lẫn hai loại id (lời mời dự án tự thêm người vào workspace bằng `sub`).
+Migration workspace-service **V6 `unify_user_id_keycloak_sub`** đổi toàn bộ sang `sub` (gộp dòng trùng, giữ vai trò cao hơn).
 
-### 5.2. Vì sao phải resolve mỗi request
+### 5.2. Rủi ro đã biết: `sub` có thể đổi
 
-identity-service **đã** ghi attribute `user_id` lên Keycloak ở 4 vị trí
-(`UserService.java:81, 170, 202, 363`). Nhưng realm **chưa có protocol mapper** để đưa
-attribute đó vào token — kiểm chứng: `grep -c user_id infrastructure/keycloak/realm-export_08082026.json` → **0**.
+`UserService.getCurrentUser` **ghi đè `users.keycloak_id`** khi email trùng khớp một tài khoản Keycloak khác
+(log *"Linking new Keycloak ID…"*). Khi đó identity vẫn nhận ra người dùng, nhưng dữ liệu nghiệp vụ còn gắn với
+`sub` cũ nên họ mất quyền dự án / workspace. Tình huống: tạo lại tài khoản Keycloak cùng email (xoá volume
+`keycloak_data`, import lại realm, admin xoá rồi tạo lại), chuyển sang Keycloak khác (8088 ↔ 9998) mà dùng chung DB,
+hoặc đăng nhập Google tạo tài khoản Keycloak riêng thay vì liên kết. Xử lý khi gặp: đổi `sub` cũ → `sub` mới trong
+các bảng nghiệp vụ (cùng cách V6).
 
-Nên token thực tế **không có** claim `user_id`, và hệ thống phải đi đường vòng:
-
-```mermaid
-flowchart TD
-    A["Request kèm JWT"] --> B{"JWT có claim<br/>user_id không?"}
-    B -->|"Có"| C["Dùng luôn — 0 lời gọi mạng"]
-    B -->|"Không — hiện trạng"| D["Lấy sub"]
-    D --> E["Feign GET /internal/users/:sub"]
-    E --> F{"Kết quả"}
-    F -->|"200"| G["Trả users.id<br/>cache Redis 30 phút"]
-    F -->|"404"| H["403 — tài khoản chưa<br/>khởi tạo trong hệ thống"]
-    F -->|"Lỗi mạng"| I["403 — không kết nối được<br/>identity-service"]
-```
-
-| Service | Lớp phụ trách | Hành vi khi thất bại |
-| :--- | :--- | :--- |
-| workspace-service | `CurrentUserResolver` + `IdentityUserLookup` | **Fail closed** — `ForbiddenException` |
-| work-service | `CanonicalUserResolver` | Giữ nguyên id gốc; việc tra membership sau đó sẽ không khớp nên vẫn fail closed |
-
-### 5.3. Vì sao là 403 chứ không phải 401
-
-Khi resolver chạy thì **JWT đã được resource server xác thực xong**. Mọi thất bại ở tầng này
-vì thế **không bao giờ chữa được bằng refresh token**.
-
-Trả 401 sẽ kích hoạt nhánh silent-refresh ở [`api.js:143`](../frontend/src/api.js): interceptor
-tưởng token hết hạn → gọi `/auth/refresh` → **refresh thành công** (token vốn hợp lệ) →
-retry → lại 401. Nhiều request workspace chạy song song cùng dồn vào hàng đợi `isRefreshing`
-và sinh ra một loạt promise bị reject.
-
-`CurrentUserResolverTest` có assert `isNotInstanceOf(UnauthorizedException.class)` để khóa
-lại quy ước này.
-
-### 5.4. Hệ quả: tài khoản "mồ côi"
+### 5.3. Hệ quả: tài khoản "mồ côi"
 
 Tài khoản tồn tại trên Keycloak nhưng **không có hàng trong bảng `users`** sẽ đăng nhập được
 nhưng không dùng được gì. `UserService.getCurrentUser:194` **không** tự tạo hàng — nó throw
@@ -204,7 +180,7 @@ Ba phạm vi lồng nhau, và **mỗi phạm vi dùng một cơ chế hoàn toà
 
 ```
 Workspace  →  enum có thứ tự   + AOP guard (fail closed)   ← mới, nhất quán
-   └─ Team →  enum, kiểm tra tay trong controller           ← không có cơ chế khai báo
+   └─ [ĐÃ LOẠI BỎ] Team (Refactor kiến trúc phẳng 2 cấp: Workspace -> Project)
         └─ Project → ma trận quyền 3 bảng + AOP guard (fail OPEN)
 ```
 
@@ -228,7 +204,7 @@ public ResponseEntity<...> update(@PathVariable UUID workspaceId, ...)
 | Thao tác | Bậc tối thiểu |
 | :--- | :--- |
 | Xem workspace, xem danh sách thành viên | thành viên bất kỳ (kể cả GUEST) |
-| Tạo team / project trong workspace | `MEMBER` |
+| Tạo project trong workspace | `MEMBER` |
 | Thêm / xóa / đổi vai trò thành viên | `ADMIN` |
 | Sửa tên, mô tả workspace | `ADMIN` |
 | Xóa (soft) / phục hồi workspace | `OWNER` |
@@ -244,26 +220,17 @@ public ResponseEntity<...> update(@PathVariable UUID workspaceId, ...)
    cùng vượt qua, cùng xóa → workspace về **zero OWNER** và không ai còn quyền sửa vai trò
    cho ai nữa.
 
-### 6.2. Team — kiểm tra tay, không có cơ chế khai báo
+### 6.2. Team (ĐÃ LOẠI BỎ TRONG REFACTOR KIẾN TRÚC PHẲNG)
 
-Nguồn: `work-service/controller/TeamController.java`
-
-`TeamRole` chỉ có `LEADER`, `MEMBER`, `VIEWER`. **Không có annotation nào** — toàn bộ kiểm
-tra nằm trực tiếp trong thân method controller qua các helper `isTeamOwner`, `isTeamLeader`:
-
-| Thao tác | Điều kiện |
-| :--- | :--- |
-| Xem team, xem danh sách thành viên | bất kỳ ai đã đăng nhập |
-| Sửa thông tin team | Owner **hoặc** Leader |
-| Thêm / xóa thành viên | Owner **hoặc** Leader |
-| Đổi vai trò thành viên | **chỉ** Leader (Owner không đủ) |
-| Xóa team | **chỉ** Owner |
-| Rời team | thành viên bất kỳ; Owner bị từ chối |
-
-Team mang **hai nguồn sự thật**: cột `teams.owner_id` *và* vai trò `LEADER` trong
-`team_members`. Việc hòa giải hai nguồn này là lý do tồn tại của ~6 helper trong controller.
-Workspace cố ý **không** lặp lại thiết kế đó (không có cột `owner_id`; hàng membership là
-nguồn duy nhất).
+> [!IMPORTANT]
+> **Tầng Team đã bị loại bỏ hoàn toàn** khỏi mã nguồn và cơ sở dữ liệu (`Flyway V8__drop_team_hierarchy.sql`).
+> 
+> **Lý do loại bỏ:**
+> 1. **Hai nguồn sự thật xung đột**: `teams.owner_id` và `team_members.role = 'LEADER'` gây xung đột logic.
+> 2. **Không có cơ chế khai báo nhất quán**: Code kiểm tra thủ công trong controller, thiếu bảo vệ "Leader cuối cùng" (`zero leader`).
+> 3. **Thừa thãi cấp bậc**: Với các tổ chức vừa và nhỏ, cấp Workspace $\rightarrow$ Project $\rightarrow$ Tasks đem lại trải nghiệm tinh gọn, trực tiếp tương tự Jira Cloud và Linear.
+>
+> Toàn bộ logic phân quyền hiện nay tập trung vào 2 tầng: **WorkspaceRole** (OWNER, ADMIN, MEMBER, GUEST) và **Project Permission Matrix** (RoleAssignment + PermissionScheme).
 
 ### 6.3. Project — ma trận quyền động 3 bảng
 
@@ -362,19 +329,16 @@ sequenceDiagram
     WS->>WS: Trích workspaceId từ @PathVariable theo tên
     Note over WS: Không trích được → 403 (FAIL CLOSED)
 
-    WS->>WS: CurrentUserResolver: sub → users.id
-    WS->>ID: GET /internal/users/{sub}
-    ID-->>WS: users.id
-    Note over WS: Cache Redis 30' · 404 → 403
+    WS->>WS: CurrentUserResolver: lấy sub từ JWT (không gọi identity)
 
-    WS->>DB: findByWorkspaceIdAndUserId(ws, users.id)
+    WS->>DB: findByWorkspaceIdAndUserId(ws, sub)
     DB-->>WS: role = ADMIN
     WS->>WS: role.atLeast(ADMIN)?
     Note over WS: Không phải thành viên → 404 (không rò rỉ)<br/>Là thành viên nhưng thiếu bậc → 403
 
     WS->>WS: Service kiểm tra lại: ADMIN không được cấp OWNER
     WS->>ID: GET /internal/users/by-identifier
-    ID-->>WS: users.id của người được thêm
+    ID-->>WS: keycloakId (sub) của người được mời
     WS->>DB: INSERT workspace_members
     WS-->>FE: 201 Created
 ```
@@ -396,7 +360,7 @@ Liệt kê thẳng để tiện bảo vệ và lên kế hoạch xử lý.
 | 2 | **Chiến lược dự phòng "lấy UUID đầu tiên"** trong cùng guard đó: trên method nhận `workItemId` nó sẽ kiểm tra quyền trên **sai thực thể**. | `ProjectPermissionGuard.java` | 🔴 Cao |
 | 3 | **Mọi user đã đăng nhập đều có `PROJECT_VIEW` ngầm** trên *mọi* project, kể cả project thuộc workspace mình không tham gia. | `ProjectMemberServiceImpl:57-60` | 🟠 Vừa |
 | 4 | **Team không có bảo vệ "leader cuối cùng"** — một LEADER không phải owner rời nhóm tự do, team có thể về zero leader, lúc đó `updateMemberRole` (chỉ leader gọi được) thành bất khả đạt. Workspace đã xử lý, Team thì chưa. | `TeamController.leaveTeam` | 🟠 Vừa |
-| 5 | **Thiếu protocol mapper `user_id`** — khiến mỗi phiên tốn một lời gọi Feign để resolve danh tính. Thêm mapper vào realm là đủ, không cần sửa code. | `infrastructure/keycloak/realm-export_08082026.json` | 🟡 Thấp |
+| 5 | **`sub` có thể đổi** khi identity nối lại tài khoản theo email (§5.2) → dữ liệu nghiệp vụ gắn `sub` cũ. (Identity từng ghi attribute `user_id` lên Keycloak ở mỗi lần đăng ký / đăng nhập / gọi `/users/me`; realm không khai báo nên Keycloak 24 bỏ qua, không service nào đọc — đã gỡ.) | `identity-service/service/UserService.getCurrentUser` | 🟡 Thấp |
 | 6 | **`getUserAliasIds` vẫn còn** trong `TeamController` — bắn một lời gọi Feign cho *mỗi* lần kiểm tra quyền (một thao tác xóa thành viên tốn 4+ round-trip). Hệ quả của việc `team_members.user_id` có thể đang lưu lẫn lộn `sub` và `users.id`. | `TeamController:534` | 🟡 Thấp |
 | 7 | **Không có JIT provisioning** cho đăng nhập thường → tài khoản chỉ có trên Keycloak bị kẹt vĩnh viễn (xem §5.4). | `UserService.getCurrentUser:194` | 🟠 Vừa |
 | 8 | **8/10 `PermissionKey` chưa được thực thi** ở bất kỳ endpoint nào — mới chỉ dùng để gating UI. | `work-service/controller/` | 🟡 Thấp |
@@ -416,8 +380,8 @@ Liệt kê thẳng để tiện bảo vệ và lên kế hoạch xử lý.
 | Đường public của gateway, đọc token từ cookie | `api-gateway/security/SecurityConfig.java`, `CookieOrBearerTokenConverter.java` |
 | Role Keycloak → quyền Spring | `api-gateway/security/KeycloakJwtConverter.java` |
 | Bảo vệ endpoint quản trị hệ thống | `identity-service/controller/UserController.java` (`@PreAuthorize`) |
-| Đổi `sub` → `users.id` | `workspace-service/security/CurrentUserResolver.java`, `IdentityUserLookup.java` |
-| Tương tự phía work-service | `work-service/security/CanonicalUserResolver.java` |
+| Lấy user id (sub) của người gọi | `work-service/security/SecurityUtils.java`, `workspace-service/security/CurrentUserResolver.java` |
+| Đổi id bất kỳ → sub trước khi ghi | `work-service/.../ProjectMemberServiceImpl.canonicalUserId()`, `workspace-service/.../WorkspaceServiceImpl.createDefaultWorkspace` |
 | Thang bậc vai trò workspace | `workspace-service/enums/WorkspaceRole.java` |
 | Guard workspace (fail closed) | `workspace-service/security/WorkspaceRoleGuard.java` |
 | Bất biến "luôn còn một OWNER" | `workspace-service/service/impl/WorkspaceMemberServiceImpl.java` (`assertNotLastOwner`) |

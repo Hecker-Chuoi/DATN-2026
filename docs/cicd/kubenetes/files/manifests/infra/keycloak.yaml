@@ -1,0 +1,93 @@
+# Keycloak 24 – chế độ production ("start"), đứng sau Traefik (TLS kết thúc ở Traefik).
+# Realm import từ ConfigMap "keycloak-realm" (Jenkins tạo từ infrastructure/keycloak/realm-export_08082026.json).
+# Realm chỉ được import ở lần chạy đầu; realm đã có trong DB thì Keycloak bỏ qua.
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+spec:
+  selector:
+    app: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate          # chỉ 1 bản → không để 2 Keycloak cùng chạy migrate DB lúc nâng cấp
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+        tier: infra
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:24.0.1
+          args: ["start", "--import-realm"]
+          env:
+            - name: AUTH_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: AUTH_DOMAIN } }
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: jdbc:postgresql://keycloak-db:5432/keycloak
+            - name: KC_DB_USERNAME
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_DB_USER } }
+            - name: KC_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_DB_PASSWORD } }
+            - name: KEYCLOAK_ADMIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_ADMIN_USER } }
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_ADMIN_PASSWORD } }
+            # $(AUTH_DOMAIN) = Kubernetes tự thay bằng biến AUTH_DOMAIN khai báo phía trên
+            - name: KC_HOSTNAME
+              value: "$(AUTH_DOMAIN)"
+            - name: KC_HOSTNAME_URL
+              value: "https://$(AUTH_DOMAIN)"
+            - name: KC_HOSTNAME_ADMIN_URL
+              value: "https://$(AUTH_DOMAIN)"
+            - name: KC_HOSTNAME_STRICT_BACKCHANNEL
+              value: "false"
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: realm
+              mountPath: /opt/keycloak/data/import/realm.json
+              subPath: realm.json
+              readOnly: true
+          startupProbe:
+            httpGet: { path: /health/started, port: 8080 }
+            periodSeconds: 5
+            failureThreshold: 60     # tối đa 5 phút (lần đầu "start" phải build + import realm)
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/live, port: 8080 }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits: { memory: 1Gi }
+      volumes:
+        - name: realm
+          configMap:
+            name: keycloak-realm

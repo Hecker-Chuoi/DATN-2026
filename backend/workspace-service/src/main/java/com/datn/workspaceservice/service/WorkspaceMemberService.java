@@ -65,4 +65,10 @@ public interface WorkspaceMemberService {
     void removeMember(UUID workspaceId, UUID targetUserId, UUID currentUserId);
 
     void leaveWorkspace(UUID workspaceId, UUID currentUserId);
+
+    /**
+     * Tự động đảm bảo user có mặt trong workspace với vai trò tối thiểu (Smart Auto-Cascade).
+     * Idempotent: nếu user đã là thành viên thì không làm gì.
+     */
+    void ensureMember(UUID workspaceId, UUID userId, WorkspaceRole role, UUID invitedBy);
 }

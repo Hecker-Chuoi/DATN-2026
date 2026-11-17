@@ -9,7 +9,6 @@
  */
 export {
   projectApi as workProjectApi,
-  teamApi as workTeamApi,
   workItemApi,
   workflowApi,
   boardApi as workBoardApi,

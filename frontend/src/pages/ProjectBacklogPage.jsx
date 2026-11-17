@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -17,7 +17,8 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { Plus } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import { useProjectContext } from '../context/ProjectContext.jsx';
@@ -30,23 +31,35 @@ import SprintAccordion from '../components/backlog/SprintAccordion.jsx';
 import BacklogIssueRow from '../components/backlog/BacklogIssueRow.jsx';
 import SprintFormModal from '../components/sprints/SprintFormModal.jsx';
 import CompleteSprintModal from '../components/sprints/CompleteSprintModal.jsx';
+import ConfirmModal from '../components/modals/ConfirmModal.jsx';
 
 const EMPTY_FILTERS = { q: '', epicId: null, assigneeIds: [], onlyMine: false, recentlyUpdated: false };
 
 /** Khoa container: "backlog" hoac "sprint:<id>". */
 const keyOf = (g) => (g.sprintId == null ? 'backlog' : `sprint:${g.sprintId}`);
 
+/** Vung tha cua khu "da hoan tat": chi de chan tha nham, khong bao gio nhan cong viec. */
+const CLOSED_AREA_ID = 'closed-area';
+
 export default function ProjectBacklogPage() {
-  const { projectId, project, members, canManageSprint, isAdmin, openItemDetail, bumpRefresh } =
+  const { projectId, project, members, canManageSprint, isAdmin, openItemDetail, bumpRefresh, refreshKey } =
     useProjectContext();
+  const navigate = useNavigate();
 
   const backlog = useProjectBacklog(projectId);
   const { data, loading, error, busy, setData, reload } = backlog;
+
+  // Dong bo lai khi cong viec duoc tao/sua o noi khac (modal chi tiet, doi sprint, tao nhanh...).
+  useEffect(() => {
+    if (refreshKey) reload({ silent: true });
+  }, [refreshKey, reload]);
 
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [activeItem, setActiveItem] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [startTarget, setStartTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [completeTarget, setCompleteTarget] = useState(null);
 
   const canManage = canManageSprint || isAdmin;
@@ -64,11 +77,34 @@ export default function ProjectBacklogPage() {
   }, [data]);
 
   const visibleGroups = useMemo(
-    () => groups.map((g) => ({ ...g, items: (g.items || []).filter((i) => matches(i, filters, currentUserId)) })),
+    () => groups.map((g) => filterGroup(g, filters, currentUserId)),
     [groups, filters, currentUserId]
   );
 
+  // Chu ky / giai doan da hoan tat: giu lai de xem (BR-B08), chi doc, khong tham gia keo tha.
+  const closedGroups = useMemo(
+    () => (data?.closedSprints || []).map((g) => filterGroup(g, filters, currentUserId)),
+    [data, filters, currentUserId]
+  );
+
   const types = project?.workItemTypes || [];
+
+  // Chu ky moi mac dinh bat dau SAU moc cuoi cung cua cac chu ky dang co, de no xep cuoi
+  // ke hoach thay vi chen len truoc (thu tu bat dau = ngay bat dau du kien, BR-S15).
+  const suggestedStartDate = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let latest = null;
+    for (const s of data?.sprints || []) {
+      const raw = s.endDate || s.startDate;
+      const d = raw ? new Date(raw) : null;
+      if (d && !Number.isNaN(d.getTime()) && (!latest || d > latest)) latest = d;
+    }
+    if (!latest || latest < today) return today;
+    const next = new Date(latest);
+    next.setDate(next.getDate() + 1);
+    return next;
+  }, [data]);
 
   // ───────────────────────── Kéo thả ─────────────────────────
 
@@ -91,6 +127,10 @@ export default function ProjectBacklogPage() {
   const handleDragEnd = async ({ active, over }) => {
     setActiveItem(null);
     if (!over) return;
+    if (over.id === CLOSED_AREA_ID) {
+      toast.error('Chu kỳ / giai đoạn đã hoàn tất chỉ để xem lại, không thể thêm công việc.');
+      return;
+    }
 
     const fromKey = findGroupKeyByItem(active.id);
     if (!fromKey) return;
@@ -114,11 +154,11 @@ export default function ProjectBacklogPage() {
 
     // Sub-task luon di theo Sprint cua cong viec cha - chan ngay tren UI.
     if (dragged.isSubtask || dragged.hierarchyLevel === -1) {
-      toast.error('Sub-task đi theo Sprint của công việc cha, không thể kéo riêng.');
+      toast.error('Công việc con đi theo chu kỳ của công việc cha, không thể kéo riêng.');
       return;
     }
     if (!canManage) {
-      toast.error('Bạn không có quyền thay đổi Sprint.');
+      toast.error('Bạn không có quyền thay đổi chu kỳ.');
       return;
     }
 
@@ -156,7 +196,7 @@ export default function ProjectBacklogPage() {
       applyGroups(revertMove(result.containers, result.snapshot, keyOf));
       console.warn('Không di chuyển được công việc:', err);
       if (err?.status === 409) {
-        toast.error('Dữ liệu vừa được người khác thay đổi. Đang tải lại Backlog.');
+        toast.error('Dữ liệu vừa được người khác thay đổi. Đang tải lại kho công việc.');
         reload({ silent: true });
       }
     }
@@ -179,23 +219,74 @@ export default function ProjectBacklogPage() {
     bumpRefresh?.();
   };
 
-  const suggestedName = `Sprint ${(data?.sprints?.length || 0) + 1}`;
+  // Dem ca chu ky da hoan tat, neu khong sau khi dong "Chu kỳ 1" se goi y trung ten.
+  const suggestedName = `Chu kỳ ${(data?.sprints?.length || 0) + (data?.closedSprints?.length || 0) + 1}`;
+
+  const openSprintReport = (g) =>
+    navigate(`../reports?tab=progress&view=burndown&sprint=${g.sprintId}`);
+
+  /**
+   * Ly do nut "Bat dau" bi khoa, de hien tooltip. Quyet dinh khoa/mo van do backend (canStart);
+   * o day chi giai thich. Backend tra cac Sprint FUTURE theo dung thu tu ke hoach (BR-S15),
+   * nen Sprint FUTURE dau tien chinh la Sprint duy nhat duoc bat dau tiep.
+   */
+  const startBlockedReason = (group) => {
+    if (group.state !== 'FUTURE' || group.canStart) return null;
+    const sprintGroups = data?.sprints || [];
+    const active = sprintGroups.find((s) => s.state === 'ACTIVE');
+    if (active) return `Đang có "${active.name}" chạy — hãy hoàn tất nó trước.`;
+    const next = sprintGroups.find((s) => s.state === 'FUTURE');
+    if (next && next.sprintId !== group.sprintId) {
+      // Khoi dung dau dang rong thi khong the bat dau duoc -> chi cach go.
+      if (!next.itemCount) {
+        return `"${next.name}" đứng trước nhưng chưa có công việc — hãy kéo việc vào, dời ngày bắt đầu của nó ra sau (bút chì) hoặc xóa nó (thùng rác).`;
+      }
+      return `Cần bắt đầu "${next.name}" trước — các chu kỳ/giai đoạn được bắt đầu lần lượt theo ngày bắt đầu dự kiến.`;
+    }
+    if (!group.itemCount) return 'Chưa có công việc nào — hãy kéo công việc vào trước.';
+    return null;
+  };
 
   // ───────────────────────── Render ─────────────────────────
 
   if (loading) {
-    return <div style={centered}>Đang tải Backlog...</div>;
+    return <div style={centered}>Đang tải kho công việc & kế hoạch...</div>;
   }
   if (error) {
     return (
       <div style={centered}>
-        Không tải được Backlog.{' '}
+        Không tải được kho công việc & kế hoạch.{' '}
         <button onClick={() => reload()} style={linkBtn}>Thử lại</button>
       </div>
     );
   }
 
-  const hasAnySprint = (data?.sprints || []).length > 0;
+  const hasAnySprint = (data?.sprints || []).length + (data?.closedSprints || []).length > 0;
+
+  const renderGroup = (group) => (
+    <DroppableGroup key={keyOf(group)} group={group}>
+      {(isOver, droppableProps) => (
+        <SprintAccordion
+          group={group}
+          canManageSprint={canManage}
+          types={types}
+          busy={busy}
+          startBlockedReason={startBlockedReason(group)}
+          isOver={isOver}
+          droppableProps={droppableProps}
+          onSelectItem={openItemDetail}
+          onStart={(g) => setStartTarget(g)}
+          onEdit={(g) => setEditTarget({ ...g, id: g.sprintId })}
+          onDelete={(g) => setDeleteTarget(g)}
+          onComplete={(g) => setCompleteTarget(g)}
+          onQuickCreate={handleQuickCreate}
+          renderRow={(item, _g, isChild) => (
+            <SortableRow key={item.id} item={item} onSelect={openItemDetail} isChild={isChild} />
+          )}
+        />
+      )}
+    </DroppableGroup>
+  );
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px 40px 24px' }}>
@@ -215,14 +306,14 @@ export default function ProjectBacklogPage() {
         />
         {canManage && (
           <button onClick={() => setCreateOpen(true)} style={createSprintBtn}>
-            <Plus size={14} /> Tạo Sprint
+            <Plus size={14} /> Tạo chu kỳ
           </button>
         )}
       </div>
 
       {!hasAnySprint && (
         <div style={emptyHint}>
-          Dự án chưa có Sprint nào. {canManage ? 'Hãy tạo Sprint đầu tiên để bắt đầu lập kế hoạch.' : ''}
+          Dự án chưa có chu kỳ nào. {canManage ? 'Hãy tạo chu kỳ đầu tiên để bắt đầu lập kế hoạch.' : ''}
         </div>
       )}
 
@@ -234,27 +325,16 @@ export default function ProjectBacklogPage() {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveItem(null)}
       >
-        {visibleGroups.map((group) => (
-          <DroppableGroup key={keyOf(group)} group={group}>
-            {(isOver, droppableProps) => (
-              <SprintAccordion
-                group={group}
-                canManageSprint={canManage}
-                types={types}
-                busy={busy}
-                isOver={isOver}
-                droppableProps={droppableProps}
-                onSelectItem={openItemDetail}
-                onStart={(g) => setStartTarget(g)}
-                onComplete={(g) => setCompleteTarget(g)}
-                onQuickCreate={handleQuickCreate}
-                renderRow={(item) => (
-                  <SortableRow key={item.id} item={item} onSelect={openItemDetail} />
-                )}
-              />
-            )}
-          </DroppableGroup>
-        ))}
+        {/* Thu tu: dang chay -> du kien -> da hoan tat (luu tru) -> Backlog (BR-B02, BR-B08) */}
+        {visibleGroups.filter((g) => g.sprintId != null).map(renderGroup)}
+
+        <ClosedSprintsSection
+          groups={closedGroups}
+          onSelectItem={openItemDetail}
+          onOpenReport={openSprintReport}
+        />
+
+        {visibleGroups.filter((g) => g.sprintId == null).map(renderGroup)}
 
         <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.18,0.67,0.6,1.22)' }}>
           {activeItem ? (
@@ -270,12 +350,58 @@ export default function ProjectBacklogPage() {
         isOpen={createOpen}
         mode="create"
         suggestedName={suggestedName}
+        suggestedStartDate={suggestedStartDate}
         loading={busy}
         onClose={() => setCreateOpen(false)}
         onSubmit={async (payload) => {
           await backlog.createSprint(payload);
           setCreateOpen(false);
-          toast.success('Đã tạo Sprint');
+          toast.success('Đã tạo chu kỳ');
+        }}
+      />
+
+      <SprintFormModal
+        isOpen={!!editTarget}
+        mode="edit"
+        sprint={editTarget}
+        loading={busy}
+        onClose={() => setEditTarget(null)}
+        onSubmit={async (payload) => {
+          await backlog.updateSprint(editTarget.sprintId, payload);
+          setEditTarget(null);
+          toast.success('Đã cập nhật chu kỳ');
+        }}
+      />
+
+      {/* Chi xoa duoc chu ky Du kien (BR-S04); cong viec ben trong tro ve Kho viec (BR-S05). */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        type="danger"
+        title={`Xóa ${sprintTerm(deleteTarget)}`}
+        message={
+          deleteTarget ? (
+            <>
+              Xóa <b>{deleteTarget.name}</b>?{' '}
+              {deleteTarget.itemCount
+                ? <>{deleteTarget.itemCount} công việc bên trong sẽ <b>trở về Kho việc</b>, không bị xóa.</>
+                : <>{capitalize(sprintTerm(deleteTarget))} này chưa có công việc nào.</>}
+            </>
+          ) : null
+        }
+        confirmText="Xóa"
+        cancelText="Hủy"
+        loading={busy}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          try {
+            await backlog.deleteSprint(deleteTarget.sprintId);
+            toast.success(`Đã xóa ${sprintTerm(deleteTarget)}`);
+            setDeleteTarget(null);
+            bumpRefresh?.();
+          } catch (err) {
+            // Interceptor da hien toast loi; giu hop thoai de nguoi dung tu dong.
+            console.warn('Không xóa được chu kỳ:', err);
+          }
         }}
       />
 
@@ -291,7 +417,7 @@ export default function ProjectBacklogPage() {
         onSubmit={async (payload) => {
           await backlog.startSprint(startTarget.sprintId, payload);
           setStartTarget(null);
-          toast.success('Sprint đã bắt đầu');
+          toast.success('Chu kỳ đã bắt đầu');
         }}
       />
 
@@ -305,10 +431,66 @@ export default function ProjectBacklogPage() {
           await backlog.completeSprint(completeTarget.sprintId, payload);
           setCompleteTarget(null);
           bumpRefresh?.();
-          toast.success('Đã hoàn tất Sprint');
+          toast.success('Đã hoàn tất chu kỳ');
         }}
       />
     </div>
+  );
+}
+
+/** "giai đoạn" hay "chu kỳ" theo tên, giống cách SprintAccordion đặt nhãn nút. */
+function sprintTerm(group) {
+  return group?.name?.toLowerCase()?.includes('giai đoạn') ? 'giai đoạn' : 'chu kỳ';
+}
+
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+/**
+ * Khu luu tru cac chu ky / giai doan da hoan tat (BR-B08), nam ngay tren khoi Backlog.
+ * Khong xoa di sau khi hoan tat: cong viec DONE van giu sprintId cua chung va la nguon cua
+ * Bao cao (tien do, nang suat, dong gop). Moi khoi mac dinh thu gon de trang gon.
+ */
+function ClosedSprintsSection({ groups, onSelectItem, onOpenReport }) {
+  const [open, setOpen] = useState(true);
+  // Dang ky vung tha de tha nham vao day thi bi chan (xem handleDragEnd), khong roi sang khoi ben canh.
+  const { setNodeRef } = useDroppable({ id: CLOSED_AREA_ID });
+  if (!groups.length) return null;
+
+  const phases = groups.filter((g) => sprintTerm(g) === 'giai đoạn').length;
+  const title =
+    phases === groups.length ? 'Giai đoạn đã hoàn tất'
+      : phases === 0 ? 'Chu kỳ đã hoàn tất'
+        : 'Chu kỳ / giai đoạn đã hoàn tất';
+
+  return (
+    <section ref={setNodeRef} style={{ marginBottom: 14 }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={closedHeaderBtn} aria-expanded={open}>
+        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        <CheckCircle2 size={15} color="#00875A" />
+        <span style={{ fontWeight: 700, fontSize: 14, color: SURFACE.text }}>{title}</span>
+        <span style={{ fontSize: 12, color: SURFACE.textMuted }}>({groups.length})</span>
+        <span style={{ fontSize: 12, color: SURFACE.textLight, fontWeight: 400 }}>
+          — chỉ để xem lại; công việc và số liệu được giữ nguyên cho Báo cáo
+        </span>
+      </button>
+      {open && (
+        <div style={{ marginLeft: 7, paddingLeft: 12, borderLeft: '2px solid #ABF5D1' }}>
+          {groups.map((g) => (
+            <SprintAccordion
+              key={g.sprintId}
+              group={g}
+              readOnly
+              defaultOpen={false}
+              canManageSprint={false}
+              onSelectItem={onSelectItem}
+              onOpenReport={onOpenReport}
+            />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -324,7 +506,7 @@ function DroppableGroup({ group, children }) {
 }
 
 /** Boc useSortable quanh hang trinh bay, giu logic keo tha tach khoi phan hien thi. */
-function SortableRow({ item, onSelect }) {
+function SortableRow({ item, onSelect, isChild }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
   });
@@ -339,10 +521,19 @@ function SortableRow({ item, onSelect }) {
       <BacklogIssueRow
         item={item}
         onSelect={onSelect}
+        isChild={isChild}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
     </div>
   );
+}
+
+/** Bo hang Epic va ap bo loc (BR-B05: chi thu hep hien thi). */
+function filterGroup(g, f, currentUserId) {
+  return {
+    ...g,
+    items: (g.items || []).filter((i) => i.hierarchyLevel !== 1).filter((i) => matches(i, f, currentUserId)),
+  };
 }
 
 function matches(item, f, currentUserId) {
@@ -367,6 +558,11 @@ const linkBtn = { border: 'none', background: 'transparent', color: '#2563EB', c
 const createSprintBtn = {
   display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6,
   border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+};
+const closedHeaderBtn = {
+  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', width: '100%',
+  padding: '6px 2px', marginBottom: 8, border: 'none', background: 'transparent',
+  color: SURFACE.textMuted, cursor: 'pointer', textAlign: 'left',
 };
 const emptyHint = {
   padding: '12px 14px', borderRadius: 8, backgroundColor: '#EFF6FF',

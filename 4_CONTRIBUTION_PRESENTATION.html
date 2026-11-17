@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Báo cáo Ghi nhận Đóng góp · DATN-2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap">
+  <style>
+    /* ─── MÀU & CHỮ (giống bộ slide Dự án mẫu) ─── */
+    :root, [data-theme="light"] {
+      --bg-base: #F1F5F9;
+      --bg-card: #FFFFFF;
+      --bg-soft: #F8FAFC;
+      --border: #E2E8F0;
+      --grid-line: rgba(148, 163, 184, 0.09);
+
+      --text-main: #0F172A;
+      --text-muted: #334155;
+      --text-dim: #64748B;
+
+      --blue: #2563EB;
+      --blue-soft: #EFF6FF;
+      --violet: #7C3AED;
+      --violet-soft: #F5F3FF;
+      --green: #059669;
+      --green-soft: #ECFDF5;
+      --amber: #B45309;
+      --amber-soft: #FFFBEB;
+      --red: #DC2626;
+      --red-soft: #FEF2F2;
+      --teal: #0F766E;
+      --teal-soft: #F0FDFA;
+
+      --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+      --font-body: "Be Vietnam Pro", system-ui, sans-serif;
+      --shadow-deck: 0 20px 45px -12px rgba(15, 23, 42, 0.08), 0 0 0 1px #E2E8F0;
+      --radius: 14px;
+    }
+    [data-theme="dark"] {
+      --bg-base: #080D1A;
+      --bg-card: #0F172A;
+      --bg-soft: #162038;
+      --border: #1E293B;
+      --grid-line: rgba(59, 130, 246, 0.05);
+
+      --text-main: #F8FAFC;
+      --text-muted: #CBD5E1;
+      --text-dim: #94A3B8;
+
+      --blue: #60A5FA;
+      --blue-soft: rgba(96, 165, 250, 0.14);
+      --violet: #A78BFA;
+      --violet-soft: rgba(167, 139, 250, 0.14);
+      --green: #34D399;
+      --green-soft: rgba(52, 211, 153, 0.14);
+      --amber: #FBBF24;
+      --amber-soft: rgba(251, 191, 36, 0.13);
+      --red: #F87171;
+      --red-soft: rgba(248, 113, 113, 0.14);
+      --teal: #2DD4BF;
+      --teal-soft: rgba(45, 212, 191, 0.13);
+
+      --shadow-deck: 0 25px 60px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px var(--border);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: var(--bg-base); font-family: var(--font-body); color: var(--text-main); }
+
+    /* ─── KHUNG 16:9 TỰ CO GIÃN ─── */
+    .stage { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px 16px 80px; }
+    .deck { width: 1280px; height: 720px; position: relative; flex-shrink: 0; transform-origin: center center; }
+    .slide {
+      position: absolute; inset: 0; display: none; flex-direction: column;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+      box-shadow: var(--shadow-deck); padding: 36px 56px 32px; overflow: hidden;
+      background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+    .slide.active { display: flex; animation: slideIn .24s cubic-bezier(.16, 1, .3, 1) forwards; }
+    @keyframes slideIn { from { opacity: .4; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .speaker-note { display: none; }
+
+    /* ─── CHỮ ─── */
+    h1, h2, h3 { font-family: var(--font-display); line-height: 1.2; letter-spacing: -0.02em; color: var(--text-main); }
+    h1 { font-size: 56px; font-weight: 800; line-height: 1.1; }
+    h2 { font-size: 32px; font-weight: 700; margin-bottom: 6px; }
+    h3 { font-size: 18.5px; font-weight: 700; }
+    p, li { font-size: 16.5px; line-height: 1.5; color: var(--text-muted); }
+    b, strong { color: var(--text-main); font-weight: 700; }
+    .lead { font-size: 18px; color: var(--text-muted); max-width: 1060px; }
+    .small { font-size: 14px; color: var(--text-dim); line-height: 1.5; }
+
+    .slide-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    .eyebrow { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+    .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .core .eyebrow { color: var(--violet); }
+    .show .eyebrow { color: var(--teal); }
+    .use .eyebrow  { color: var(--blue); }
+
+    /* Trang ít chữ: phóng to để dễ đọc khi chiếu */
+    .slide.big h2 { font-size: 36px; }
+    .slide.big .lead { font-size: 20px; }
+    .slide.big table { font-size: 18.5px; }
+    .slide.big th { font-size: 13.5px; padding: 12px 20px; }
+    .slide.big td { padding: 14px 20px; }
+    .slide.big .card h3 { font-size: 21px; }
+    .slide.big .card p, .slide.big .card ul li { font-size: 18px; }
+    .slide.big .flow .step { padding: 18px 20px; }
+    .slide.big .flow .step h3 { font-size: 21px; }
+    .slide.big .usage .u { padding: 28px 24px; gap: 12px; }
+    .slide.big .usage .u h3 { font-size: 22px; }
+    .slide.big .usage .u .small { font-size: 16.5px; }
+    .slide.big .tl-text { font-size: 19px; }
+    .slide.big .counter .box .v { font-size: 34px; }
+    .slide.big .counter .box .l { font-size: 15px; }
+    .slide.big .callout { font-size: 18px; }
+    .slide.big .tl-item { padding: 10px 0; }
+    /* Căn giữa phần nội dung theo chiều dọc khi trang còn trống */
+    .slide.big > .title-block { margin-bottom: 0; padding-bottom: 18px; }
+    .slide.big > .title-block + * { margin-top: auto; }
+    .slide.big > :nth-last-child(2) { margin-bottom: auto; }
+
+    /* Phần trọng tâm (đánh giá): dải màu bên trái + nhãn "Trọng tâm" */
+    .slide.core::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: linear-gradient(180deg, var(--violet), var(--blue)); }
+    .eyebrow-wrap { display: inline-flex; align-items: center; gap: 12px; }
+    .core-pill { font-size: 12px; font-weight: 800; letter-spacing: .04em; color: #fff; background: var(--violet); padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+    .core-card ul li { font-size: 16.5px; line-height: 1.55; }
+    .core-card ul { gap: 9px; }
+    .core-card { border: 1.5px solid color-mix(in srgb, var(--violet) 35%, var(--border)); background: linear-gradient(180deg, var(--violet-soft), var(--bg-card) 38%); }
+    .core-k { font-family: var(--font-display); font-size: 26px; font-weight: 800; color: var(--violet); line-height: 1; }
+    .crit { display: grid; gap: 2px; padding: 8px 10px; border-radius: 9px; background: var(--bg-card); border: 1px solid var(--border); }
+    .crit b { font-size: 15.5px; }
+    .crit span { font-size: 14.5px; color: var(--text-muted); line-height: 1.45; }
+    .slide-num { font-size: 13.5px; font-weight: 700; color: var(--text-dim); background: var(--bg-soft); padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+    .title-block { margin-bottom: 16px; }
+
+    /* ─── KHỐI DÙNG CHUNG ─── */
+    .body { flex: 1; display: grid; gap: 16px; min-height: 0; }
+    .cols-2 { grid-template-columns: 1fr 1fr; }
+    .cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 9px; }
+    .card.soft { background: var(--bg-soft); }
+    .card .icon { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; font-size: 21px; flex-shrink: 0; }
+    .card ul { padding-left: 20px; display: grid; gap: 5px; }
+    .card ul li { font-size: 15.5px; }
+    .tag { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+
+    .c-blue   { color: var(--blue);   background: var(--blue-soft); }
+    .c-violet { color: var(--violet); background: var(--violet-soft); }
+    .c-green  { color: var(--green);  background: var(--green-soft); }
+    .c-amber  { color: var(--amber);  background: var(--amber-soft); }
+    .c-red    { color: var(--red);    background: var(--red-soft); }
+    .c-teal   { color: var(--teal);   background: var(--teal-soft); }
+    .top-blue   { border-top: 4px solid var(--blue); }
+    .top-violet { border-top: 4px solid var(--violet); }
+    .top-green  { border-top: 4px solid var(--green); }
+    .top-amber  { border-top: 4px solid var(--amber); }
+    .top-teal   { border-top: 4px solid var(--teal); }
+
+    .callout { border-radius: 12px; padding: 12px 18px; font-size: 16px; line-height: 1.5; display: flex; gap: 12px; align-items: flex-start; border: 1px solid transparent; }
+    .callout .ci { font-size: 19px; line-height: 1.25; }
+    .callout.info { background: var(--blue-soft);  color: var(--text-main); border-color: color-mix(in srgb, var(--blue) 25%, transparent); }
+    .callout.warn { background: var(--amber-soft); color: var(--text-main); border-color: color-mix(in srgb, var(--amber) 25%, transparent); }
+    .callout.ok   { background: var(--green-soft); color: var(--text-main); border-color: color-mix(in srgb, var(--green) 25%, transparent); }
+
+    /* Bảng */
+    table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 16.5px; }
+    th { text-align: left; font-weight: 700; color: var(--text-dim); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; padding: 11px 16px; background: var(--bg-soft); border-bottom: 1px solid var(--border); }
+    td { padding: 13px 16px; border-bottom: 1px solid var(--border); color: var(--text-muted); vertical-align: middle; line-height: 1.45; }
+    tr:last-child td { border-bottom: none; }
+    .compact table { font-size: 15.5px; }
+    .compact th { padding: 9px 14px; }
+    .compact td { padding: 9px 14px; }
+    .nowrap { white-space: nowrap; }
+    .table-wrap { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg-card); }
+    .num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+    th.num { text-align: right; }
+    .plus  { color: var(--green); font-weight: 700; }
+    .minus { color: var(--red); font-weight: 700; }
+    .who { font-weight: 700; color: var(--text-main); }
+    .muted-row td { color: var(--text-dim); font-style: italic; }
+
+    /* Dòng thời gian */
+    .timeline { display: grid; }
+    .tl-item { display: grid; grid-template-columns: 76px 22px 1fr; gap: 12px; align-items: start; padding: 7px 0; }
+    .tl-time { font-weight: 700; color: var(--text-dim); font-size: 14px; text-align: right; padding-top: 2px; }
+    .tl-dot { width: 14px; height: 14px; border-radius: 50%; margin-top: 5px; justify-self: center; }
+    .tl-text { font-size: 16px; color: var(--text-muted); line-height: 1.45; }
+
+    /* Luồng các bước */
+    .flow { display: flex; align-items: stretch; gap: 10px; }
+    .flow .step { flex: 1; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+    .flow .step .n { font-family: var(--font-display); font-weight: 800; font-size: 13.5px; color: var(--violet); }
+    .flow .arrow { display: grid; place-items: center; color: var(--text-dim); font-size: 22px; }
+
+    /* Các bước sử dụng (đánh số lớn) */
+    .usage { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .usage .u { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 22px 20px 18px; display: flex; flex-direction: column; gap: 10px; position: relative; }
+    .usage .u p { font-size: 17px; }
+    .usage .u h3 { font-size: 20px; }
+    .usage .u .k { font-family: var(--font-display); font-weight: 800; font-size: 15px; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: #fff; background: var(--blue); }
+    .usage .u .where { font-size: 13.5px; color: var(--text-dim); border-top: 1px dashed var(--border); padding-top: 8px; margin-top: auto; }
+    .usage .u.auto .k { background: var(--green); }
+
+    /* Bảng "muốn ... thì làm ..." */
+    .howto td:first-child { width: 34%; font-weight: 600; color: var(--text-main); }
+    .kbd { display: inline-block; font-size: 13.5px; font-weight: 600; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-soft); color: var(--text-main); white-space: nowrap; }
+
+    /* Thanh tỉ lệ */
+    .bar { display: flex; height: 36px; border-radius: 9px; overflow: hidden; border: 1px solid var(--border); }
+    .bar span { display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; }
+    .p-an   { background: #2563EB; }
+    .p-binh { background: #7C3AED; }
+    .p-chi  { background: #0F766E; }
+    .p-dung { background: #B45309; }
+    .p-other { background: #64748B; }
+
+    /* Số đếm */
+    .counter { display: flex; gap: 12px; }
+    .counter .box { flex: 1; text-align: center; padding: 10px 8px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border); }
+    .counter .box .v { font-family: var(--font-display); font-size: 28px; font-weight: 800; color: var(--text-main); font-variant-numeric: tabular-nums; }
+    .counter .box .l { font-size: 13px; color: var(--text-dim); }
+
+    /* Màn hình mẫu */
+    .mock { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); overflow: hidden; display: flex; flex-direction: column; }
+    .mock-tabs { display: flex; gap: 4px; padding: 8px 14px 0; border-bottom: 1px solid var(--border); background: var(--bg-soft); }
+    .mock-tabs span { padding: 7px 14px; font-size: 13.5px; color: var(--text-dim); border-radius: 8px 8px 0 0; }
+    .mock-tabs span.on { color: var(--blue); font-weight: 700; background: var(--bg-card); border: 1px solid var(--border); border-bottom-color: var(--bg-card); margin-bottom: -1px; }
+    .mock-body { padding: 12px 16px; display: grid; gap: 10px; }
+    .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .tile { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+    .tile .v { font-family: var(--font-display); font-size: 26px; font-weight: 800; color: var(--text-main); font-variant-numeric: tabular-nums; }
+    .tile .l { font-size: 13.5px; color: var(--text-dim); }
+    .mock table { font-size: 15px; }
+    .mock th { padding: 8px 12px; }
+    .mock td { padding: 9px 12px; }
+    .pin { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--red); color: #fff; font-size: 11.5px; font-weight: 800; margin-right: 6px; vertical-align: 1px; flex-shrink: 0; }
+    .pin-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: var(--text-muted); margin-top: 10px; }
+
+    /* Biểu đồ cột nhỏ (chi tiết 1 người) */
+    .mini-chart { display: flex; align-items: flex-end; gap: 14px; height: 130px; padding: 8px 6px 0; border-bottom: 1px solid var(--border); }
+    .mini-chart .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+    .mini-chart .col .b { width: 100%; max-width: 46px; border-radius: 6px 6px 0 0; background: var(--blue); }
+    .mini-chart .col .val { font-size: 13px; font-weight: 700; color: var(--text-main); }
+    .mini-axis { display: flex; gap: 14px; padding: 4px 6px 0; }
+    .mini-axis span { flex: 1; text-align: center; font-size: 12.5px; color: var(--text-dim); }
+
+    /* Thanh 6 nấc điểm độ khó */
+    .scale { padding: 4px 30px 0; }
+    .scale-track { display: flex; justify-content: space-between; position: relative; }
+    .scale-track::before { content: ""; position: absolute; left: 22px; right: 22px; top: 21px; height: 4px; border-radius: 4px; background: var(--border); }
+    .scale-track .nub { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 90px; }
+    .scale-track .dotv { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 18px; color: var(--text-main); background: var(--bg-card); border: 2px solid var(--border); }
+    .scale-track .nub b { font-size: 14.5px; color: var(--text-muted); font-weight: 600; }
+    .scale-track .nub.on .dotv { background: var(--violet); border-color: var(--violet); color: #fff; box-shadow: 0 0 0 5px var(--violet-soft); }
+    .scale-track .nub.on b { color: var(--violet); font-weight: 700; }
+    .scale-track .nub.warn .dotv { border-color: var(--amber); color: var(--amber); }
+
+    /* Ô tình huống hiển thị */
+    .case { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+    .case h3 { font-size: 16.5px; }
+    .case .preview { border: 1px dashed var(--border); border-radius: 9px; padding: 8px 10px; background: var(--bg-soft); font-size: 14px; color: var(--text-muted); display: grid; gap: 5px; }
+    .case .preview .row { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .case p { font-size: 14.5px; }
+
+    /* Bìa */
+    .cover { justify-content: center; gap: 24px; }
+    .agenda { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 8px; }
+    .agenda .a { border-radius: 14px; padding: 18px 20px; border: 1px solid var(--border); background: var(--bg-soft); display: flex; gap: 14px; align-items: center; }
+    .agenda .a .k { font-family: var(--font-display); font-size: 26px; font-weight: 800; width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0; }
+    .agenda .a h3 { font-size: 20px; }
+    .agenda .a p { font-size: 14.5px; }
+
+    /* ─── THANH ĐIỀU HƯỚNG ─── */
+    .nav-bar {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px;
+      box-shadow: 0 10px 30px -10px rgba(15, 23, 42, .25); z-index: 10; max-width: calc(100vw - 32px);
+    }
+    .nav-btn { font-family: var(--font-body); font-size: 14px; font-weight: 600; color: var(--text-main); background: var(--bg-soft); border: 1px solid var(--border); padding: 7px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+    .nav-btn:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+    .nav-btn:disabled { opacity: .4; cursor: default; }
+    .nav-indicator { font-size: 14px; font-weight: 700; color: var(--text-dim); min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+    .progress-track { width: 120px; height: 5px; background: var(--border); border-radius: 999px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 0; background: var(--blue); transition: width .25s; }
+    .sep { width: 1px; height: 20px; background: var(--border); }
+
+    .notes-drawer {
+      position: fixed; top: 16px; right: 16px; bottom: 84px; width: 380px; max-width: calc(100vw - 32px);
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: 0 20px 45px -12px rgba(15, 23, 42, .3); z-index: 11;
+      transform: translateX(calc(100% + 32px)); transition: transform .25s; display: flex; flex-direction: column;
+    }
+    .notes-drawer.open { transform: none; }
+    .notes-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 14px; color: var(--text-dim); }
+    .notes-header button { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 16px; }
+    .notes-content { padding: 16px 18px; overflow: auto; }
+    .notes-content p { font-size: 15.5px; line-height: 1.6; margin-bottom: 10px; color: var(--text-muted); }
+
+    @media (max-width: 720px) {
+      .progress-track, .sep, #fsBtn { display: none; }
+      .nav-btn { padding: 6px 10px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+
+<main class="stage" id="stage">
+  <div class="deck" id="deck">
+
+    <!-- ═════════ BÌA ═════════ -->
+    <section class="slide active cover" aria-label="Bìa">
+      <span class="eyebrow" style="color:var(--blue)"><span class="dot"></span>Đồ án Tốt nghiệp DATN-2026 · Quản lý Dự án Agile/Scrum</span>
+      <h1>Ghi nhận & Báo cáo<br>Đóng góp Thành viên</h1>
+      <p class="lead">Hệ thống đánh giá đóng góp tự động, minh bạch dựa trên <b>dữ liệu bằng chứng thực tế (Evidence-based Metrics)</b>, giải quyết triệt để bài toán công bằng trong làm việc nhóm.</p>
+      <div class="agenda">
+        <div class="a core-card" style="border:2px solid var(--violet); background:var(--violet-soft);"><div class="k c-violet" style="background:var(--violet); color:#fff;">1</div><div><span class="core-pill" style="display:inline-block; margin-bottom:5px;">★ Trọng tâm</span><h3>Cơ chế & Logic tính toán</h3><p>Sổ ghi công bất biến · Quy tắc Zero-Parent · Mở lại & Xóa việc · Điều chỉnh</p></div></div>
+        <div class="a"><div class="k c-teal">2</div><div><h3>Giao diện & Trải nghiệm</h3><p>Báo cáo tổng quan · 4 chỉ số KPI · Bảng đóng góp · Drawer chi tiết & Biểu đồ</p></div></div>
+        <div class="a"><div class="k c-blue">3</div><div><h3>Bảo mật & Phân quyền</h3><p>Đóng băng Snapshot · Phân quyền Leader/Member · Xuất Excel UTF-8 BOM</p></div></div>
+      </div>
+      <div class="speaker-note">
+        <p>Kính thưa quý thầy cô và hội đồng, em xin phép trình bày tính năng <b>Báo cáo Ghi nhận Đóng góp thành viên</b> trong hệ thống quản lý dự án DATN-2026.</p>
+        <p>Tính năng này được xây dựng nhằm giải quyết bài toán cốt lõi: tự động hóa việc ghi nhận công sức của từng thành viên một cách minh bạch, có bằng chứng định lượng rõ ràng cho từng công việc, xóa bỏ hoàn toàn hiện tượng ỷ lại hoặc đánh giá cảm tính trong các dự án phần mềm.</p>
+        <p>Bài báo cáo gồm 3 phần: Cơ chế tính toán, Giao diện hiển thị và Phân quyền bảo mật.</p>
+      </div>
+    </section>
+
+    <!-- ═════════ PHẦN 1 · TÓM TẮT CƠ CHẾ ĐÁNH GIÁ ═════════ -->
+    <section class="slide core" aria-label="Tóm tắt cơ chế đánh giá">
+      <div class="slide-header"><span class="eyebrow-wrap"><span class="eyebrow"><span class="dot"></span>Phần 1 · Cơ chế tính toán</span><span class="core-pill">★ Trọng tâm</span></span><span class="slide-num"></span></div>
+      <div class="title-block">
+        <h2>Tổng quan cơ chế đánh giá: Tóm tắt trong một trang</h2>
+      </div>
+      <div class="body cols-3">
+        <div class="card core-card">
+          <div class="core-k">①</div>
+          <h3>Đa chiều & Khách quan</h3>
+          <p class="small" style="margin-top:-4px;">Ba góc nhìn độc lập, không dùng điểm số ảo hay trọng số thiên lệch.</p>
+          <div class="crit"><b>Bàn giao</b><span>Điểm Story Points thực nhận · Số việc hoàn thành · Tỉ lệ đóng góp (%)</span></div>
+          <div class="crit"><b>Tương tác & Hỗ trợ</b><span>Thảo luận (số bình luận) · Báo lỗi (số Bug phát hiện)</span></div>
+          <div class="crit"><b>Chất lượng & Tiến độ</b><span>Tỉ lệ đúng hạn (%) · Số lần bị mở lại (Reopened) · Cycle Time trung bình</span></div>
+        </div>
+        <div class="card core-card">
+          <div class="core-k">②</div>
+          <h3>Tự động ghi nhận theo sự kiện</h3>
+          <ul>
+            <li>Việc chuyển sang <b>Hoàn thành (DONE)</b> → Tự động ghi có điểm cho người phụ trách lúc đó.</li>
+            <li><b>Quy tắc Zero-Parent</b>: Task cha có subtasks điểm = 0, chỉ tính điểm trên các subtask con để chống cộng trùng điểm.</li>
+            <li>Bị mở lại hoặc bị xóa → Tự động ghi <b>dòng trừ điểm (−Points)</b> hoàn trả.</li>
+            <li>Có hạn chót (Due Date) → Tự động phân loại <i>“Đúng hạn”</i> hoặc <i>“Trễ X ngày”</i>.</li>
+          </ul>
+        </div>
+        <div class="card core-card">
+          <div class="core-k">③</div>
+          <h3>Sổ ghi công & Đóng băng số liệu</h3>
+          <ul>
+            <li><b>Append-only Ledger</b>: Sổ ghi công chỉ ghi thêm dòng giao dịch, không ai sửa/xóa dòng cũ được.</li>
+            <li>Lưu vết kiểm toán (Audit Trail) rõ ràng: <b>người làm</b> và <b>người thao tác (actorId)</b>.</li>
+            <li>Kết quả = <b>tổng đại số</b> các dòng trong chu kỳ đang chọn.</li>
+            <li>Khi đóng chu kỳ (Sprint Closed) → Hệ thống tự chụp <b>Snapshot đóng băng</b> vĩnh viễn.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout info" style="margin-top:16px;"><span class="ci">💡</span><span><b>Nguyên tắc công bằng:</b> Hệ thống cung cấp góc nhìn số liệu đa chiều, minh bạch để Trưởng nhóm và Giảng viên đánh giá, tuyệt đối không dùng điểm số ảo hay công thức trọng số gán ép gây thiên lệch.</span></div>
+      <div class="speaker-note">
+        <p>Hệ thống đánh giá đóng góp qua 3 trụ cột độc lập: Bàn giao, Tương tác hỗ trợ và Chất lượng tiến độ. Mọi số liệu đều được ghi nhận tự động theo thời gian thực khi trạng thái công việc thay đổi.</p>
+        <p>Đặc biệt, hệ thống sử dụng mô hình Sổ ghi công bất biến (Append-only Ledger) và quy tắc Zero-Parent để chống cộng trùng điểm. Khi chu kỳ kết thúc, toàn bộ số liệu được đóng băng thành Snapshot cố định, ngăn chặn mọi can thiệp làm sai lệch kết quả.</p>
+      </div>
+    </section>
+
+    <!-- ═════════ PHẦN 1 · LOGIC GÁN ĐIỂM · ĐIỂM ĐỘ KHÓ ═════════ -->
+    <section class="slide core" aria-label="Logic: điểm độ khó lấy từ đâu">
+      <div class="slide-header"><span class="eyebrow-wrap"><span class="eyebrow"><span class="dot"></span>Phần 1 · Logic gán điểm</span><span class="core-pill">★ Trọng tâm</span></span><span class="slide-num"></span></div>
+      <div class="title-block">
+        <h2>“Điểm đóng góp” lấy từ đâu?</h2>
+        <p class="lead">Điểm Story Points chuẩn Agile/Scrum theo thang <b>Fibonacci (1, 2, 3, 5, 8, 13)</b>, được ước lượng trực tiếp trên từng công việc.</p>
+      </div>
+      <div class="scale">
+        <div class="scale-track">
+          <div class="nub"><span class="dotv">1</span><b>Rất nhỏ</b></div>
+          <div class="nub"><span class="dotv">2</span><b>Nhỏ</b></div>
+          <div class="nub"><span class="dotv">3</span><b>Vừa</b></div>
+          <div class="nub on"><span class="dotv">5</span><b>Khá lớn</b></div>
+          <div class="nub"><span class="dotv">8</span><b>Lớn</b></div>
+          <div class="nub warn"><span class="dotv">13</span><b>Rất lớn</b></div>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:16px;">
+        <table>
+          <thead><tr><th style="width:12%">Mức điểm</th><th>Ý nghĩa & Khối lượng công việc</th><th style="width:24%">Thời gian ước lượng</th><th style="width:22%">Gợi ý triển khai</th></tr></thead>
+          <tbody>
+            <tr><td class="who">1 điểm</td><td>Chỉnh sửa nhỏ, sửa nhãn, cập nhật cấu hình đơn giản</td><td>Dưới nửa ngày</td><td>Làm ngay</td></tr>
+            <tr><td class="who">2 điểm</td><td>Tính năng nhỏ, luồng nghiệp vụ quen thuộc, ít phụ thuộc</td><td>Nửa ngày</td><td>Làm trong ngày</td></tr>
+            <tr><td class="who">3 điểm</td><td>Tính năng trọn vẹn, luồng dữ liệu rõ ràng</td><td>Khoảng 1 ngày</td><td>1 thành viên phụ trách</td></tr>
+            <tr><td class="who">5 điểm</td><td>Module hoàn chỉnh, có xử lý API / Database phức tạp</td><td>2 – 3 ngày</td><td>Cần kiểm thử kỹ</td></tr>
+            <tr><td class="who">8 điểm</td><td>Nhiều thành phần liên kết, độ phức tạp và rủi ro cao</td><td>4 – 5 ngày</td><td>Cần trao đổi kiến trúc</td></tr>
+            <tr><td class="who">13 điểm</td><td>Công việc quá lớn hoặc rủi ro kỹ thuật cao</td><td>Gần cả chu kỳ</td><td><b>Bắt buộc chia nhỏ (Subtasks)</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout info" style="margin-top:12px;"><span class="ci">🎯</span><span><b>Tích hợp trải nghiệm:</b> Điểm được chọn nhanh qua component <code>CustomSelect</code> dropdown có nhãn màu sắc thanh lịch tại modal tạo việc và trang chi tiết công việc.</span></div>
+      <div class="speaker-note">
+        <p>Điểm đóng góp được lấy trực tiếp từ trường Story Points của công việc. Hệ thống sử dụng thang đo Fibonacci tiêu chuẩn với 6 nấc, mỗi nấc đều có định nghĩa rõ ràng về khối lượng và thời gian tương ứng.</p>
+        <p>Điều này giúp các thành viên trong nhóm thống nhất tiêu chí ước lượng ngay trong các buổi Sprint Planning, tránh việc tự chấm điểm tùy tiện.</p>
+      </div>
+    </section>
+
+    <!-- ═════════ PHẦN 1 · LOGIC GÁN ĐIỂM · SỔ GHI CÔNG ═════════ -->
+    <section class="slide core big" aria-label="Logic: sổ ghi công">
+      <div class="slide-header"><span class="eyebrow-wrap"><span class="eyebrow"><span class="dot"></span>Phần 1 · Kiến trúc dữ liệu</span><span class="core-pill">★ Trọng tâm</span></span><span class="slide-num"></span></div>
+      <div class="title-block">
+        <h2>Sổ ghi công (Ledger): Chỉ ghi thêm, không chỉnh sửa</h2>
+        <p class="lead">Thiết kế theo mô hình <b>Append-only Ledger</b>. Mọi biến động điểm số đều là một dòng giao dịch lưu trữ vĩnh viễn.</p>
+      </div>
+      <div class="body" style="grid-template-columns: 1.65fr 1fr;">
+        <div class="table-wrap" style="align-self:start;">
+          <table>
+            <thead><tr><th>Thời gian</th><th>Thành viên</th><th>Công việc</th><th>Loại sự kiện</th><th class="num">Biến động</th></tr></thead>
+            <tbody>
+              <tr><td class="nowrap">Thứ 2</td><td class="who">Tuấn Anh</td><td>DATN-101 · Trang đăng nhập</td><td><span class="tag c-green">COMPLETED</span></td><td class="num plus">+5 điểm</td></tr>
+              <tr><td class="nowrap">Thứ 3</td><td class="who">Thu Chi</td><td>DATN-108 · Sửa lỗi giỏ hàng</td><td><span class="tag c-green">COMPLETED</span></td><td class="num plus">+3 điểm</td></tr>
+              <tr><td class="nowrap">Thứ 5</td><td class="who">Tuấn Anh</td><td>DATN-101 · <b>Bị mở lại</b></td><td><span class="tag c-red">REOPENED</span></td><td class="num minus">−5 điểm</td></tr>
+              <tr><td class="nowrap">Thứ 5</td><td class="who">Hải Bình</td><td>DATN-101 · Hoàn thành lại</td><td><span class="tag c-green">COMPLETED</span></td><td class="num plus">+5 điểm</td></tr>
+              <tr><td class="nowrap">Thứ 6</td><td class="who">Quốc Dũng</td><td>Hỗ trợ review mã nguồn</td><td><span class="tag c-violet">MANUAL_ADJUSTMENT</span></td><td class="num plus">+2 điểm</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:grid; gap:12px; align-content:start;">
+          <div class="card soft"><h3>📥 4 loại giao dịch chính</h3><p><code>COMPLETED</code> (xong việc), <code>REOPENED</code> (mở lại), <code>DELETED</code> (xóa việc), <code>MANUAL_ADJUSTMENT</code> (điều chỉnh).</p></div>
+          <div class="card soft"><h3>👥 Lưu vết kiểm toán (Audit Trail)</h3><p>Mỗi dòng lưu rõ <b>người làm (userId)</b> và <b>người bấm nút thực hiện (actorId)</b>.</p></div>
+          <div class="card soft"><h3>📊 Tính toán tức thì</h3><p>Tổng điểm của thành viên = <b>tổng đại số (∑)</b> các dòng giao dịch trong chu kỳ.</p></div>
+        </div>
+      </div>
+      <div class="speaker-note">
+        <p>Về mặt kiến trúc phần mềm, hệ thống áp dụng mô hình Append-only Ledger tương tự sổ cái kế toán tài chính. Hệ thống không bao giờ thực hiện lệnh UPDATE hay DELETE trên các dòng ghi công.</p>
+        <p>Khi Tuấn Anh làm xong thì được cộng 5; nếu việc bị mở lại thì ghi thêm một dòng trừ 5 của Tuấn Anh, và khi Hải Bình hoàn thành lại thì ghi dòng cộng 5 cho Bình. Nhờ vậy, mọi con số đều có bằng chứng và truy vết được 100%.</p>
+      </div>
+    </section>
+
+    <!-- ═════════ PHẦN 1 · LOGIC GÁN ĐIỂM · QUY TẮC ZERO-PARENT ═════════ -->
+    <section class="slide core big" aria-label="Logic: quy tắc ghi công và zero-parent">
+      <div class="slide-header"><span class="eyebrow-wrap"><span class="eyebrow"><span class="dot"></span>Phần 1 · Logic gán điểm</span><span class="core-pill">★ Trọng tâm</span></span><span class="slide-num"></span></div>
+      <div class="title-block">
+        <h2>Khi nào ghi công và ai được nhận điểm?</h2>
+      </div>
+      <div class="flow" style="margin-bottom:16px;">
+        <div class="step"><span class="n">1</span><h3>Việc sang “Hoàn thành” (DONE)</h3><p class="small">Kích hoạt listener tự động</p></div>
+        <div class="arrow">➜</div>
+        <div class="step"><span class="n">2</span><h3>Kiểm tra Zero-Parent & Lấy Assignee</h3><p class="small">Xác định điểm và ghi chú hạn chót</p></div>
+        <div class="arrow">➜</div>
+        <div class="step"><span class="n">3</span><h3>Ghi 1 dòng vào Sổ ghi công</h3><p class="small">Lưu vết bất biến vào CSDL</p></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:38%">Loại công việc / Tình huống</th><th>Điểm ghi nhận</th><th>Ý nghĩa & Phòng chống gian lận</th></tr></thead>
+          <tbody>
+            <tr><td class="who">Công việc lá bình thường (Task, Bug, Subtask)</td><td><span class="plus">+ Story Points của việc</span> · +1 việc xong</td><td>Ghi công chuẩn cho người trực tiếp làm</td></tr>
+            <tr><td class="who">Hạng mục lớn có việc con (Epic, Task có Subtasks)</td><td><b>0 điểm</b> · +1 việc xong</td><td><b>Quy tắc Zero-Parent:</b> Điểm đã ghi cho các subtask con, tránh cộng trùng lặp!</td></tr>
+            <tr><td class="who">Chưa gán người (Assignee = null)</td><td><b>Không ghi điểm</b> · Phát cảnh báo</td><td>Tránh tranh chấp điểm số; cảnh báo hiển thị trên Dashboard để Leader gán lại</td></tr>
+            <tr><td class="who">Chuyển trạng thái phụ (“Đã xong” → “Đã đóng”)</td><td>Không ghi thêm dòng nào</td><td>Tránh tính trùng điểm khi quy trình workflow có nhiều bước Done</td></tr>
+            <tr><td class="who">Đóng do trùng lặp hoặc không làm nữa</td><td><b>0 điểm</b> · +1 việc đóng</td><td>Không tính điểm công sức cho các việc bị hủy</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="speaker-note">
+        <p>Mốc ghi công duy nhất là lúc việc chuyển sang trạng thái Hoàn thành. Hệ thống tự động xác định người nhận điểm là người được giao (Assignee) tại thời điểm đó.</p>
+        <p>Đặc biệt, để giải quyết triệt để vấn đề việc lớn nhiều người làm, hệ thống cài đặt chính sách Zero-Parent: Task cha chỉ mang tính chất dồn điểm để theo dõi tiến độ, còn điểm ghi nhận công sức chỉ tính trên các Subtask thực tế do từng người làm. Nếu một việc xong mà chưa có người nhận, hệ thống từ chối ghi điểm và bắn cảnh báo lên màn hình.</p>
+      </div>
+    </section>
+
+    <!-- ═════════ PHẦN 1 · LOGIC GÁN ĐIỂM · MỞ LẠI & ĐIỀU CHỈNH ═════════ -->
+    <section class="slide core big" aria-label="Logic: mở lại việc và điều chỉnh thủ công">
+      <div class="slide-header"><span class="eyebrow-wrap"><span class="eyebrow"><span class="dot"></span>Phần 1 · Logic gán điểm</span><span class="core-pill">★ Trọng tâm</span></span><span class="slide-num"></span></div>
+      <div class="title-block">
+        <h2>Mở lại việc, Xóa việc & Điều chỉnh điểm thủ công</h2>
+      </div>
+      <div class="body cols-2" style="flex:none;">
+        <div class="card soft" style="gap:12px;">
+          <h3>Quy trình Bị mở lại (Reopened)</h3>
+          <div class="timeline">
+            <div class="tl-item"><div class="tl-time">Bước 1</div><div class="tl-dot" style="background:var(--green)"></div><div class="tl-text">Tuấn Anh hoàn thành → <span class="plus">+5 Tuấn Anh</span> (Đúng hạn)</div></div>
+            <div class="tl-item"><div class="tl-time">Bước 2</div><div class="tl-dot" style="background:var(--red)"></div><div class="tl-text">Tester mở lại việc → <span class="minus">−5 Tuấn Anh</span> (Bị mở lại)</div></div>
+            <div class="tl-item"><div class="tl-time">Bước 3</div><div class="tl-dot" style="background:var(--green)"></div><div class="tl-text">Hải Bình sửa xong → <span class="plus">+5 Hải Bình</span> (Hoàn thành lại)</div></div>
+          </div>
+          <div class="counter" style="margin-top:6px;">
+            <div class="box"><div class="v">0</div><div class="l">Tuấn Anh</div></div>
+            <div class="box"><div class="v">5</div><div class="l">Hải Bình</div></div>
+            <div class="box"><div class="v">5</div><div class="l">Tổng nhóm</div></div>
+          </div>
+          <p class="small" style="color:var(--text-dim); margin-top:2px;">* Xóa việc đã xong: Tự động ghi dòng trừ điểm hoàn trả.</p>
+        </div>
+        <div class="card" style="gap:12px;">
+          <h3>Điều chỉnh điểm thủ công (Manual Adjustment)</h3>
+          <ul>
+            <li><b>Chỉ dành riêng cho Leader</b>: Kiểm tra quyền <code>PROJECT_ADMIN</code> trước khi thực hiện.</li>
+            <li><b>Biên độ an toàn</b>: Giới hạn nghiêm ngặt từ <b>−8 đến +8 điểm</b>, chống lạm quyền cộng điểm tùy tiện.</li>
+            <li><b>Bắt buộc nhập lý do</b>: Giải trình rõ ràng (họp khách hàng, nghiên cứu đột xuất, hỗ trợ cứu lỗi...).</li>
+            <li><b>Lưu vết kiểm toán</b>: Ghi rõ ai là người duyệt điều chỉnh (<code>actorId</code>) để toàn đội cùng giám sát.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="speaker-note">
+        <p>Khi một công việc bị mở lại hoặc bị xóa, hệ thống lập tức bù trừ một dòng điểm âm, đảm bảo người làm ẩu không được giữ điểm và người sửa lỗi sau cùng sẽ được nhận công.</p>
+        <p>Đồng thời, hệ thống cung cấp tính năng Điều chỉnh điểm thủ công dành riêng cho Project Leader với biên độ giới hạn từ -8 đến +8 điểm và bắt buộc có lý do, giúp ghi nhận các đóng góp ngoài bảng như họp hành hay hỗ trợ đồng đội.</p>
+      </div>
+    </section>
+
+    <!-- ═════════ PHẦN 1 · LOGIC TÍNH ĐÁNH GIÁ · CÁCH TÍNH TỪNG CON SỐ ═════════ -->
+    <section class="slide core big" aria-label="Logic: cách tính từng con số">
+      <div class="slide-header"><span class="eyebrow-wrap"><span class="eyebrow"><span class="dot"></span>Phần 1 · Logic tính đánh giá</span><span class="core-pill">★ Trọng tâm</span></span><span class="slide-num"></span></div>
+      <div class="title-block">
+        <h2>Mỗi con số trên báo cáo được tính như thế nào?</h2>
+        <p class="lead">Tổng hợp trực tiếp từ Sổ ghi công và cơ sở dữ liệu trong phạm vi chu kỳ (Sprint) đang xem.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:24%">Chỉ số hiển thị</th><th>Công thức & Logic tính toán trong Backend</th><th>Ý nghĩa thực tiễn</th></tr></thead>
+          <tbody>
+            <tr><td class="who">Điểm đóng góp</td><td><code>∑ (Points)</code> của các dòng trong Sổ ghi công thuộc chu kỳ</td><td>Khối lượng công việc thực tế đã hoàn thành</td></tr>
+            <tr><td class="who">Tỉ lệ đóng góp (%)</td><td><code>(Điểm cá nhân ÷ Tổng điểm nhóm) × 100%</code></td><td>Tỉ trọng đóng góp của cá nhân đối với toàn đội</td></tr>
+            <tr><td class="who">Việc đã xong</td><td>Đếm số dòng <code>entryType = 'COMPLETED'</code> trong kỳ</td><td>Số đầu việc hoàn thành</td></tr>
+            <tr><td class="who">Thảo luận</td><td>Đếm số lượng <b>bình luận (Comments)</b> của người dùng trên các task</td><td>Mức độ tương tác, hỗ trợ và giao tiếp trong nhóm</td></tr>
+            <tr><td class="who">Báo lỗi</td><td>Đếm số lượng công việc loại <b>BUG</b> do người dùng tạo (Reporter)</td><td>Đóng góp vào khâu kiểm thử và phát hiện lỗi</td></tr>
+            <tr><td class="who">Tỉ lệ đúng hạn (%)</td><td><code>(Số việc xong ≤ DueDate ÷ Tổng việc xong) × 100%</code></td><td>Độ chuẩn xác về tiến độ cam kết</td></tr>
+            <tr><td class="who">Số lần bị mở lại</td><td>Đếm số dòng <code>entryType = 'REOPENED'</code> của người dùng</td><td>Cảnh báo chất lượng đầu ra cần xem xét</td></tr>
+            <tr><td class="who">Cycle Time trung bình</td><td>Trung bình số ngày từ lúc bắt đầu/tạo đến khi Hoàn thành (DONE)</td><td>Tốc độ giải quyết một công việc của nhóm</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="speaker-note">
+        <p>Trên bảng báo cáo, mỗi cột đều đại diện cho một thước đo cụ thể: Điểm và Tỉ lệ đo lường khối lượng bàn giao; Thảo luận và Báo lỗi phản ánh sự tương tác hỗ trợ đồng đội; Tỉ lệ đúng hạn, Số lần bị mở lại và Cycle Time phản ánh chất lượng thực thi.</p>
+        <p>Không có bất kỳ con số nào là phỏng đoán hay tự nhập bằng tay.</p>
+      </div>
+    </section>
+
+    <!-- ═════════ PHẦN 2 · HIỂN THỊ · MÀN HÌNH CHÍNH ═════════ -->
+    <section class="slide show" aria-label="Hiển thị: màn hình chính">
+      <div class="slide-header"><span class="eyebrow"><span class="dot"></span>Phần 2 · Hiển thị giao diện</span><span class="slide-num"></span></div>
+      <div class="title-block">
+        <h2>Màn hình Báo cáo Đóng góp trực quan, hiện đại</h2>
+      </div>
+      <div class="mock">
+        <div class="mock-tabs"><span>Tiến độ chu kỳ</span><span>Vận tốc chu kỳ</span><span>Lưu lượng tích lũy</span><span class="on">Đóng góp</span></div>
+        <div class="mock-body">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:13.5px; color:var(--text-dim);">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="pin">1</span>
+              <span>Xem theo:</span>
+              <span class="kbd">Chu kỳ 4 (Đang chạy) ▾</span>
+              <span class="tag c-blue">🔒 Số liệu đóng băng</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="pin">2</span>
+              <span class="tag c-blue" title="Sổ ghi công">📖 Sổ ghi công</span>
+              <span class="tag c-blue" title="Điều chỉnh điểm (Leader)">⚙️ Điều chỉnh điểm</span>
+              <span class="tag c-blue" title="Xuất CSV/Excel">⬇ Xuất file Excel</span>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center;"><span class="pin">3</span>
+            <div class="tiles" style="flex:1;">
+              <div class="tile"><div class="v">42</div><div class="l">Điểm đã xong</div></div>
+              <div class="tile"><div class="v">31</div><div class="l">Việc đã xong</div></div>
+              <div class="tile"><div class="v">2,4 ngày</div><div class="l">Thời gian làm một việc</div></div>
+              <div class="tile"><div class="v">88,5%</div><div class="l">Xong đúng hạn</div></div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:flex-start;"><span class="pin" style="margin-top:6px;">4</span>
+            <table style="flex:1;">
+              <thead><tr><th>Thành viên ▾</th><th class="num">Điểm</th><th class="num">Tỉ lệ</th><th class="num">Việc xong</th><th class="num">Thảo luận</th><th class="num">Báo lỗi</th><th class="num">Đúng hạn</th><th class="num">Bị mở lại</th><th></th></tr></thead>
+              <tbody>
+                <tr><td class="who">Nguyễn Viết Tuấn Anh</td><td class="num">16</td><td class="num">38.1%</td><td class="num">9</td><td class="num">12</td><td class="num">1</td><td class="num">88.9%</td><td class="num">0</td><td class="num">›</td></tr>
+                <tr><td class="who">Trần Hải Bình</td><td class="num">10</td><td class="num">23.8%</td><td class="num">11</td><td class="num">18</td><td class="num">4</td><td class="num">72.7%</td><td class="num">1</td><td class="num">›</td></tr>
+                <tr><td class="who">Lê Thu Chi</td><td class="num">9</td><td class="num">21.4%</td><td class="num">7</td><td class="num">9</td><td class="num">2</td><td class="num">85.7%</td><td class="num">0</td><td class="num">›</td></tr>
+                <tr><td class="who">Phạm Quốc Dũng</td><td class="num">7</td><td class="num">16.7%</td><td class="num">4</td><td class="num">5</td><td class="num">1</td><td class="num">75.0%</td><td class="num">0</td><td class="num">›</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout warn" style="padding:6px 12px; font-size:13.5px; align-items:center;"><span class="pin" style="margin:0;">5</span><span>⚠️ Có 2 việc hoàn thành khi chưa được giao cho ai (Assignee = null).</span></div>
+        </div>
+      </div>
+      <div class="pin-legend">
+        <span><span class="pin">1</span>Bộ chọn chu kỳ & Trạng thái đóng băng</span>
+        <span><span class="pin">2</span>Bộ 3 tác vụ icon: Sổ ghi công · Điều chỉnh điểm · Xuất Excel</span>
+        <span><span class="pin">3</span>4 thẻ KPI toàn nhóm</span>
+        <span><span class="pin">4</span>Bảng đóng góp thành viên (kèm liên kết Drawer)</span>
+        <span><span class="pin">5</span>Cảnh báo dữ liệu</span>
+      </div>
+      <div class="speaker-note">
+        <p>Đây là giao diện thực tế của tab Báo cáo đóng góp. Phía trên gồm bộ chọn chu kỳ và 3 nút chức năng thao tác nhanh: mở sổ ghi công, điều chỉnh điểm và xuất file Excel.</p>
+        <p>Tiếp theo là 4 chỉ số KPI tổng thể của cả nhóm. Bảng chi tiết bên dưới liệt kê từng thành viên kèm các chỉ số minh bạch. Nếu có công việc chưa gán người phụ trách, hệ thống sẽ hiển thị cảnh báo ngay tại đây.</p>
+      </div>
+    </section>
+
+    <!-- ═════════ PHẦN 2 · HIỂN THỊ · CHI TIẾT MỘT NGƯỜI ═════════ -->
+    <section class="slide show" aria-label="Hiển thị: chi tiết một thành viên">
+      <div class="slide-header"><span class="eyebrow"><span class="dot"></span>Phần 2 · Hiển thị giao diện</span><span class="slide-num"></span></div>
+      <div class="title-block">
+        <h2>Bấm vào một thành viên → Mở Drawer kiểm tra từng việc</h2>
+      </div>
+      <div class="body" style="grid-template-columns: 1fr 1.55fr;">
+        <div class="card" style="gap:12px;">
+          <h3>Tuấn Anh · Chu kỳ 4</h3>
+          <div class="counter">
+            <div class="box"><div class="v">16</div><div class="l">Điểm</div></div>
+            <div class="box"><div class="v">9</div><div class="l">Việc xong</div></div>
+            <div class="box"><div class="v">88.9%</div><div class="l">Đúng hạn</div></div>
+          </div>
+          <p class="small" style="margin-top:4px;"><b>Phân bố điểm theo tuần (Weekly Points)</b></p>
+          <div>
+            <div class="mini-chart" style="height:150px;">
+              <div class="col"><span class="val">3</span><div class="b" style="height:25%"></div></div>
+              <div class="col"><span class="val">8</span><div class="b" style="height:65%"></div></div>
+              <div class="col"><span class="val">5</span><div class="b" style="height:42%"></div></div>
+            </div>
+            <div class="mini-axis"><span>Tuần 1</span><span>Tuần 2</span><span>Tuần 3</span></div>
+          </div>
+          <p class="small" style="color:var(--text-dim); margin-top:2px;">* Tự động chia các tuần theo thời gian bắt đầu và kết thúc của Sprint.</p>
+        </div>
+        <div class="table-wrap" style="align-self:start;">
+          <table>
+            <thead><tr><th>Mã việc</th><th>Tiêu đề công việc</th><th class="num">Điểm</th><th>Ghi chú tiến độ</th></tr></thead>
+            <tbody>
+              <tr><td class="who">DATN-101</td><td>Thiết kế trang đăng nhập & xác thực</td><td class="num plus">+5</td><td>Đúng hạn</td></tr>
+              <tr><td class="who">DATN-108</td><td>Tối ưu hóa truy vấn giỏ hàng</td><td class="num plus">+3</td><td>Trễ 1 ngày</td></tr>
+              <tr><td class="who">DATN-101</td><td>Thiết kế trang đăng nhập</td><td class="num minus">−5</td><td>Bị mở lại</td></tr>
+              <tr><td class="who">DATN-101</td><td>Thiết kế trang đăng nhập (sửa lại)</td><td class="num plus">+5</td><td>Hoàn thành lại</td></tr>
+              <tr><td class="who">DATN-115</td><td>Xây dựng giao diện hồ sơ cá nhân</td><td class="num plus">+8</td><td>Đúng hạn</td></tr>
+              <tr><td class="who">ADJUST</td><td>Thưởng hỗ trợ review mã nguồn</td><td class="num plus">+2</td><td>Hỗ trợ nhóm</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="callout ok" style="margin-top:12px;"><span class="ci">✨</span><span><b>Chuẩn hóa giao diện:</b> Ghi chú thể hiện trực tiếp bằng văn bản chuyên nghiệp (Đúng hạn, Trễ X ngày, Hoàn thành lại, Bị mở lại), loại bỏ các biểu tượng emoji gây mất tập trung.</span></div>
+      <div class="speaker-note">
+        <p>Khi bấm vào bất kỳ thành viên nào, một Drawer sẽ trượt ra từ bên phải màn hình. Tại đây, ta thấy biểu đồ phân bố điểm theo từng tuần của Sprint, giúp đánh giá thành viên làm đều đặn hay dồn việc vào phút chót.</p>
+        <p>Đồng thời, bảng phía dưới liệt kê chính xác từng mã task mà thành viên đã làm, số điểm nhận được, và ghi chú tiến độ rõ ràng.</p>
+      </div>
+    </section>
+
+    <!-- ═════════ PHẦN 3 · BẢO MẬT & PHÂN QUYỀN ═════════ -->
+    <section class="slide use big" aria-label="Bảo mật & Phân quyền">
+      <div class="slide-header"><span class="eyebrow"><span class="dot"></span>Phần 3 · Bảo mật & Vận hành</span><span class="slide-num"></span></div>
+      <div class="title-block">
+        <h2>Phân quyền chặt chẽ & Tính năng cấp doanh nghiệp</h2>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:34%">Tính năng / Nghiệp vụ</th><th style="width:33%">Quản lý dự án (Project Leader / Admin)</th><th style="width:33%">Thành viên thường (Project Member)</th></tr></thead>
+          <tbody>
+            <tr><td class="who">Xem báo cáo toàn dự án (Tất cả chu kỳ)</td><td><span class="tag c-green">Toàn quyền xem</span> (Tổng hợp toàn bộ Sprint)</td><td><span class="tag c-red">Bị chặn</span> (Chỉ xem từng Sprint cụ thể)</td></tr>
+            <tr><td class="who">Phạm vi bảng dữ liệu nhìn thấy</td><td>Xem được <b>toàn bộ thành viên</b> trong nhóm</td><td><b>Chỉ xem dòng của chính mình</b> (tránh so sánh tiêu cực)</td></tr>
+            <tr><td class="who">Điều chỉnh điểm thủ công</td><td><span class="tag c-green">Được phép</span> (Biên độ −8 đến +8, bắt buộc lý do)</td><td><span class="tag c-red">Không có quyền</span> (Ẩn nút, chặn API)</td></tr>
+            <tr><td class="who">Xem Sổ ghi công (Ledger)</td><td>Xem toàn bộ lịch sử biến động điểm cả nhóm</td><td>Chỉ xem các dòng ghi công liên quan đến mình</td></tr>
+            <tr><td class="who">Đóng băng số liệu (Snapshot)</td><td colspan="2">Tự động kích hoạt khi Sprint đóng (CLOSED), lưu bản ghi vĩnh viễn không thể sửa đổi</td></tr>
+            <tr><td class="who">Xuất báo cáo Excel / CSV</td><td colspan="2">Tích hợp sẵn chuẩn <b>UTF-8 BOM</b> (<code>0xEF, 0xBB, 0xBF</code>), mở trên Excel tiếng Việt có dấu chuẩn 100%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="speaker-note">
+        <p>Về mặt bảo mật và phân quyền (RBAC), hệ thống phân tách rõ ràng: Quản lý dự án có quyền xem toàn bộ chu kỳ, xem tất cả thành viên và điều chỉnh điểm. Trong khi đó, thành viên thường chỉ xem được dữ liệu của chính mình nhằm bảo vệ quyền riêng tư và tránh áp lực so sánh tiêu cực.</p>
+        <p>Ngoài ra, tính năng Snapshot đóng băng số liệu khi đóng Sprint và xuất file Excel chuẩn UTF-8 BOM đảm bảo tính toàn vẹn dữ liệu cho kỳ thi tốt nghiệp.</p>
+      </div>
+    </section>
+
+    <!-- ═════════ PHẦN 3 · TỔNG KẾT & GIÁ TRỊ ═════════ -->
+    <section class="slide use big" aria-label="Tổng kết & Giá trị thực tiễn">
+      <div class="slide-header"><span class="eyebrow"><span class="dot"></span>Phần 3 · Tổng kết & Giá trị</span><span class="slide-num"></span></div>
+      <div class="title-block">
+        <h2>Tổng kết: Giá trị thực tiễn đối với Đồ án Tốt nghiệp</h2>
+        <p class="lead">Giải quyết triệt để bài toán đánh giá công bằng, minh bạch trong các dự án công nghệ thông tin.</p>
+      </div>
+      <div class="body cols-3" style="flex:none;">
+        <div class="card top-blue" style="gap:10px;">
+          <h3>🎓 Dành cho Sinh viên</h3>
+          <ul>
+            <li>Yên tâm tập trung cống hiến chuyên môn.</li>
+            <li>Mọi nỗ lực từ code, test, báo lỗi, thảo luận đều được ghi nhận tự động.</li>
+            <li>Có bằng chứng xác thực bảo vệ kết quả đồ án của bản thân.</li>
+          </ul>
+        </div>
+        <div class="card top-violet" style="gap:10px;">
+          <h3>👥 Dành cho Trưởng nhóm</h3>
+          <ul>
+            <li>Nắm bắt bức tranh toàn cảnh về hiệu suất và tiến độ của từng người.</li>
+            <li>Có công cụ khen thưởng / bù trừ điểm minh bạch, có lưu vết.</li>
+            <li>Giảm thiểu tối đa mâu thuẫn nội bộ về phân chia công việc.</li>
+          </ul>
+        </div>
+        <div class="card top-green" style="gap:10px;">
+          <h3>👨‍🏫 Dành cho Giảng viên</h3>
+          <ul>
+            <li>Có báo cáo định lượng chi tiết kèm danh sách công việc thực tế.</li>
+            <li>Xuất file Excel nộp kèm hồ sơ nghiệm thu đồ án.</li>
+            <li>Chấm điểm từng sinh viên công tâm, loại bỏ hiện tượng “người làm ít điểm cao”.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout ok" style="margin-top:16px;"><span class="ci">🎉</span><span><b>Sẵn sàng bảo vệ:</b> Phân hệ Ghi nhận đóng góp đã được hoàn thiện 100% cả Backend & Frontend, vượt qua toàn bộ các ca kiểm thử và sẵn sàng triển khai thực tế.</span></div>
+      <div class="speaker-note">
+        <p>Kính thưa quý thầy cô, phân hệ Ghi nhận đóng góp đã giải quyết thành công bài toán khó nhất trong làm việc nhóm sinh viên: sự công bằng và minh bạch.</p>
+        <p>Với cơ sở dữ liệu bất biến, quy tắc chống cộng trùng điểm, phân quyền chặt chẽ và giao diện trực quan, hệ thống cung cấp cho giảng viên một cơ sở tin cậy tuyệt đối để đánh giá công sức thực tế của từng sinh viên.</p>
+        <p>Em xin trân trọng cảm ơn quý thầy cô và kính mời hội đồng đặt câu hỏi.</p>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<nav class="nav-bar" aria-label="Điều hướng trình chiếu">
+  <button type="button" class="nav-btn" id="prevBtn" title="Trang trước (phím ◀)">◀ Trước</button>
+  <span class="nav-indicator" id="slideCounter">01 / 11</span>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <button type="button" class="nav-btn" id="nextBtn" title="Trang sau (phím ▶ hoặc phím cách)">Sau ▶</button>
+  <div class="sep"></div>
+  <button type="button" class="nav-btn" id="notesBtn" title="Gợi ý lời nói (phím S)">📝 Lời nói</button>
+  <button type="button" class="nav-btn" id="themeBtn" title="Đổi nền sáng / tối (phím T)">🌓</button>
+  <button type="button" class="nav-btn" id="fsBtn" title="Toàn màn hình (phím F)">⛶</button>
+</nav>
+
+<aside class="notes-drawer" id="notesDrawer" aria-label="Gợi ý lời nói">
+  <div class="notes-header">
+    <span>📝 GỢI Ý LỜI NÓI</span>
+    <button type="button" id="closeNotesBtn" aria-label="Đóng">✕</button>
+  </div>
+  <div class="notes-content" id="notesBody"></div>
+</aside>
+
+<script>
+(function () {
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const deck = document.getElementById('deck');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const slideCounter = document.getElementById('slideCounter');
+  const progressFill = document.getElementById('progressFill');
+  const notesDrawer = document.getElementById('notesDrawer');
+  const notesBody = document.getElementById('notesBody');
+  const total = String(slides.length).padStart(2, '0');
+  let current = 0;
+
+  // Nền tối theo máy nếu người dùng chưa chọn
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  } catch (e) {}
+
+  // Số trang tự đánh, không phải sửa tay khi thêm bớt slide
+  slides.forEach((s, i) => {
+    const n = s.querySelector('.slide-num');
+    if (n) n.textContent = String(i + 1).padStart(2, '0') + ' / ' + total;
+  });
+
+  function fitDeck() {
+    const sw = window.innerWidth - 32;
+    const sh = window.innerHeight - 90;
+    const scale = Math.min(sw / 1280, sh / 720);
+    deck.style.transform = 'scale(' + Math.max(scale, 0.2) + ')';
+  }
+
+  function showSlide(index) {
+    current = Math.max(0, Math.min(index, slides.length - 1));
+    slides.forEach((s, i) => s.classList.toggle('active', i === current));
+    slideCounter.textContent = String(current + 1).padStart(2, '0') + ' / ' + total;
+    progressFill.style.width = ((current + 1) / slides.length * 100) + '%';
+    prevBtn.disabled = current === 0;
+    nextBtn.disabled = current === slides.length - 1;
+    const note = slides[current].querySelector('.speaker-note');
+    notesBody.innerHTML = note ? note.innerHTML : '<p><em>Trang này không có gợi ý.</em></p>';
+    try { history.replaceState(null, '', '#' + (current + 1)); } catch (e) {}
+  }
+
+  function fromHash() {
+    const n = parseInt((location.hash || '').replace('#', ''), 10);
+    return isNaN(n) ? 0 : n - 1;
+  }
+
+  prevBtn.onclick = () => showSlide(current - 1);
+  nextBtn.onclick = () => showSlide(current + 1);
+  document.getElementById('notesBtn').onclick = () => notesDrawer.classList.toggle('open');
+  document.getElementById('closeNotesBtn').onclick = () => notesDrawer.classList.remove('open');
+  document.getElementById('themeBtn').onclick = () => {
+    const now = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', now);
+  };
+  document.getElementById('fsBtn').onclick = () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+    else document.exitFullscreen().catch(() => {});
+  };
+
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown' || k === 'n') { e.preventDefault(); showSlide(current + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || k === 'p') { e.preventDefault(); showSlide(current - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); showSlide(0); }
+    else if (e.key === 'End') { e.preventDefault(); showSlide(slides.length - 1); }
+    else if (k === 's') notesDrawer.classList.toggle('open');
+    else if (k === 't') document.getElementById('themeBtn').click();
+    else if (k === 'f') document.getElementById('fsBtn').click();
+  });
+
+  // Vuốt trái / phải trên điện thoại
+  let touchX = null;
+  document.addEventListener('touchstart', (e) => { touchX = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 50) showSlide(current + (dx < 0 ? 1 : -1));
+    touchX = null;
+  });
+
+  window.addEventListener('resize', fitDeck);
+  showSlide(fromHash());
+  fitDeck();
+})();
+</script>
+</body>
+</html>

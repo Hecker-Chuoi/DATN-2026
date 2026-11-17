@@ -2,6 +2,7 @@ package com.datn.workservice.controller;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.common.dto.PageResponse;
+import com.datn.workservice.dto.request.ChangeAssigneeRequest;
 import com.datn.workservice.dto.request.CreateSubtaskRequest;
 import com.datn.workservice.dto.request.CreateWorkItemRequest;
 import com.datn.workservice.dto.request.UpdateWorkItemRequest;
@@ -120,6 +121,23 @@ public class WorkItemController {
         UUID userId = SecurityUtils.getCurrentUserId();
         WorkItemDetailResponse response = workItemService.updateWorkItem(id, request, userId);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * Giao / hủy giao việc (assigneeId = null là hủy giao). Chỉ cần ISSUE_ASSIGN, không cần ISSUE_EDIT;
+     * mọi thay đổi đều được ghi vào lịch sử công việc (BR-W01, BR-W02).
+     */
+    @PutMapping("/items/{id}/assignee")
+    @RequireTaskPermission(PermissionKey.ISSUE_ASSIGN)
+    public ResponseEntity<ApiResponse<WorkItemDetailResponse>> changeAssignee(
+            @PathVariable("id") UUID id,
+            @RequestBody(required = false) ChangeAssigneeRequest request
+    ) {
+        UUID userId = SecurityUtils.getCurrentUserId();
+        UUID assigneeId = request != null ? request.getAssigneeId() : null;
+        WorkItemDetailResponse response = workItemService.changeAssignee(id, assigneeId, userId);
+        return ResponseEntity.ok(ApiResponse.success(response,
+                assigneeId == null ? "Đã hủy giao việc" : "Đã giao việc"));
     }
 
     @PatchMapping("/items/{id}/rank")

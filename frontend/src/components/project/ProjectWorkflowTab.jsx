@@ -30,13 +30,18 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workflowApi, workItemTypeApi } from '../../api.js';
+import CustomSelect from '../common/CustomSelect.jsx';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 import {
   STATUS_CATEGORY_CONFIG,
   WORK_ITEM_TYPE_CONFIG,
   TASK_TYPE_PRESETS,
   resolveDynamicTypeConfig,
   HIERARCHY_LEVELS,
+  toDisplayHierarchyLevel,
   getTypeDisplayName,
+  getTypeDescriptionDisplay,
+  generateTypeCode,
   getStatusDisplayName,
   getStatusCategoryDisplayName,
   getHierarchyDisplayName,
@@ -64,20 +69,22 @@ const COLOR_PRESETS = [
   '#D97706', '#EA580C', '#64748B', '#7C3AED', '#EC4899',
 ];
 
+// name = tên icon lucide lưu xuống BE (giữ nguyên); short = nhãn tiếng Việt hiển thị dưới icon
 const ICON_PRESETS = [
-  { name: 'Zap', label: 'Tia chớp (Hạng mục lớn)' },
-  { name: 'CheckSquare', label: 'Ô kiểm (Nhiệm vụ)' },
-  { name: 'Bookmark', label: 'Thẻ đánh dấu (Câu chuyện)' },
-  { name: 'Bug', label: 'Con bọ (Lỗi phần mềm)' },
-  { name: 'GitCommit', label: 'Điểm nhánh (Nhiệm vụ con)' },
-  { name: 'Layers', label: 'Phân tầng (Giai đoạn)' },
-  { name: 'FileCheck', label: 'Kiểm định (Nghiệm thu)' },
-  { name: 'Sparkles', label: 'Ngôi sao (Chiến dịch)' },
-  { name: 'Sliders', label: 'Kênh / Tùy biến' },
-  { name: 'AlertTriangle', label: 'Cảnh báo sự cố' },
+  { name: 'Zap', short: 'Tia chớp', label: 'Tia chớp (Hạng mục lớn)' },
+  { name: 'CheckSquare', short: 'Ô kiểm', label: 'Ô kiểm (Nhiệm vụ)' },
+  { name: 'Bookmark', short: 'Đánh dấu', label: 'Thẻ đánh dấu (Yêu cầu)' },
+  { name: 'Bug', short: 'Sự cố', label: 'Cảnh báo (Sự cố)' },
+  { name: 'GitCommit', short: 'Nhánh việc', label: 'Nhánh việc (Nhiệm vụ con)' },
+  { name: 'Layers', short: 'Phân tầng', label: 'Phân tầng (Giai đoạn)' },
+  { name: 'FileCheck', short: 'Kiểm định', label: 'Kiểm định (Nghiệm thu)' },
+  { name: 'Sparkles', short: 'Ngôi sao', label: 'Ngôi sao (Chiến dịch)' },
+  { name: 'Sliders', short: 'Tùy biến', label: 'Kênh / Tùy biến' },
+  { name: 'AlertTriangle', short: 'Cảnh báo', label: 'Cảnh báo sự cố' },
 ];
 
 export default function ProjectWorkflowTab({ projectId, project, isAdmin, onTypesUpdated }) {
+  const { handleBackdropClick } = useModalBackdrop();
   const SUBTAB_STORAGE_KEY = `project_${projectId}_workflow_subtab`;
   const [activeSubTab, setActiveSubTab] = useState(() => {
     try {
@@ -212,7 +219,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
     const trimmedName = transitionName.trim();
     if (!trimmedName) {
-      toast.error('Vui lòng nhập tên bước chuyển (Action Name)');
+      toast.error('Vui lòng nhập tên bước chuyển');
       return;
     }
 
@@ -419,9 +426,10 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
   const handleOpenEditTypeModal = (type) => {
     setEditingType(type);
     setTypeFormData({
-      name: type.name || '',
+      // Hiển thị tên/mô tả tiếng Việt (tên mặc định "Epic", "Sub-task"... được dịch); mã giữ nguyên, không hiện ra
+      name: getTypeDisplayName(type.name || type.code) || '',
       code: type.code || '',
-      description: type.description || '',
+      description: getTypeDescriptionDisplay(type.description) || '',
       hierarchyLevel: type.hierarchyLevel ?? 0,
       colorHex: type.colorHex || '#3B82F6',
       iconName: type.iconName || 'CheckSquare',
@@ -435,16 +443,16 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
       toast.error('Vui lòng nhập tên loại công việc');
       return;
     }
-    if (!typeFormData.code.trim()) {
-      toast.error('Vui lòng nhập mã loại công việc');
-      return;
-    }
+    // Mã loại không hiện trên giao diện: sửa thì giữ mã cũ, tạo mới thì tự sinh từ tên
+    const typeCode = editingType
+      ? (editingType.code || typeFormData.code).trim().toUpperCase()
+      : generateTypeCode(typeFormData.name, projectTypes.map((t) => t.code));
 
     try {
       setSubmittingType(true);
       const payload = {
         name: typeFormData.name.trim(),
-        code: typeFormData.code.trim().toUpperCase(),
+        code: typeCode,
         description: typeFormData.description.trim(),
         hierarchyLevel: Number(typeFormData.hierarchyLevel),
         colorHex: typeFormData.colorHex,
@@ -474,13 +482,13 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
     // 1. Kiểm tra ràng buộc tối thiểu 1 loại cho mỗi level (Level 1, Level 0, Level -1)
     const sameLevelTypes = projectTypes.filter((t) => t.hierarchyLevel === type.hierarchyLevel);
     if (sameLevelTypes.length <= 1) {
-      const lvlStr = type.hierarchyLevel === 1 ? 'Cấp 1 (Hạng mục lớn)' : type.hierarchyLevel === 0 ? 'Cấp 0 (Tiêu chuẩn)' : 'Cấp -1 (Nhiệm vụ con)';
+      const lvlStr = type.hierarchyLevel === 1 ? 'Cấp 3 (Hạng mục lớn)' : type.hierarchyLevel === 0 ? 'Cấp 2 (Tiêu chuẩn)' : 'Cấp 1 (Nhiệm vụ con)';
       toast.error(`Không thể xóa! Dự án luôn phải duy trì tối thiểu 1 loại công việc cho ${lvlStr}.`);
       return;
     }
 
     const typeDisplayName = getTypeDisplayName(type.name || type.code);
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa loại công việc "${typeDisplayName}" (${type.code})?`)) {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa loại công việc "${typeDisplayName}"?`)) {
       return;
     }
 
@@ -529,7 +537,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
             await workItemTypeApi.delete(projectId, oldType.id);
           } catch (delErr) {
             // Có thể lỗi do đang có items sử dụng hoặc vi phạm min level
-            keptDueToUse.push(oldType.name);
+            keptDueToUse.push(getTypeDisplayName(oldType.name || oldType.code));
           }
         }
       }
@@ -639,7 +647,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <GitBranch size={18} color="#2563EB" />
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                  {workflowDetail?.name || 'Sơ đồ Quy trình & Quản lý Trạng thái (Visual Workflow & Transitions)'}
+                  {workflowDetail?.name || 'Sơ đồ Quy trình & Quản lý Trạng thái'}
                 </h3>
                 {workflowDetail?.isDefault && (
                   <span
@@ -658,7 +666,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 )}
               </div>
               <p style={{ fontSize: 13, color: '#64748B', marginTop: 6, marginBottom: 0, maxWidth: 720, lineHeight: 1.5 }}>
-                {workflowDetail?.description || 'Máy trạng thái FSM kiểm soát vòng đời và các bước chuyển trạng thái (FSM) cho công việc trong dự án.'}
+                {workflowDetail?.description || 'Quy trình kiểm soát vòng đời và các bước chuyển trạng thái cho công việc trong dự án.'}
               </p>
             </div>
 
@@ -719,9 +727,10 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
               gap: 16,
               marginBottom: 24,
+              width: '100%',
             }}
           >
             {/* TODO Lane */}
@@ -733,16 +742,17 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 padding: '14px',
                 display: 'flex',
                 flexDirection: 'column',
+                minWidth: 0,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 12 }}>
                 <Clock size={15} color="#64748B" />
-                <span>1. CẦN LÀM (TODO)</span>
+                <span>1. CẦN LÀM</span>
                 <span style={{ fontSize: 11, backgroundColor: '#E2E8F0', padding: '1px 6px', borderRadius: 10, marginLeft: 'auto' }}>
                   {todoStatuses.length}
                 </span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
                 {todoStatuses.map((st) => {
                   const canDelete = todoStatuses.length > 1;
                   return (
@@ -758,13 +768,20 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: 8,
+                        minWidth: 0,
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.name}
+                        >
                           {st.name}
                         </div>
-                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.description || 'Trạng thái khởi tạo'}
+                        >
                           {st.description || 'Trạng thái khởi tạo'}
                         </div>
                       </div>
@@ -873,16 +890,17 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 padding: '14px',
                 display: 'flex',
                 flexDirection: 'column',
+                minWidth: 0,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#1D4ED8', marginBottom: 12 }}>
                 <Sparkles size={15} color="#2563EB" />
-                <span>2. ĐANG XỬ LÝ (IN PROGRESS)</span>
+                <span>2. ĐANG XỬ LÝ</span>
                 <span style={{ fontSize: 11, backgroundColor: '#DBEAFE', padding: '1px 6px', borderRadius: 10, marginLeft: 'auto' }}>
                   {inProgressStatuses.length}
                 </span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
                 {inProgressStatuses.map((st) => {
                   const canDelete = inProgressStatuses.length > 1;
                   return (
@@ -898,13 +916,20 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: 8,
+                        minWidth: 0,
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.name}
+                        >
                           {st.name}
                         </div>
-                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.description || 'Đang thực hiện'}
+                        >
                           {st.description || 'Đang thực hiện'}
                         </div>
                       </div>
@@ -1013,16 +1038,32 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 padding: '14px',
                 display: 'flex',
                 flexDirection: 'column',
+                minWidth: 0,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#15803D', marginBottom: 12 }}>
                 <CheckCircle2 size={15} color="#16A34A" />
-                <span>3. HOÀN THÀNH (DONE)</span>
+                <span>3. HOÀN THÀNH</span>
                 <span style={{ fontSize: 11, backgroundColor: '#DCFCE7', padding: '1px 6px', borderRadius: 10, marginLeft: 'auto' }}>
                   {doneStatuses.length}
                 </span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  lineHeight: 1.45,
+                  color: '#92400E',
+                  backgroundColor: '#FFFBEB',
+                  border: '1px solid #FDE68A',
+                  borderRadius: 6,
+                  padding: '6px 8px',
+                  marginBottom: 10,
+                }}
+              >
+                Chỉ <strong>Admin dự án</strong> mới xác nhận Hoàn thành. Thành viên chuyển công việc vào đây sẽ tạo
+                yêu cầu <strong>Tạm hoàn thành</strong>, chờ Admin duyệt (điểm đóng góp chỉ ghi khi được xác nhận).
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
                 {doneStatuses.map((st) => {
                   const canDelete = doneStatuses.length > 1;
                   return (
@@ -1038,13 +1079,20 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: 8,
+                        minWidth: 0,
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.name}
+                        >
                           {st.name}
                         </div>
-                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div
+                          style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          title={st.description || 'Đã nghiệm thu'}
+                        >
                           {st.description || 'Đã nghiệm thu'}
                         </div>
                       </div>
@@ -1151,6 +1199,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               borderRadius: 8,
               border: '1px solid #E2E8F0',
               overflow: 'hidden',
+              backgroundColor: '#FFFFFF',
             }}
           >
             <div
@@ -1161,6 +1210,8 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 8,
               }}
             >
               <div style={{ fontWeight: 700, fontSize: 13, color: '#0F172A' }}>
@@ -1171,196 +1222,213 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
               </span>
             </div>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: isAdmin ? '2fr 2fr 2fr 2.5fr 140px' : '2fr 2fr 2fr 3fr',
-                padding: '12px 16px',
-                backgroundColor: '#F8FAFC',
-                borderBottom: '1px solid #E2E8F0',
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#475569',
-              }}
-            >
-              <span>Từ trạng thái xuất phát</span>
-              <span>Tên nút thao tác</span>
-              <span>Đến trạng thái đích</span>
-              <span>Điều kiện & Ràng buộc</span>
-              {isAdmin && <span style={{ textAlign: 'right' }}>Thao tác</span>}
-            </div>
+            <div style={{ overflowX: 'auto', width: '100%' }}>
+              <div style={{ minWidth: 720 }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isAdmin ? '2fr 2fr 2fr 2.5fr 140px' : '2fr 2fr 2fr 3fr',
+                    padding: '12px 16px',
+                    backgroundColor: '#F8FAFC',
+                    borderBottom: '1px solid #E2E8F0',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#475569',
+                  }}
+                >
+                  <span>Từ trạng thái xuất phát</span>
+                  <span>Tên nút thao tác</span>
+                  <span>Đến trạng thái đích</span>
+                  <span>Điều kiện & Ràng buộc</span>
+                  {isAdmin && <span style={{ textAlign: 'right' }}>Thao tác</span>}
+                </div>
 
-            {transitions.length === 0 ? (
-              <div style={{ padding: '32px', textAlign: 'center', color: '#64748B', fontSize: 13 }}>
-                Chưa có bước chuyển nào được thiết lập.
-              </div>
-            ) : (
-              transitions.map((t) => {
-                const hasConditions = t.conditionsConfig && Array.isArray(t.conditionsConfig) && t.conditionsConfig.length > 0;
-                const hasValidators = t.validatorsConfig && Array.isArray(t.validatorsConfig) && t.validatorsConfig.length > 0;
-
-                return (
-                  <div
-                    key={t.id}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: isAdmin ? '2fr 2fr 2fr 2.5fr 140px' : '2fr 2fr 2fr 3fr',
-                      padding: '14px 16px',
-                      borderBottom: '1px solid #F1F5F9',
-                      alignItems: 'center',
-                      fontSize: 13,
-                    }}
-                  >
-                    {/* From Status */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: 4,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          backgroundColor: '#F1F5F9',
-                          color: '#334155',
-                          border: '1px solid #CBD5E1',
-                        }}
-                      >
-                        {getStatusDisplayName(t.fromStatusName)}
-                      </span>
-                    </div>
-
-                    {/* Transition Name */}
-                    <div style={{ fontWeight: 600, color: '#2563EB', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <ArrowRight size={14} color="#64748B" />
-                      <span>{t.name}</span>
-                    </div>
-
-                    {/* To Status */}
-                    <div>
-                      <span
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: 4,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          backgroundColor: t.toStatusCategory === 'DONE' ? '#DCFCE7' : t.toStatusCategory === 'IN_PROGRESS' ? '#DBEAFE' : '#F1F5F9',
-                          color: t.toStatusCategory === 'DONE' ? '#15803D' : t.toStatusCategory === 'IN_PROGRESS' ? '#1D4ED8' : '#475569',
-                          border: `1px solid ${t.toStatusCategory === 'DONE' ? '#86EFAC' : t.toStatusCategory === 'IN_PROGRESS' ? '#93C5FD' : '#CBD5E1'}`,
-                        }}
-                      >
-                        {getStatusDisplayName(t.toStatusName)}
-                      </span>
-                    </div>
-
-                    {/* Rules */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {hasConditions && (
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                            backgroundColor: '#FEF3C7',
-                            color: '#92400E',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 3,
-                          }}
-                        >
-                          <Shield size={11} /> Điều kiện
-                        </span>
-                      )}
-                      {hasValidators && (
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                            backgroundColor: '#FEE2E2',
-                            color: '#991B1B',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 3,
-                          }}
-                        >
-                          <FileCheck size={11} /> Kiểm tra hợp lệ
-                        </span>
-                      )}
-                      {!hasConditions && !hasValidators && (
-                        <span style={{ fontSize: 12, color: '#94A3B8' }}>Không ràng buộc</span>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    {isAdmin && (
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditTransition(t)}
-                          style={{
-                            border: '1px solid #E2E8F0',
-                            background: '#FFFFFF',
-                            color: '#64748B',
-                            cursor: 'pointer',
-                            padding: '5px 8px',
-                            borderRadius: 6,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            fontSize: 12,
-                            fontWeight: 500,
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = '#2563EB';
-                            e.currentTarget.style.borderColor = '#BFDBFE';
-                            e.currentTarget.style.backgroundColor = '#EFF6FF';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.color = '#64748B';
-                            e.currentTarget.style.borderColor = '#E2E8F0';
-                            e.currentTarget.style.backgroundColor = '#FFFFFF';
-                          }}
-                          title="Chỉnh sửa bước chuyển"
-                        >
-                          <Edit2 size={13} />
-                          <span>Sửa</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTransition(t.id)}
-                          style={{
-                            border: '1px solid #E2E8F0',
-                            background: '#FFFFFF',
-                            color: '#64748B',
-                            cursor: 'pointer',
-                            padding: '5px 8px',
-                            borderRadius: 6,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            fontSize: 12,
-                            fontWeight: 500,
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = '#EF4444';
-                            e.currentTarget.style.borderColor = '#FECACA';
-                            e.currentTarget.style.backgroundColor = '#FEF2F2';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.color = '#64748B';
-                            e.currentTarget.style.borderColor = '#E2E8F0';
-                            e.currentTarget.style.backgroundColor = '#FFFFFF';
-                          }}
-                          title="Xóa bước chuyển"
-                        >
-                          <Trash2 size={13} />
-                          <span>Xóa</span>
-                        </button>
-                      </div>
-                    )}
+                {transitions.length === 0 ? (
+                  <div style={{ padding: '32px', textAlign: 'center', color: '#64748B', fontSize: 13 }}>
+                    Chưa có bước chuyển nào được thiết lập.
                   </div>
-                );
-              })
-            )}
+                ) : (
+                  transitions.map((t) => {
+                    const hasConditions = t.conditionsConfig && Array.isArray(t.conditionsConfig) && t.conditionsConfig.length > 0;
+                    const hasValidators = t.validatorsConfig && Array.isArray(t.validatorsConfig) && t.validatorsConfig.length > 0;
+
+                    return (
+                      <div
+                        key={t.id}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: isAdmin ? '2fr 2fr 2fr 2.5fr 140px' : '2fr 2fr 2fr 3fr',
+                          padding: '14px 16px',
+                          borderBottom: '1px solid #F1F5F9',
+                          alignItems: 'center',
+                          fontSize: 13,
+                        }}
+                      >
+                        {/* From Status */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                          <span
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: 4,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              backgroundColor: '#F1F5F9',
+                              color: '#334155',
+                              border: '1px solid #CBD5E1',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              maxWidth: '100%',
+                            }}
+                            title={getStatusDisplayName(t.fromStatusName)}
+                          >
+                            {getStatusDisplayName(t.fromStatusName)}
+                          </span>
+                        </div>
+
+                        {/* Transition Name */}
+                        <div style={{ fontWeight: 600, color: '#2563EB', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                          <ArrowRight size={14} color="#64748B" style={{ flexShrink: 0 }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.name}>
+                            {t.name}
+                          </span>
+                        </div>
+
+                        {/* To Status */}
+                        <div style={{ minWidth: 0 }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '3px 8px',
+                              borderRadius: 4,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              backgroundColor: t.toStatusCategory === 'DONE' ? '#DCFCE7' : t.toStatusCategory === 'IN_PROGRESS' ? '#DBEAFE' : '#F1F5F9',
+                              color: t.toStatusCategory === 'DONE' ? '#15803D' : t.toStatusCategory === 'IN_PROGRESS' ? '#1D4ED8' : '#475569',
+                              border: `1px solid ${t.toStatusCategory === 'DONE' ? '#86EFAC' : t.toStatusCategory === 'IN_PROGRESS' ? '#93C5FD' : '#CBD5E1'}`,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              maxWidth: '100%',
+                            }}
+                            title={getStatusDisplayName(t.toStatusName)}
+                          >
+                            {getStatusDisplayName(t.toStatusName)}
+                          </span>
+                        </div>
+
+                        {/* Rules */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {hasConditions && (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                backgroundColor: '#FEF3C7',
+                                color: '#92400E',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 3,
+                              }}
+                            >
+                              <Shield size={11} /> Điều kiện
+                            </span>
+                          )}
+                          {hasValidators && (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                backgroundColor: '#FEE2E2',
+                                color: '#991B1B',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 3,
+                              }}
+                            >
+                              <FileCheck size={11} /> Kiểm tra hợp lệ
+                            </span>
+                          )}
+                          {!hasConditions && !hasValidators && (
+                            <span style={{ fontSize: 12, color: '#94A3B8' }}>Không ràng buộc</span>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        {isAdmin && (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditTransition(t)}
+                              style={{
+                                border: '1px solid #E2E8F0',
+                                background: '#FFFFFF',
+                                color: '#64748B',
+                                cursor: 'pointer',
+                                padding: '5px 8px',
+                                borderRadius: 6,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontSize: 12,
+                                fontWeight: 500,
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = '#2563EB';
+                                e.currentTarget.style.borderColor = '#BFDBFE';
+                                e.currentTarget.style.backgroundColor = '#EFF6FF';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = '#64748B';
+                                e.currentTarget.style.borderColor = '#E2E8F0';
+                                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                              }}
+                              title="Chỉnh sửa bước chuyển"
+                            >
+                              <Edit2 size={13} />
+                              <span>Sửa</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTransition(t.id)}
+                              style={{
+                                border: '1px solid #E2E8F0',
+                                background: '#FFFFFF',
+                                color: '#64748B',
+                                cursor: 'pointer',
+                                padding: '5px 8px',
+                                borderRadius: 6,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontSize: 12,
+                                fontWeight: 500,
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = '#EF4444';
+                                e.currentTarget.style.borderColor = '#FECACA';
+                                e.currentTarget.style.backgroundColor = '#FEF2F2';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = '#64748B';
+                                e.currentTarget.style.borderColor = '#E2E8F0';
+                                e.currentTarget.style.backgroundColor = '#FFFFFF';
+                              }}
+                              title="Xóa bước chuyển"
+                            >
+                              <Trash2 size={13} />
+                              <span>Xóa</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1395,7 +1463,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 </h3>
               </div>
               <p style={{ fontSize: 13, color: '#64748B', marginTop: 6, marginBottom: 0, maxWidth: 720, lineHeight: 1.5 }}>
-                Tùy biến các loại công việc riêng của dự án này. <strong>Quy tắc hệ thống:</strong> Luôn duy trì tối thiểu 1 loại cho <strong>Cấp 1</strong> (Hạng mục lớn), 1 loại cho <strong>Cấp 0</strong> (Tiêu chuẩn) và 1 loại cho <strong>Cấp -1</strong> (Nhiệm vụ con).
+                Tùy biến các loại công việc riêng của dự án này. <strong>Quy tắc hệ thống:</strong> Luôn duy trì tối thiểu 1 loại cho <strong>Cấp 3</strong> (Hạng mục lớn), 1 loại cho <strong>Cấp 2</strong> (Tiêu chuẩn) và 1 loại cho <strong>Cấp 1</strong> (Nhiệm vụ con).
               </p>
             </div>
 
@@ -1485,20 +1553,22 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
           </div>
 
           {/* Types Table */}
-          <div style={{ borderRadius: 8, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: isAdmin ? '3fr 1.2fr 2fr 100px' : '3.5fr 1.5fr 2.5fr',
-                padding: '12px 16px',
-                backgroundColor: '#F8FAFC',
-                borderBottom: '1px solid #E2E8F0',
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#475569',
-              }}
-            >
-              <span>Loại công việc & Mô tả</span>
+          <div style={{ borderRadius: 8, border: '1px solid #E2E8F0', overflow: 'hidden', backgroundColor: '#FFFFFF' }}>
+            <div style={{ overflowX: 'auto', width: '100%' }}>
+              <div style={{ minWidth: 680 }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isAdmin ? '3fr 1.2fr 2fr 100px' : '3.5fr 1.5fr 2.5fr',
+                    padding: '12px 16px',
+                    backgroundColor: '#F8FAFC',
+                    borderBottom: '1px solid #E2E8F0',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#475569',
+                  }}
+                >
+                  <span>Loại công việc & Mô tả</span>
               <span>Cấp bậc</span>
               <span>Quy trình làm việc áp dụng</span>
               {isAdmin && <span style={{ textAlign: 'right' }}>Thao tác</span>}
@@ -1547,10 +1617,9 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                           {renderTypeIcon(t.iconName, hex, 14)}
                           <span>{getTypeDisplayName(t.name || t.code)}</span>
                         </span>
-                        <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>({t.code})</span>
                       </div>
                       <div style={{ fontSize: 12, color: t.description ? '#475569' : '#94A3B8', fontStyle: t.description ? 'normal' : 'italic', marginTop: 2 }}>
-                        {t.description ? t.description : 'Chưa thiết lập mô tả'}
+                        {t.description ? getTypeDescriptionDisplay(t.description) : 'Chưa thiết lập mô tả'}
                       </div>
                     </div>
 
@@ -1571,7 +1640,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             gap: 4,
                           }}
                         >
-                          <Zap size={12} /> Cấp 1 • Hạng mục lớn
+                          <Zap size={12} /> Cấp 3 • Hạng mục lớn
                         </span>
                       )}
                       {level === 0 && (
@@ -1589,7 +1658,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             gap: 4,
                           }}
                         >
-                          <CheckSquare size={12} /> Cấp 0 • Tiêu chuẩn
+                          <CheckSquare size={12} /> Cấp 2 • Tiêu chuẩn
                         </span>
                       )}
                       {level === -1 && (
@@ -1607,7 +1676,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             gap: 4,
                           }}
                         >
-                          <GitCommit size={12} /> Cấp -1 • Nhiệm vụ con
+                          <GitCommit size={12} /> Cấp 1 • Công việc con
                         </span>
                       )}
                     </div>
@@ -1692,6 +1761,8 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 );
               })
             )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1742,51 +1813,38 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
                   Trạng thái xuất phát
                 </label>
-                <select
+                <CustomSelect
                   value={fromStatusId}
-                  onChange={(e) => setFromStatusId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    outline: 'none',
-                  }}
-                >
-                  <option value="">-- Bất kỳ trạng thái nào (Khởi tạo / Tự do) --</option>
-                  {allStatuses.map((st) => (
-                    <option key={st.id} value={st.id} disabled={toStatusId && st.id === toStatusId}>
-                      {getStatusDisplayName(st.name)} ({getStatusCategoryDisplayName(st.category)}){toStatusId && st.id === toStatusId ? ' (Trùng trạng thái đích)' : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setFromStatusId(val)}
+                  options={[
+                    { value: '', label: '-- Bất kỳ trạng thái nào (Khởi tạo / Tự do) --' },
+                    ...allStatuses.map((st) => ({
+                      value: st.id,
+                      label: `${getStatusDisplayName(st.name)} (${getStatusCategoryDisplayName(st.category)})${toStatusId && st.id === toStatusId ? ' (Trùng trạng thái đích)' : ''}`,
+                      disabled: toStatusId && st.id === toStatusId,
+                    })),
+                  ]}
+                  placeholder="-- Bất kỳ trạng thái nào --"
+                />
               </div>
 
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
                   Trạng thái đích *
                 </label>
-                <select
+                <CustomSelect
                   value={toStatusId}
-                  onChange={(e) => setToStatusId(e.target.value)}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    outline: 'none',
-                  }}
-                >
-                  <option value="">-- Chọn trạng thái đích --</option>
-                  {allStatuses.map((st) => (
-                    <option key={st.id} value={st.id} disabled={fromStatusId && st.id === fromStatusId}>
-                      {getStatusDisplayName(st.name)} ({getStatusCategoryDisplayName(st.category)}){fromStatusId && st.id === fromStatusId ? ' (Trùng trạng thái bắt đầu)' : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setToStatusId(val)}
+                  options={[
+                    { value: '', label: '-- Chọn trạng thái đích --' },
+                    ...allStatuses.map((st) => ({
+                      value: st.id,
+                      label: `${getStatusDisplayName(st.name)} (${getStatusCategoryDisplayName(st.category)})${fromStatusId && st.id === fromStatusId ? ' (Trùng trạng thái bắt đầu)' : ''}`,
+                      disabled: fromStatusId && st.id === fromStatusId,
+                    })),
+                  ]}
+                  placeholder="-- Chọn trạng thái đích --"
+                />
               </div>
 
               <div style={{ marginBottom: 14 }}>
@@ -1952,22 +2010,15 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
                   Nhóm trạng thái chuẩn *
                 </label>
-                <select
+                <CustomSelect
                   value={newStatusCategory}
-                  onChange={(e) => setNewStatusCategory(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    outline: 'none',
-                  }}
-                >
-                  <option value="TODO">Cần làm</option>
-                  <option value="IN_PROGRESS">Đang thực hiện</option>
-                  <option value="DONE">Hoàn thành</option>
-                </select>
+                  onChange={(val) => setNewStatusCategory(val)}
+                  options={[
+                    { value: 'TODO', label: 'Cần làm' },
+                    { value: 'IN_PROGRESS', label: 'Đang thực hiện' },
+                    { value: 'DONE', label: 'Hoàn thành' },
+                  ]}
+                />
               </div>
 
               <div style={{ marginBottom: 14 }}>
@@ -2125,8 +2176,8 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
 
             {/* Modal Form */}
             <form onSubmit={handleSaveType} style={{ padding: 20, maxHeight: '80vh', overflowY: 'auto' }}>
-              {/* Name & Code */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12, marginBottom: 14 }}>
+              {/* Name (mã loại được tự sinh/giữ nguyên, không hiển thị) */}
+              <div style={{ marginBottom: 14 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
                     Tên Loại Công Việc *
@@ -2145,30 +2196,6 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       fontSize: 13,
                       outline: 'none',
                       boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                    Mã loại (viết hoa) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: KIEM_THU, TAI_LIEU"
-                    value={typeFormData.code}
-                    onChange={(e) => setTypeFormData({ ...typeFormData, code: e.target.value.toUpperCase() })}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: 6,
-                      border: '1px solid #CBD5E1',
-                      fontSize: 13,
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
                     }}
                   />
                 </div>
@@ -2194,7 +2221,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     }}
                   >
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#9333EA', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                      <Zap size={14} /> Cấp 1
+                      <Zap size={14} /> Cấp 3
                     </div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: '#6B21A8', marginTop: 2 }}>Hạng mục lớn</div>
                     <div style={{ fontSize: 10, color: '#7E22CE', marginTop: 4 }}>Công việc cấp cao nhất</div>
@@ -2214,7 +2241,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     }}
                   >
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                      <CheckSquare size={14} /> Cấp 0
+                      <CheckSquare size={14} /> Cấp 2
                     </div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: '#1D4ED8', marginTop: 2 }}>Tiêu chuẩn</div>
                     <div style={{ fontSize: 10, color: '#1E40AF', marginTop: 4 }}>Trực thuộc hạng mục lớn hoặc độc lập</div>
@@ -2234,10 +2261,10 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     }}
                   >
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#0284C7', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                      <GitCommit size={14} /> Cấp -1
+                      <GitCommit size={14} /> Cấp 1
                     </div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: '#0369A1', marginTop: 2 }}>Nhiệm vụ con</div>
-                    <div style={{ fontSize: 10, color: '#075985', marginTop: 4 }}>Bắt buộc trực thuộc công việc Cấp 0</div>
+                    <div style={{ fontSize: 10, color: '#075985', marginTop: 4 }}>Bắt buộc trực thuộc công việc Cấp 2</div>
                   </div>
                 </div>
               </div>
@@ -2330,6 +2357,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       <button
                         key={ic.name}
                         type="button"
+                        title={ic.label}
                         onClick={() => setTypeFormData({ ...typeFormData, iconName: ic.name })}
                         style={{
                           display: 'flex',
@@ -2346,7 +2374,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       >
                         {renderTypeIcon(ic.name, isSelected ? typeFormData.colorHex : '#64748B', 18)}
                         <span style={{ fontSize: 10, color: isSelected ? typeFormData.colorHex : '#64748B', fontWeight: isSelected ? 700 : 500 }}>
-                          {ic.name}
+                          {ic.short}
                         </span>
                       </button>
                     );
@@ -2529,8 +2557,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             {renderTypeIcon(t.iconName, t.colorHex, 13)}
                             <span>{getTypeDisplayName(t.name || t.code)}</span>
                           </span>
-                          <span style={{ color: '#64748B', fontWeight: 600 }}>({t.code})</span>
-                          <span style={{ color: '#64748B' }}>- {t.description}</span>
+                          <span style={{ color: '#64748B' }}>- {getTypeDescriptionDisplay(t.description)}</span>
                         </div>
                         <span
                           style={{
@@ -2542,7 +2569,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                             color: t.hierarchyLevel === 1 ? '#9333EA' : t.hierarchyLevel === 0 ? '#2563EB' : '#0284C7',
                           }}
                         >
-                          Cấp {t.hierarchyLevel}
+                          Cấp {toDisplayHierarchyLevel(t.hierarchyLevel)}
                         </span>
                       </div>
                     ))}
@@ -2643,7 +2670,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
             zIndex: 1000,
             padding: '16px',
           }}
-          onClick={() => setIsExplanationModalOpen(false)}
+          {...handleBackdropClick(() => setIsExplanationModalOpen(false))}
         >
           <div
             style={{
@@ -2826,7 +2853,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                   >
                     <Shield size={18} color="#2563EB" style={{ marginTop: 2, flexShrink: 0 }} />
                     <div>
-                      <strong>Ràng buộc bất biến của hệ thống:</strong> Mỗi dự án luôn bắt buộc phải duy trì tối thiểu <strong>1 loại cho Cấp 1</strong>, <strong>1 loại cho Cấp 0</strong>, và <strong>1 loại cho Cấp -1</strong>. Hệ thống ngăn chặn việc xóa hoặc chuyển đổi làm mất đi loại công việc duy nhất của bất kỳ cấp độ nào.
+                      <strong>Ràng buộc bất biến của hệ thống:</strong> Mỗi dự án luôn bắt buộc phải duy trì tối thiểu <strong>1 loại cho Cấp 3</strong>, <strong>1 loại cho Cấp 2</strong>, và <strong>1 loại cho Cấp 1</strong>. Hệ thống ngăn chặn việc xóa hoặc chuyển đổi làm mất đi loại công việc duy nhất của bất kỳ cấp độ nào.
                     </div>
                   </div>
 
@@ -2846,21 +2873,21 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, backgroundColor: '#F3E8FF', border: '1px solid #E9D5FF' }}>
                       <Zap size={16} color="#9333EA" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#6B21A8' }}>Cấp 1: Hạng mục lớn</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#6B21A8' }}>Cấp 3: Hạng mục lớn</span>
                     </div>
 
                     <ArrowRight size={18} color="#94A3B8" />
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE' }}>
                       <CheckSquare size={16} color="#2563EB" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8' }}>Cấp 0: Tiêu chuẩn (Nhiệm vụ / Câu chuyện / Lỗi)</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8' }}>Cấp 2: Tiêu chuẩn (Nhiệm vụ / Yêu cầu / Sự cố)</span>
                     </div>
 
                     <ArrowRight size={18} color="#94A3B8" />
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, backgroundColor: '#E0F2FE', border: '1px solid #BAE6FD' }}>
                       <GitCommit size={16} color="#0284C7" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#0369A1' }}>Cấp -1: Nhiệm vụ con</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#0369A1' }}>Cấp 1: Nhiệm vụ con</span>
                     </div>
                   </div>
 
@@ -2877,7 +2904,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                         <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, backgroundColor: '#9333EA', color: '#FFFFFF' }}>
-                          Cấp 1
+                          Cấp 3
                         </span>
                         <h4 style={{ fontSize: 15, fontWeight: 700, color: '#581C87', margin: 0 }}>
                           Hạng Mục Lớn — Tầng Bao Quát & Chiến Lược
@@ -2888,7 +2915,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       </p>
                       <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#4A044E', lineHeight: 1.6 }}>
                         <li><strong>Vị trí cây phân cấp:</strong> Là cấp cao nhất trong dự án (Tuyệt đối <strong>không được phép có công việc cha</strong>).</li>
-                        <li><strong>Quan hệ con:</strong> Chỉ chứa trực tiếp các công việc con thuộc <strong>Cấp 0</strong>. Không được chứa trực tiếp Nhiệm vụ con Cấp -1.</li>
+                        <li><strong>Quan hệ con:</strong> Chỉ chứa trực tiếp các công việc con thuộc <strong>Cấp 2</strong>. Không được chứa trực tiếp Công việc con Cấp 1.</li>
                         <li><strong>Ví dụ:</strong> <em>Hệ thống Cổng Thanh Toán Trực Tuyến</em>, <em>Thi công hạng mục Cọc & Móng Tòa nhà</em>, <em>Chiến dịch Marketing Tết 2026</em>.</li>
                       </ul>
                     </div>
@@ -2904,19 +2931,19 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                         <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, backgroundColor: '#2563EB', color: '#FFFFFF' }}>
-                          Cấp 0
+                          Cấp 2
                         </span>
                         <h4 style={{ fontSize: 15, fontWeight: 700, color: '#1E3A8A', margin: 0 }}>
-                          Công Việc Tiêu Chuẩn (Nhiệm vụ, Câu chuyện, Lỗi...) — Tầng Thực Thi Cốt Lõi
+                          Công Việc Tiêu Chuẩn (Công việc, Yêu cầu, Sự cố...) — Tầng Thực Thi Cốt Lõi
                         </h4>
                       </div>
                       <p style={{ fontSize: 13, color: '#1E40AF', margin: '0 0 10px 0', lineHeight: 1.5 }}>
                         Là đơn vị công việc trọng tâm phục vụ lập kế hoạch chu kỳ, phân công thành viên phụ trách và theo dõi tiến độ hàng tuần.
                       </p>
                       <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#172554', lineHeight: 1.6 }}>
-                        <li><strong>Vị trí cây phân cấp:</strong> Có thể trực thuộc một Hạng mục lớn (Cấp 1) hoặc có thể đứng độc lập không cần cha.</li>
+                        <li><strong>Vị trí cây phân cấp:</strong> Có thể trực thuộc một Hạng mục lớn (Cấp 3) hoặc có thể đứng độc lập không cần cha.</li>
                         <li><strong>Phân công & Ước lượng:</strong> Được gán trực tiếp cho người phụ trách, có điểm ước lượng, ngày bắt đầu và hạn chót hoàn thành.</li>
-                        <li><strong>Quan hệ con:</strong> Có thể chứa nhiều Nhiệm vụ con (**Cấp -1**) bên dưới để phân rã kỹ thuật.</li>
+                        <li><strong>Quan hệ con:</strong> Có thể chứa nhiều Công việc con (**Cấp 1**) bên dưới để phân rã kỹ thuật.</li>
                         <li><strong>Ví dụ:</strong> <em>Tích hợp cổng thanh toán</em>, <em>Sửa lỗi ứng dụng khi tải tệp</em>, <em>Đổ bê tông dầm sàn tầng 1</em>.</li>
                       </ul>
                     </div>
@@ -2932,17 +2959,17 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                         <span style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 700, backgroundColor: '#0284C7', color: '#FFFFFF' }}>
-                          Cấp -1
+                          Cấp 1
                         </span>
                         <h4 style={{ fontSize: 15, fontWeight: 700, color: '#0369A1', margin: 0 }}>
-                          Nhiệm Vụ Con — Tầng Tác Vụ Vi Mô Chi Tiết
+                          Công Việc Con — Tầng Tác Vụ Vi Mô Chi Tiết
                         </h4>
                       </div>
                       <p style={{ fontSize: 13, color: '#0284C7', margin: '0 0 10px 0', lineHeight: 1.5 }}>
                         Dành cho các tác vụ kỹ thuật nhỏ từ 1-8 giờ để phân chia cụ thể các bước thực hiện cho từng cá nhân.
                       </p>
                       <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#0C4A6E', lineHeight: 1.6 }}>
-                        <li><strong>Vị trí cây phân cấp:</strong> Bắt buộc <strong>phải có công việc cha thuộc Cấp 0</strong>. Không thể đứng độc lập một mình.</li>
+                        <li><strong>Vị trí cây phân cấp:</strong> Bắt buộc <strong>phải có công việc cha thuộc Cấp 2</strong>. Không thể đứng độc lập một mình.</li>
                         <li><strong>Giới hạn phân cấp:</strong> Không thể chia thêm cấp con bên dưới (không có cấp cháu).</li>
                         <li><strong>Ví dụ:</strong> <em>Viết hàm mã hóa bảo mật</em>, <em>Cắt giao diện cửa sổ thông báo</em>, <em>Kiểm tra chất lượng vật tư</em>.</li>
                       </ul>
@@ -2993,7 +3020,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                     <div style={{ padding: 14, borderRadius: 8, border: '1px solid #BFDBFE', backgroundColor: '#EFF6FF' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: '#2563EB', fontWeight: 700, fontSize: 13 }}>
                         <CheckSquare size={16} />
-                        <span>Quy trình Nhiệm vụ / Câu chuyện</span>
+                        <span>Quy trình Công việc / Yêu cầu</span>
                       </div>
                       <div style={{ fontSize: 12, color: '#1E40AF', lineHeight: 1.5 }}>
                         Dòng chảy công việc linh hoạt tinh gọn:
@@ -3028,7 +3055,7 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                         <CheckCircle2 size={16} color="#059669" style={{ marginTop: 2, flexShrink: 0 }} />
                         <div>
-                          <strong>Toàn bộ việc con phải hoàn thành trước:</strong> Công việc cha (Cấp 0) chỉ được phép kéo sang <code>Hoàn thành</code> khi tất cả các Nhiệm vụ con (Cấp -1) trực thuộc đã hoàn thành. Ngăn chặn việc đóng việc khi chưa hoàn tất.
+                          <strong>Toàn bộ việc con phải hoàn thành trước:</strong> Công việc cha (Cấp 2) chỉ được phép kéo sang <code>Hoàn thành</code> khi tất cả các Công việc con (Cấp 1) trực thuộc đã hoàn thành. Ngăn chặn việc đóng việc khi chưa hoàn tất.
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
@@ -3072,20 +3099,20 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       </h4>
                     </div>
                     <p style={{ fontSize: 13, color: '#15803D', margin: '0 0 12px 0', lineHeight: 1.5 }}>
-                      Hệ thống tự động đồng bộ thời gian từ cấp nhiệm vụ con lên cấp cha và hạng mục lớn theo thời gian thực:
+                      Hệ thống tự động đồng bộ thời gian từ cấp công việc con lên cấp cha và hạng mục lớn theo thời gian thực:
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, color: '#14532D' }}>
                       <div style={{ padding: 10, backgroundColor: '#FFFFFF', borderRadius: 8, border: '1px solid #86EFAC' }}>
-                        <strong>1. Ghi nhận thời gian tại Nhiệm vụ con (Cấp -1):</strong> Thành viên trực tiếp ghi nhận thời gian làm việc thực tế và thời gian ước lượng chi tiết tại từng nhiệm vụ con cụ thể.
+                        <strong>1. Ghi nhận thời gian tại Công việc con (Cấp 1):</strong> Thành viên trực tiếp ghi nhận thời gian làm việc thực tế và thời gian ước lượng chi tiết tại từng công việc con cụ thể.
                       </div>
                       <div style={{ padding: 10, backgroundColor: '#FFFFFF', borderRadius: 8, border: '1px solid #86EFAC' }}>
-                        <strong>2. Tự động lũy kế lên Công việc cha (Cấp 0):</strong> Tổng thời gian thực tế và ước lượng của công việc cha sẽ tự động cộng dồn từ toàn bộ các nhiệm vụ con bên dưới:
+                        <strong>2. Tự động lũy kế lên Công việc cha (Cấp 2):</strong> Tổng thời gian thực tế và ước lượng của công việc cha sẽ tự động cộng dồn từ toàn bộ các công việc con bên dưới:
                         <div style={{ marginTop: 4, fontFamily: 'monospace', color: '#15803D', fontWeight: 600 }}>
-                          Tổng thời gian = Thời gian ghi nhận trực tiếp + ∑(Thời gian của các nhiệm vụ con)
+                          Tổng thời gian = Thời gian ghi nhận trực tiếp + ∑(Thời gian của các công việc con)
                         </div>
                       </div>
                       <div style={{ padding: 10, backgroundColor: '#FFFFFF', borderRadius: 8, border: '1px solid #86EFAC' }}>
-                        <strong>3. Tiến độ tổng thể Hạng mục lớn (Cấp 1):</strong> Hệ thống tính toán tỷ lệ % hoàn thành dựa trên tổng thời gian đã ghi nhận và số lượng công việc trực thuộc đã hoàn thành.
+                        <strong>3. Tiến độ tổng thể Hạng mục lớn (Cấp 3):</strong> Hệ thống tính toán tỷ lệ % hoàn thành dựa trên tổng thời gian đã ghi nhận và số lượng công việc trực thuộc đã hoàn thành.
                       </div>
                     </div>
                   </div>
@@ -3106,8 +3133,8 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                       </h4>
                     </div>
                     <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: '#1E3A8A', lineHeight: 1.6 }}>
-                      <li><strong>Thời hạn Nhiệm vụ con (Cấp -1):</strong> Ngày bắt đầu và hạn chót của nhiệm vụ con <strong>phải nằm trọn vẹn</strong> trong khoảng thời gian diễn ra của công việc cha. Hệ thống tự động chặn không cho nhiệm vụ con kết thúc sau công việc cha.</li>
-                      <li><strong>Thời hạn Công việc cha (Cấp 0):</strong> Phải nằm trong chu kỳ làm việc đang chạy hoặc nằm trong khung thời gian tổng thể của Hạng mục lớn (Cấp 1).</li>
+                      <li><strong>Thời hạn Công việc con (Cấp 1):</strong> Ngày bắt đầu và hạn chót của công việc con <strong>phải nằm trọn vẹn</strong> trong khoảng thời gian diễn ra của công việc cha. Hệ thống tự động chặn không cho công việc con kết thúc sau công việc cha.</li>
+                      <li><strong>Thời hạn Công việc cha (Cấp 2):</strong> Phải nằm trong chu kỳ làm việc đang chạy hoặc nằm trong khung thời gian tổng thể của Hạng mục lớn (Cấp 3).</li>
                       <li><strong>Biểu đồ tiến độ & Dòng thời gian:</strong> Thanh thời gian của Hạng mục lớn sẽ tự động co giãn bao trùm từ ngày bắt đầu sớm nhất đến ngày kết thúc muộn nhất của các công việc trực thuộc bên dưới.</li>
                     </ul>
                   </div>

@@ -28,6 +28,8 @@ import com.datn.workservice.entity.Project;
 import com.datn.workservice.entity.Sprint;
 import com.datn.workservice.entity.Status;
 import com.datn.workservice.entity.WorkItem;
+import com.datn.workservice.entity.WorkItemType;
+import com.datn.workservice.repository.WorkItemTypeRepository;
 import com.datn.workservice.entity.Workflow;
 import com.datn.workservice.entity.WorkflowTransition;
 import com.datn.workservice.enums.BoardType;
@@ -93,6 +95,7 @@ public class BoardServiceImpl implements BoardService {
     private final WIPLimitGuard wipLimitGuard;
     private final SwimlaneGrouper swimlaneGrouper;
     private final SprintService sprintService;
+    private final WorkItemTypeRepository workItemTypeRepository;
 
     // ───────────────────────────── CRUD ─────────────────────────────
 
@@ -118,7 +121,7 @@ public class BoardServiceImpl implements BoardService {
 
         BoardType type = request.getType() != null
                 ? request.getType()
-                : (project.getProjectType() == ProjectType.SOFTWARE_KANBAN ? BoardType.KANBAN : BoardType.SCRUM);
+                : ((project.getProjectType() == ProjectType.SOFTWARE_KANBAN || project.getProjectType() == ProjectType.BUSINESS) ? BoardType.KANBAN : BoardType.SCRUM);
 
         Board board = boardRepository.save(Board.builder()
                 .projectId(projectId)
@@ -190,9 +193,42 @@ public class BoardServiceImpl implements BoardService {
 
         List<WorkItem> items;
         if (board.getType() == BoardType.SCRUM) {
-            items = scopeSprintId == null
-                    ? List.of()
-                    : workItemRepository.findBySprintIdAndDeletedAtIsNullOrderByRankAsc(scopeSprintId);
+            if (scopeSprintId == null) {
+                items = List.of();
+            } else {
+                List<WorkItem> sprintItems = workItemRepository.findBySprintIdAndDeletedAtIsNullOrderByRankAsc(scopeSprintId);
+                Set<UUID> sprintItemIds = sprintItems.stream().map(WorkItem::getId).collect(Collectors.toSet());
+                Set<UUID> candidateParentIds = new HashSet<>();
+                for (WorkItem wi : sprintItems) {
+                    if (wi.getParentId() != null && !sprintItemIds.contains(wi.getParentId())) {
+                        candidateParentIds.add(wi.getParentId());
+                    }
+                }
+                if (!candidateParentIds.isEmpty()) {
+                    List<WorkItem> directParents = workItemRepository.findAllById(candidateParentIds);
+                    for (WorkItem p : directParents) {
+                        if (p.getParentId() != null && !sprintItemIds.contains(p.getParentId())) {
+                            candidateParentIds.add(p.getParentId());
+                        }
+                    }
+                }
+
+                List<WorkItem> relatedEpics = new ArrayList<>();
+                if (!candidateParentIds.isEmpty()) {
+                    List<WorkItem> parents = workItemRepository.findAllById(candidateParentIds);
+                    for (WorkItem p : parents) {
+                        if (p.getDeletedAt() == null && !sprintItemIds.contains(p.getId())) {
+                            WorkItemType type = p.getTypeId() == null ? null : workItemTypeRepository.findById(p.getTypeId()).orElse(null);
+                            if (type != null && (type.getHierarchyLevel() == 1 || "EPIC".equalsIgnoreCase(type.getCode()))) {
+                                relatedEpics.add(p);
+                            }
+                        }
+                    }
+                }
+
+                items = new ArrayList<>(relatedEpics);
+                items.addAll(sprintItems);
+            }
         } else {
             Set<UUID> mapped = statusIdsByColumn.values().stream()
                     .flatMap(List::stream).collect(Collectors.toSet());
@@ -333,6 +369,23 @@ public class BoardServiceImpl implements BoardService {
 
         // executeTransition nap lai entity theo id; lay dung instance no tra ve roi moi dat rank.
         WorkItem moved = workflowEngineService.executeTransition(itemId, chosen.getTransitionId(), execReq, userId);
+
+        // BR-W03: nguoi keo khong phai Admin du an -> chi tao yeu cau "Tam hoan thanh", the o lai cot cu.
+        if (moved.isCompletionApprovalRequested()) {
+            Status current = statusRepository.findById(moved.getStatusId()).orElse(null);
+            log.info("The {} keo vao cot '{}' -> gui yeu cau xac nhan hoan thanh", moved.getCode(), targetColumn.getName());
+            return MoveCardResponse.builder()
+                    .itemId(moved.getId()).code(moved.getCode()).newRank(moved.getRank())
+                    .statusId(moved.getStatusId())
+                    .statusName(current == null ? null : current.getName())
+                    .statusCategory(current == null ? null : current.getCategory())
+                    .version(moved.getVersion())
+                    .statusChanged(false)
+                    .completionPending(true)
+                    .warning("Đã gửi yêu cầu xác nhận hoàn thành. Công việc ở trạng thái Tạm hoàn thành cho tới khi Admin dự án duyệt.")
+                    .build();
+        }
+
         moved.setRank(newRank);
 
         // saveAndFlush chu khong save: Hibernate chi tang @Version luc flush. Neu khong flush,

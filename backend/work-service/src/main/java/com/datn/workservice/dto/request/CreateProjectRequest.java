@@ -2,6 +2,7 @@ package com.datn.workservice.dto.request;
 
 import com.datn.workservice.enums.DefaultAssigneeType;
 import com.datn.workservice.enums.ProjectType;
+import com.datn.workservice.enums.TemplateCategory;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -22,8 +23,6 @@ public class CreateProjectRequest {
 
     @NotNull(message = "Workspace ID is required")
     private UUID workspaceId;
-
-    private UUID teamId;
 
     @NotBlank(message = "Project name is required")
     @Size(max = 255, message = "Project name cannot exceed 255 characters")
@@ -52,6 +51,8 @@ public class CreateProjectRequest {
 
     @Builder.Default
     private Boolean isTemplate = false;
+
+    private TemplateCategory templateCategory;
 
     private LocalDate startDate;
 

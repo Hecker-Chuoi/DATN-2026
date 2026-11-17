@@ -35,11 +35,4 @@ public class WorkspaceResponse {
      * người gọi là OWNER duy nhất, thay vì để backend trả 400 rồi mới biết.
      */
     private long ownerCount;
-
-    /**
-     * Cố ý để null ở v1: workspace-service không đếm được team mà không đọc bảng
-     * của work-service, và một Feign client chiều ngược lại sẽ tạo rủi ro phụ
-     * thuộc vòng lúc boot. Frontend tự gọi GET /work/api/v1/work/teams?workspaceId=...
-     */
-    private Long teamCount;
 }

@@ -9,8 +9,11 @@ import {
 } from 'lucide-react';
 import AdminProjectManagement from '../components/admin/AdminProjectManagement.jsx';
 import ConfirmModal from '../components/modals/ConfirmModal.jsx';
+import CustomSelect from '../components/common/CustomSelect.jsx';
+import { useModalBackdrop } from '../hooks/useModalBackdrop.js';
 
 export default function AdminDashboard({ onLogout }) {
+  const { handleBackdropClick } = useModalBackdrop();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('projects'); // 'projects' | 'users'
   const [currentUser, setCurrentUser] = useState(null);
@@ -64,7 +67,7 @@ export default function AdminDashboard({ onLogout }) {
     } catch (err) {
       console.error('Error fetching users:', err);
       if (err.status === 403) {
-        setError('403 Forbidden: Bạn cần có quyền ADMIN để truy cập danh sách và quản lý người dùng.');
+        setError('Không có quyền truy cập: Bạn cần có quyền Quản trị viên để truy cập danh sách và quản lý người dùng.');
       } else {
         setError(err.message || 'Lỗi khi kết nối với máy chủ.');
       }
@@ -223,7 +226,7 @@ export default function AdminDashboard({ onLogout }) {
     setConfirmConfig({
       isOpen: true,
       title: 'Xóa tài khoản',
-      message: `Bạn có chắc chắn muốn xóa tài khoản "${user.username}"? Hành động này sẽ khóa tài khoản trên Keycloak và thu hồi quyền thành viên nhóm/task liên quan.`,
+      message: `Bạn có chắc chắn muốn xóa tài khoản "${user.username}"? Hành động này sẽ khóa tài khoản hệ thống và thu hồi quyền thành viên dự án/công việc liên quan.`,
       confirmText: 'Xóa tài khoản',
       cancelText: 'Hủy',
       type: 'danger',
@@ -314,11 +317,11 @@ export default function AdminDashboard({ onLogout }) {
             <span>Quản Lý Người Dùng</span>
           </button>
 
-          <a href="#keycloak" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang cấu hình Keycloak IAM'); }}>
+          <a href="#keycloak" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang cấu hình xác thực tập trung'); }}>
             <KeyRound size={18} />
-            <span>Xác thực Keycloak</span>
+            <span>Bảo mật & Xác thực</span>
           </a>
-          <a href="#gateway" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang thông số API Gateway'); }}>
+          <a href="#gateway" className="nav-item" onClick={(e) => { e.preventDefault(); alert('Trang thông số cổng điều phối'); }}>
             <Server size={18} />
             <span>Nhật ký Cổng kết nối</span>
           </a>
@@ -468,7 +471,7 @@ export default function AdminDashboard({ onLogout }) {
 
                 {loading ? (
                   <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
-                    Đang tải dữ liệu từ Identity Service...
+                    Đang tải danh sách tài khoản người dùng...
                   </div>
                 ) : users.length === 0 ? (
                   <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
@@ -647,28 +650,19 @@ export default function AdminDashboard({ onLogout }) {
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#64748b' }}>
                           <span>Hiển thị:</span>
-                          <select
+                          <CustomSelect
                             value={size}
-                            onChange={(e) => {
-                              setSize(Number(e.target.value));
-                              setPage(0); // Reset to first page
+                            onChange={(val) => {
+                              setSize(Number(val));
+                              setPage(0);
                             }}
-                            style={{
-                              padding: '4px 8px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              backgroundColor: '#fff',
-                              color: '#334155',
-                              fontSize: '13px',
-                              fontWeight: '500',
-                              outline: 'none',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <option value={10}>10 dòng</option>
-                            <option value={25}>25 dòng</option>
-                            <option value={50}>50 dòng</option>
-                          </select>
+                            options={[
+                              { value: 10, label: '10 dòng' },
+                              { value: 25, label: '25 dòng' },
+                              { value: 50, label: '50 dòng' },
+                            ]}
+                            width={110}
+                          />
                         </div>
                       </div>
 
@@ -746,7 +740,7 @@ export default function AdminDashboard({ onLogout }) {
 
       {/* UPDATE ROLE MODAL */}
       {selectedUser && (
-        <div className="modal-overlay" onClick={() => setSelectedUser(null)}>
+        <div className="modal-overlay" {...handleBackdropClick(() => setSelectedUser(null))}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -828,7 +822,7 @@ export default function AdminDashboard({ onLogout }) {
 
       {/* ADD USER MODAL */}
       {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="modal-overlay" {...handleBackdropClick(() => setShowCreateModal(false))}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -890,7 +884,7 @@ export default function AdminDashboard({ onLogout }) {
 
       {/* RESET PASSWORD MODAL */}
       {resetUser && (
-        <div className="modal-overlay" onClick={() => setResetUser(null)}>
+        <div className="modal-overlay" {...handleBackdropClick(() => setResetUser(null))}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

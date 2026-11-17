@@ -822,3 +822,27 @@ body {
   transform: translateY(-2px);
   filter: brightness(1.1);
 }
+
+/* Linear-style Popover Animations */
+@keyframes linearMenuFade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.linear-menu-enter {
+  animation: linearMenuFade 0.12s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top left;
+}
+
+/* Biểu tượng đang tải (Loader2 dùng animation: spin) */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

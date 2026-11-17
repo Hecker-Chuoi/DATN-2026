@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
-import { userTokenStore, adminTokenStore, authApi, userApi } from './api.js';
+import { userTokenStore, adminTokenStore, authApi, userApi, isSessionValid } from './api.js';
 import { PermissionProvider } from './context/PermissionContext.jsx';
 
 import WorkspaceLayout from './components/layout/WorkspaceLayout.jsx';
@@ -14,7 +14,6 @@ import ProjectMembersPage from './pages/ProjectMembersPage.jsx';
 import ProjectWorkflowPage from './pages/ProjectWorkflowPage.jsx';
 import ProjectGitHubPage from './pages/ProjectGitHubPage.jsx';
 import GitHubCallback from './pages/GitHubCallback.jsx';
-import TeamDetailPage from './pages/TeamDetailPage.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import UserLoginPage from './pages/UserLoginPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -28,10 +27,14 @@ import WorkspaceListPage from './pages/WorkspaceListPage.jsx';
 import WorkspaceMembersPage from './pages/WorkspaceMembersPage.jsx';
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage.jsx';
 import AccessDenied from './components/common/AccessDenied.jsx';
+import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 import InvitationsPage from './pages/InvitationsPage.jsx';
 import VerifyEmailPage from './pages/VerifyEmailPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
+import NotificationsPage from './pages/NotificationsPage.jsx';
+import BrowseItemRedirect from './pages/BrowseItemRedirect.jsx';
+import { NotificationProvider } from './notifications/NotificationContext.jsx';
 
 // Keycloak public URL (đổi qua .env.local: VITE_KEYCLOAK_URL) – mặc định cổng 8088 dùng chung của nhóm
 const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8088';
@@ -43,26 +46,53 @@ const KEYCLOAK_URL = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8088
  * chọn workspace nên không có sidebar) cũng đọc được danh sách workspace.
  * CreateWorkspaceModal cũng mount ở đây, một instance duy nhất dùng chung cho cả
  * switcher trong Sidebar và trang danh sách.
+ * NotificationProvider đặt ở đây để kết nối WebSocket thông báo không bị ngắt khi đổi
+ * workspace hoặc đi qua trang /browse/:code.
  */
 function AuthedShell() {
   return (
     <WorkspaceProvider>
-      <Outlet />
-      <CreateWorkspaceModal />
+      <NotificationProvider>
+        <Outlet />
+        <CreateWorkspaceModal />
+      </NotificationProvider>
     </WorkspaceProvider>
   );
+}
+
+/**
+ * Chưa đăng nhập mà mở link công việc / thông báo (thường từ email): nhớ đích để đăng nhập xong quay lại.
+ */
+function LoginRedirect() {
+  const location = useLocation();
+  if (location.pathname.startsWith('/browse/') || location.pathname === '/notifications') {
+    try {
+      sessionStorage.setItem('redirect_after_login', location.pathname + location.search);
+    } catch {
+      // chặn site data: bỏ qua
+    }
+  }
+  return <Navigate to="/login" replace />;
 }
 
 function App() {
   // ─── User Workspace Auth State ───
   const [isUserAuth, setIsUserAuth] = useState(() => {
-    return !!userTokenStore.get();
+    if (!isSessionValid(userTokenStore)) {
+      userTokenStore.clear();
+      return false;
+    }
+    return true;
   });
   const [currentUser, setCurrentUser] = useState(null);
 
   // ─── Admin Portal Auth State ───
   const [isAdminAuth, setIsAdminAuth] = useState(() => {
-    return !!adminTokenStore.get();
+    if (!isSessionValid(adminTokenStore)) {
+      adminTokenStore.clear();
+      return false;
+    }
+    return true;
   });
 
   const fetchCurrentUser = async () => {
@@ -91,18 +121,23 @@ function App() {
   };
 
   const handleUserLogout = async () => {
-    toast.success('Đã đăng xuất thành công!');
+    const refreshToken = userTokenStore.getRefreshToken();
     try {
-      await authApi.logout();
+      if (refreshToken) {
+        await authApi.logout(refreshToken);
+      } else {
+        await authApi.logout();
+      }
     } catch (err) {
       console.warn('Backend logout error:', err);
     }
     userTokenStore.clear();
     setIsUserAuth(false);
     setCurrentUser(null);
+    toast.success('Đã đăng xuất thành công!');
 
-    const keycloakLogoutUrl = `${KEYCLOAK_URL}/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/login')}`;
-    window.location.href = keycloakLogoutUrl;
+    // Điều hướng thẳng về trang /login mà không cần chuyển hướng sang Keycloak
+    window.location.replace('/login');
   };
 
   // ─── Handlers for Admin ───
@@ -112,20 +147,21 @@ function App() {
 
   const handleAdminLogout = async () => {
     const refreshToken = adminTokenStore.getRefreshToken();
-    adminTokenStore.clear();
-    setIsAdminAuth(false);
-    toast.success('Đã đăng xuất tài khoản Quản trị viên!');
-
     try {
       if (refreshToken) {
         await authApi.logout(refreshToken);
+      } else {
+        await authApi.logout();
       }
     } catch (err) {
       console.warn('Backend logout error:', err);
     }
+    adminTokenStore.clear();
+    setIsAdminAuth(false);
+    toast.success('Đã đăng xuất tài khoản Quản trị viên!');
 
-    const keycloakLogoutUrl = `${KEYCLOAK_URL}/realms/datn-realm/protocol/openid-connect/logout?client_id=datn-backend&post_logout_redirect_uri=${encodeURIComponent(window.location.origin + '/admin/login')}`;
-    window.location.href = keycloakLogoutUrl;
+    // Điều hướng thẳng về trang /admin/login mà không cần chuyển hướng sang Keycloak
+    window.location.replace('/admin/login');
   };
 
   return (
@@ -165,7 +201,8 @@ function App() {
         }}
       />
 
-      <Routes>
+      <ErrorBoundary>
+        <Routes>
         {/* ─── 1. User Workspace Authentication Routes ─── */}
         <Route
           path="/login"
@@ -198,7 +235,7 @@ function App() {
         <Route path="/integrations/github/callback" element={<GitHubCallback />} />
 
         {/* ─── 2. User Work Management Portal (`/w/:workspaceId/**`) ─── */}
-        <Route element={isUserAuth ? <AuthedShell /> : <Navigate to="/login" replace />}>
+        <Route element={isUserAuth ? <AuthedShell /> : <LoginRedirect />}>
           {/* Chưa chọn workspace -> không có sidebar */}
           <Route path="/workspaces" element={<WorkspaceListPage />} />
 
@@ -209,6 +246,9 @@ function App() {
           <Route path="/my-issues" element={<WorkspaceRedirect sub="/my-issues" />} />
           <Route path="/profile" element={<WorkspaceRedirect sub="/profile" />} />
           <Route path="/invitations" element={<WorkspaceRedirect sub="/invitations" />} />
+          <Route path="/notifications" element={<WorkspaceRedirect sub="/notifications" />} />
+          {/* Link trong thông báo / email: tra mã công việc rồi mở đúng dự án */}
+          <Route path="/browse/:code" element={<BrowseItemRedirect />} />
 
           <Route
             path="/w/:workspaceId"
@@ -222,16 +262,18 @@ function App() {
               <Route index element={<Navigate to="board" replace />} />
               <Route path="board" element={<ProjectBoardPage />} />
               <Route path="backlog" element={<ProjectBacklogPage />} />
+              {/* Man "Dong gop" da gop vao "Bao cao" (tab Quan ly dong gop); giu route cu de link da luu khong 404. */}
+              <Route path="contributions" element={<Navigate to="../reports?tab=contributions" replace />} />
               <Route path="reports" element={<ProjectReportsPage />} />
               <Route path="members" element={<ProjectMembersPage />} />
               <Route path="workflow" element={<ProjectWorkflowPage />} />
               <Route path="github" element={<ProjectGitHubPage />} />
             </Route>
-            <Route path="teams/:teamId" element={<TeamDetailPage />} />
             <Route path="members" element={<WorkspaceMembersPage />} />
             <Route path="settings" element={<WorkspaceSettingsPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="invitations" element={<InvitationsPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
             <Route path="403" element={<AccessDenied status={403} title="Bạn không có quyền truy cập" message="Bạn không có quyền xem nội dung này. Hãy liên hệ người quản trị để được cấp quyền." />} />
             <Route path="404" element={<AccessDenied status={404} />} />
           <Route
@@ -252,10 +294,10 @@ function App() {
                     color: '#0F172A',
                   }}
                 >
-                  <span>My tasks</span>
+                  <span>Công việc của tôi</span>
                 </div>
                 <div style={{ padding: 40, textAlign: 'center' }}>
-                  <h3 style={{ color: '#0F172A', marginBottom: 6, fontSize: 16 }}>My tasks</h3>
+                  <h3 style={{ color: '#0F172A', marginBottom: 6, fontSize: 16 }}>Công việc của tôi</h3>
                   <p style={{ color: '#64748B', fontSize: 13 }}>Danh sách tác vụ được giao cho bạn.</p>
                 </div>
               </div>
@@ -294,13 +336,14 @@ function App() {
           element={<Navigate to="/register" replace />}
         />
 
-        {/* 401: phiên hết hạn (interceptor chuyển hướng tới đây khi refresh token thất bại) */}
-        <Route path="/401" element={<AccessDenied status={401} />} />
+        {/* 401: phiên hết hạn -> tự động điều hướng về /login thay vì hiển thị màn hình trung gian */}
+        <Route path="/401" element={<Navigate to="/login" replace />} />
 
         {/* Catch-all: về workspace phù hợp thay vì đường dẫn phẳng /projects
             (vốn không còn tồn tại sau khi workspace vào URL). */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </ErrorBoundary>
      </PermissionProvider>
     </BrowserRouter>
   );

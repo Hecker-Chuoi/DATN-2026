@@ -152,6 +152,15 @@ services:
       MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
       MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-false}
       MAIL_FROM: ${MAIL_FROM:-no-reply@datn.local}
+      # Thông báo trong ứng dụng (docs/services/notification/): bảng notifications, JWT Keycloak, Kafka
+      SPRING_DATASOURCE_URL: jdbc:postgresql://app-db:5432/datn_main_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/datn-realm/protocol/openid-connect/certs
+      KEYCLOAK_ISSUER_URI: http://localhost:9998/realms/datn-realm
+      APP_SERVICES_IDENTITY_URL: http://identity-service:9992
+      # Listener nội bộ của Kafka (localhost:9092 chỉ dành cho service chạy trên máy)
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       - mailpit
     networks:
@@ -293,16 +302,23 @@ services:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      # PLAINTEXT (localhost:9092): service chạy trên máy (start-dev.ps1, IDE).
+      # INTERNAL (kafka:29092): service chạy trong container cùng mạng app-net. Kafka trả cho client đúng địa chỉ
+      # "quảng bá" của listener nó gọi vào; chỉ có localhost thì container sẽ gọi nhầm vào chính nó.
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,INTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:29092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_NUM_PARTITIONS: 3
+      # Mặc định Kafka ghi vào /tmp/kafka-logs TRONG container: tạo lại container là mất topic và offset
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka_data:/var/lib/kafka/data
     networks:
       - app-net
 

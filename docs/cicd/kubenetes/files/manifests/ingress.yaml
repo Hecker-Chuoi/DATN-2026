@@ -1,0 +1,43 @@
+# =============================================================================
+# Ingress – cửa vào HTTPS (Traefik có sẵn trong k3s nghe cổng 80/443 của EC2)
+# cert-manager đọc annotation → tự xin chứng chỉ Let's Encrypt, lưu vào Secret "datn-tls".
+# ĐỔI 2 tên miền bên dưới cho khớp APP_DOMAIN / AUTH_DOMAIN trong prod.env.
+#
+# pathType Prefix so khớp THEO TỪNG ĐOẠN đường dẫn: "/work" khớp /work và /work/api/...
+# nhưng KHÔNG khớp /workspace/... → hai route không đè lên nhau.
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: datn
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - datn.example.com
+        - auth.datn.example.com
+      secretName: datn-tls
+  rules:
+    - host: datn.example.com
+      http:
+        paths:
+          - path: /identity
+            pathType: Prefix
+            backend: { service: { name: api-gateway, port: { number: 8081 } } }
+          - path: /work
+            pathType: Prefix
+            backend: { service: { name: api-gateway, port: { number: 8081 } } }
+          - path: /workspace
+            pathType: Prefix
+            backend: { service: { name: api-gateway, port: { number: 8081 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: frontend, port: { number: 80 } } }
+    - host: auth.datn.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: keycloak, port: { number: 8080 } } }

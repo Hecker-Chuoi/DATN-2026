@@ -18,7 +18,6 @@ import com.datn.workservice.repository.PermissionSchemeEntryRepository;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.ProjectRoleRepository;
 import com.datn.workservice.repository.RoleAssignmentRepository;
-import com.datn.workservice.repository.TeamMemberRepository;
 import com.datn.workservice.service.impl.ProjectMemberServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,6 +32,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import com.datn.workservice.security.WorkspaceAccessChecker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -52,9 +53,12 @@ class ProjectMemberServiceTest {
     @Mock
     private PermissionSchemeEntryRepository permissionSchemeEntryRepository;
     @Mock
-    private TeamMemberRepository teamMemberRepository;
-    @Mock
     private IdentityClient identityClient;
+    @Mock
+    private WorkspaceAccessChecker workspaceAccessChecker;
+
+    @org.mockito.Mock
+    private com.datn.workservice.notification.ProjectNotifier projectNotifier;
 
     @InjectMocks
     private ProjectMemberServiceImpl projectMemberService;
@@ -89,7 +93,7 @@ class ProjectMemberServiceTest {
                 .id(roleId)
                 .projectId(projectId)
                 .name("MEMBER")
-                .description("Team member")
+                .description("Project member")
                 .build();
 
         adminRole = ProjectRole.builder()

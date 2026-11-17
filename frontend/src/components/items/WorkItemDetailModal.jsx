@@ -36,26 +36,59 @@ import {
   Search,
   Check,
   AlertTriangle,
-  Lock
+  Lock,
+  HelpCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { workItemApi, getUserKeycloakId } from '../../api.js';
+import { workItemApi, sprintApi, getUserKeycloakId } from '../../api.js';
 import { useProjectPermission } from '../../hooks/useProjectPermission.js';
 import MemberSelect from '../common/MemberSelect.jsx';
+import CustomSelect from '../common/CustomSelect.jsx';
+import StoryPointsPicker from '../common/StoryPointsPicker.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import ResolveSubtasksModal from '../modals/ResolveSubtasksModal.jsx';
+import CompletionPendingPanel from './CompletionPendingPanel.jsx';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
+import MentionTextarea from '../common/MentionTextarea.jsx';
+import { renderMentions } from '../../utils/mentions.jsx';
 
 const TYPE_ICONS = {
   EPIC: { icon: Bookmark, color: '#6554C0', label: 'Hạng mục lớn' },
-  STORY: { icon: Bookmark, color: '#36B37E', label: 'Câu chuyện người dùng' },
-  TASK: { icon: CheckSquare, color: '#0052CC', label: 'Nhiệm vụ' },
-  BUG: { icon: CircleDot, color: '#E5493A', label: 'Lỗi phần mềm' },
-  SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Nhiệm vụ con' },
+  STORY: { icon: Bookmark, color: '#36B37E', label: 'Yêu cầu' },
+  TASK: { icon: CheckSquare, color: '#0052CC', label: 'Công việc' },
+  BUG: { icon: CircleDot, color: '#E5493A', label: 'Sự cố' },
+  SUBTASK: { icon: GitCommitHorizontal, color: '#4C9AFF', label: 'Công việc con' },
 };
 
-export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [], sprints = [], canManageSprint = true }) {
+// Loại liên kết + mô tả ngắn (khớp hành vi backend WorkItemLinkServiceImpl / WorkflowEngineServiceImpl)
+const LINK_TYPE_OPTIONS = [
+  {
+    value: 'BLOCKS',
+    label: 'Cản trở / Chặn tiến độ',
+    desc: 'Công việc được chọn phải chờ công việc này xong mới chuyển được sang Đang thực hiện / Hoàn thành.',
+  },
+  {
+    value: 'RELATES_TO',
+    label: 'Có liên quan đến',
+    desc: 'Chỉ để tham chiếu qua lại, không ràng buộc trạng thái.',
+  },
+  {
+    value: 'DUPLICATES',
+    label: 'Trùng lặp với',
+    desc: 'Công việc này trùng với công việc được chọn và sẽ được tự động đóng (kết quả: Trùng lặp).',
+    warning: true,
+  },
+  {
+    value: 'CAUSES',
+    label: 'Gây ra / Nguyên nhân của',
+    desc: 'Công việc này là nguyên nhân sinh ra công việc được chọn (vd: một thay đổi gây ra lỗi). Dùng để truy vết, không chặn trạng thái.',
+  },
+];
+
+export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onClose, onItemUpdated, members = [], sprints = [], canManageSprint = true, focusCommentId = null }) {
+  const { handleBackdropClick } = useModalBackdrop();
   const [currentId, setCurrentId] = useState(initialItemId);
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -85,6 +118,10 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
   const [showResolveSubtasksModal, setShowResolveSubtasksModal] = useState(false);
   const [pendingTransitionId, setPendingTransitionId] = useState(null);
   const [isResolvingSubtasks, setIsResolvingSubtasks] = useState(false);
+  // "Tạm hoàn thành" (chờ Admin dự án xác nhận)
+  const [completionBusy, setCompletionBusy] = useState(false);
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
 
   // Collaboration state
   const [comments, setComments] = useState([]);
@@ -102,6 +139,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
   const [links, setLinks] = useState([]);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkRelationType, setLinkRelationType] = useState('RELATES_TO');
+  const [showLinkTypeHelp, setShowLinkTypeHelp] = useState(false);
   const [linkSearchQuery, setLinkSearchQuery] = useState('');
   const [linkSearchResults, setLinkSearchResults] = useState([]);
   const [selectedTargetItem, setSelectedTargetItem] = useState(null);
@@ -113,6 +151,34 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
   useEffect(() => {
     setCurrentId(initialItemId);
   }, [initialItemId]);
+
+  // Mở từ thông báo bình luận (?comment=): chuyển sang tab Bình luận, cuộn tới và làm nổi bình luận đó
+  const [prevFocusCommentId, setPrevFocusCommentId] = useState(null);
+  if (focusCommentId !== prevFocusCommentId) {
+    setPrevFocusCommentId(focusCommentId);
+    if (focusCommentId) setActiveTab('comments');
+  }
+  const focusDoneRef = useRef(null);
+  useEffect(() => {
+    if (!isOpen) {
+      focusDoneRef.current = null;
+      return;
+    }
+    if (!focusCommentId || focusDoneRef.current === focusCommentId || activeTab !== 'comments') return;
+    const el = document.getElementById(`comment-${focusCommentId}`);
+    if (!el) return;
+    focusDoneRef.current = focusCommentId;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const prev = { boxShadow: el.style.boxShadow, backgroundColor: el.style.backgroundColor, transition: el.style.transition };
+    el.style.transition = 'box-shadow 0.4s ease, background-color 0.4s ease';
+    el.style.boxShadow = '0 0 0 2px #F59E0B';
+    el.style.backgroundColor = '#FFFBEB';
+    setTimeout(() => {
+      el.style.boxShadow = prev.boxShadow;
+      el.style.backgroundColor = prev.backgroundColor;
+      setTimeout(() => { el.style.transition = prev.transition; }, 450);
+    }, 2600);
+  }, [isOpen, focusCommentId, comments, activeTab]);
 
   const fetchDetail = async (idToFetch = currentId) => {
     if (!idToFetch) return;
@@ -258,7 +324,12 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
       setShowStatusDropdown(false);
       const res = await workItemApi.executeTransition(currentId, transitionId, { comment: '', resolveAllSubtasks });
       if (res && res.data) {
-        toast.success(resolveAllSubtasks ? 'Đã hoàn thành tất cả nhiệm vụ con và công việc cha!' : 'Đã chuyển trạng thái thành công');
+        if (res.data.completionApprovalRequested) {
+          // Không phải Admin dự án: trạng thái chưa đổi, chỉ tạo yêu cầu "Tạm hoàn thành"
+          toast.success('Đã gửi yêu cầu xác nhận hoàn thành. Công việc ở trạng thái Tạm hoàn thành cho tới khi Admin dự án duyệt.', { duration: 5000 });
+        } else {
+          toast.success(resolveAllSubtasks ? 'Đã hoàn thành tất cả công việc con và công việc cha!' : 'Đã chuyển trạng thái thành công');
+        }
         setShowResolveSubtasksModal(false);
         setPendingTransitionId(null);
         fetchDetail(currentId);
@@ -289,31 +360,103 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
   };
 
   const handleUpdateAssignee = async (newAssigneeId) => {
+    if ((newAssigneeId || null) === (item?.assigneeId || null)) return;
     try {
-      const res = await workItemApi.update(currentId, { assigneeId: newAssigneeId || null });
+      // Endpoint riêng: hỗ trợ cả HỦY giao (null) và luôn ghi vào Lịch sử
+      const res = await workItemApi.changeAssignee(currentId, newAssigneeId || null);
       if (res && res.data) {
         setItem(res.data);
-        toast.success('Đã cập nhật người thực hiện');
+        toast.success(newAssigneeId ? 'Đã giao việc' : 'Đã hủy giao việc');
         fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
       console.error('Failed to update assignee:', err);
-      toast.error('Lỗi khi cập nhật người thực hiện');
+      toast.error(err.response?.data?.message || err.message || 'Lỗi khi cập nhật người thực hiện');
+    }
+  };
+
+  // ─── "Tạm hoàn thành" → Admin dự án xác nhận / từ chối ───────────────────
+  const refreshAfterCompletionAction = (updated) => {
+    fetchDetail(currentId);
+    fetchChangelogs(currentId);
+    fetchComments(currentId);
+    if (onItemUpdated) onItemUpdated(updated || item);
+  };
+
+  const handleApproveCompletion = async () => {
+    setCompletionBusy(true);
+    try {
+      const res = await workItemApi.approveCompletion(currentId);
+      toast.success('Đã xác nhận hoàn thành công việc');
+      refreshAfterCompletionAction(res?.data);
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Không thể xác nhận hoàn thành');
+    } finally {
+      setCompletionBusy(false);
+    }
+  };
+
+  const handleRejectCompletion = async () => {
+    setCompletionBusy(true);
+    try {
+      await workItemApi.rejectCompletion(currentId, rejectReason.trim());
+      toast.success('Đã từ chối yêu cầu xác nhận hoàn thành');
+      setShowRejectForm(false);
+      setRejectReason('');
+      refreshAfterCompletionAction();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Không thể từ chối yêu cầu');
+    } finally {
+      setCompletionBusy(false);
+    }
+  };
+
+  const handleCancelCompletion = async () => {
+    setCompletionBusy(true);
+    try {
+      await workItemApi.cancelCompletion(currentId);
+      toast.success('Đã rút lại yêu cầu xác nhận hoàn thành');
+      refreshAfterCompletionAction();
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Không thể hủy yêu cầu');
+    } finally {
+      setCompletionBusy(false);
     }
   };
 
   const handleUpdateSprint = async (newSprintId) => {
+    const targetSprint = newSprintId || null;
+    const currentSprint = item?.sprintId || null;
+    if (targetSprint === currentSprint) return;
+
     try {
-      const res = await workItemApi.update(currentId, { sprintId: newSprintId || null });
+      if (targetSprint) {
+        await sprintApi.addItems(targetSprint, [currentId]);
+      } else if (currentSprint) {
+        await sprintApi.removeItems(currentSprint, [currentId]);
+      }
+      const res = await workItemApi.getById(currentId);
       if (res && res.data) {
         setItem(res.data);
-        toast.success(newSprintId ? 'Đã chuyển Sprint' : 'Đã đưa về Backlog');
+        toast.success(targetSprint ? 'Đã chuyển chu kỳ' : 'Đã đưa về kho việc');
         fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
-      console.warn('Không đổi được Sprint:', err);
+      console.warn('Không đổi được chu kỳ qua sprintApi, thử fallback workItemApi:', err);
+      try {
+        const res = await workItemApi.update(currentId, { sprintId: targetSprint });
+        if (res && res.data) {
+          setItem(res.data);
+          toast.success(targetSprint ? 'Đã chuyển chu kỳ' : 'Đã đưa về kho việc');
+          fetchChangelogs(currentId);
+          if (onItemUpdated) onItemUpdated(res.data);
+        }
+      } catch (fallbackErr) {
+        console.error('Lỗi khi đổi chu kỳ:', fallbackErr);
+        toast.error('Lỗi khi chuyển chu kỳ');
+      }
     }
   };
 
@@ -324,12 +467,12 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
       const res = await workItemApi.update(currentId, { storyPoints: val === '' ? null : num });
       if (res && res.data) {
         setItem(res.data);
-        toast.success('Đã cập nhật Story Points');
+        toast.success('Đã cập nhật điểm ước lượng');
         fetchChangelogs(currentId);
         if (onItemUpdated) onItemUpdated(res.data);
       }
     } catch (err) {
-      toast.error('Lỗi cập nhật Story Points');
+      toast.error('Lỗi cập nhật điểm ước lượng');
     }
   };
 
@@ -353,13 +496,13 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
     if (!newSubtaskTitle.trim()) return;
     try {
       await workItemApi.createSubtask(currentId, { summary: newSubtaskTitle.trim() });
-      toast.success('Đã thêm Sub-task mới');
+      toast.success('Đã thêm công việc con mới');
       setNewSubtaskTitle('');
       setIsAddingSubtask(false);
       fetchDetail(currentId);
       if (onItemUpdated) onItemUpdated();
     } catch (err) {
-      toast.error('Lỗi khi tạo Sub-task');
+      toast.error('Lỗi khi tạo công việc con');
     }
   };
 
@@ -509,7 +652,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
     const isTargetSubtask = selectedTargetItem?.hierarchyLevel === -1 || selectedTargetItem?.isSubtask || selectedTargetItem?.typeCode === 'SUBTASK';
 
     if (linkRelationType === 'BLOCKS' && ((isCurrentEpic && isTargetSubtask) || (isCurrentSubtask && isTargetEpic))) {
-      toast.error('Không thể tạo liên kết BLOCKS trực tiếp giữa Epic và Sub-task (Scale Mismatch). Vui lòng liên kết ở cấp độ Story/Task.');
+      toast.error('Không thể tạo liên kết cản trở trực tiếp giữa Hạng mục lớn và Công việc con (chênh lệch cấp bậc). Vui lòng liên kết ở cấp độ công việc tiêu chuẩn.');
       return;
     }
 
@@ -597,7 +740,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
         justifyContent: 'center',
         padding: 24,
       }}
-      onClick={onClose}
+      {...handleBackdropClick(onClose)}
     >
       <div
         style={{
@@ -668,7 +811,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
             {(() => {
               const displayColor = item?.typeColor || typeInfo.color || '#2563EB';
               const lvl = item?.hierarchyLevel;
-              const lvlLabel = lvl === 1 ? 'Cấp 1 • Hạng mục lớn' : lvl === 0 ? 'Cấp 0 • Tiêu chuẩn' : lvl === -1 ? 'Cấp -1 • Nhiệm vụ con' : null;
+              const lvlLabel = lvl === 1 ? 'Cấp 3 • Hạng mục lớn' : lvl === 0 ? 'Cấp 2 • Tiêu chuẩn' : lvl === -1 ? 'Cấp 1 • Công việc con' : null;
               return (
                 <div
                   style={{
@@ -973,7 +1116,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       padding: '4px 0',
                       lineHeight: 1.3,
                     }}
-                    title="Click để chỉnh sửa tiêu đề"
+                    title="Nhấn để chỉnh sửa tiêu đề"
                   >
                     {item?.summary || 'Chưa có tiêu đề'}
                   </h2>
@@ -1202,7 +1345,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                 <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Nhiệm vụ con</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Công việc con</span>
                       {subtaskTotal > 0 && (
                         <span style={{ fontSize: 12, color: '#64748B' }}>
                           {subtaskDone}/{subtaskTotal} hoàn thành ({Math.round(progressPercent)}%)
@@ -1225,7 +1368,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         }}
                       >
                         <Plus size={14} />
-                        <span>Thêm nhiệm vụ con</span>
+                        <span>Thêm công việc con</span>
                       </button>
                     )}
                   </div>
@@ -1312,7 +1455,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         type="text"
                         value={newSubtaskTitle}
                         onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                        placeholder="Nhập tiêu đề nhiệm vụ con..."
+                        placeholder="Nhập tiêu đề công việc con..."
                         autoFocus
                         style={{
                           flex: 1,
@@ -1361,27 +1504,27 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
               {/* ─── Epic Child Stories & Progress (Step 5.5) ─── */}
               {(item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC') && (
-                <div style={{ border: '1px solid #E9D5FF', backgroundColor: '#FAF5FF', borderRadius: 8, padding: 16 }}>
+                <div style={{ border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', borderRadius: 8, padding: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Bookmark size={16} color="#6554C0" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#581C87' }}>
+                      <Bookmark size={16} color="#7C3AED" />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>
                         Công việc trực thuộc Hạng mục lớn ({item?.childStories?.length || 0})
                       </span>
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#6554C0' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#7C3AED' }}>
                       {item?.doneStoryPoints || 0} / {item?.totalStoryPoints || 0} điểm ước lượng hoàn thành
                     </div>
                   </div>
 
                   {/* Epic Progress Bar */}
                   {item?.totalStoryPoints > 0 && (
-                    <div style={{ width: '100%', height: 6, backgroundColor: '#E9D5FF', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
+                    <div style={{ width: '100%', height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
                       <div
                         style={{
                           width: `${Math.min(100, Math.round(((item.doneStoryPoints || 0) / item.totalStoryPoints) * 100))}%`,
                           height: '100%',
-                          backgroundColor: '#6554C0',
+                          backgroundColor: '#10B981',
                           transition: 'width 0.3s ease',
                         }}
                       />
@@ -1403,14 +1546,28 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                               padding: '8px 12px',
                               backgroundColor: '#FFFFFF',
                               borderRadius: 6,
-                              border: '1px solid #E9D5FF',
+                              border: '1px solid #E2E8F0',
                               fontSize: 13,
+                              transition: 'border-color 0.15s ease',
                             }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {/* Icon loại công việc: Màu xanh dương tiêu chuẩn của Task */}
+                              <span
+                                style={{
+                                  width: 14,
+                                  height: 14,
+                                  borderRadius: 3,
+                                  backgroundColor: cs.typeColor || '#3B82F6',
+                                  flexShrink: 0,
+                                  display: 'inline-block',
+                                }}
+                                title={getTypeDisplayName(cs.typeName || cs.typeCode)}
+                              />
                               <span
                                 onClick={() => setCurrentId(cs.id)}
-                                style={{ fontSize: 12, fontWeight: 700, color: '#6554C0', cursor: 'pointer' }}
+                                style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', cursor: 'pointer' }}
+                                title="Bấm để xem chi tiết công việc này"
                               >
                                 {cs.code}
                               </span>
@@ -1420,7 +1577,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               {cs.storyPoints != null && (
-                                <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4, backgroundColor: '#F3F0FF', color: '#6554C0' }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 999, backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
                                   {cs.storyPoints} điểm
                                 </span>
                               )}
@@ -1430,8 +1587,8 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                   fontWeight: 600,
                                   padding: '2px 8px',
                                   borderRadius: 4,
-                                  backgroundColor: cs.statusColorHex ? `${cs.statusColorHex}15` : '#EFF6FF',
-                                  color: cs.statusColorHex || '#2563EB',
+                                  backgroundColor: cs.statusColorHex ? `${cs.statusColorHex}15` : '#F1F5F9',
+                                  color: cs.statusColorHex || '#475569',
                                 }}
                               >
                                 {getStatusDisplayName(cs.statusName || 'Cần làm')}
@@ -1441,7 +1598,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         );
                       })
                     ) : (
-                      <div style={{ fontSize: 12, color: '#7E22CE', fontStyle: 'italic' }}>
+                      <div style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>
                         Chưa có công việc con nào được gắn vào Hạng mục lớn này.
                       </div>
                     )}
@@ -1508,11 +1665,13 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     )}
                     {canComment && (
                     <form onSubmit={handleAddComment} style={{ marginBottom: 20 }}>
-                      <textarea
+                      <MentionTextarea
                         rows={3}
                         value={commentDraft}
-                        onChange={(e) => setCommentDraft(e.target.value)}
-                        placeholder="Thêm bình luận trao đổi (Hỗ trợ Markdown)..."
+                        onChange={setCommentDraft}
+                        members={members}
+                        excludeUserId={myId}
+                        placeholder="Thêm bình luận trao đổi… Gõ @ để nhắc tên thành viên"
                         style={{
                           width: '100%',
                           fontSize: 13,
@@ -1557,6 +1716,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                         comments.map((c) => (
                           <div
                             key={c.id}
+                            id={`comment-${c.id}`}
                             style={{
                               padding: 14,
                               backgroundColor: '#F8FAFC',
@@ -1593,10 +1753,12 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
 
                             {editingCommentId === c.id ? (
                               <div style={{ marginTop: 8 }}>
-                                <textarea
+                                <MentionTextarea
                                   rows={3}
                                   value={editingCommentDraft}
-                                  onChange={(e) => setEditingCommentDraft(e.target.value)}
+                                  onChange={setEditingCommentDraft}
+                                  members={members}
+                                  excludeUserId={myId}
                                   style={{
                                     width: '100%',
                                     fontSize: 13,
@@ -1640,7 +1802,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                 </div>
                               </div>
                             ) : (
-                              <div style={{ color: '#334155', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{c.body}</div>
+                              <div style={{ color: '#334155', lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{renderMentions(c.body, myId)}</div>
                             )}
 
                             {/* Comment Actions */}
@@ -1690,11 +1852,13 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                             {/* Inline Reply Form */}
                             {replyParentId === c.id && (
                               <div style={{ marginTop: 10, paddingLeft: 12, borderLeft: '2px solid #BFDBFE' }}>
-                                <textarea
+                                <MentionTextarea
                                   rows={2}
                                   value={replyDraft}
-                                  onChange={(e) => setReplyDraft(e.target.value)}
-                                  placeholder={`Trả lời ${c.authorName}...`}
+                                  onChange={setReplyDraft}
+                                  members={members}
+                                  excludeUserId={myId}
+                                  placeholder={`Trả lời ${c.authorName}… (gõ @ để nhắc tên)`}
                                   autoFocus
                                   style={{
                                     width: '100%',
@@ -1747,6 +1911,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                 {c.replies.map((reply) => (
                                   <div
                                     key={reply.id}
+                                    id={`comment-${reply.id}`}
                                     style={{
                                       padding: 10,
                                       backgroundColor: '#FFFFFF',
@@ -1776,7 +1941,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                                       </div>
                                       <span style={{ fontSize: 10, color: '#94A3B8' }}>{formatRelativeTime(reply.createdAt)}</span>
                                     </div>
-                                    <div style={{ color: '#334155', fontSize: 12, lineHeight: 1.4 }}>{reply.body}</div>
+                                    <div style={{ color: '#334155', fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{renderMentions(reply.body, myId)}</div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, fontSize: 10, color: '#64748B' }}>
                                       {canDeleteComment(reply) && (
                                       <button
@@ -2094,8 +2259,18 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                               }}
                               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
                               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                              title={t.requiresApproval ? 'Bạn không phải Admin dự án: công việc sẽ ở trạng thái Tạm hoàn thành cho tới khi Admin xác nhận' : undefined}
                             >
-                              {t.name} (➔ {getStatusDisplayName(t.toStatusName)})
+                              {t.requiresApproval ? (
+                                <>
+                                  <div>{t.name} (➔ Tạm hoàn thành)</div>
+                                  <div style={{ fontSize: 11, fontWeight: 500, color: '#B45309', marginTop: 2 }}>
+                                    Gửi yêu cầu – chờ Admin dự án xác nhận
+                                  </div>
+                                </>
+                              ) : (
+                                <>{t.name} (➔ {getStatusDisplayName(t.toStatusName)})</>
+                              )}
                             </div>
                           );
                         })
@@ -2108,6 +2283,26 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   )}
                 </div>
               </div>
+
+              {/* "Tạm hoàn thành" – chờ Admin dự án xác nhận */}
+              {item?.completionPending && item?.completionRequest && (
+                <CompletionPendingPanel
+                  request={item.completionRequest}
+                  canConfirm={Boolean(item.canConfirmCompletion)}
+                  isRequester={item.completionRequest.requestedBy === myId}
+                  busy={completionBusy}
+                  showRejectForm={showRejectForm}
+                  rejectReason={rejectReason}
+                  onRejectReasonChange={setRejectReason}
+                  onToggleRejectForm={(v) => {
+                    setShowRejectForm(v);
+                    if (!v) setRejectReason('');
+                  }}
+                  onApprove={handleApproveCompletion}
+                  onReject={handleRejectCompletion}
+                  onCancel={handleCancelCompletion}
+                />
+              )}
 
               {/* Priority Section */}
               <div>
@@ -2262,32 +2457,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Điểm ước lượng</span>
                   <StoryPointsHelpTooltip size={12} align="sidebar" />
                 </div>
-                {item?.hierarchyLevel === -1 || item?.isSubtask || item?.typeCode === 'SUBTASK' ? (
-                  <div>
-                    <input
-                      type="text"
-                      disabled
-                      value="Không áp dụng"
-                      title="Nhiệm vụ con không tính điểm trực tiếp"
-                      style={{
-                        width: '100%',
-                        marginTop: 6,
-                        padding: '8px 12px',
-                        borderRadius: 6,
-                        border: '1px solid #E2E8F0',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: '#94A3B8',
-                        backgroundColor: '#F1F5F9',
-                        cursor: 'not-allowed',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                      Nhiệm vụ con không tính điểm trực tiếp
-                    </div>
-                  </div>
-                ) : item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC' ? (
+                {item?.hierarchyLevel === 1 || item?.typeCode === 'EPIC' ? (
                   <div>
                     <input
                       type="text"
@@ -2313,27 +2483,14 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                     </div>
                   </div>
                 ) : (
-                  <input
-                    type="number"
-                    step="0.5"
-                    defaultValue={item?.storyPoints || ''}
-                    disabled={!canEdit}
-                    onBlur={(e) => handleUpdateStoryPoints(e.target.value)}
-                    placeholder="0"
-                    style={{
-                      width: '100%',
-                      marginTop: 6,
-                      padding: '8px 12px',
-                      borderRadius: 6,
-                      border: '1px solid #CBD5E1',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: '#0F172A',
-                      outline: 'none',
-                      backgroundColor: '#FFFFFF',
-                      boxSizing: 'border-box',
-                    }}
-                  />
+                  <div style={{ marginTop: 6 }}>
+                    <StoryPointsPicker
+                      value={item?.storyPoints}
+                      onChange={(val) => handleUpdateStoryPoints(val)}
+                      disabled={!canEdit}
+                      align="right"
+                    />
+                  </div>
                 )}
               </div>
 
@@ -2349,7 +2506,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   </div>
                   {item?.subtasks && item.subtasks.length > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: '#0284C7' }}>
-                      <span>Tổng cộng dồn (Gồm nhiệm vụ con):</span>
+                      <span>Tổng cộng dồn (Gồm công việc con):</span>
                       <strong>
                         {Math.round(((item?.totalTimeSpentSeconds || 0) / 3600) * 10) / 10} giờ
                       </strong>
@@ -2372,7 +2529,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   <div
                     title={
                       item?.hierarchyLevel === -1
-                        ? 'Sub-task đi theo chu kỳ của công việc cha'
+                        ? 'Công việc con đi theo chu kỳ của công việc cha'
                         : undefined
                     }
                     style={{
@@ -2386,34 +2543,39 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                       color: '#2563EB',
                     }}
                   >
-                    {item?.sprintName || 'Danh sách tồn đọng'}
+                    {item?.sprintName || 'Kho việc chờ phân bổ'}
                   </div>
                 ) : (
-                  <select
-                    value={item?.sprintId || ''}
-                    onChange={(e) => handleUpdateSprint(e.target.value || null)}
-                    style={{
-                      marginTop: 6,
-                      width: '100%',
-                      padding: '8px 12px',
-                      backgroundColor: '#EFF6FF',
-                      borderRadius: 6,
-                      border: '1px solid #BFDBFE',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: '#2563EB',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <option value="">Danh sách tồn đọng</option>
-                    {sprints
-                      .filter((sp) => sp.state !== 'CLOSED')
-                      .map((sp) => (
-                        <option key={sp.id} value={sp.id}>
-                          {sp.name}
-                        </option>
-                      ))}
-                  </select>
+                  <div style={{ marginTop: 6 }}>
+                    <CustomSelect
+                      value={item?.sprintId || ''}
+                      onChange={(val) => handleUpdateSprint(val || null)}
+                      options={[
+                        { value: '', label: 'Kho việc chờ phân bổ' },
+                        ...sprints
+                          .filter((sp) => sp.state !== 'CLOSED')
+                          .map((sp) => ({
+                            value: sp.id,
+                            label: sp.name,
+                            badge: (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  padding: '1px 6px',
+                                  borderRadius: 999,
+                                  backgroundColor: sp.state === 'ACTIVE' ? '#DCFCE7' : '#FEF3C7',
+                                  color: sp.state === 'ACTIVE' ? '#15803D' : '#B45309',
+                                }}
+                              >
+                                {sp.state === 'ACTIVE' ? 'Đang chạy' : 'Kế hoạch'}
+                              </span>
+                            ),
+                          })),
+                      ]}
+                      placeholder="Kho việc chờ phân bổ"
+                    />
+                  </div>
                 )}
               </div>
 
@@ -2449,7 +2611,7 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               alignItems: 'center',
               justifyContent: 'center',
             }}
-            onClick={() => setShowLinkModal(false)}
+            {...handleBackdropClick(() => setShowLinkModal(false))}
           >
             <div
               style={{
@@ -2475,27 +2637,77 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
               </div>
 
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>
-                  Loại quan hệ
-                </label>
-                <select
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>
+                    Loại quan hệ
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowLinkTypeHelp((v) => !v)}
+                    aria-expanded={showLinkTypeHelp}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      padding: 0,
+                      cursor: 'pointer',
+                      color: showLinkTypeHelp ? '#2563EB' : '#64748B',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <HelpCircle size={13} />
+                    <span>{showLinkTypeHelp ? 'Ẩn giải thích' : 'Giải thích các loại'}</span>
+                  </button>
+                </div>
+                <CustomSelect
                   value={linkRelationType}
-                  onChange={(e) => setLinkRelationType(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #CBD5E1',
-                    fontSize: 13,
-                    outline: 'none',
-                    fontWeight: 600,
-                  }}
-                >
-                  <option value="BLOCKS">Cản trở / Chặn tiến độ</option>
-                  <option value="RELATES_TO">Có liên quan đến</option>
-                  <option value="DUPLICATES">Trùng lặp với</option>
-                  <option value="CAUSES">Gây ra / Nguyên nhân của</option>
-                </select>
+                  onChange={(val) => setLinkRelationType(val)}
+                  options={LINK_TYPE_OPTIONS.map(({ value, label }) => ({ value, label }))}
+                />
+
+                {showLinkTypeHelp && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: 6,
+                      backgroundColor: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: 8,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                    }}
+                  >
+                    {LINK_TYPE_OPTIONS.map((opt) => {
+                      const active = opt.value === linkRelationType;
+                      return (
+                        <div
+                          key={opt.value}
+                          onClick={() => setLinkRelationType(opt.value)}
+                          title="Bấm để chọn loại này"
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            backgroundColor: active ? '#EFF6FF' : 'transparent',
+                            borderLeft: `3px solid ${active ? '#2563EB' : 'transparent'}`,
+                          }}
+                        >
+                          <div style={{ fontSize: 12, fontWeight: 700, color: active ? '#1D4ED8' : '#0F172A' }}>
+                            {opt.label}
+                          </div>
+                          <div style={{ fontSize: 11, lineHeight: 1.45, color: opt.warning ? '#B45309' : '#64748B', marginTop: 1 }}>
+                            {opt.warning && <AlertTriangle size={11} style={{ verticalAlign: '-1px', marginRight: 3 }} />}
+                            {opt.desc}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div>

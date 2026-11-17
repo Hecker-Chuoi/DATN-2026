@@ -96,9 +96,9 @@ export function WipBadge({ current, max, min }) {
     <span
       title={
         max != null
-          ? `Giới hạn WIP tối đa: ${max}`
+          ? `Giới hạn việc đang làm tối đa: ${max}`
           : belowMin
-            ? `Dưới giới hạn WIP tối thiểu: ${min}`
+            ? `Dưới giới hạn việc đang làm tối thiểu: ${min}`
             : undefined
       }
       style={{
@@ -106,7 +106,7 @@ export function WipBadge({ current, max, min }) {
         padding: bg === 'transparent' ? 0 : '1px 6px', borderRadius: 4,
       }}
     >
-      {max != null ? `(${current}/${max} WIP Limit)` : `(${current})`}
+      {max != null ? `(${current}/${max} Giới hạn)` : `(${current})`}
     </span>
   );
 }

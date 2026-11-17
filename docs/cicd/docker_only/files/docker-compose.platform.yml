@@ -1,0 +1,73 @@
+# =============================================================================
+# docker-compose.platform.yml – HƯỚNG 1: "nền móng" chạy 1 lần bằng tay trên EC2
+# Đặt trên server tại: /opt/datn/platform/  (cùng jenkins.Dockerfile, Caddyfile, .env)
+#
+#   cd /opt/datn/platform && docker compose up -d --build
+#
+# Gồm 2 container KHÔNG do pipeline quản lý (pipeline không tự deploy lại chính nó):
+#   - jenkins : CI/CD server
+#   - caddy   : reverse proxy biên, tự xin/gia hạn chứng chỉ HTTPS Let's Encrypt
+#
+# File .env cạnh file này (tạo bởi setup-ec2.sh, sửa tên miền + email):
+#   DOCKER_GID=988
+#   ACME_EMAIL=ban@example.com
+#   APP_DOMAIN=datn.example.com
+#   AUTH_DOMAIN=auth.datn.example.com
+#   JENKINS_DOMAIN=jenkins.datn.example.com
+# =============================================================================
+name: datn-platform
+
+services:
+
+  jenkins:
+    build:
+      context: .
+      dockerfile: jenkins.Dockerfile
+    image: datn/jenkins:lts
+    container_name: jenkins
+    restart: unless-stopped
+    # user jenkins (uid 1000) được thêm vào group docker của HOST → dùng được docker.sock
+    group_add:
+      - "${DOCKER_GID:?thieu DOCKER_GID trong .env}"
+    environment:
+      JAVA_OPTS: "-Xmx1g -Djava.awt.headless=true"
+      MAVEN_OPTS: "-Xmx1g"
+    volumes:
+      - jenkins_home:/var/jenkins_home              # job, credential, cache ~/.m2, ~/.npm
+      - /var/run/docker.sock:/var/run/docker.sock   # điều khiển Docker daemon của EC2
+      # QUAN TRỌNG: mount CÙNG đường dẫn. Lệnh docker từ Jenkins được daemon của HOST thực thi,
+      # nên mọi đường dẫn bind-mount trong compose (vd /opt/datn/deploy/keycloak/realm.json)
+      # phải tồn tại y hệt trên host. Mount trùng đường dẫn → trong và ngoài container giống nhau.
+      - /opt/datn:/opt/datn
+    mem_limit: 3g
+    networks: [datn-net]
+    # Không publish cổng: truy cập qua Caddy https://JENKINS_DOMAIN
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"     # HTTP/3
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      APP_DOMAIN: ${APP_DOMAIN}
+      AUTH_DOMAIN: ${AUTH_DOMAIN}
+      JENKINS_DOMAIN: ${JENKINS_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # chứng chỉ TLS – mất volume này là phải xin lại
+      - caddy_config:/config
+    mem_limit: 128m
+    networks: [datn-net]
+
+volumes:
+  jenkins_home:
+  caddy_data:
+  caddy_config:
+
+networks:
+  datn-net:
+    external: true

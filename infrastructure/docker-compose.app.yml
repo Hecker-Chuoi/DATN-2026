@@ -95,6 +95,15 @@ services:
       MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
       MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-false}
       MAIL_FROM: ${MAIL_FROM:-no-reply@datn.local}
+      # Thông báo trong ứng dụng (docs/services/notification/): bảng notifications, JWT Keycloak, Kafka
+      SPRING_DATASOURCE_URL: jdbc:postgresql://app-db:5432/datn_main_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/datn-realm/protocol/openid-connect/certs
+      KEYCLOAK_ISSUER_URI: http://localhost:8088/realms/datn-realm
+      APP_SERVICES_IDENTITY_URL: http://identity-service:8082
+      # Listener nội bộ của Kafka (localhost:9092 chỉ dành cho service chạy trên máy)
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     networks:
       - app-net
 

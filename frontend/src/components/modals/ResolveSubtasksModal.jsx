@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, GitCommitHorizontal, X } from 'lucide-react';
 import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 export default function ResolveSubtasksModal({
   isOpen,
@@ -12,6 +13,8 @@ export default function ResolveSubtasksModal({
   onCancel,
   loading = false,
 }) {
+  const backdropProps = useModalBackdrop(onCancel);
+
   if (!isOpen) return null;
 
   const incompleteSubtasks = subtasks.filter(
@@ -33,7 +36,7 @@ export default function ResolveSubtasksModal({
         zIndex: 10001,
         padding: 20,
       }}
-      onClick={onCancel}
+      {...backdropProps}
     >
       <div
         style={{
@@ -78,11 +81,11 @@ export default function ResolveSubtasksModal({
             </div>
             <div>
               <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                {isEpic ? 'Công việc trực thuộc Hạng mục lớn chưa hoàn thành' : 'Nhiệm vụ con chưa hoàn thành'}
+                {isEpic ? 'Công việc trực thuộc Hạng mục lớn chưa hoàn thành' : 'Công việc con chưa hoàn thành'}
               </h2>
               <div style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>
                 Công việc <strong style={{ color: '#0284C7' }}>[{parentCode}]</strong> còn{' '}
-                <strong style={{ color: '#D97706' }}>{incompleteSubtasks.length}</strong> {isEpic ? 'công việc trực thuộc' : 'nhiệm vụ con'} chưa xong.
+                <strong style={{ color: '#D97706' }}>{incompleteSubtasks.length}</strong> {isEpic ? 'công việc trực thuộc' : 'công việc con'} chưa xong.
               </div>
             </div>
           </div>
@@ -128,7 +131,7 @@ export default function ResolveSubtasksModal({
           >
             {isEpic
               ? 'Theo quy tắc phân tầng dự án, Hạng mục lớn chỉ có thể hoàn thành khi tất cả các công việc trực thuộc đã xong. Bạn có thể chọn đóng đồng loạt toàn bộ các công việc trực thuộc bên dưới:'
-              : 'Theo quy tắc phân tầng dự án, công việc cha chỉ có thể hoàn thành khi tất cả các nhiệm vụ con đã xong. Bạn có thể chọn đóng đồng loạt toàn bộ nhiệm vụ con bên dưới:'}
+              : 'Theo quy tắc phân tầng dự án, công việc cha chỉ có thể hoàn thành khi tất cả các công việc con đã xong. Bạn có thể chọn đóng đồng loạt toàn bộ công việc con bên dưới:'}
           </div>
 
           <div
@@ -268,7 +271,7 @@ export default function ResolveSubtasksModal({
                 ? 'Đang cập nhật...'
                 : isEpic
                 ? 'Hoàn thành tất cả công việc trực thuộc'
-                : 'Hoàn thành tất cả nhiệm vụ con'}
+                : 'Hoàn thành tất cả công việc con'}
             </span>
           </button>
         </div>

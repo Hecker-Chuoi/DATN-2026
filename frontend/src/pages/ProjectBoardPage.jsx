@@ -1,36 +1,55 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Layers, CalendarClock, X } from 'lucide-react';
+import { Search, Layers, CalendarClock, X, Kanban, ListTree, Zap, CheckSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useProjectContext } from '../context/ProjectContext.jsx';
 import { useBoardData } from '../hooks/useBoardData.js';
 import { boardApi, sprintApi } from '../api.js';
 import { SURFACE } from '../constants/jiraTokens.js';
-import { getTypeDisplayName, getStatusDisplayName } from '../constants/workConstants.js';
-import { boardTypeOf } from '../utils/projectType.js';
+import { getTypeDisplayName } from '../constants/workConstants.js';
+import { boardTypeOf, isBusinessProject } from '../utils/projectType.js';
 import InteractiveBoard from '../components/boards/InteractiveBoard.jsx';
+import BoardListView from '../components/boards/BoardListView.jsx';
 import SprintStateBadge from '../components/sprints/SprintStateBadge.jsx';
 import CompleteSprintModal from '../components/sprints/CompleteSprintModal.jsx';
+import PendingCompletionsButton from '../components/boards/PendingCompletionsButton.jsx';
 
 /**
- * Route /board. Tu chon bo cuc Scrum hay Kanban dua tren loai bang:
- * - SCRUM: co thanh Sprint dang chay + nut Hoan tat Sprint
- * - KANBAN: khong co khai niem Sprint
+ * Route /board. Hỗ trợ 2 chế độ hiển thị:
+ * - Bảng (Kanban Board): kéo thả thẻ theo các cột trạng thái
+ * - Danh sách (List View): cấu trúc phân cấp cây Hạng mục lớn -> Công việc -> Công việc con
  */
 export default function ProjectBoardPage() {
   const { projectId, project, canTransitionIssue, canManageSprint, isAdmin, openItemDetail, refreshKey, bumpRefresh } =
     useProjectContext();
 
+  const isBusiness = isBusinessProject(project);
+
   const [boardId, setBoardId] = useState(null);
   const [boardsLoading, setBoardsLoading] = useState(true);
   const [q, setQ] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
   const [completeOpen, setCompleteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [futureSprints, setFutureSprints] = useState([]);
 
-  // Du an hien chi co mot bang (do seed tu dong khi tao du an).
+  // Lưu chế độ hiển thị (board / list) vào localStorage
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('board_view_mode') || 'board';
+    } catch {
+      return 'board';
+    }
+  });
+
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('board_view_mode', mode);
+    } catch {}
+  };
+
+  // Dự án hiện chỉ có một bảng (do seed tự động khi tạo dự án).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -51,17 +70,64 @@ export default function ProjectBoardPage() {
   const board = useBoardData(projectId, boardId);
   const { data, columns, loading, error, reload, forbiddenColumnIds, setData } = board;
 
-  // Dong bo lai khi cong viec duoc tao/sua o noi khac (modal chi tiet, tao nhanh...).
+  // Đồng bộ lại khi công việc được tạo/sửa ở nơi khác (modal chi tiết, tạo nhanh...).
   useEffect(() => {
     if (boardId && refreshKey) reload({ silent: true });
   }, [refreshKey, boardId, reload]);
 
   const filteredColumns = useMemo(
-    () => columns.map((c) => ({ ...c, items: c.items.filter((i) => matches(i, q, typeFilter, statusFilter)) })),
-    [columns, q, typeFilter, statusFilter]
+    () =>
+      columns.map((c) => ({
+        ...c,
+        items: c.items.filter((i) => matches(i, q, typeFilter)),
+      })),
+    [columns, q, typeFilter]
   );
 
-  /** InteractiveBoard tra ve mang cot da cap nhat; ghi nguoc vao `cards` phang. */
+  const allFilteredCards = useMemo(() => {
+    return (data?.cards || []).filter((i) =>
+      matches(i, q, typeFilter)
+    );
+  }, [data?.cards, q, typeFilter]);
+
+  // Nhóm các loại công việc theo Cấp bậc (Hierarchy Level):
+  // Cấp 1 (Hạng mục lớn: Epic, CTF...), Cấp 0 (Tiêu chuẩn: Task, Story, Bug...), Cấp -1 (Công việc con: Subtask...)
+  const groupedTypes = useMemo(() => {
+    const types = project?.workItemTypes || [];
+    const level1 = [];
+    const level0 = [];
+    const levelMinus1 = [];
+
+    for (const t of types) {
+      const code = String(t.code || t.name || '').toUpperCase().replace('-', '_');
+      const item = {
+        key: code,
+        label: getTypeDisplayName(t.name || t.code, isBusiness),
+        code: t.code,
+        name: t.name,
+        color: t.colorHex || '#3B82F6',
+        hierarchyLevel: t.hierarchyLevel,
+      };
+
+      if (t.hierarchyLevel === 1) {
+        level1.push(item);
+      } else if (t.hierarchyLevel === -1 || t.isSubtask) {
+        levelMinus1.push(item);
+      } else {
+        level0.push(item);
+      }
+    }
+
+    // Sắp xếp trong nhóm: EPIC lên đầu nhóm 1, TASK lên đầu nhóm 0, SUBTASK lên đầu nhóm -1
+    level1.sort((a, b) => (a.code === 'EPIC' ? -1 : b.code === 'EPIC' ? 1 : a.label.localeCompare(b.label)));
+    level0.sort((a, b) => (a.code === 'TASK' ? -1 : b.code === 'TASK' ? 1 : a.label.localeCompare(b.label)));
+    levelMinus1.sort((a, b) => (a.code === 'SUBTASK' ? -1 : b.code === 'SUBTASK' ? 1 : a.label.localeCompare(b.label)));
+
+    return { level1, level0, levelMinus1 };
+  }, [project?.workItemTypes]);
+
+
+  /** InteractiveBoard trả về mảng cột đã cập nhật; ghi ngược vào `cards` phẳng. */
   const applyColumns = (nextColumns) => {
     setData((prev) => {
       if (!prev) return prev;
@@ -90,31 +156,14 @@ export default function ProjectBoardPage() {
     );
   }
 
-  // Loai cong viec lay tu chinh du an thay vi mang hardcode: du an co thể tuy bien loai.
-  const typeOptions = [
-    { key: 'ALL', label: 'Tất cả' },
-    ...(project?.workItemTypes || []).map((t) => ({
-      key: String(t.code || t.name || '').toUpperCase().replace('-', '_'),
-      label: getTypeDisplayName(t.code || t.name),
-    })),
-  ];
-
-  // So the theo tung trang thai, de nguoi dung biet loc ra bao nhieu truoc khi bam.
-  const statusCounts = new Map();
-  for (const col of columns) {
-    for (const it of col.items) {
-      if (it.statusName) statusCounts.set(it.statusName, (statusCounts.get(it.statusName) || 0) + 1);
-    }
-  }
-
-  const hasFilter = q || typeFilter !== 'ALL' || statusFilter !== 'ALL';
+  const hasFilter = Boolean(q || typeFilter !== 'ALL');
 
   const isScrum = boardTypeOf(project, data) === 'SCRUM' || data?.boardType === 'SCRUM';
   const sprint = data?.activeSprint;
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '14px 24px 32px 24px' }}>
-      {/* Thanh Sprint (chi voi bang Scrum) */}
+      {/* ─── Thanh Sprint (chỉ với bảng Scrum) ─── */}
       {isScrum && (
         sprint ? (
           <div style={sprintBar}>
@@ -133,20 +182,20 @@ export default function ProjectBoardPage() {
             )}
             {(canManageSprint || isAdmin) && (
               <button onClick={openComplete} disabled={busy} style={primaryBtn(busy)}>
-                Hoàn tất Sprint
+                {sprint?.name?.toLowerCase()?.includes('giai đoạn') ? 'Hoàn tất giai đoạn' : 'Hoàn tất chu kỳ'}
               </button>
             )}
           </div>
         ) : (
           <div style={emptyHint}>
-            Chưa có Sprint nào đang chạy. Hãy sang tab <b>Backlog</b> để bắt đầu một Sprint.
+            Chưa có chu kỳ nào đang chạy. Hãy sang tab <b>Kho việc & Kế hoạch</b> để bắt đầu một chu kỳ.
           </div>
         )
       )}
 
-      {/* Bo loc */}
+      {/* ─── Thanh Bộ Lọc & Switcher Chế độ hiển thị ─── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', width: 220 }}>
+        <div style={{ position: 'relative', width: 200 }}>
           <Search size={14} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: SURFACE.textLight }} />
           <input
             value={q}
@@ -155,44 +204,215 @@ export default function ProjectBoardPage() {
             style={{ width: '100%', padding: '6px 10px 6px 28px', borderRadius: 6, border: `1px solid ${SURFACE.border}`, fontSize: 13, outline: 'none', color: SURFACE.text }}
           />
         </div>
-        {typeOptions.map((t) => {
-          const active = typeFilter === t.key;
-          return (
-            <button
-              key={t.key}
-              onClick={() => setTypeFilter(t.key)}
-              style={{
-                padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: active ? 600 : 500,
-                cursor: 'pointer',
-                border: `1px solid ${active ? '#93C5FD' : SURFACE.border}`,
-                backgroundColor: active ? '#EFF6FF' : '#FFFFFF',
-                color: active ? '#1D4ED8' : SURFACE.textMuted,
-              }}
-            >
-              {t.label}
-            </button>
-          );
-        })}
 
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+        {/* Nút Tất cả */}
+        <button
+          type="button"
+          onClick={() => setTypeFilter('ALL')}
           style={{
-            padding: '6px 10px', borderRadius: 6, border: `1px solid ${SURFACE.border}`,
-            fontSize: 12, backgroundColor: '#FFFFFF', color: SURFACE.text, cursor: 'pointer',
+            padding: '5px 12px',
+            borderRadius: 6,
+            fontSize: 12,
+            fontWeight: typeFilter === 'ALL' ? 700 : 500,
+            cursor: 'pointer',
+            border: `1px solid ${typeFilter === 'ALL' ? '#93C5FD' : SURFACE.border}`,
+            backgroundColor: typeFilter === 'ALL' ? '#EFF6FF' : '#FFFFFF',
+            color: typeFilter === 'ALL' ? '#1D4ED8' : SURFACE.text,
+            transition: 'all 0.15s ease',
           }}
         >
-          <option value="ALL">Mọi trạng thái</option>
-          {[...statusCounts.entries()].map(([name, count]) => (
-            <option key={name} value={name}>
-              {getStatusDisplayName(name)} ({count})
-            </option>
-          ))}
-        </select>
+          Tất cả
+        </button>
+
+        {/* ── Nhóm Cấp 1 (Hạng mục lớn: Epic, CTF...) ── */}
+        {groupedTypes.level1.length > 0 && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              backgroundColor: '#FAF5FF',
+              border: `1px solid ${typeFilter === 'LEVEL_1' || groupedTypes.level1.some((t) => typeFilter === t.key) ? '#C084FC' : '#E9D5FF'}`,
+              borderRadius: 8,
+              padding: '2px 4px',
+              gap: 4,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setTypeFilter(typeFilter === 'LEVEL_1' ? 'ALL' : 'LEVEL_1')}
+              title={isBusiness ? "Lọc tất cả công việc Cấp 3 (Giai đoạn)" : "Lọc tất cả công việc Cấp 3 (Hạng mục lớn)"}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                borderRadius: 5,
+                border: 'none',
+                backgroundColor: typeFilter === 'LEVEL_1' ? '#7E22CE' : 'transparent',
+                color: typeFilter === 'LEVEL_1' ? '#FFFFFF' : '#7E22CE',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Zap size={11} /> Cấp 3
+            </button>
+
+            {groupedTypes.level1.map((t) => {
+              const active = typeFilter === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTypeFilter(active ? 'ALL' : t.key)}
+                  style={{
+                    padding: '3px 9px',
+                    borderRadius: 5,
+                    fontSize: 12,
+                    fontWeight: active ? 700 : 500,
+                    cursor: 'pointer',
+                    border: active ? '1px solid #7E22CE' : '1px solid transparent',
+                    backgroundColor: active ? '#7E22CE' : '#FFFFFF',
+                    color: active ? '#FFFFFF' : '#581C87',
+                    boxShadow: active ? '0 1px 2px rgba(126,34,206,0.2)' : '0 1px 1px rgba(0,0,0,0.04)',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Nhóm Cấp 0 (Tiêu chuẩn: Task, Story, Bug...) ── */}
+        {groupedTypes.level0.length > 0 && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              backgroundColor: '#EFF6FF',
+              border: `1px solid ${typeFilter === 'LEVEL_0' || groupedTypes.level0.some((t) => typeFilter === t.key) ? '#93C5FD' : '#BFDBFE'}`,
+              borderRadius: 8,
+              padding: '2px 4px',
+              gap: 4,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setTypeFilter(typeFilter === 'LEVEL_0' ? 'ALL' : 'LEVEL_0')}
+              title="Lọc tất cả công việc Cấp 2 (Tiêu chuẩn)"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                borderRadius: 5,
+                border: 'none',
+                backgroundColor: typeFilter === 'LEVEL_0' ? '#2563EB' : 'transparent',
+                color: typeFilter === 'LEVEL_0' ? '#FFFFFF' : '#1D4ED8',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <CheckSquare size={11} /> Cấp 2
+            </button>
+
+            {groupedTypes.level0.map((t) => {
+              const active = typeFilter === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTypeFilter(active ? 'ALL' : t.key)}
+                  style={{
+                    padding: '3px 9px',
+                    borderRadius: 5,
+                    fontSize: 12,
+                    fontWeight: active ? 700 : 500,
+                    cursor: 'pointer',
+                    border: active ? '1px solid #2563EB' : '1px solid transparent',
+                    backgroundColor: active ? '#2563EB' : '#FFFFFF',
+                    color: active ? '#FFFFFF' : '#1E40AF',
+                    boxShadow: active ? '0 1px 2px rgba(37,99,235,0.2)' : '0 1px 1px rgba(0,0,0,0.04)',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Nhóm Cấp -1 (Công việc con: Subtasks...) ── */}
+        {groupedTypes.levelMinus1.length > 0 && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              backgroundColor: '#ECFEFF',
+              border: `1px solid ${typeFilter === 'LEVEL_-1' || groupedTypes.levelMinus1.some((t) => typeFilter === t.key) ? '#67E8F9' : '#A5F3FC'}`,
+              borderRadius: 8,
+              padding: '2px 4px',
+              gap: 4,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setTypeFilter(typeFilter === 'LEVEL_-1' ? 'ALL' : 'LEVEL_-1')}
+              title="Lọc tất cả công việc Cấp 1 (Công việc con)"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                borderRadius: 5,
+                border: 'none',
+                backgroundColor: typeFilter === 'LEVEL_-1' ? '#0891B2' : 'transparent',
+                color: typeFilter === 'LEVEL_-1' ? '#FFFFFF' : '#0E7490',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Layers size={11} /> Cấp 1
+            </button>
+
+            {groupedTypes.levelMinus1.map((t) => {
+              const active = typeFilter === t.key;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTypeFilter(active ? 'ALL' : t.key)}
+                  style={{
+                    padding: '3px 9px',
+                    borderRadius: 5,
+                    fontSize: 12,
+                    fontWeight: active ? 700 : 500,
+                    cursor: 'pointer',
+                    border: active ? '1px solid #0891B2' : '1px solid transparent',
+                    backgroundColor: active ? '#0891B2' : '#FFFFFF',
+                    color: active ? '#FFFFFF' : '#155E75',
+                    boxShadow: active ? '0 1px 2px rgba(8,145,178,0.2)' : '0 1px 1px rgba(0,0,0,0.04)',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {hasFilter && (
           <button
-            onClick={() => { setQ(''); setTypeFilter('ALL'); setStatusFilter('ALL'); }}
+            onClick={() => { setQ(''); setTypeFilter('ALL'); }}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               padding: '5px 10px', borderRadius: 6, border: `1px solid ${SURFACE.border}`,
@@ -202,24 +422,105 @@ export default function ProjectBoardPage() {
             <X size={12} /> Xoá lọc
           </button>
         )}
-        {data?.swimlaneStrategy && (
-          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: SURFACE.textMuted }}>
-            <Layers size={13} /> Phân luồng: {data.swimlaneStrategy}
-          </span>
-        )}
+
+        {/* ─── Switcher: Chuyển đổi Bảng (Board) / Danh sách (List) ─── */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <PendingCompletionsButton
+            projectId={projectId}
+            refreshKey={`${refreshKey || 0}-${data?.generatedAt || ''}`}
+            isAdmin={isAdmin}
+            onOpenItem={openItemDetail}
+          />
+          {data?.swimlaneStrategy && viewMode === 'board' && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: SURFACE.textMuted }}>
+              <Layers size={13} /> Phân làn: {data.swimlaneStrategy === 'BY_EPIC' ? (isBusiness ? 'Theo Giai đoạn' : 'Theo Hạng mục lớn') : data.swimlaneStrategy === 'BY_ASSIGNEE' ? 'Theo Người thực hiện' : data.swimlaneStrategy === 'BY_PRIORITY' ? 'Theo Mức độ ưu tiên' : data.swimlaneStrategy === 'NONE' ? 'Không phân làn' : data.swimlaneStrategy}
+            </span>
+          )}
+
+          <div
+            style={{
+              display: 'flex',
+              backgroundColor: '#F1F5F9',
+              padding: 2,
+              borderRadius: 6,
+              border: '1px solid #E2E8F0',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('board')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '4px 10px',
+                borderRadius: 5,
+                border: 'none',
+                backgroundColor: viewMode === 'board' ? '#FFFFFF' : 'transparent',
+                color: viewMode === 'board' ? '#1D4ED8' : '#64748B',
+                fontWeight: viewMode === 'board' ? 700 : 500,
+                fontSize: 12,
+                cursor: 'pointer',
+                boxShadow: viewMode === 'board' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
+              title="Xem dạng Bảng Kanban"
+            >
+              <Kanban size={13} />
+              <span>Bảng</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('list')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '4px 10px',
+                borderRadius: 5,
+                border: 'none',
+                backgroundColor: viewMode === 'list' ? '#FFFFFF' : 'transparent',
+                color: viewMode === 'list' ? '#1D4ED8' : '#64748B',
+                fontWeight: viewMode === 'list' ? 700 : 500,
+                fontSize: 12,
+                cursor: 'pointer',
+                boxShadow: viewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
+              title={isBusiness ? "Xem dạng Danh sách phân cấp (Giai đoạn -> Công việc -> Việc con)" : "Xem dạng Danh sách phân cấp (Hạng mục lớn -> Công việc -> Công việc con)"}
+            >
+              <ListTree size={13} />
+              <span>Danh sách</span>
+            </button>
+          </div>
+        </div>
       </div>
 
-      <InteractiveBoard
-        boardId={boardId}
-        columns={filteredColumns}
-        swimlanes={data?.swimlanes || []}
-        unmappedStatuses={data?.unmappedStatuses || []}
-        canTransition={canTransitionIssue || isAdmin}
-        forbiddenColumnIds={forbiddenColumnIds}
-        onSelectItem={openItemDetail}
-        onApplyColumns={applyColumns}
-        onReload={reload}
-      />
+      {/* ─── Nội Dung: Render theo Chế độ Bảng hoặc Danh sách ─── */}
+      {viewMode === 'board' ? (
+        <InteractiveBoard
+          boardId={boardId}
+          columns={filteredColumns}
+          swimlanes={data?.swimlanes || []}
+          unmappedStatuses={data?.unmappedStatuses || []}
+          canTransition={canTransitionIssue || isAdmin}
+          forbiddenColumnIds={forbiddenColumnIds}
+          onSelectItem={openItemDetail}
+          onApplyColumns={applyColumns}
+          onReload={reload}
+        />
+      ) : (
+        <BoardListView
+          cards={allFilteredCards}
+          columns={columns}
+          canTransition={canTransitionIssue || isAdmin}
+          onSelectItem={openItemDetail}
+          onReload={reload}
+          projectId={projectId}
+          isBusiness={isBusiness}
+        />
+      )}
 
       <CompleteSprintModal
         isOpen={completeOpen}
@@ -232,7 +533,7 @@ export default function ProjectBoardPage() {
             setBusy(true);
             await sprintApi.close(sprint.id, payload);
             setCompleteOpen(false);
-            toast.success('Đã hoàn tất Sprint');
+            toast.success('Đã hoàn tất chu kỳ');
             await reload({ silent: true });
             bumpRefresh?.();
           } catch (err) {
@@ -246,13 +547,21 @@ export default function ProjectBoardPage() {
   );
 }
 
-function matches(item, q, typeFilter, statusFilter) {
+function matches(item, q, typeFilter) {
   if (typeFilter !== 'ALL') {
-    const code = String(item.typeCode || item.typeName || '').toUpperCase().replace('-', '_');
-    if (code !== typeFilter && code.replace('_', '') !== typeFilter) return false;
-  }
-  if (statusFilter && statusFilter !== 'ALL' && item.statusName !== statusFilter) {
-    return false;
+    if (typeFilter === 'LEVEL_1') {
+      const isLevel1 = item.hierarchyLevel === 1 || item.typeCode === 'EPIC' || item.typeCode === 'CTF' || item.typeName?.toLowerCase()?.includes('hạng mục');
+      if (!isLevel1) return false;
+    } else if (typeFilter === 'LEVEL_0') {
+      const isLevel0 = item.hierarchyLevel === 0 || (!item.isSubtask && item.hierarchyLevel !== 1 && item.hierarchyLevel !== -1);
+      if (!isLevel0) return false;
+    } else if (typeFilter === 'LEVEL_-1') {
+      const isLevelSub = Boolean(item.isSubtask || item.hierarchyLevel === -1 || item.hierarchyLevel === 3);
+      if (!isLevelSub) return false;
+    } else {
+      const code = String(item.typeCode || item.typeName || '').toUpperCase().replace('-', '_');
+      if (code !== typeFilter && code.replace('_', '') !== typeFilter) return false;
+    }
   }
   if (q) {
     const n = q.trim().toLowerCase();

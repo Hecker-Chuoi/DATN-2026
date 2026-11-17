@@ -4,7 +4,11 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cache.interceptor.CacheErrorHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
@@ -12,16 +16,44 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.GenericToStringSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
-import java.util.UUID;
 
+@Slf4j
 @Configuration
 @EnableCaching
-public class RedisConfig {
+public class RedisConfig implements CachingConfigurer {
+
+    @Override
+    public CacheErrorHandler errorHandler() {
+        return new CacheErrorHandler() {
+            @Override
+            public void handleCacheGetError(RuntimeException exception, Cache cache, Object key) {
+                log.warn("Redis GET failed for cache='{}', key='{}'. Falling back to underlying service: {}",
+                        cache.getName(), key, exception.getMessage());
+            }
+
+            @Override
+            public void handleCachePutError(RuntimeException exception, Cache cache, Object key, Object value) {
+                log.warn("Redis PUT failed for cache='{}', key='{}'. Skipping cache write: {}",
+                        cache.getName(), key, exception.getMessage());
+            }
+
+            @Override
+            public void handleCacheEvictError(RuntimeException exception, Cache cache, Object key) {
+                log.warn("Redis EVICT failed for cache='{}', key='{}. Skipping eviction: {}",
+                        cache.getName(), key, exception.getMessage());
+            }
+
+            @Override
+            public void handleCacheClearError(RuntimeException exception, Cache cache) {
+                log.warn("Redis CLEAR failed for cache='{}'. Skipping cache clear: {}",
+                        cache.getName(), exception.getMessage());
+            }
+        };
+    }
 
     private ObjectMapper createRedisObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
@@ -64,28 +96,8 @@ public class RedisConfig {
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer));
 
-        // Cache ánh xạ Keycloak sub -> users.id của IdentityUserLookup.
-        //
-        // PHẢI dùng serializer riêng, KHÔNG dùng cacheConfig chung ở trên: bộ
-        // GenericJackson2JsonRedisSerializer kia bật activateDefaultTyping với
-        // NON_FINAL, mà UUID là class FINAL nên Jackson không ghi kèm type info.
-        // Kết quả là giá trị đọc lại từ Redis về dưới dạng String và gây
-        // ClassCastException ngay lần cache hit đầu tiên (lần miss thì vẫn chạy,
-        // nên lỗi này chỉ hiện ra ở request thứ hai).
-        //
-        // GenericToStringSerializer đi qua DefaultConversionService, vốn đã có sẵn
-        // converter String <-> UUID, nên round-trip đúng kiểu.
-        //
-        // TTL dài hơn default vì ánh xạ này gần như bất biến trong một phiên; mỗi
-        // lần miss là một lời gọi Feign sang identity-service.
-        RedisCacheConfiguration userIdCacheConfig = cacheConfig
-                .entryTtl(Duration.ofMinutes(30))
-                .serializeValuesWith(RedisSerializationContext.SerializationPair
-                        .fromSerializer(new GenericToStringSerializer<>(UUID.class)));
-
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(cacheConfig)
-                .withCacheConfiguration("wsUserId", userIdCacheConfig)
                 .build();
     }
 }

@@ -34,7 +34,7 @@ public class ProjectController {
     /**
      * ──────────────────────────── DANH SÁCH API ────────────────────────────
      * POST   /api/v1/work/projects                  : Tạo dự án mới (khởi tạo hệ sinh thái)
-     * GET    /api/v1/work/projects                  : Lấy danh sách dự án (lọc theo workspace/team + tìm kiếm + phân trang)
+     * GET    /api/v1/work/projects                  : Lấy danh sách dự án (lọc theo workspace + tìm kiếm + phân trang)
      * GET    /api/v1/work/projects/templates        : Lấy danh sách dự án mẫu (templates)
      * GET    /api/v1/work/projects/{projectId}      : Lấy chi tiết dự án theo ID
      * GET    /api/v1/work/projects/key/{key}        : Lấy chi tiết dự án theo key
@@ -64,15 +64,18 @@ public class ProjectController {
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<ProjectResponse>>> getAllProjects(
             @RequestParam(required = false) UUID workspaceId,
-            @RequestParam(required = false) UUID teamId,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Boolean isTemplate,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
         boolean includeAll = SecurityUtils.isGlobalAdmin();
+        Boolean effectiveIsTemplate = isTemplate;
+        if (effectiveIsTemplate == null && !includeAll) {
+            effectiveIsTemplate = false;
+        }
         PageResponse<ProjectResponse> response = projectService.getAllProjects(
-                resolveWorkspaceScope(workspaceId), teamId, search, isTemplate, pageable, currentUserId, includeAll
+                resolveWorkspaceScope(workspaceId), search, effectiveIsTemplate, pageable, currentUserId, includeAll
         );
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -93,9 +96,7 @@ public class ProjectController {
      * Giải phạm vi workspace cho các endpoint listing.
      * <p>
      * Có workspaceId thì xác minh người gọi là thành viên rồi giới hạn đúng
-     * workspace đó. Bỏ trống thì lấy toàn bộ workspace của người gọi. Trước đây
-     * workspaceId là optional và KHÔNG được enforce, nên bỏ trống nó là liệt kê
-     * mọi project trong toàn hệ thống.
+     * workspace đó. Bỏ trống thì lấy toàn bộ workspace của người gọi.
      * <p>
      * Trả về danh sách RỖNG (không phải null) khi người gọi không thuộc workspace
      * nào - để ra trang trống chứ không phải trang không filter.

@@ -6,6 +6,7 @@
  */
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { translateServerMessage } from './utils/serverMessageVi.js';
 
 // ─── Token storage (Lưu trữ localStorage duy trì phiên làm việc lâu dài) ───────
 let _userToken = localStorage.getItem('user_access_token') || null;
@@ -88,6 +89,27 @@ function isAdminPortalPage() {
   return typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
 }
 
+/** Kiểm tra xem token (access hoặc refresh) đã hết hạn theo claim exp hay chưa */
+export function isTokenExpired(token) {
+  if (!token || typeof token !== 'string') return true;
+  const payload = decodeJwtPayload(token);
+  if (!payload || !payload.exp) return false;
+  return payload.exp * 1000 <= Date.now();
+}
+
+/** Kiểm tra phiên của store (user hoặc admin) còn hiệu lực hay không */
+export function isSessionValid(store = userTokenStore) {
+  const token = store.get();
+  if (!token) return false;
+  const refreshToken = store.getRefreshToken();
+  // Nếu có refreshToken: phiên còn sống chừng nào refreshToken chưa hết hạn
+  if (refreshToken) {
+    return !isTokenExpired(refreshToken);
+  }
+  // Nếu không có refreshToken: kiểm tra accessToken
+  return !isTokenExpired(token);
+}
+
 // ─── Recursive Normalizer for Spring Boot / Jackson DefaultTyping ────────────
 function normalizeResponseData(data) {
   if (data === null || data === undefined) return data;
@@ -153,11 +175,25 @@ apiClient.interceptors.request.use(
 let isRefreshing = false;
 let failedQueue = [];
 
-// Hết phiên (không có / không refresh được token): đưa về trang 401 (user) hoặc trang đăng nhập admin.
-const AUTH_PAGE_RE = /^\/(login|register|401|auth\/callback|admin\/login|admin\/auth\/callback)/;
-const redirectToSessionExpired = (isAdminRoute) => {
-  if (typeof window === 'undefined' || AUTH_PAGE_RE.test(window.location.pathname)) return;
-  window.location.replace(isAdminRoute ? '/admin/login' : '/401');
+// Hết phiên (không có / không refresh được token): tự động đá về trang đăng nhập tương ứng thay vì trang lỗi 401
+const PUBLIC_AUTH_PAGES = /^\/(login|register|verify-email|forgot-password|reset-password|auth\/callback|admin\/login|admin\/auth\/callback)/;
+export const redirectToSessionExpired = (isAdminRoute) => {
+  if (typeof window === 'undefined') return;
+  const currentPath = window.location.pathname;
+  if (PUBLIC_AUTH_PAGES.test(currentPath)) return;
+
+  const target = isAdminRoute ? '/admin/login' : '/login';
+
+  try {
+    sessionStorage.setItem('session_expired_notice', 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    if (currentPath && currentPath !== '/' && currentPath !== '/401' && !PUBLIC_AUTH_PAGES.test(currentPath)) {
+      sessionStorage.setItem('redirect_after_login', currentPath + window.location.search);
+    }
+  } catch {
+    // ignore
+  }
+
+  window.location.replace(target);
 };
 
 const processQueue = (error, token = null) => {
@@ -254,6 +290,11 @@ apiClient.interceptors.response.use(
     }
 
     const body = error.response?.data;
+    // Việt hóa câu lỗi của BE (chỉ hiển thị). Ghi đè luôn body.message vì nhiều call site
+    // đọc err.response.data.message thay vì err.message.
+    if (body && typeof body.message === 'string') {
+      body.message = translateServerMessage(body.message);
+    }
     const msg = body?.message || error.message || 'Lỗi kết nối máy chủ';
 
     // Call site tự xử lý lỗi bằng cách gửi { skipErrorToast: true }:
@@ -295,7 +336,10 @@ export const authApi = {
 // ─── User API ─────────────────────────────────────────────────────────────────
 export const userApi = {
   listAll: (params) => apiClient.get('/identity/api/v1/admin/users', { params }),
-  search: (query) => apiClient.get('/identity/api/v1/users/search', { params: { query } }),
+  search: (query, config = {}) =>
+    apiClient.get('/identity/api/v1/users/search', { params: { query }, ...config }),
+  getByEmail: (email, config = {}) =>
+    apiClient.get('/identity/api/v1/users/by-email', { params: { email }, ...config }),
   me: () => apiClient.get('/identity/api/v1/users/me'),
   updateRoles: (id, roles) =>
     apiClient.put(`/identity/api/v1/admin/users/${id}/roles`, { roles }),
@@ -310,29 +354,10 @@ export const userApi = {
 // ─── Work Service: Base Endpoint ──────────────────────────────────────────────
 const WORK_BASE = '/work/api/v1/work';
 
-// ─── 1. Teams API ─────────────────────────────────────────────────────────────
-export const teamApi = {
-  listAll: (params) => apiClient.get(`${WORK_BASE}/teams`, { params }),
-  listMine: (params) => apiClient.get(`${WORK_BASE}/teams/my`, { params }),
-  getById: (id) => apiClient.get(`${WORK_BASE}/teams/${id}`),
-  create: (data) => apiClient.post(`${WORK_BASE}/teams`, data),
-  update: (id, data) => apiClient.put(`${WORK_BASE}/teams/${id}`, data),
-  delete: (id) => apiClient.delete(`${WORK_BASE}/teams/${id}`),
-  leaveTeam: (teamId) => apiClient.post(`${WORK_BASE}/teams/${teamId}/leave`),
-  getMembers: (teamId) => apiClient.get(`${WORK_BASE}/teams/${teamId}/members`),
-  addMember: (teamId, data) => apiClient.post(`${WORK_BASE}/teams/${teamId}/members`, data),
-  assignLeader: (teamId, newLeaderUserId) =>
-    apiClient.put(`${WORK_BASE}/teams/${teamId}/leader`, { newLeaderUserId }),
-  updateMemberRole: (teamId, userId, role) =>
-    apiClient.put(`${WORK_BASE}/teams/${teamId}/members/${userId}/role`, { role }),
-  removeMember: (teamId, userId) =>
-    apiClient.delete(`${WORK_BASE}/teams/${teamId}/members/${userId}`),
-};
 
 // ─── 2. Projects API ──────────────────────────────────────────────────────────
 export const invitationApi = {
   my: () => apiClient.get(`${WORK_BASE}/invitations/my`, { skipErrorToast: true }),
-  forTeam: (teamId) => apiClient.get(`${WORK_BASE}/invitations`, { params: { teamId }, skipErrorToast: true }),
   forProject: (projectId) => apiClient.get(`${WORK_BASE}/invitations`, { params: { projectId }, skipErrorToast: true }),
   accept: (id) => apiClient.post(`${WORK_BASE}/invitations/${id}/accept`),
   decline: (id) => apiClient.post(`${WORK_BASE}/invitations/${id}/decline`),
@@ -358,6 +383,19 @@ export const projectApi = {
   removeMember: (projectId, userId) =>
     apiClient.delete(`${WORK_BASE}/projects/${projectId}/members/${userId}`),
   getRoles: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/roles`),
+};
+
+// ─── 2.0. Project Templates API (Dự án mẫu) ───────────────────────────────────
+export const templateApi = {
+  /** Thư viện mẫu: params { workspaceId, category, search } → TemplateSummaryResponse[] */
+  list: (params) => apiClient.get(`${WORK_BASE}/templates`, { params }),
+  /** Bản thiết kế đầy đủ của mẫu (trạng thái, workflow, board, sprint, cây công việc, kiểm tra toàn vẹn). */
+  preview: (templateId) => apiClient.get(`${WORK_BASE}/templates/${templateId}/preview`),
+  /** Tạo dự án thật từ mẫu → { project, stats, dateOffsetDays, integrity } */
+  createProject: (templateId, data) => apiClient.post(`${WORK_BASE}/templates/${templateId}/projects`, data),
+  saveAsTemplate: (projectId, data) => apiClient.post(`${WORK_BASE}/projects/${projectId}/save-as-template`, data),
+  checkIntegrity: (projectId) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/template-check`, { skipErrorToast: true }),
 };
 
 // ─── 2.1. Project Work Item Types API (Custom Types per Project) ───────────────
@@ -406,7 +444,7 @@ export const workItemApi = {
   listByProject: (projectId, params) =>
     apiClient.get(`${WORK_BASE}/projects/${projectId}/items`, { params }),
   getById: (id) => apiClient.get(`${WORK_BASE}/items/${id}`),
-  getByCode: (code) => apiClient.get(`${WORK_BASE}/items/code/${code}`),
+  getByCode: (code, config = {}) => apiClient.get(`${WORK_BASE}/items/code/${encodeURIComponent(code)}`, config),
   create: (projectIdOrData, maybeData) => {
     if (maybeData) {
       return apiClient.post(`${WORK_BASE}/projects/${projectIdOrData}/items`, maybeData);
@@ -415,7 +453,22 @@ export const workItemApi = {
     return apiClient.post(`${WORK_BASE}/projects/${projectId}/items`, projectIdOrData);
   },
   update: (id, data) => apiClient.put(`${WORK_BASE}/items/${id}`, data),
-  updateRank: (id, data) => apiClient.patch(`${WORK_BASE}/items/${id}/rank`, data),
+  // Giao / hủy giao việc (assigneeId = null là hủy giao) — luôn được ghi vào Lịch sử
+  changeAssignee: (id, assigneeId) =>
+    apiClient.put(`${WORK_BASE}/items/${id}/assignee`, { assigneeId: assigneeId || null }),
+  // "Tạm hoàn thành" → Admin dự án xác nhận / từ chối
+  listCompletionRequests: (projectId) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/completion-requests`),
+  getCompletionHistory: (id) => apiClient.get(`${WORK_BASE}/items/${id}/completion-requests`),
+  approveCompletion: (id) => apiClient.post(`${WORK_BASE}/items/${id}/completion/approve`),
+  rejectCompletion: (id, reason) =>
+    apiClient.post(`${WORK_BASE}/items/${id}/completion/reject`, { reason: reason || null }),
+  cancelCompletion: (id) => apiClient.delete(`${WORK_BASE}/items/${id}/completion`),
+  updateRank: (id, data) =>
+    apiClient.patch(
+      `${WORK_BASE}/items/${id}/rank`,
+      typeof data === 'string' ? { rank: data } : data
+    ),
   delete: (id) => apiClient.delete(`${WORK_BASE}/items/${id}`),
   getSubtasks: (id) => apiClient.get(`${WORK_BASE}/items/${id}/subtasks`),
   createSubtask: (parentId, data) =>
@@ -528,6 +581,23 @@ export const sprintApi = {
   getCfd: (projectId, params) => apiClient.get(`${WORK_BASE}/projects/${projectId}/cfd`, { params }),
 };
 
+// ─── 5b. Contribution API (Sổ ghi công & Báo cáo đóng góp) ────────────────────
+export const contributionApi = {
+  getOverview: (projectId, params) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/reports/contributions`, { params }),
+  getLedger: (projectId, params) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/reports/contributions/ledger`, { params }),
+  getMemberDetail: (projectId, targetUserId, params) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/reports/contributions/members/${targetUserId}`, { params }),
+  adjustPoints: (projectId, data) =>
+    apiClient.post(`${WORK_BASE}/projects/${projectId}/reports/contributions/adjust`, data),
+  getExportUrl: (projectId, sprintId) => {
+    let url = `${WORK_BASE}/projects/${projectId}/reports/contributions/export`;
+    if (sprintId) url += `?sprintId=${sprintId}`;
+    return url;
+  },
+};
+
 // ─── 6. Components & Versions API ─────────────────────────────────────────────
 export const componentApi = {
   listByProject: (projectId) => apiClient.get(`${WORK_BASE}/projects/${projectId}/components`),
@@ -543,6 +613,36 @@ export const versionApi = {
 // ─── 7. JQL & Search API ──────────────────────────────────────────────────────
 export const jqlApi = {
   search: (jqlQuery) => apiClient.post(`${WORK_BASE}/jql/search`, { jql: jqlQuery }),
+};
+
+// ─── 8. Notification API (notification-service qua gateway) ───────────────────
+// Thiết kế: docs/services/notification/2_KIEN_TRUC_VA_THIET_KE.md §6
+const NOTIF_BASE = '/notification/api/v1/notifications';
+
+export const notificationApi = {
+  /** params: { filter: 'all'|'unread'|'action', category, projectId, cursor, size } */
+  list: (params, config = {}) => apiClient.get(NOTIF_BASE, { params, ...config }),
+  counts: (config = {}) => apiClient.get(`${NOTIF_BASE}/unread-count`, { skipErrorToast: true, ...config }),
+  setRead: (id, read = true) => apiClient.patch(`${NOTIF_BASE}/${id}`, { read }),
+  readAll: (params) => apiClient.post(`${NOTIF_BASE}/read-all`, null, { params }),
+  remove: (id) => apiClient.delete(`${NOTIF_BASE}/${id}`),
+  restore: (id) => apiClient.post(`${NOTIF_BASE}/${id}/restore`),
+  removeAllRead: () => apiClient.delete(NOTIF_BASE, { params: { filter: 'read' } }),
+
+  // ─── Cài đặt bật / tắt (theo nhóm × kênh) và tắt tiếng dự án ───
+  preferences: (config = {}) => apiClient.get(`${NOTIF_BASE}/preferences`, config),
+  /** categories: [{ category, inApp?, email? }] — trường bỏ trống giữ nguyên */
+  savePreferences: (categories) => apiClient.put(`${NOTIF_BASE}/preferences`, { categories }),
+  /** until: ISO string hoặc null (tắt đến khi bật lại) */
+  muteProject: (projectId, projectName, until = null) =>
+    apiClient.put(`${NOTIF_BASE}/preferences/projects/${projectId}/mute`, { projectName, until }),
+  unmuteProject: (projectId) => apiClient.delete(`${NOTIF_BASE}/preferences/projects/${projectId}/mute`),
+};
+
+/** Chạy ngay job thông báo (chỉ Global ADMIN, dùng khi demo). */
+export const notificationJobApi = {
+  run: (job = 'all', projectId) =>
+    apiClient.post(`${WORK_BASE}/admin/notification-jobs/${job}/run`, null, { params: projectId ? { projectId } : {} }),
 };
 
 export default apiClient;

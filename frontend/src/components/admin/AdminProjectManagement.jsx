@@ -27,9 +27,12 @@ import {
   LayoutGrid,
   ListFilter
 } from 'lucide-react';
-import { projectApi, teamApi } from '../../api.js';
+import { projectApi } from '../../api.js';
+import CustomSelect from '../common/CustomSelect.jsx';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 export default function AdminProjectManagement() {
+  const { handleBackdropClick } = useModalBackdrop();
   const navigate = useNavigate();
 
   // ─── States: Projects & Pagination ───
@@ -44,11 +47,9 @@ export default function AdminProjectManagement() {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [templateFilter, setTemplateFilter] = useState('ALL'); // 'ALL' | 'TEMPLATE_ONLY' | 'STANDARD_ONLY'
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'PLANNING' | 'COMPLETED' | 'ON_HOLD'
-  const [teamFilter, setTeamFilter] = useState('ALL');
-
+  
   // ─── States: Auxiliary Data ───
-  const [teams, setTeams] = useState([]);
-  const [stats, setStats] = useState({
+    const [stats, setStats] = useState({
     total: 0,
     templates: 0,
     active: 0,
@@ -63,21 +64,6 @@ export default function AdminProjectManagement() {
   const [deletingProject, setDeletingProject] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ─── 1. Load Teams for filtering & modals ───
-  useEffect(() => {
-    async function loadTeams() {
-      try {
-        const res = await teamApi.listAll();
-        if (res && res.data) {
-          setTeams(Array.isArray(res.data) ? res.data : []);
-        }
-      } catch (err) {
-        console.warn('Could not load teams:', err);
-      }
-    }
-    loadTeams();
-  }, []);
-
   // ─── 2. Fetch Projects Data ───
   const fetchProjects = useCallback(async (targetPage = page, targetPageSize = pageSize) => {
     setLoading(true);
@@ -87,7 +73,6 @@ export default function AdminProjectManagement() {
         size: targetPageSize,
         search: searchKeyword.trim() || undefined,
         status: statusFilter !== 'ALL' ? statusFilter : undefined,
-        teamId: teamFilter !== 'ALL' ? teamFilter : undefined,
       };
 
       // Xử lý bộ lọc Template
@@ -120,7 +105,7 @@ export default function AdminProjectManagement() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, searchKeyword, templateFilter, statusFilter, teamFilter]);
+  }, [page, pageSize, searchKeyword, templateFilter, statusFilter]);
 
   // ─── 3. Fetch Quick Stats (Non-paginated summary) ───
   const fetchStats = async () => {
@@ -152,7 +137,7 @@ export default function AdminProjectManagement() {
   useEffect(() => {
     fetchProjects(0, pageSize);
     fetchStats();
-  }, [templateFilter, statusFilter, teamFilter, pageSize]);
+  }, [templateFilter, statusFilter, pageSize]);
 
   // Trigger search submit
   const handleSearchSubmit = (e) => {
@@ -166,7 +151,6 @@ export default function AdminProjectManagement() {
     setSearchKeyword('');
     setTemplateFilter('ALL');
     setStatusFilter('ALL');
-    setTeamFilter('ALL');
     setPage(0);
   };
 
@@ -199,7 +183,6 @@ export default function AdminProjectManagement() {
         status: editingProject.status,
         isPublic: editingProject.isPublic,
         isTemplate: editingProject.isTemplate,
-        teamId: editingProject.teamId || null,
         startDate: editingProject.startDate || null,
         endDate: editingProject.endDate || null,
       });
@@ -305,7 +288,7 @@ export default function AdminProjectManagement() {
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0284c7')}
           >
             <Plus size={16} />
-            <span>Tạo Dự Án / Template Mới</span>
+            <span>Tạo Dự Án / Mẫu Mới</span>
           </button>
         </div>
       </div>
@@ -592,65 +575,25 @@ export default function AdminProjectManagement() {
               {/* Status Filter */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Trạng thái:</span>
-                <select
+                <CustomSelect
                   value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
+                  onChange={(val) => {
+                    setStatusFilter(val);
                     setPage(0);
                   }}
-                  style={{
-                    height: 38,
-                    padding: '0 12px',
-                    borderRadius: 8,
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: '#ffffff',
-                    fontSize: 13,
-                    color: '#0f172a',
-                    outline: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="ALL">Tất cả trạng thái</option>
-                  <option value="ACTIVE">Đang hoạt động</option>
-                  <option value="PLANNING">Lập kế hoạch</option>
-                  <option value="COMPLETED">Đã hoàn thành</option>
-                  <option value="ON_HOLD">Tạm dừng</option>
-                </select>
-              </div>
-
-              {/* Team Filter */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Nhóm:</span>
-                <select
-                  value={teamFilter}
-                  onChange={(e) => {
-                    setTeamFilter(e.target.value);
-                    setPage(0);
-                  }}
-                  style={{
-                    height: 38,
-                    padding: '0 12px',
-                    borderRadius: 8,
-                    border: '1px solid #cbd5e1',
-                    backgroundColor: '#ffffff',
-                    fontSize: 13,
-                    color: '#0f172a',
-                    outline: 'none',
-                    cursor: 'pointer',
-                    maxWidth: 180,
-                  }}
-                >
-                  <option value="ALL">Tất cả các nhóm</option>
-                  {teams.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: 'ALL', label: 'Tất cả trạng thái' },
+                    { value: 'ACTIVE', label: 'Đang hoạt động' },
+                    { value: 'PLANNING', label: 'Lập kế hoạch' },
+                    { value: 'COMPLETED', label: 'Đã hoàn thành' },
+                    { value: 'ON_HOLD', label: 'Tạm dừng' },
+                  ]}
+                  width={170}
+                />
               </div>
 
               {/* Reset Filter Button */}
-              {(searchKeyword || templateFilter !== 'ALL' || statusFilter !== 'ALL' || teamFilter !== 'ALL') && (
+              {(searchKeyword || templateFilter !== 'ALL' || statusFilter !== 'ALL') && (
                 <button
                   type="button"
                   onClick={handleResetFilters}
@@ -878,13 +821,13 @@ export default function AdminProjectManagement() {
                         </span>
                       </td>
 
-                      {/* Team & Visibility */}
+                      {/* Workspace & Visibility */}
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#334155' }}>
                             <Users size={13} color="#64748b" />
                             <span style={{ fontWeight: 500 }}>
-                              {project.teamName || 'Cá nhân / Toàn cục'}
+                              {'Dự án Không gian'}
                             </span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#64748b' }}>
@@ -938,7 +881,7 @@ export default function AdminProjectManagement() {
                           <button
                             type="button"
                             onClick={() => navigate(`/projects/${project.id}`)}
-                            title="Mở bảng Kanban dự án"
+                            title="Mở bảng làm việc dự án"
                             style={{
                               padding: '5px 8px',
                               borderRadius: 6,
@@ -961,7 +904,7 @@ export default function AdminProjectManagement() {
                           <button
                             type="button"
                             onClick={() => setCloningProject(project)}
-                            title="Nhân bản (Clone) cấu trúc dự án này"
+                            title="Nhân bản cấu trúc dự án này"
                             style={{
                               padding: '5px 8px',
                               borderRadius: 6,
@@ -984,7 +927,7 @@ export default function AdminProjectManagement() {
                           <button
                             type="button"
                             onClick={() => setEditingProject({ ...project })}
-                            title="Chỉnh sửa thông tin & Cấu hình Template"
+                            title="Chỉnh sửa thông tin & cấu hình mẫu"
                             style={{
                               padding: '5px 8px',
                               borderRadius: 6,
@@ -1055,30 +998,22 @@ export default function AdminProjectManagement() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span>Số dòng:</span>
-              <select
+              <CustomSelect
                 value={pageSize}
-                onChange={(e) => {
-                  const newSize = Number(e.target.value);
+                onChange={(val) => {
+                  const newSize = Number(val);
                   setPageSize(newSize);
                   setPage(0);
                   fetchProjects(0, newSize);
                 }}
-                style={{
-                  height: 28,
-                  padding: '0 6px',
-                  borderRadius: 4,
-                  border: '1px solid #cbd5e1',
-                  backgroundColor: '#ffffff',
-                  fontSize: 12,
-                  color: '#0f172a',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
+                options={[
+                  { value: 5, label: '5' },
+                  { value: 10, label: '10' },
+                  { value: 20, label: '20' },
+                  { value: 50, label: '50' },
+                ]}
+                width={80}
+              />
             </div>
           </div>
 
@@ -1173,7 +1108,6 @@ export default function AdminProjectManagement() {
       {/* ─── MODAL 1: Create Project / Template Modal ─── */}
       {showCreateModal && (
         <CreateProjectModal
-          teams={teams}
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
@@ -1187,7 +1121,7 @@ export default function AdminProjectManagement() {
       {editingProject && (
         <div
           className="modal-overlay"
-          onClick={() => setEditingProject(null)}
+          {...handleBackdropClick(() => setEditingProject(null))}
           style={{
             position: 'fixed',
             inset: 0,
@@ -1304,54 +1238,22 @@ export default function AdminProjectManagement() {
                 />
               </div>
 
-              {/* Status & Team */}
+              {/* Status */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
                     Trạng Thái
                   </label>
-                  <select
+                  <CustomSelect
                     value={editingProject.status || 'ACTIVE'}
-                    onChange={(e) => setEditingProject({ ...editingProject, status: e.target.value })}
-                    style={{
-                      width: '100%',
-                      height: 40,
-                      padding: '0 12px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  >
-                    <option value="PLANNING">Lập kế hoạch</option>
-                    <option value="ACTIVE">Đang hoạt động</option>
-                    <option value="COMPLETED">Đã hoàn thành</option>
-                    <option value="ON_HOLD">Tạm dừng</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                    Nhóm sở hữu
-                  </label>
-                  <select
-                    value={editingProject.teamId || ''}
-                    onChange={(e) => setEditingProject({ ...editingProject, teamId: e.target.value || null })}
-                    style={{
-                      width: '100%',
-                      height: 40,
-                      padding: '0 12px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  >
-                    <option value="">Không gán nhóm (Cá nhân)</option>
-                    {teams.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setEditingProject({ ...editingProject, status: val })}
+                    options={[
+                      { value: 'PLANNING', label: 'Lập kế hoạch' },
+                      { value: 'ACTIVE', label: 'Đang hoạt động' },
+                      { value: 'COMPLETED', label: 'Đã hoàn thành' },
+                      { value: 'ON_HOLD', label: 'Tạm dừng' },
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -1458,7 +1360,6 @@ export default function AdminProjectManagement() {
       {/* ─── MODAL 3: Clone Project Modal ─── */}
       {cloningProject && (
         <CreateProjectModal
-          teams={teams}
           sourceProject={cloningProject}
           onClose={() => setCloningProject(null)}
           onSuccess={() => {
@@ -1473,7 +1374,7 @@ export default function AdminProjectManagement() {
       {deletingProject && (
         <div
           className="modal-overlay"
-          onClick={() => setDeletingProject(null)}
+          {...handleBackdropClick(() => setDeletingProject(null))}
           style={{
             position: 'fixed',
             inset: 0,

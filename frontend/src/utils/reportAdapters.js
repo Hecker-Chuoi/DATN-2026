@@ -31,7 +31,7 @@ export function toBurndownRows(dto) {
 export function toVelocityRows(dto) {
   const sprints = dto?.sprints || [];
   return sprints.map((s) => ({
-    label: s.sprintName || 'Sprint',
+    label: s.sprintName || 'Đợt làm việc',
     committed: num(s.committedStoryPoints),
     completed: num(s.completedStoryPoints),
     estimated: !!s.estimated,

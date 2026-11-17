@@ -19,6 +19,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByEmail(String email);
 
+    Optional<User> findByEmailIgnoreCase(String email);
+
     Optional<User> findByKeycloakId(String keycloakId);
 
     boolean existsByUsername(String username);
@@ -36,10 +38,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
            "LOWER(u.firstName) LIKE LOWER(:search) OR " +
            "LOWER(u.lastName) LIKE LOWER(:search)")
     Page<User> searchUsers(@Param("search") String search, Pageable pageable);
- 
-    @Modifying
-    @Query(value = "DELETE FROM team_members WHERE user_id = :userId", nativeQuery = true)
-    void deleteTeamMembershipsByUserId(@Param("userId") UUID userId);
 
     @Modifying
     @Query(value = "DELETE FROM role_assignments WHERE user_id = :userId", nativeQuery = true)

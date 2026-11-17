@@ -1,0 +1,73 @@
+# work-service (:8083) – project, task, sprint, board, file đính kèm (MinIO), Redis, Kafka
+apiVersion: v1
+kind: Service
+metadata:
+  name: work-service
+spec:
+  selector:
+    app: work-service
+  ports:
+    - name: http
+      port: 8083
+      targetPort: 8083
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: work-service
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels:
+      app: work-service
+  template:
+    metadata:
+      labels:
+        app: work-service
+        tier: app
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: datn/work-service
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8083
+          envFrom:
+            - configMapRef: { name: datn-config }
+          env:
+            - name: APP_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DOMAIN } }
+            - name: AUTH_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: AUTH_DOMAIN } }
+            - name: APP_FRONTEND_URL
+              value: "https://$(APP_DOMAIN)"
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI
+              value: "https://$(AUTH_DOMAIN)/realms/datn-realm"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_USER } }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_PASSWORD } }
+            - name: MINIO_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MINIO_ROOT_USER } }
+            - name: MINIO_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: MINIO_ROOT_PASSWORD } }
+          startupProbe:
+            tcpSocket: { port: 8083 }
+            periodSeconds: 5
+            failureThreshold: 60           # work-service khởi động lâu nhất (Flyway + seed template)
+          readinessProbe:
+            tcpSocket: { port: 8083 }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 8083 }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 150m, memory: 512Mi }
+            limits: { memory: 1Gi }

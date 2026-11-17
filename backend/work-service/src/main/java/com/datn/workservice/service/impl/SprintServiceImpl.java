@@ -26,6 +26,7 @@ import com.datn.workservice.repository.WorkItemRepository;
 import com.datn.workservice.repository.WorkItemTypeRepository;
 import com.datn.workservice.service.LexoRankService;
 import com.datn.workservice.service.OutboxRecorder;
+import com.datn.workservice.service.SprintSequence;
 import com.datn.workservice.service.SprintService;
 import com.datn.workservice.service.WorkItemAuditService;
 import com.datn.workservice.service.mapper.CardMappingContext;
@@ -76,6 +77,8 @@ public class SprintServiceImpl implements SprintService {
     private final WorkItemStateReplayer stateReplayer;
     private final BurndownCalculator burndownCalculator;
     private final OutboxRecorder outboxRecorder;
+    private final com.datn.workservice.service.ContributionReportService contributionReportService;
+    private final com.datn.workservice.notification.ProjectNotifier projectNotifier;
 
     // ───────────────────────────── CRUD ─────────────────────────────
 
@@ -83,12 +86,16 @@ public class SprintServiceImpl implements SprintService {
     @Transactional(readOnly = true)
     public List<SprintResponse> listByProject(UUID projectId, Set<SprintState> states) {
         requireProject(projectId);
-        List<Sprint> sprints = (states == null || states.isEmpty())
+        boolean unfiltered = states == null || states.isEmpty();
+        List<Sprint> sprints = unfiltered
                 ? sprintRepository.findByProjectId(projectId)
                 : sprintRepository.findByProjectIdAndStateIn(projectId, states);
 
-        boolean hasActive = sprints.stream().anyMatch(s -> s.getState() == SprintState.ACTIVE);
-        List<Sprint> ordered = sprints.stream().sorted(sprintOrder()).toList();
+        // Khi loc theo trang thai, danh sach co the thieu Sprint ACTIVE/FUTURE -> phai tra rieng.
+        UUID startableId = unfiltered
+                ? SprintSequence.startableSprintId(sprints)
+                : resolveStartableSprintId(projectId);
+        List<Sprint> ordered = sprints.stream().sorted(SprintSequence.DISPLAY_ORDER).toList();
 
         Map<UUID, List<WorkItem>> itemsBySprint = loadItemsBySprint(
                 ordered.stream().map(Sprint::getId).toList());
@@ -99,7 +106,7 @@ public class SprintServiceImpl implements SprintService {
 
         return ordered.stream()
                 .map(s -> toResponse(s, itemsBySprint.getOrDefault(s.getId(), List.of()),
-                        statusById, typeById, hasActive, withSnapshot.contains(s.getId())))
+                        statusById, typeById, startableId, withSnapshot.contains(s.getId())))
                 .toList();
     }
 
@@ -108,9 +115,8 @@ public class SprintServiceImpl implements SprintService {
     public SprintResponse getById(UUID sprintId) {
         Sprint sprint = requireSprint(sprintId);
         List<WorkItem> items = workItemRepository.findBySprintIdAndDeletedAtIsNullOrderByRankAsc(sprintId);
-        boolean hasActive = sprintRepository
-                .findFirstByProjectIdAndState(sprint.getProjectId(), SprintState.ACTIVE).isPresent();
-        return toResponse(sprint, items, loadStatusMap(), loadTypeMap(items), hasActive,
+        return toResponse(sprint, items, loadStatusMap(), loadTypeMap(items),
+                resolveStartableSprintId(sprint.getProjectId()),
                 snapshotRepository.existsBySprintId(sprintId));
     }
 
@@ -131,9 +137,8 @@ public class SprintServiceImpl implements SprintService {
         sprint = sprintRepository.save(sprint);
         log.info("Tao Sprint '{}' cho du an {}", sprint.getName(), projectId);
 
-        return toResponse(sprint, List.of(), loadStatusMap(), Map.of(),
-                sprintRepository.findFirstByProjectIdAndState(projectId, SprintState.ACTIVE).isPresent(),
-                false);
+        // Sprint moi chua co cong viec nen chua the bat dau, khong can xac dinh thu tu.
+        return toResponse(sprint, List.of(), loadStatusMap(), Map.of(), null, false);
     }
 
     @Override
@@ -153,13 +158,17 @@ public class SprintServiceImpl implements SprintService {
         LocalDateTime start = request.getStartDate() != null ? request.getStartDate() : sprint.getStartDate();
         LocalDateTime end = request.getEndDate() != null ? request.getEndDate() : sprint.getEndDate();
         validateDateRange(start, end);
+        LocalDateTime oldEnd = sprint.getEndDate();
         sprint.setStartDate(start);
         sprint.setEndDate(end);
 
         sprint = sprintRepository.save(sprint);
 
+        // Doi ngay bat dau co the doi thu tu ke hoach (BR-S15) -> tinh lai Sprint duoc phep bat dau.
         List<WorkItem> items = workItemRepository.findBySprintIdAndDeletedAtIsNullOrderByRankAsc(sprintId);
-        return toResponse(sprint, items, loadStatusMap(), loadTypeMap(items), true,
+        projectNotifier.sprintDatesChanged(projectOrNull(sprint.getProjectId()), sprint, oldEnd, items, userId); // E8
+        return toResponse(sprint, items, loadStatusMap(), loadTypeMap(items),
+                resolveStartableSprintId(sprint.getProjectId()),
                 snapshotRepository.existsBySprintId(sprintId));
     }
 
@@ -182,6 +191,7 @@ public class SprintServiceImpl implements SprintService {
         workItemRepository.saveAll(items);
         sprintRepository.delete(sprint);
         log.info("Xoa Sprint '{}', tra {} cong viec ve Backlog", sprint.getName(), items.size());
+        projectNotifier.sprintDeleted(projectOrNull(sprint.getProjectId()), sprint, items, userId); // E9
     }
 
     // ─────────────────────────── Lifecycle ───────────────────────────
@@ -199,6 +209,10 @@ public class SprintServiceImpl implements SprintService {
         if (project.getDeletedAt() != null) {
             throw new BadRequestException("Dự án đã bị lưu trữ");
         }
+        // Du an mau chi la ban thiet ke: sprint cua mau luon o FUTURE de nhan ban ra du an that.
+        if (Boolean.TRUE.equals(project.getIsTemplate())) {
+            throw new BadRequestException("Không thể bắt đầu Sprint trong dự án mẫu. Hãy tạo dự án từ mẫu rồi bắt đầu Sprint ở dự án đó.");
+        }
 
         // Moi du an chi mot Sprint ACTIVE. Unique index o V2 chan not truong hop chay dua.
         sprintRepository.findFirstByProjectIdAndState(sprint.getProjectId(), SprintState.ACTIVE)
@@ -206,6 +220,16 @@ public class SprintServiceImpl implements SprintService {
                     throw new ConflictException("Dự án đã có Sprint đang chạy: '" + active.getName()
                             + "'. Hãy đóng Sprint đó trước khi bắt đầu Sprint mới.");
                 });
+
+        // BR-S15: cac giai doan bat dau lan luot - chi Sprint FUTURE dung dau ke hoach moi duoc bat dau.
+        Sprint next = sprintRepository.findByProjectIdAndState(sprint.getProjectId(), SprintState.FUTURE)
+                .stream()
+                .min(SprintSequence.PLAN_ORDER)
+                .orElse(sprint);
+        if (!Objects.equals(next.getId(), sprint.getId())) {
+            throw new ConflictException("Các Sprint phải được bắt đầu lần lượt theo kế hoạch: hãy bắt đầu '"
+                    + next.getName() + "' trước. Muốn đổi thứ tự, hãy sửa ngày bắt đầu dự kiến của các Sprint.");
+        }
 
         LocalDateTime start = firstNonNull(request == null ? null : request.getStartDate(),
                 sprint.getStartDate(), LocalDateTime.now());
@@ -248,8 +272,10 @@ public class SprintServiceImpl implements SprintService {
 
         log.info("Bat dau Sprint '{}' ({} cong viec)", sprint.getName(), itemCount);
 
+        // Sprint vua chuyen sang ACTIVE -> khong con Sprint nao duoc bat dau.
         List<WorkItem> items = workItemRepository.findBySprintIdAndDeletedAtIsNullOrderByRankAsc(sprintId);
-        return toResponse(sprint, items, loadStatusMap(), loadTypeMap(items), true, false);
+        projectNotifier.sprintStarted(project, sprint, items, userId); // E1 (+ đóng E6)
+        return toResponse(sprint, items, loadStatusMap(), loadTypeMap(items), null, false);
     }
 
     @Override
@@ -325,6 +351,16 @@ public class SprintServiceImpl implements SprintService {
         payload.put("movedToSprintId", targetSprintId);
         payload.put("closedBy", userId);
         outboxRecorder.record("SPRINT", sprint.getId(), "SPRINT_COMPLETED", payload);
+        // E2 (+ đóng E3 nếu chu kỳ từng quá hạn)
+        projectNotifier.sprintCompleted(projectOrNull(sprint.getProjectId()), sprint, completed, incomplete,
+                targetSprintName, userId);
+
+        // Đóng băng số liệu đóng góp của Sprint vào snapshot
+        try {
+            contributionReportService.freezeSprintContributionSnapshot(sprint.getId(), sprint.getProjectId());
+        } catch (Exception e) {
+            log.warn("Không thể đóng băng snapshot đóng góp cho Sprint '{}': {}", sprint.getId(), e.getMessage());
+        }
 
         log.info("Dong Sprint '{}': {} xong / {} chua xong -> {}",
                 sprint.getName(), completed.size(), incomplete.size(), targetSprintName);
@@ -401,6 +437,7 @@ public class SprintServiceImpl implements SprintService {
             changed.add(item);
         }
         moveItemsToSprint(changed, sprintId, sprint.getName(), null, userId);
+        projectNotifier.sprintScopeChanged(projectOrNull(sprint.getProjectId()), sprint, changed, true, userId); // E5
         return toCards(changed);
     }
 
@@ -422,6 +459,7 @@ public class SprintServiceImpl implements SprintService {
             changed.add(item);
         }
         moveItemsToSprint(changed, null, "Backlog", sprint.getName(), userId);
+        projectNotifier.sprintScopeChanged(projectOrNull(sprint.getProjectId()), sprint, changed, false, userId); // E7
         return toCards(changed);
     }
 
@@ -519,6 +557,11 @@ public class SprintServiceImpl implements SprintService {
         return cardMapper.mapAll(items, ctx);
     }
 
+    /** Tra dự án cho phần thông báo: không ném lỗi để thông báo không bao giờ làm hỏng nghiệp vụ. */
+    private Project projectOrNull(UUID projectId) {
+        return projectId == null ? null : projectRepository.findById(projectId).orElse(null);
+    }
+
     private Project requireProject(UUID projectId) {
         return projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
@@ -588,19 +631,20 @@ public class SprintServiceImpl implements SprintService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private java.util.Comparator<Sprint> sprintOrder() {
-        // ACTIVE truoc, roi FUTURE theo ngay bat dau, cuoi cung CLOSED moi nhat len truoc.
-        Map<SprintState, Integer> weight = Map.of(
-                SprintState.ACTIVE, 0, SprintState.FUTURE, 1, SprintState.CLOSED, 2);
-        return java.util.Comparator
-                .<Sprint, Integer>comparing(s -> weight.getOrDefault(s.getState(), 3))
-                .thenComparing(s -> s.getStartDate() == null ? LocalDateTime.MAX : s.getStartDate());
+    /** Sprint duy nhat cua du an duoc phep bat dau luc nay (BR-S11 + BR-S15), hoac null. */
+    private UUID resolveStartableSprintId(UUID projectId) {
+        return SprintSequence.startableSprintId(sprintRepository.findByProjectIdAndStateIn(
+                projectId, EnumSet.of(SprintState.ACTIVE, SprintState.FUTURE)));
     }
 
+    /**
+     * @param startableSprintId Sprint duy nhat cua du an duoc phep bat dau luc nay
+     *                          ({@link SprintSequence#startableSprintId}), hoac null
+     */
     private SprintResponse toResponse(Sprint sprint, List<WorkItem> items,
                                       Map<UUID, Status> statusById,
                                       Map<UUID, WorkItemType> typeById,
-                                      boolean projectHasActiveSprint,
+                                      UUID startableSprintId,
                                       boolean hasSnapshot) {
         int todo = 0, inProgress = 0, done = 0;
         BigDecimal totalPoints = BigDecimal.ZERO;
@@ -633,7 +677,7 @@ public class SprintServiceImpl implements SprintService {
 
         boolean canStart = sprint.getState() == SprintState.FUTURE
                 && !items.isEmpty()
-                && !projectHasActiveSprint;
+                && Objects.equals(sprint.getId(), startableSprintId);
 
         return SprintResponse.builder()
                 .id(sprint.getId())

@@ -12,7 +12,7 @@ export const HIERARCHY_LEVELS = {
 export const HIERARCHY_LABELS = {
   [HIERARCHY_LEVELS.EPIC]: { label: 'Hạng mục lớn', level: 1, code: 'EPIC' },
   [HIERARCHY_LEVELS.STANDARD]: { label: 'Công việc tiêu chuẩn', level: 0, code: 'STANDARD' },
-  [HIERARCHY_LEVELS.SUBTASK]: { label: 'Nhiệm vụ con', level: -1, code: 'SUBTASK' },
+  [HIERARCHY_LEVELS.SUBTASK]: { label: 'Công việc con', level: -1, code: 'SUBTASK' },
 };
 
 // ─── Work Item Types ──────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ export const WORK_ITEM_TYPE_CONFIG = {
   },
   STORY: {
     code: 'STORY',
-    name: 'Câu chuyện người dùng',
+    name: 'Yêu cầu',
     hierarchyLevel: HIERARCHY_LEVELS.STANDARD,
     color: '#16a34a', // Green
     bgColor: '#dcfce7',
@@ -47,7 +47,7 @@ export const WORK_ITEM_TYPE_CONFIG = {
   },
   TASK: {
     code: 'TASK',
-    name: 'Nhiệm vụ',
+    name: 'Công việc',
     hierarchyLevel: HIERARCHY_LEVELS.STANDARD,
     color: '#2563eb', // Blue
     bgColor: '#dbeafe',
@@ -57,7 +57,7 @@ export const WORK_ITEM_TYPE_CONFIG = {
   },
   BUG: {
     code: 'BUG',
-    name: 'Lỗi phần mềm',
+    name: 'Sự cố',
     hierarchyLevel: HIERARCHY_LEVELS.STANDARD,
     color: '#dc2626', // Red
     bgColor: '#fee2e2',
@@ -67,7 +67,7 @@ export const WORK_ITEM_TYPE_CONFIG = {
   },
   SUB_TASK: {
     code: 'SUB_TASK',
-    name: 'Nhiệm vụ con',
+    name: 'Công việc con',
     hierarchyLevel: HIERARCHY_LEVELS.SUBTASK,
     color: '#0284c7', // Sky
     bgColor: '#e0f2fe',
@@ -78,15 +78,50 @@ export const WORK_ITEM_TYPE_CONFIG = {
 };
 
 // ─── Vietnamese Display Helpers ───────────────────────────────────────────────
-export const getTypeDisplayName = (typeCodeOrName) => {
-  if (!typeCodeOrName) return 'Nhiệm vụ';
-  const t = String(typeCodeOrName).trim().toUpperCase().replace('-', '_');
-  if (t === 'EPIC') return 'Hạng mục lớn';
-  if (t === 'STORY' || t === 'USER_STORY') return 'Câu chuyện người dùng';
-  if (t === 'TASK') return 'Nhiệm vụ';
-  if (t === 'BUG') return 'Lỗi phần mềm';
-  if (t === 'SUBTASK' || t === 'SUB_TASK') return 'Nhiệm vụ con';
+export const getTypeDisplayName = (typeCodeOrName, isBusiness = false) => {
+  if (!typeCodeOrName) return 'Công việc';
+  const raw = String(typeCodeOrName).trim();
+  const t = raw.toUpperCase().replace(/[-\s]/g, '_');
+  if (t === 'EPIC' || t === 'HẠNG_MỤC_LỚN' || t === 'HANG_MUC_LON' || t === 'GIAI_ĐOẠN' || t === 'GIAI_DOAN') {
+    return isBusiness ? 'Giai đoạn' : 'Hạng mục lớn';
+  }
+  if (t === 'STORY' || t === 'USER_STORY' || t === 'YÊU_CẦU' || t === 'YEU_CAU') return 'Yêu cầu';
+  if (t === 'TASK' || t === 'NHIỆM_VỤ' || t === 'NHIEM_VU' || t === 'CÔNG_VIỆC' || t === 'CONG_VIEC') return 'Công việc';
+  if (t === 'BUG' || t === 'SỰ_CỐ' || t === 'SU_CO' || t === 'LỖI' || t === 'LOI') return 'Sự cố';
+  if (t === 'SUBTASK' || t === 'SUB_TASK' || t === 'NHIỆM_VỤ_CON' || t === 'NHIEM_VU_CON' || t === 'CÔNG_VIỆC_CON' || t === 'CONG_VIEC_CON') return 'Công việc con';
   return typeCodeOrName;
+};
+
+// Mô tả mặc định do BE seed (một số bằng tiếng Anh / còn chữ "Task") → hiển thị tiếng Việt.
+// Chỉ đổi khi khớp đúng câu mặc định; mô tả người dùng tự nhập giữ nguyên.
+const DEFAULT_TYPE_DESCRIPTIONS_VI = {
+  'a large body of work that can be broken down into smaller tasks': 'Hạng mục lớn bao quát nhiều công việc',
+  'a small piece of work that needs to be done': 'Công việc tiêu chuẩn',
+  'a sub-component of a parent task': 'Công việc con trực thuộc công việc cha',
+  'công việc con phụ thuộc của task': 'Công việc con trực thuộc công việc cha',
+};
+
+export const getTypeDescriptionDisplay = (description) => {
+  if (!description) return description;
+  return DEFAULT_TYPE_DESCRIPTIONS_VI[String(description).trim().toLowerCase()] || description;
+};
+
+// Sinh mã loại công việc (BE bắt buộc, duy nhất trong dự án) từ tên tiếng Việt,
+// để người dùng không phải nhập mã. VD: "Nghiệm thu" → "NGHIEM_THU", trùng thì thêm _2, _3...
+export const generateTypeCode = (name, existingCodes = []) => {
+  const base = String(name || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[đĐ]/g, 'D')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40) || 'LOAI';
+  const taken = new Set(existingCodes.map((c) => String(c || '').toUpperCase()));
+  if (!taken.has(base)) return base;
+  let i = 2;
+  while (taken.has(`${base}_${i}`)) i += 1;
+  return `${base}_${i}`;
 };
 
 export const getStatusDisplayName = (statusName) => {
@@ -119,10 +154,30 @@ export const getPriorityDisplayName = (priority) => {
   return priority;
 };
 
+// Chỉ dùng để HIỂN THỊ: BE lưu hierarchyLevel 1 / 0 / -1 (Hạng mục lớn / Tiêu chuẩn / Công việc con),
+// FE hiển thị Cấp 3 / Cấp 2 / Cấp 1. Mọi so sánh/logic vẫn dùng giá trị gốc của BE.
+export const toDisplayHierarchyLevel = (level) => {
+  if (level === 1) return 3;
+  if (level === 0) return 2;
+  if (level === -1) return 1;
+  return level;
+};
+
 export const getHierarchyDisplayName = (level) => {
-  if (level === 1) return 'Cấp 1 • Hạng mục lớn';
-  if (level === -1) return 'Cấp -1 • Nhiệm vụ con';
-  return 'Cấp 0 • Tiêu chuẩn';
+  if (level === 1) return 'Cấp 3 • Hạng mục lớn';
+  if (level === -1) return 'Cấp 1 • Công việc con';
+  return 'Cấp 2 • Tiêu chuẩn';
+};
+
+export const getRoleDisplayName = (role) => {
+  if (!role) return '';
+  const r = String(role).trim().toUpperCase();
+  if (r === 'ADMIN' || r === 'ADMINISTRATOR') return 'Quản trị viên';
+  if (r === 'MEMBER') return 'Thành viên';
+  if (r === 'OWNER') return 'Chủ sở hữu';
+  if (r === 'GUEST') return 'Khách';
+  if (r === 'LEAD' || r === 'PROJECT_LEAD') return 'Trưởng dự án';
+  return role;
 };
 
 // ─── Status Categories (Jira 3 Core Categories) ─────────────────────────────
@@ -279,14 +334,14 @@ export const PROJECT_TYPES = {
 export const PROJECT_TYPE_CONFIG = {
   SCRUM: {
     code: 'SCRUM',
-    name: 'Quy trình Scrum',
-    description: 'Quy trình lặp theo chu kỳ, quản lý danh sách tồn đọng, biểu đồ tiến độ và điểm ước lượng.',
+    name: 'Theo chu kỳ / Theo giai đoạn',
+    description: 'Quản lý theo từng chu kỳ hoặc giai đoạn định kỳ, lập kế hoạch đợt việc, theo dõi tiến độ và khối lượng công việc.',
     icon: 'RotateCw',
   },
   KANBAN: {
     code: 'KANBAN',
-    name: 'Bảng Kanban',
-    description: 'Luồng công việc liên tục với giới hạn việc đang làm để kiểm soát tiến độ.',
+    name: 'Bảng công việc liên tục',
+    description: 'Luồng công việc liên tục trực quan hóa qua các cột trạng thái với giới hạn việc đang làm.',
     icon: 'Kanban',
   },
 };
@@ -300,12 +355,6 @@ export const SWIMLANE_STRATEGIES = {
   CUSTOM_JQL: 'CUSTOM_JQL',
 };
 
-// ─── Team Roles ─────────────────────────────────────────────────────────────
-export const TEAM_ROLES = {
-  LEADER: 'LEADER',
-  MEMBER: 'MEMBER',
-  VIEWER: 'VIEWER',
-};
 
 // ─── Project Fine-grained Permission Keys ───────────────────────────────────
 export const PERMISSION_KEYS = {
@@ -436,15 +485,15 @@ export const TASK_TYPE_PRESETS = [
   {
     id: 'SOFTWARE_DEV',
     name: 'Phát triển Phần mềm',
-    description: 'Chuẩn quy trình lặp và bảng làm việc cho đội ngũ kỹ thuật phần mềm, tích hợp Hạng mục lớn, Câu chuyện người dùng, Nhiệm vụ, Lỗi phần mềm và Nhiệm vụ con.',
+    description: 'Chuẩn quy trình lặp và bảng làm việc cho đội ngũ kỹ thuật phần mềm, tích hợp Hạng mục lớn, Yêu cầu, Công việc, Sự cố và Công việc con.',
     icon: 'Layers',
     badgeColor: '#2563EB',
     types: [
       { name: 'Hạng mục lớn', code: 'EPIC', hierarchyLevel: 1, iconName: 'Zap', colorHex: '#9333EA', description: 'Mục tiêu lớn hoặc tập hợp tính năng phức tạp cần triển khai qua nhiều chu kỳ' },
-      { name: 'Câu chuyện người dùng', code: 'STORY', hierarchyLevel: 0, iconName: 'Bookmark', colorHex: '#10B981', description: 'Yêu cầu nghiệp vụ hoặc tính năng nhìn từ góc độ người dùng cuối' },
-      { name: 'Nhiệm vụ', code: 'TASK', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#3B82F6', description: 'Công việc kỹ thuật hoặc tác vụ phát triển tiêu chuẩn' },
-      { name: 'Lỗi phần mềm', code: 'BUG', hierarchyLevel: 0, iconName: 'Bug', colorHex: '#EF4444', description: 'Lỗi phát sinh hoặc sự cố kỹ thuật cần khắc phục' },
-      { name: 'Nhiệm vụ con', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#06B6D4', description: 'Nhiệm vụ con chia nhỏ từ công việc cha' },
+      { name: 'Yêu cầu', code: 'STORY', hierarchyLevel: 0, iconName: 'Bookmark', colorHex: '#10B981', description: 'Yêu cầu nghiệp vụ hoặc công việc cần thực hiện' },
+      { name: 'Công việc', code: 'TASK', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#3B82F6', description: 'Công việc kỹ thuật hoặc tác vụ phát triển tiêu chuẩn' },
+      { name: 'Sự cố', code: 'BUG', hierarchyLevel: 0, iconName: 'Bug', colorHex: '#EF4444', description: 'Sự cố phát sinh hoặc vấn đề kỹ thuật cần khắc phục' },
+      { name: 'Công việc con', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#06B6D4', description: 'Công việc con chia nhỏ từ công việc cha' },
     ],
   },
   {
@@ -463,7 +512,7 @@ export const TASK_TYPE_PRESETS = [
   },
   {
     id: 'MARKETING',
-    name: 'Marketing & Truyền thông',
+    name: 'Tiếp thị & Truyền thông',
     description: 'Dành cho chiến dịch tiếp thị, quảng bá truyền thông, sáng tạo nội dung và sản xuất ấn phẩm.',
     icon: 'Sparkles',
     badgeColor: '#7C3AED',
@@ -478,13 +527,13 @@ export const TASK_TYPE_PRESETS = [
   {
     id: 'AGILE_BASIC',
     name: 'Mặc định cơ bản',
-    description: 'Cấu hình tiêu chuẩn tối giản gồm đúng 3 cấp độ: Hạng mục lớn, Nhiệm vụ và Nhiệm vụ con.',
+    description: 'Cấu hình tiêu chuẩn tối giản gồm đúng 3 cấp độ: Hạng mục lớn, Công việc và Công việc con.',
     icon: 'Zap',
     badgeColor: '#10B981',
     types: [
       { name: 'Hạng mục lớn', code: 'EPIC', hierarchyLevel: 1, iconName: 'Zap', colorHex: '#9333EA', description: 'Hạng mục lớn bao quát nhiều công việc' },
-      { name: 'Nhiệm vụ', code: 'TASK', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#3B82F6', description: 'Công việc tiêu chuẩn' },
-      { name: 'Nhiệm vụ con', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#06B6D4', description: 'Công việc con trực thuộc công việc cha' },
+      { name: 'Công việc', code: 'TASK', hierarchyLevel: 0, iconName: 'CheckSquare', colorHex: '#3B82F6', description: 'Công việc tiêu chuẩn' },
+      { name: 'Công việc con', code: 'SUBTASK', hierarchyLevel: -1, iconName: 'GitCommit', colorHex: '#06B6D4', description: 'Công việc con trực thuộc công việc cha' },
     ],
   },
 ];
@@ -494,7 +543,7 @@ export function resolveDynamicTypeConfig(type) {
   const hex = type.colorHex || '#3B82F6';
   return {
     id: type.id,
-    name: type.name || 'Task',
+    name: type.name || 'Công việc',
     code: type.code || 'TASK',
     hierarchyLevel: type.hierarchyLevel ?? 0,
     color: hex,

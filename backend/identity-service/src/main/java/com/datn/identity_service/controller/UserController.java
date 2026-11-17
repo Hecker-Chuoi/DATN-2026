@@ -40,6 +40,15 @@ public class UserController {
         PageResponse<UserResponse> page = userService.getAllUsers(query, org.springframework.data.domain.PageRequest.of(0, 20));
         return ResponseEntity.ok(ApiResponse.success(page.getContent(), "Users search completed"));
     }
+
+    @GetMapping("/api/v1/users/by-email")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<UserResponse>> getUserByEmail(
+            @RequestParam("email") String email
+    ) {
+        UserResponse user = userService.getUserByEmail(email);
+        return ResponseEntity.ok(ApiResponse.success(user, "User retrieved successfully"));
+    }
  
     @GetMapping("/api/v1/admin/users")
     @PreAuthorize("hasRole('ADMIN')")

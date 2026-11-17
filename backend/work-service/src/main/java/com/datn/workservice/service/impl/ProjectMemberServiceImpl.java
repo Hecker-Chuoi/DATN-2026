@@ -11,14 +11,12 @@ import com.datn.workservice.dto.response.RoleAssignmentResponse;
 import com.datn.workservice.entity.Project;
 import com.datn.workservice.entity.ProjectRole;
 import com.datn.workservice.entity.RoleAssignment;
-import com.datn.workservice.entity.TeamMember;
 import com.datn.workservice.enums.PermissionKey;
-import com.datn.workservice.enums.TeamRole;
 import com.datn.workservice.repository.PermissionSchemeEntryRepository;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.ProjectRoleRepository;
 import com.datn.workservice.repository.RoleAssignmentRepository;
-import com.datn.workservice.repository.TeamMemberRepository;
+import com.datn.workservice.security.WorkspaceAccessChecker;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +39,10 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     private final ProjectRoleRepository projectRoleRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final PermissionSchemeEntryRepository permissionSchemeEntryRepository;
-    private final TeamMemberRepository teamMemberRepository;
     private final IdentityClient identityClient;
+    private final WorkspaceAccessChecker workspaceAccessChecker;
+    private final com.datn.workservice.client.WorkspaceClient workspaceClient;
+    private final com.datn.workservice.notification.ProjectNotifier projectNotifier;
 
     // ─── Permission evaluation ───────────────────────────────────────────────
 
@@ -61,6 +61,18 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
         // 1. Project Lead & Creator have super-admin privileges over the project
         if (userId.equals(project.getLeadUserId()) || userId.equals(project.getCreatedBy())) {
             return true;
+        }
+
+        // 1b. Workspace Owner & Workspace Admin (Manager Workspace) have super-admin privileges over all projects in the workspace
+        if (project.getWorkspaceId() != null) {
+            try {
+                String wsRole = workspaceAccessChecker.getRole(project.getWorkspaceId(), userId);
+                if ("OWNER".equalsIgnoreCase(wsRole) || "ADMIN".equalsIgnoreCase(wsRole)) {
+                    return true;
+                }
+            } catch (Exception e) {
+                log.debug("Could not verify workspace admin/owner role for user {}: {}", userId, e.getMessage());
+            }
         }
 
         // 2. Membership is mandatory: no role assignment -> no permission at all (deny by default)
@@ -97,8 +109,17 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
 
         boolean isLead = currentUserId.equals(project.getLeadUserId()) || currentUserId.equals(project.getCreatedBy());
+        boolean isWsAdminOrOwner = false;
+        if (project.getWorkspaceId() != null) {
+            try {
+                String wsRole = workspaceAccessChecker.getRole(project.getWorkspaceId(), currentUserId);
+                isWsAdminOrOwner = "OWNER".equalsIgnoreCase(wsRole) || "ADMIN".equalsIgnoreCase(wsRole);
+            } catch (Exception e) {
+                log.debug("Could not verify workspace admin/owner role for current user {}: {}", currentUserId, e.getMessage());
+            }
+        }
 
-        if (isGlobalAdmin || isLead) {
+        if (isGlobalAdmin || isLead || isWsAdminOrOwner) {
             List<String> allPerms = Arrays.stream(PermissionKey.values())
                     .map(Enum::name)
                     .collect(Collectors.toList());
@@ -106,7 +127,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
                     .projectId(projectId)
                     .roleName(ROLE_ADMINISTRATOR)
                     .isLead(isLead)
-                    .isGlobalAdmin(isGlobalAdmin)
+                    .isGlobalAdmin(isGlobalAdmin || isWsAdminOrOwner)
                     .permissions(allPerms)
                     .build();
         }
@@ -201,65 +222,6 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
 
     @Override
     @Transactional
-    public void syncTeamMemberToProjects(UUID teamId, UUID userId, TeamRole teamRole) {
-        if (teamId == null || userId == null || teamRole == null) return;
-        for (Project project : projectRepository.findByTeamId(teamId)) {
-            List<ProjectRole> roles = projectRoleRepository.findByProjectId(project.getId());
-            ProjectRole targetRole = teamRole == TeamRole.LEADER ? findRole(roles, ROLE_ADMINISTRATOR)
-                    : teamRole == TeamRole.VIEWER ? findRole(roles, ROLE_VIEWER)
-                    : findRole(roles, ROLE_MEMBER);
-            if (targetRole == null) continue;
-
-            List<RoleAssignment> existing = roleAssignmentRepository.findByProjectIdAndUserId(project.getId(), userId);
-            if (existing.isEmpty()) {
-                roleAssignmentRepository.save(RoleAssignment.builder()
-                        .projectId(project.getId()).userId(userId).roleId(targetRole.getId()).build());
-            } else {
-                for (RoleAssignment ra : existing) {
-                    ra.setRoleId(targetRole.getId());
-                    roleAssignmentRepository.save(ra);
-                }
-            }
-        }
-    }
-
-    @Override
-    @Transactional
-    public void syncTeamMembersToProject(UUID projectId) {
-        Project project = projectRepository.findById(projectId).orElse(null);
-        if (project == null || project.getTeamId() == null) return;
-
-        List<TeamMember> teamMembers = teamMemberRepository.findByTeamId(project.getTeamId());
-        if (teamMembers.isEmpty()) return;
-
-        List<ProjectRole> projectRoles = projectRoleRepository.findByProjectId(project.getId());
-        ProjectRole adminRole = findRole(projectRoles, ROLE_ADMINISTRATOR);
-        ProjectRole memberRole = findRole(projectRoles, ROLE_MEMBER);
-        ProjectRole viewerRole = findRole(projectRoles, ROLE_VIEWER);
-        if (adminRole == null || memberRole == null || viewerRole == null) return;
-
-        for (TeamMember tm : teamMembers) {
-            if (tm.getUserId() == null) continue;
-            List<RoleAssignment> existing = roleAssignmentRepository.findByProjectIdAndUserId(project.getId(), tm.getUserId());
-            if (!existing.isEmpty()) continue;
-
-            ProjectRole targetRole = memberRole;
-            if (tm.getRole() == TeamRole.LEADER) {
-                targetRole = adminRole;
-            } else if (tm.getRole() == TeamRole.VIEWER) {
-                targetRole = viewerRole;
-            }
-
-            roleAssignmentRepository.save(RoleAssignment.builder()
-                    .projectId(project.getId())
-                    .userId(tm.getUserId())
-                    .roleId(targetRole.getId())
-                    .build());
-        }
-    }
-
-    @Override
-    @Transactional
     public RoleAssignmentResponse addMemberToProject(UUID projectId, AssignProjectRoleRequest request, UUID currentUserId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
@@ -285,6 +247,24 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
 
         RoleAssignment saved = roleAssignmentRepository.save(assignment);
         log.info("Member added to project: user={}, role={}, project={} by {}", targetUserId, role.getName(), projectId, currentUserId);
+        projectNotifier.memberAdded(project, targetUserId, role.getName(), currentUserId); // G5
+
+        // Smart Auto-Cascade: Đảm bảo user có mặt trong Workspace của dự án
+        if (project.getWorkspaceId() != null) {
+            try {
+                workspaceClient.ensureMember(
+                        project.getWorkspaceId(),
+                        com.datn.workservice.client.dto.EnsureWorkspaceMemberRequest.builder()
+                                .userId(targetUserId)
+                                .role("MEMBER")
+                                .invitedBy(currentUserId)
+                                .build()
+                );
+                log.info("Smart auto-cascade: Đã đảm bảo user {} là thành viên workspace {}", targetUserId, project.getWorkspaceId());
+            } catch (Exception e) {
+                log.warn("Không thể auto-cascade user {} vào workspace cho project {}: {}", targetUserId, projectId, e.getMessage());
+            }
+        }
 
         UserResponse user = fetchUser(targetUserId);
 
@@ -315,6 +295,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
         }
 
         RoleAssignment assignment = assignments.get(0);
+        String oldRoleName = projectRoleRepository.findById(assignment.getRoleId()).map(ProjectRole::getName).orElse(null);
         boolean wasAdmin = isAdministratorRole(assignment.getRoleId());
         boolean willBeAdmin = ROLE_ADMINISTRATOR.equalsIgnoreCase(role.getName());
         if (wasAdmin && !willBeAdmin) {
@@ -325,6 +306,8 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
         RoleAssignment saved = roleAssignmentRepository.save(assignment);
 
         log.info("Member role updated: user={}, newRole={}, project={} by {}", targetUserId, role.getName(), projectId, currentUserId);
+        projectRepository.findById(projectId) // G6
+                .ifPresent(p -> projectNotifier.roleChanged(p, targetUserId, oldRoleName, role.getName(), currentUserId));
 
         return RoleAssignmentResponse.builder()
                 .id(saved.getId())
@@ -356,6 +339,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
 
         roleAssignmentRepository.deleteByProjectIdAndUserId(projectId, targetUserId);
         log.info("Member removed from project: user={}, project={} by {}", targetUserId, projectId, currentUserId);
+        projectNotifier.memberRemoved(project, targetUserId, currentUserId); // G2 (+ G3 nếu còn việc dở)
     }
 
     @Override
@@ -373,21 +357,6 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
-
-    private boolean isImplicitAdmin(Project project, UUID userId) {
-        return userId.equals(project.getLeadUserId()) || userId.equals(project.getCreatedBy());
-    }
-
-    private static List<String> allPermissionKeys() {
-        return Arrays.stream(PermissionKey.values()).map(Enum::name).collect(Collectors.toList());
-    }
-
-    private int rolePriority(String roleName) {
-        if (ROLE_ADMINISTRATOR.equalsIgnoreCase(roleName)) return 0;
-        if (ROLE_MEMBER.equalsIgnoreCase(roleName)) return 1;
-        if (ROLE_VIEWER.equalsIgnoreCase(roleName)) return 2;
-        return 3;
-    }
 
     private static ProjectRole findRole(List<ProjectRole> roles, String name) {
         return roles.stream().filter(r -> name.equalsIgnoreCase(r.getName())).findFirst().orElse(null);

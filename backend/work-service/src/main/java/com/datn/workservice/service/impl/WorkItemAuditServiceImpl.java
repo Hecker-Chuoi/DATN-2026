@@ -2,6 +2,7 @@ package com.datn.workservice.service.impl;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.workservice.client.IdentityClient;
+import com.datn.workservice.client.IdentityUsers;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.response.WorkItemChangelogResponse;
 import com.datn.workservice.entity.*;
@@ -50,7 +51,8 @@ public class WorkItemAuditServiceImpl implements WorkItemAuditService {
             Map.entry("PARENT", "Công việc cha (Parent)"),
             Map.entry("RESOLUTION", "Kết quả xử lý (Resolution)"),
             Map.entry("ATTACHMENT", "Tệp đính kèm (Attachment)"),
-            Map.entry("LINK", "Liên kết công việc (Issue Link)")
+            Map.entry("LINK", "Liên kết công việc (Issue Link)"),
+            Map.entry("COMPLETION", "Xác nhận hoàn thành")
     );
 
     @Override
@@ -170,6 +172,14 @@ public class WorkItemAuditServiceImpl implements WorkItemAuditService {
     }
 
     @Override
+    @Transactional
+    public void recordAssigneeChange(UUID workItemId, UUID oldAssigneeId, UUID newAssigneeId, UUID userId) {
+        if (workItemId == null || userId == null || Objects.equals(oldAssigneeId, newAssigneeId)) return;
+        changelogRepository.save(buildChangelog(workItemId, "ASSIGNEE",
+                resolveUserName(oldAssigneeId), resolveUserName(newAssigneeId), userId));
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<WorkItemChangelogResponse> getChangelogs(UUID workItemId) {
         List<WorkItemChangelog> logs = changelogRepository.findByWorkItemIdOrderByChangedAtDesc(workItemId);
@@ -271,9 +281,8 @@ public class WorkItemAuditServiceImpl implements WorkItemAuditService {
         try {
             ApiResponse<List<UserResponse>> res = identityClient.getUsersByIds(new ArrayList<>(userIds));
             if (res != null && res.getData() != null) {
-                return res.getData().stream()
-                        .filter(u -> u.getId() != null)
-                        .collect(Collectors.toMap(UserResponse::getId, u -> u, (a, b) -> a));
+                // Map theo cả id của identity lẫn Keycloak sub (bảng work-service lưu sub)
+                return IdentityUsers.indexByAnyId(res.getData());
             }
         } catch (Exception e) {
             log.warn("Failed to fetch user batch for changelogs: {}", e.getMessage());

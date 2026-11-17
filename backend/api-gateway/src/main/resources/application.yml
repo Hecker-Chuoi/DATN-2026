@@ -1,5 +1,9 @@
 server:
   port: 8081
+  # Sau nginx (deploy): đọc X-Forwarded-Proto/Host để biết địa chỉ thật người dùng mở (https, cổng khác 80).
+  # Không có dòng này, CorsConfig coi request từ https://<domain> là gọi chéo nguồn và trả 403 (cả WebSocket).
+  # Chỉ an toàn khi cổng gateway KHÔNG mở ra Internet (mọi request đều đi qua nginx).
+  forward-headers-strategy: framework
 
 spring:
   application:
@@ -28,6 +32,14 @@ spring:
           uri: http://localhost:8087
           predicates:
             - Path=/workspace/api/**, /workspace/actuator/**
+          filters:
+            - StripPrefix=1
+        # Thông báo: REST /notification/api/** (JWT) + WebSocket /notification/ws (xác thực ở frame STOMP CONNECT).
+        # CỐ Ý không route /notification/internal/**: endpoint gửi email nội bộ, không xác thực.
+        - id: notification-service
+          uri: http://localhost:9994
+          predicates:
+            - Path=/notification/api/**, /notification/ws/**
           filters:
             - StripPrefix=1
 

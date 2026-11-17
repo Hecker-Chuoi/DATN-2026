@@ -8,10 +8,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Cảnh báo lúc boot khi FK teams/projects -> workspaces bị thiếu.
+ * Cảnh báo lúc boot khi FK projects -> workspaces bị thiếu.
  * <p>
  * Vì sao cần: migration V3 đặt FK trong history của workspace-service nhưng bảng
- * teams/projects lại thuộc history của work-service. Trên một DB mới, nếu
+ * projects lại thuộc history của work-service. Trên một DB mới, nếu
  * workspace-service migrate TRƯỚC work-service thì V3 no-op (bảng chưa tồn tại)
  * nhưng Flyway vẫn đánh dấu đã applied, và FK sẽ VĨNH VIỄN không được tạo.
  * <p>
@@ -34,7 +34,6 @@ public class SchemaIntegrityChecker implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        warnIfMissing("public.teams", "fk_teams_workspace");
         warnIfMissing("public.projects", "fk_projects_workspace");
     }
 

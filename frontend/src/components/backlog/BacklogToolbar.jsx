@@ -1,6 +1,7 @@
 import { Search, X } from 'lucide-react';
 import { SURFACE } from '../../constants/jiraTokens.js';
 import { getAvatarColor, getInitials } from '../../utils/avatarColor.js';
+import CustomSelect from '../common/CustomSelect.jsx';
 
 /**
  * Thanh cong cu Backlog: tim kiem, loc theo Epic, loc theo nguoi thuc hien (bam avatar),
@@ -50,24 +51,19 @@ export default function BacklogToolbar({
       </div>
 
       {/* Loc theo Epic */}
-      <select
+      <CustomSelect
         value={filters.epicId || ''}
-        onChange={(e) => set({ epicId: e.target.value || null })}
-        style={{
-          padding: '6px 10px',
-          borderRadius: 6,
-          border: `1px solid ${SURFACE.border}`,
-          fontSize: 13,
-          backgroundColor: '#FFFFFF',
-          color: SURFACE.text,
-          maxWidth: 200,
-        }}
-      >
-        <option value="">Tất cả Epic</option>
-        {epics.map((e) => (
-          <option key={e.id} value={e.id}>{e.code} — {e.summary}</option>
-        ))}
-      </select>
+        onChange={(val) => set({ epicId: val || null })}
+        options={[
+          { value: '', label: 'Tất cả hạng mục lớn' },
+          ...epics.map((e) => ({
+            value: e.id,
+            label: `${e.code} — ${e.summary}`,
+          })),
+        ]}
+        width={220}
+        placeholder="Tất cả hạng mục lớn"
+      />
 
       {/* Nhom avatar thanh vien */}
       {members.length > 0 && (

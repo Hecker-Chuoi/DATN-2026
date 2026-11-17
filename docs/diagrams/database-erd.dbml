@@ -8,7 +8,7 @@
 // LƯU Ý VỀ KIẾN TRÚC MICROSERVICE:
 //   Mỗi service sở hữu schema riêng. Các quan hệ cross-service (mọi cột trỏ tới
 //   users.id, và workspace_id trong work-service) KHÔNG có FK vật lý trong DB —
-//   trừ fk_teams_workspace / fk_projects_workspace do V3 của workspace-service
+//   fk_projects_workspace do V3 của workspace-service
 //   thêm vào (2 service dùng chung 1 PostgreSQL instance).
 //   Trong lược đồ này các quan hệ logic cross-service được vẽ bằng nét đứt
 //   (chú thích "logical") để phân biệt với FK thật.
@@ -17,7 +17,7 @@
 Project DATN2026 {
   database_type: 'PostgreSQL'
   note: '''
-    Hệ phân cấp: Workspace > Team > Project > Work Item (Epic > Story/Task/Bug > Subtask)
+    Hệ phân cấp: Workspace > Project > Work Item (Epic > Story/Task/Bug > Subtask) [Phẳng 2 cấp]
     - identity-service : users, user_roles
     - workspace-service: workspaces, workspace_members
     - work-service     : 30+ bảng (Jira-grade work engine)
@@ -39,12 +39,6 @@ Enum workspace_member_role {
   ADMIN
   MEMBER
   GUEST
-}
-
-Enum team_member_role {
-  LEADER
-  MEMBER
-  VIEWER
 }
 
 Enum project_type {
@@ -149,7 +143,7 @@ Table workspaces {
   created_by uuid [not null, note: 'logical -> users.id (không FK: cross-service). Chỉ dùng để audit, KHÔNG phải owner.']
   created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
   updated_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-  deleted_at timestamptz [note: 'Soft delete có chủ đích: xóa cứng sẽ bỏ mồ côi teams/projects/work_items ở schema work-service.']
+  deleted_at timestamptz [note: 'Soft delete có chủ đích: xóa cứng sẽ bỏ mồ côi projects/work_items ở schema work-service.']
 
   indexes {
     created_by [name: 'idx_workspaces_created_by', note: 'partial: WHERE deleted_at IS NULL']
@@ -174,45 +168,12 @@ Table workspace_members {
 }
 
 // ============================================================================
-// WORK SERVICE — 1. TEAMS
-// ============================================================================
-
-Table teams {
-  id uuid [pk, default: `gen_random_uuid()`]
-  workspace_id uuid [not null, ref: > workspaces.id, note: 'FK THẬT: fk_teams_workspace, ON DELETE RESTRICT (thêm bởi workspace-service V3)']
-  name varchar(255) [not null]
-  description text
-  owner_id uuid [not null, note: 'logical -> users.id. Song trùng với team_members.role = LEADER (hai nguồn sự thật — cần hòa giải ở TeamController).']
-  created_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-  updated_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-
-  indexes {
-    workspace_id [name: 'idx_teams_workspace']
-    owner_id [name: 'idx_teams_owner']
-  }
-}
-
-Table team_members {
-  id uuid [pk, default: `gen_random_uuid()`]
-  team_id uuid [not null, ref: > teams.id, note: 'ON DELETE CASCADE']
-  user_id uuid [not null, note: 'logical -> users.id']
-  role team_member_role [not null, default: 'MEMBER']
-  joined_at timestamptz [not null, default: `CURRENT_TIMESTAMP`]
-
-  indexes {
-    (team_id, user_id) [unique, name: 'uq_team_member']
-    user_id [name: 'idx_team_members_user']
-  }
-}
-
-// ============================================================================
 // WORK SERVICE — 2. PROJECTS & CLONES
 // ============================================================================
 
 Table projects {
   id uuid [pk, default: `gen_random_uuid()`]
   workspace_id uuid [not null, ref: > workspaces.id, note: 'FK THẬT: fk_projects_workspace, ON DELETE RESTRICT']
-  team_id uuid [ref: > teams.id, note: 'ON DELETE SET NULL']
   name varchar(255) [not null]
   key varchar(20) [not null, unique, note: 'Mã tiền tố sinh code work item, vd DATN-123']
   description text
@@ -736,8 +697,6 @@ Table outbox_events {
 // Ref: workspaces.created_by            > users.id
 // Ref: workspace_members.user_id        > users.id
 // Ref: workspace_members.invited_by     > users.id
-// Ref: teams.owner_id                   > users.id
-// Ref: team_members.user_id             > users.id
 // Ref: projects.lead_user_id            > users.id
 // Ref: projects.created_by              > users.id
 // Ref: project_clones.cloned_by         > users.id
@@ -766,9 +725,7 @@ TableGroup workspace_service [note: 'workspace-service — gốc tenant'] {
   workspace_members
 }
 
-TableGroup work_org [note: 'work-service — tổ chức: team, project, phân quyền'] {
-  teams
-  team_members
+TableGroup work_org [note: 'work-service — tổ chức: project, phân quyền'] {
   projects
   project_clones
   project_roles

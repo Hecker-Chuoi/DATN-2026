@@ -8,8 +8,7 @@ import lombok.Data;
 /**
  * Thêm thành viên vào workspace.
  * <p>
- * Dùng DTO có kiểu + Valid, KHÔNG dùng Map như TeamController (ở đó Map làm cho
- * Valid không bao giờ chạy và 4 DTO đã viết sẵn thành dead code).
+ * Dùng DTO có kiểu + Valid, Dùng DTO tường minh có @Valid.
  */
 @Data
 public class AddWorkspaceMemberRequest {

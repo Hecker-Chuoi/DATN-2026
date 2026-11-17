@@ -42,7 +42,9 @@ export default function GoogleCallback({ onLoginSuccess }) {
         if (onLoginSuccess) {
           onLoginSuccess();
         }
-        navigate(isAdminCallback ? '/admin' : '/projects');
+        const savedRedirect = sessionStorage.getItem('redirect_after_login');
+        sessionStorage.removeItem('redirect_after_login');
+        navigate(savedRedirect || (isAdminCallback ? '/admin' : '/projects'));
       })
       .catch((err) => {
         console.error('Google callback error:', err);

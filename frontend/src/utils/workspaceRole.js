@@ -16,7 +16,7 @@ export const ROLE_RANK = {
 
 export const ROLE_LABELS = {
   OWNER: 'Chủ sở hữu',
-  ADMIN: 'Quản trị',
+  ADMIN: 'Quản trị viên',
   MEMBER: 'Thành viên',
   GUEST: 'Khách',
 };

@@ -15,7 +15,7 @@ import java.util.UUID;
  * Kiểm tra quyền truy cập workspace từ phía work-service.
  * <p>
  * <b>FAIL CLOSED.</b> Mọi lỗi Feign hoặc timeout đều thành ForbiddenException.
- * Cố tình KHÔNG copy thái độ catch-rồi-bỏ-qua của TeamController.getUserAliasIds
+ * Xử lý kiểm tra quyền workspace nghiêm ngặt, fail-closed khi có lỗi
  * và ProjectMemberServiceImpl.getProjectMembers: bỏ qua lỗi là chấp nhận được khi
  * chỉ hydrate dữ liệu HIỂN THỊ, nhưng chí tử khi đang PHÂN QUYỀN - workspace-service
  * chết sẽ biến thành "ai cũng vào được mọi workspace".
@@ -32,7 +32,6 @@ public class WorkspaceAccessChecker {
     private static final List<String> RANKS = List.of("OWNER", "ADMIN", "MEMBER", "GUEST");
 
     private final WorkspaceClient workspaceClient;
-    private final CanonicalUserResolver canonicalUserResolver;
 
     /**
      * @return tên vai trò, hoặc null nếu không phải thành viên
@@ -40,7 +39,9 @@ public class WorkspaceAccessChecker {
      */
     @Cacheable(value = "wsRole", key = "#workspaceId + ':' + #userId", unless = "#result == null")
     public String getRole(UUID workspaceId, UUID userId) {
+        if (workspaceId == null || userId == null) return null;
         try {
+            // user id toàn hệ thống là Keycloak sub (workspace-service cũng lưu sub từ V6)
             ApiResponse<String> response = workspaceClient.getMemberRole(workspaceId, userId);
             return response == null ? null : response.getData();
         } catch (Exception e) {
@@ -53,15 +54,14 @@ public class WorkspaceAccessChecker {
     /**
      * Người gọi phải là thành viên workspace với bậc tối thiểu minRole.
      * <p>
-     * userId truyền vào là id lấy từ JWT, có thể là Keycloak sub. Phải đổi sang
-     * users.id trước khi tra membership, vì workspace_members khóa theo users.id.
+     * userId là Keycloak sub (SecurityUtils.getCurrentUserId()).
      */
     public void requireAtLeast(UUID workspaceId, UUID userId, String minRole) {
         if (workspaceId == null) {
             throw new ForbiddenException("Thiếu workspaceId để kiểm tra quyền");
         }
 
-        String role = getRole(workspaceId, canonicalUserResolver.resolve(userId));
+        String role = getRole(workspaceId, userId);
         if (role == null) {
             throw new ForbiddenException("Bạn không phải thành viên của workspace này");
         }
@@ -87,7 +87,7 @@ public class WorkspaceAccessChecker {
     public List<UUID> getWorkspaceIds(UUID userId) {
         try {
             ApiResponse<List<UUID>> response =
-                    workspaceClient.getWorkspaceIds(canonicalUserResolver.resolve(userId));
+                    workspaceClient.getWorkspaceIds(userId);
             if (response == null || response.getData() == null) {
                 return List.of();
             }

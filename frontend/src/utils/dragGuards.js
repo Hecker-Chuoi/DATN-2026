@@ -35,7 +35,7 @@ export function validateHierarchyDrop(draggedItem, targetParent) {
     if (parentLevel !== null) {
       return {
         allowed: false,
-        reason: 'Epic (Hạng mục lớn) là cấp cao nhất, không thể nằm trong công việc khác!',
+        reason: 'Hạng mục lớn là cấp cao nhất, không thể nằm trong công việc khác!',
         icon: 'Ban',
       };
     }
@@ -49,7 +49,7 @@ export function validateHierarchyDrop(draggedItem, targetParent) {
     }
     return {
       allowed: false,
-      reason: 'Công việc tiêu chuẩn chỉ có thể thuộc về Epic hoặc đứng độc lập!',
+      reason: 'Công việc tiêu chuẩn chỉ có thể thuộc về Hạng mục lớn hoặc đứng độc lập!',
       icon: 'Ban',
     };
   }
@@ -59,21 +59,21 @@ export function validateHierarchyDrop(draggedItem, targetParent) {
     if (!targetParent) {
       return {
         allowed: false,
-        reason: 'Sub-task (Nhiệm vụ con) bắt buộc phải nằm trong một Story, Task hoặc Bug!',
+        reason: 'Công việc con bắt buộc phải trực thuộc một Công việc tiêu chuẩn (Yêu cầu, Công việc hoặc Sự cố)!',
         icon: 'Ban',
       };
     }
     if (parentLevel === HIERARCHY_LEVELS.EPIC) {
       return {
         allowed: false,
-        reason: 'Sub-task không thể gắn trực tiếp vào Epic (Phải gắn qua Story/Task/Bug)!',
+        reason: 'Công việc con không thể gắn trực tiếp vào Hạng mục lớn (Phải gắn qua Công việc tiêu chuẩn)!',
         icon: 'Ban',
       };
     }
     if (parentLevel === HIERARCHY_LEVELS.SUBTASK) {
       return {
         allowed: false,
-        reason: 'Không cho phép lồng Sub-task đa tầng bên trong Sub-task khác!',
+        reason: 'Không cho phép lồng công việc con đa tầng bên trong công việc con khác!',
         icon: 'Ban',
       };
     }

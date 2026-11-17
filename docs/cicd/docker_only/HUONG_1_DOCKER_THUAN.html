@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hướng 1 Docker thuần — DATN-2026</title>
+<meta name="description" content="Triển khai CI/CD DATN-2026 bằng Jenkins + Docker Compose + Caddy trên 1 EC2: kiến trúc, pipeline 7 stage, rollback, từng bước cài đặt, vận hành.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
+<style>:root {
+  --bg: #F4F6FA; --surface: #FFFFFF; --surface-2: #F8FAFC; --border: #E2E8F0; --border-strong: #CBD5E1;
+  --text: #0F172A; --muted: #475569; --dim: #64748B;
+  --accent: #2563EB; --accent-soft: #EFF6FF; --accent-ink: #1E40AF;
+  --ok: #047857; --ok-soft: #ECFDF5; --warn: #B45309; --warn-soft: #FFFBEB;
+  --bad: #B91C1C; --bad-soft: #FEF2F2; --violet: #6D28D9; --violet-soft: #F5F3FF;
+  --code-bg: #0F172A; --code-text: #E2E8F0; --code-comment: #8B9BB4; --code-head: #1E293B;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(15,23,42,.04), 0 10px 28px -16px rgba(15,23,42,.18);
+  --font-body: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Plus Jakarta Sans", "Be Vietnam Pro", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B1120; --surface: #111827; --surface-2: #0F172A; --border: #1F2A3C; --border-strong: #334155;
+    --text: #E5E7EB; --muted: #A3AEC2; --dim: #7C8AA3;
+    --accent: #60A5FA; --accent-soft: rgba(96,165,250,.12); --accent-ink: #BFDBFE;
+    --ok: #34D399; --ok-soft: rgba(52,211,153,.10); --warn: #FBBF24; --warn-soft: rgba(251,191,36,.10);
+    --bad: #F87171; --bad-soft: rgba(248,113,113,.10); --violet: #A78BFA; --violet-soft: rgba(167,139,250,.12);
+    --code-bg: #070B14; --code-text: #E2E8F0; --code-comment: #7C8AA3; --code-head: #111827;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -16px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B1120; --surface: #111827; --surface-2: #0F172A; --border: #1F2A3C; --border-strong: #334155;
+  --text: #E5E7EB; --muted: #A3AEC2; --dim: #7C8AA3;
+  --accent: #60A5FA; --accent-soft: rgba(96,165,250,.12); --accent-ink: #BFDBFE;
+  --ok: #34D399; --ok-soft: rgba(52,211,153,.10); --warn: #FBBF24; --warn-soft: rgba(251,191,36,.10);
+  --bad: #F87171; --bad-soft: rgba(248,113,113,.10); --violet: #A78BFA; --violet-soft: rgba(167,139,250,.12);
+  --code-bg: #070B14; --code-text: #E2E8F0; --code-comment: #7C8AA3; --code-head: #111827;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -16px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15.5px/1.7 var(--font-body); }
+a { color: var(--accent); text-underline-offset: 3px; }
+code, kbd { font-family: var(--font-mono); font-size: .86em; }
+:not(pre) > code { background: var(--accent-soft); color: var(--accent-ink); padding: .12em .4em; border-radius: 6px; overflow-wrap: anywhere; }
+strong { font-weight: 650; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
+
+/* ---------- layout ---------- */
+.topbar { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+.topbar-in { max-width: 1280px; margin: 0 auto; padding: 10px 24px; display: flex; align-items: center; gap: 14px; }
+.brand { font-family: var(--font-display); font-weight: 800; letter-spacing: -.01em; color: var(--text); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+.brand-dot { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+.topnav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.topnav a { color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 600; padding: 6px 10px; border-radius: 8px; }
+.topnav a:hover, .topnav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); }
+.theme-btn { border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 8px; padding: 6px 10px; font: 600 13px var(--font-body); cursor: pointer; }
+.layout { max-width: 1280px; margin: 0 auto; padding: 28px 24px 80px; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 44px; }
+.toc { position: sticky; top: 70px; align-self: start; max-height: calc(100vh - 90px); overflow: auto; font-size: 13.5px; padding-right: 6px; }
+.toc-title { font: 700 11.5px var(--font-display); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 0 0 10px; }
+.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+.toc li { counter-increment: toc; }
+.toc a { display: block; color: var(--muted); text-decoration: none; padding: 5px 10px; border-left: 2px solid var(--border); line-height: 1.45; }
+.toc a::before { content: counter(toc) ". "; color: var(--dim); }
+.toc a:hover { color: var(--text); }
+.toc a.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); }
+.toc details summary { display: none; }
+main { min-width: 0; }
+
+@media (max-width: 1000px) {
+  .layout { grid-template-columns: 1fr; gap: 20px; padding: 18px 16px 64px; }
+  .toc { position: static; max-height: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; }
+  .toc details summary { display: block; cursor: pointer; font-weight: 700; padding: 6px 0; }
+  .toc .toc-title { display: none; }
+  .topbar-in { padding: 10px 16px; }
+  .topnav a { padding: 5px 7px; font-size: 12.5px; }
+}
+
+/* ---------- hero ---------- */
+.hero { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 34px 34px 28px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+.hero::after { content: ""; position: absolute; inset: 0 0 auto auto; width: 340px; height: 340px; transform: translate(35%, -45%); background: radial-gradient(closest-side, var(--accent-soft), transparent); pointer-events: none; }
+.eyebrow { font: 700 12px var(--font-display); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+h1 { font: 800 clamp(26px, 4vw, 38px)/1.15 var(--font-display); letter-spacing: -.02em; margin: 0 0 12px; text-wrap: balance; }
+.lead { font-size: 17px; color: var(--muted); margin: 0; max-width: 72ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.chip { font: 600 12.5px var(--font-body); border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 4px 11px; }
+.chip.b { border-color: transparent; background: var(--accent-soft); color: var(--accent-ink); }
+.chip.g { border-color: transparent; background: var(--ok-soft); color: var(--ok); }
+.chip.v { border-color: transparent; background: var(--violet-soft); color: var(--violet); }
+.chip.w { border-color: transparent; background: var(--warn-soft); color: var(--warn); }
+
+/* ---------- sections ---------- */
+section { scroll-margin-top: 76px; padding-top: 8px; }
+h2 { font: 800 25px/1.25 var(--font-display); letter-spacing: -.015em; margin: 52px 0 14px; display: flex; gap: 12px; align-items: baseline; text-wrap: balance; }
+h2 .n { flex: none; font-size: 13px; font-weight: 800; color: var(--accent); background: var(--accent-soft); border-radius: 8px; padding: 3px 9px; transform: translateY(-3px); }
+h3 { font: 750 18.5px/1.35 var(--font-display); margin: 30px 0 8px; letter-spacing: -.005em; }
+h4 { font: 700 15.5px var(--font-display); margin: 20px 0 6px; }
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+li { margin: 4px 0; }
+li::marker { color: var(--dim); }
+.muted { color: var(--muted); }
+.small { font-size: 13.5px; }
+
+/* ---------- callouts ---------- */
+.callout { border: 1px solid var(--border); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 10px; padding: 12px 16px; margin: 16px 0; }
+.callout > :first-child { margin-top: 0; } .callout > :last-child { margin-bottom: 0; }
+.callout .ct { font: 750 13px var(--font-display); letter-spacing: .03em; text-transform: uppercase; margin-bottom: 4px; display: block; }
+.callout.info { border-left-color: var(--accent); background: var(--accent-soft); } .callout.info .ct { color: var(--accent); }
+.callout.ok { border-left-color: var(--ok); background: var(--ok-soft); } .callout.ok .ct { color: var(--ok); }
+.callout.warn { border-left-color: var(--warn); background: var(--warn-soft); } .callout.warn .ct { color: var(--warn); }
+.callout.bad { border-left-color: var(--bad); background: var(--bad-soft); } .callout.bad .ct { color: var(--bad); }
+.callout.v { border-left-color: var(--violet); background: var(--violet-soft); } .callout.v .ct { color: var(--violet); }
+
+/* ---------- cards ---------- */
+.grid { display: grid; gap: 14px; margin: 16px 0; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 760px) { .g2, .g3 { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); min-width: 0; }
+.card h4 { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+.card .k { font: 700 11.5px var(--font-display); text-transform: uppercase; letter-spacing: .08em; color: var(--dim); }
+a.card { text-decoration: none; color: inherit; display: block; transition: border-color .15s, transform .15s; }
+a.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+/* ---------- tables ---------- */
+.tbl { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); margin: 16px 0; box-shadow: var(--shadow); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+th { font: 700 12.5px var(--font-display); text-transform: uppercase; letter-spacing: .04em; color: var(--dim); background: var(--surface-2); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.yes { color: var(--ok); font-weight: 700; } .no { color: var(--bad); font-weight: 700; } .mid { color: var(--warn); font-weight: 700; }
+
+/* ---------- code ---------- */
+.code { margin: 14px 0; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border-strong); background: var(--code-bg); box-shadow: var(--shadow); }
+.code-h { display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 14px; background: var(--code-head); color: #CBD5E1; font: 600 12.5px var(--font-mono); border-bottom: 1px solid rgba(148,163,184,.18); }
+.code-h .lang { color: #93C5FD; text-transform: uppercase; font-size: 11px; letter-spacing: .06em; }
+.code-h .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy { margin-left: auto; flex: none; border: 1px solid rgba(148,163,184,.35); background: transparent; color: #E2E8F0; font: 600 11.5px var(--font-body); padding: 3px 10px; border-radius: 6px; cursor: pointer; }
+.copy:hover { background: rgba(148,163,184,.15); }
+pre { margin: 0; padding: 14px 16px; overflow: auto; color: var(--code-text); font: 13px/1.6 var(--font-mono); tab-size: 2; max-height: 640px; }
+pre .cm { color: var(--code-comment); font-style: italic; }
+details.file { margin: 12px 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+details.file > summary { cursor: pointer; padding: 12px 16px; font-weight: 650; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; list-style: none; }
+details.file > summary::-webkit-details-marker { display: none; }
+details.file > summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
+details.file[open] > summary::before { transform: rotate(90deg); }
+details.file > summary code { font-size: 12.5px; }
+details.file > summary .d { color: var(--muted); font-weight: 400; font-size: 13.5px; }
+details.file > .code { margin: 0 12px 12px; }
+
+/* ---------- pipeline flow ---------- */
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 18px 0; }
+.stage { flex: 1 1 130px; min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--accent); border-radius: 10px; padding: 10px 12px; box-shadow: var(--shadow); position: relative; }
+.stage .sn { font: 800 11px var(--font-display); color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
+.stage .st { font: 750 14px/1.3 var(--font-display); margin: 2px 0 4px; }
+.stage .sd { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.stage.ci { border-top-color: var(--accent); }
+.stage.cd { border-top-color: var(--ok); }
+.stage.rb { border-top-color: var(--bad); }
+.stage.src { border-top-color: var(--violet); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+
+/* ---------- architecture diagram ---------- */
+.arch { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); margin: 18px 0; }
+.arch .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.arch .down { text-align: center; color: var(--dim); font: 600 12.5px var(--font-body); margin: 6px 0; }
+.arch .down::before { content: "▼"; display: block; color: var(--border-strong); font-size: 14px; line-height: 1; margin-bottom: 2px; }
+.node { border: 1px solid var(--border-strong); border-radius: 10px; padding: 8px 12px; background: var(--surface-2); text-align: center; min-width: 120px; flex: 0 1 auto; }
+.node b { display: block; font: 750 13.5px var(--font-display); }
+.node small { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.node.ext { background: var(--violet-soft); border-color: transparent; }
+.node.edge { background: var(--accent-soft); border-color: transparent; }
+.node.app { background: var(--ok-soft); border-color: transparent; }
+.node.data { background: var(--warn-soft); border-color: transparent; }
+.node.ci { background: var(--bad-soft); border-color: transparent; }
+.zone { border: 1.5px dashed var(--border-strong); border-radius: 14px; padding: 26px 12px 12px; position: relative; margin-top: 8px; }
+.zone > .zl { position: absolute; top: 6px; left: 12px; font: 750 11.5px var(--font-display); letter-spacing: .07em; text-transform: uppercase; color: var(--dim); }
+.zone + .zone { margin-top: 12px; }
+.zones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .zones { grid-template-columns: 1fr; } .node { min-width: 0; flex: 1 1 140px; } }
+
+/* ---------- steps ---------- */
+ol.steps { list-style: none; padding: 0; counter-reset: st; margin: 16px 0; }
+ol.steps > li { counter-increment: st; position: relative; padding: 0 0 18px 48px; margin: 0; border-left: 2px solid var(--border); margin-left: 15px; padding-left: 30px; }
+ol.steps > li:last-child { border-left-color: transparent; padding-bottom: 0; }
+ol.steps > li::before { content: counter(st); position: absolute; left: -16px; top: -2px; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; font: 800 13px/30px var(--font-display); text-align: center; }
+ol.steps > li > h4 { margin-top: 0; }
+
+/* ---------- misc ---------- */
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 14px; }
+.kv dt { color: var(--dim); font-weight: 600; } .kv dd { margin: 0; }
+.bar { height: 10px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+.timeline { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; font-size: 13.5px; align-items: center; margin: 14px 0; }
+.timeline .pods { display: flex; gap: 6px; flex-wrap: wrap; }
+.pod { font: 600 12px var(--font-mono); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); }
+.pod.old { background: var(--surface-2); color: var(--muted); }
+.pod.new { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.pod.starting { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.pod.gone { text-decoration: line-through; opacity: .55; }
+footer { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--dim); font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-in">
+  <a class="brand" href="../00_TONG_QUAN_CICD.html"><span class="brand-dot"></span>DATN-2026 · CI/CD</a>
+  <nav class="topnav" aria-label="Tài liệu">
+    <a href="../00_TONG_QUAN_CICD.html">Tổng quan</a>
+    <a href="HUONG_1_DOCKER_THUAN.html" aria-current="page">Hướng 1 · Docker</a>
+    <a href="../kubenetes/HUONG_2_KUBERNETES_K3S.html">Hướng 2 · Kubernetes</a>
+  </nav>
+  <button class="theme-btn" data-theme-toggle type="button">Sáng / Tối</button>
+</div></header>
+
+<div class="layout">
+<nav class="toc" aria-label="Mục lục"><details open><summary>Mục lục</summary>
+  <p class="toc-title">Mục lục</p>
+  <ol>
+    <li><a href="#tldr">Tóm tắt 1 phút</a></li>
+    <li><a href="#architecture">Kiến trúc trên 1 EC2</a></li>
+    <li><a href="#flow">Từ git push đến lúc lên server</a></li>
+    <li><a href="#pipeline">Pipeline 7 stage chi tiết</a></li>
+    <li><a href="#design">6 quyết định thiết kế</a></li>
+    <li><a href="#rollback">Rollback</a></li>
+    <li><a href="#sizing">RAM &amp; cấu hình máy</a></li>
+    <li><a href="#setup">Triển khai từng bước</a></li>
+    <li><a href="#ops">Vận hành hằng ngày</a></li>
+    <li><a href="#troubleshoot">Sự cố thường gặp</a></li>
+    <li><a href="#proscons">Ưu / nhược điểm</a></li>
+    <li><a href="#files">Toàn bộ file mẫu</a></li>
+  </ol>
+</details></nav>
+
+<main>
+  <div class="hero">
+    <p class="eyebrow">Hướng 1 · Docker thuần</p>
+    <h1>Jenkins + Docker Compose + Caddy trên một EC2</h1>
+    <p class="lead">Mọi thứ chạy dưới dạng container Docker trên một máy. Jenkins build image ngay trên máy đó, ghi tag mới vào một file trạng thái rồi gọi <code>docker compose up -d</code>. Caddy đứng ở cổng 80/443, tự lo HTTPS.</p>
+    <div class="chips">
+      <span class="chip b">Jenkins LTS (JDK 21)</span><span class="chip b">Docker Compose v2</span><span class="chip g">Caddy 2 + Let's Encrypt</span><span class="chip w">t3.xlarge khuyên dùng</span><span class="chip">Không cần registry</span>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <section id="tldr">
+    <h2><span class="n">01</span>Tóm tắt 1 phút</h2>
+    <div class="grid g3">
+      <div class="card"><span class="k">Cài 1 lần bằng tay</span><h4>Nền móng</h4><p class="small">Docker trên EC2, rồi một compose <code>datn-platform</code> gồm <strong>Jenkins</strong> và <strong>Caddy</strong>.</p></div>
+      <div class="card"><span class="k">Pipeline tự làm</span><h4>Ứng dụng</h4><p class="small">Compose <code>datn</code> gồm 6 container ứng dụng và 6 container hạ tầng, do Jenkins deploy.</p></div>
+      <div class="card"><span class="k">Điểm mấu chốt</span><h4>Bảng tag</h4><p class="small"><code>/opt/datn/state/deployed.env</code> ghi image nào đang chạy. Deploy là sửa bảng này; rollback là khôi phục bản cũ của bảng.</p></div>
+    </div>
+    <div class="flow">
+      <div class="stage src"><div class="sn">1</div><div class="st">Checkout</div><div class="sd">lấy code, tính TAG</div></div>
+      <div class="stage src"><div class="sn">2</div><div class="st">Phát hiện thay đổi</div><div class="sd">service nào cần build</div></div>
+      <div class="stage ci"><div class="sn">3</div><div class="st">CI Backend</div><div class="sd">mvn test + jar</div></div>
+      <div class="stage ci"><div class="sn">4</div><div class="st">CI Frontend</div><div class="sd">npm lint + build</div></div>
+      <div class="stage cd"><div class="sn">5 · main</div><div class="st">Build image</div><div class="sd">docker build</div></div>
+      <div class="stage cd"><div class="sn">6 · main</div><div class="st">Deploy</div><div class="sd">compose up -d</div></div>
+      <div class="stage cd"><div class="sn">7 · main</div><div class="st">Smoke test</div><div class="sd">healthy + HTTPS</div></div>
+      <div class="stage rb"><div class="sn">post</div><div class="st">Rollback</div><div class="sd">khi 6/7 lỗi</div></div>
+    </div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="architecture">
+    <h2><span class="n">02</span>Kiến trúc trên 1 EC2</h2>
+    <div class="arch" role="img" aria-label="Kiến trúc Hướng 1">
+      <div class="row"><div class="node ext"><b>Người dùng</b><small>trình duyệt</small></div><div class="node ext"><b>GitHub</b><small>webhook khi push</small></div><div class="node ext"><b>Let's Encrypt</b><small>cấp chứng chỉ</small></div></div>
+      <div class="down">Elastic IP · Security Group chỉ mở 80/443 (22 cho IP của bạn)</div>
+      <div class="zone"><span class="zl">EC2 Ubuntu 24.04 · Docker Engine · network "datn-net"</span>
+        <div class="zone"><span class="zl">compose "datn-platform" · /opt/datn/platform · cài tay 1 lần</span>
+          <div class="row">
+            <div class="node edge"><b>caddy</b><small>:80 :443 → chia theo tên miền</small></div>
+            <div class="node ci"><b>jenkins</b><small>JDK 21 · Maven · Node 22 · docker CLI</small></div>
+          </div>
+          <p class="small muted" style="text-align:center;margin:8px 0 0">jenkins mount <code>/var/run/docker.sock</code> → ra lệnh cho Docker Engine của chính EC2</p>
+        </div>
+        <div class="zone"><span class="zl">compose "datn" · /opt/datn/deploy · Jenkins deploy</span>
+          <div class="row">
+            <div class="node app"><b>frontend</b></div><div class="node app"><b>api-gateway</b></div><div class="node app"><b>identity-service</b></div><div class="node app"><b>work-service</b></div><div class="node app"><b>workspace-service</b></div><div class="node app"><b>notification-service</b></div>
+          </div>
+          <div class="down">hạ tầng · volume bền vững</div>
+          <div class="row">
+            <div class="node data"><b>keycloak</b></div><div class="node data"><b>app-db</b></div><div class="node data"><b>keycloak-db</b></div><div class="node data"><b>redis</b></div><div class="node data"><b>kafka</b></div><div class="node data"><b>minio</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Vì sao tách 2 compose project?</h3>
+    <ul>
+      <li><strong>Jenkins không được tự deploy lại chính nó.</strong> Nếu Jenkins nằm trong compose ứng dụng, lệnh <code>docker compose up</code> do Jenkins chạy có thể tự tắt Jenkins giữa chừng.</li>
+      <li><strong>Caddy phải luôn sống</strong>, kể cả khi stack ứng dụng đang deploy hoặc đang lỗi. Có Caddy thì vẫn vào được Jenkins để sửa.</li>
+      <li>Hai project nói chuyện với nhau qua <strong>network ngoài <code>datn-net</code></strong>, tạo sẵn bằng <code>docker network create</code>. Caddy gọi <code>frontend:80</code>, <code>api-gateway:8081</code>; Jenkins gọi <code>api-gateway:8081</code> khi smoke test.</li>
+    </ul>
+
+    <h3>Bố cục thư mục trên server</h3>
+    <div class="code"><div class="code-h"><span class="lang">text</span><span class="t">/opt/datn</span><button class="copy" type="button">Sao chép</button></div><pre><code>/opt/datn/
+├── platform/                  # cài tay 1 lần (bạn copy vào)
+│   ├── docker-compose.platform.yml
+│   ├── jenkins.Dockerfile
+│   ├── Caddyfile
+│   └── .env                   # DOCKER_GID, ACME_EMAIL, 3 tên miền
+├── deploy/                    # Jenkins chép vào mỗi lần deploy (từ repo)
+│   ├── docker-compose.prod.yml
+│   └── keycloak/realm.json
+├── state/                     # "bộ nhớ" của pipeline
+│   ├── deployed.env           # tag image đang chạy của 6 service
+│   └── history/
+│       ├── 57.env             # trạng thái sau build #57 (deploy thành công)
+│       └── before-58.env      # trạng thái ngay trước build #58
+└── backups/                   # pg_dump hằng ngày</code></pre></div>
+
+    <h3>Đường đi của request</h3>
+    <ol>
+      <li>Trình duyệt mở <code>https://datn.example.com/projects</code> → Caddy chuyển tới <code>frontend:80</code> → Nginx trả <code>index.html</code>, React Router xử lý đường dẫn.</li>
+      <li>React gọi <code>/work/api/v1/work/projects</code> (cùng tên miền nên không có CORS) → Caddy thấy đường dẫn <code>/work/*</code> → chuyển tới <code>api-gateway:8081</code>.</li>
+      <li>Gateway kiểm tra JWT (header hoặc cookie <code>access_token</code>), bỏ tiền tố <code>/work</code> (StripPrefix) → <code>http://work-service:8083/api/v1/work/projects</code>.</li>
+      <li>Đăng nhập: React gọi <code>/identity/api/v1/auth/login</code> → identity-service gọi Keycloak qua mạng nội bộ <code>http://keycloak:8080</code>. Token trả về có <code>iss=https://auth.datn.example.com/realms/datn-realm</code>.</li>
+    </ol>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="flow">
+    <h2><span class="n">03</span>Từ <code>git push</code> đến lúc lên server</h2>
+    <ol class="steps">
+      <li><h4>Merge vào <code>main</code></h4><p>GitHub gửi POST tới <code>https://jenkins.datn.example.com/github-webhook/</code>. Request đi qua Caddy vào container jenkins.</p></li>
+      <li><h4>Jenkins nhận diện nhánh</h4><p>Multibranch Pipeline thấy commit mới trên <code>main</code> và chạy <strong>Jenkinsfile của chính commit đó</strong>. Pipeline được quản lý phiên bản cùng code.</p></li>
+      <li><h4>Checkout + so sánh</h4><p>Jenkins clone code vào <code>/var/jenkins_home/workspace/…</code> và chạy <code>git diff</code> giữa commit này với commit của lần build thành công gần nhất để biết service nào thay đổi.</p></li>
+      <li><h4>CI ngay trong container Jenkins</h4><p><code>mvn package</code> (JDK 21 có sẵn) và <code>npm ci/lint/build</code> (Node 22). Thư viện cache trong <code>~/.m2</code> và <code>~/.npm</code> thuộc volume <code>jenkins_home</code>, lần sau không phải tải lại.</p></li>
+      <li><h4><code>docker build</code> qua docker.sock</h4><p>Docker CLI trong Jenkins gửi lệnh tới Docker Engine của EC2. Image được lưu luôn trong kho image của EC2, nên <strong>không cần registry</strong>: build ở đâu thì chạy ở đó.</p></li>
+      <li><h4>Sửa bảng tag và <code>compose up -d</code></h4><p>Compose so sánh cấu hình mới với các container đang chạy và <strong>chỉ tạo lại container có tag đổi</strong>. DB, Keycloak và các service khác không bị động tới.</p></li>
+      <li><h4>Smoke test, ghi lịch sử, dọn dẹp</h4><p>Đợi mọi container healthy, gọi thử qua HTTPS như người dùng thật. Đạt thì lưu <code>history/&lt;số build&gt;.env</code> và xoá image cũ. GitHub hiện dấu ✓ cạnh commit.</p></li>
+    </ol>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="pipeline">
+    <h2><span class="n">04</span>Pipeline 7 stage chi tiết</h2>
+    <p>File: <code>docs/cicd/docker_only/files/Jenkinsfile</code> → copy tới <code>infrastructure/cicd/docker/Jenkinsfile</code>. Nhánh không phải <code>main</code> chỉ chạy stage 1–4.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Stage</th><th>Chạy khi</th><th>Làm gì</th><th>Thời gian</th><th>Nếu lỗi</th></tr></thead>
+      <tbody>
+        <tr><td><strong>1. Checkout</strong></td><td>Luôn chạy</td><td><code>checkout scm</code>; tính <code>TAG = &lt;BUILD_NUMBER&gt;-&lt;sha7&gt;</code>; xác định nhánh deploy hay không, chế độ build hay rollback; kiểm tra <code>ROLLBACK_TO</code> là số</td><td class="num">5–15 s</td><td>Dừng, server không đổi</td></tr>
+        <tr><td><strong>2. Phát hiện thay đổi</strong></td><td>Chế độ build</td><td><code>git diff --name-only &lt;commit OK gần nhất&gt; HEAD</code>, ánh xạ ra danh sách service (bảng ở mục 5.3). Lần đầu hoặc <code>BUILD_ALL</code> thì chọn tất cả</td><td class="num">~1 s</td><td>—</td></tr>
+        <tr><td><strong>3. CI · Backend</strong></td><td>Có service backend đổi</td><td><code>mvn -B -ntp clean package</code> cho cả reactor: build <code>common</code> → chạy unit test mọi module → đóng gói 5 jar. Đăng kết quả JUnit lên Jenkins</td><td class="num">1–3 phút<br>(lần đầu 4–6)</td><td>Build đỏ, <strong>không</strong> tạo image</td></tr>
+        <tr><td><strong>4. CI · Frontend</strong></td><td>Frontend đổi</td><td><code>npm ci</code> → <code>npm run lint</code> → <code>npm run build</code></td><td class="num">1–2 phút</td><td>Build đỏ</td></tr>
+        <tr><td><strong>5. Build image</strong></td><td><code>main</code> + có service</td><td>Backend: <code>docker build -f backend/Dockerfile.runtime … backend/&lt;svc&gt;/target</code> (chỉ chép jar). Frontend: build-arg <code>VITE_KEYCLOAK_URL=https://auth…</code>, <code>NGINX_CONF=nginx.prod.conf</code></td><td class="num">~10 s/backend<br>1–2 phút frontend</td><td>Build đỏ, server không đổi</td></tr>
+        <tr><td><strong>6. Deploy</strong></td><td><code>main</code> + (có service, hoặc hạ tầng đổi, hoặc rollback)</td><td>Chép compose + realm sang <code>/opt/datn/deploy</code> → lưu <code>before-N.env</code> → sửa tag trong <code>deployed.env</code> → <code>docker compose up -d --remove-orphans</code></td><td class="num">10–30 s</td><td><strong>Tự rollback</strong></td></tr>
+        <tr><td><strong>7. Smoke test</strong></td><td>Sau deploy</td><td>Chờ mọi container hết trạng thái <em>starting/unhealthy</em> (tối đa 6 phút); <code>curl https://APP_DOMAIN/</code>; kiểm tra <code>issuer</code> của Keycloak; <code>api-gateway/actuator/health</code> = UP; lưu <code>history/N.env</code></td><td class="num">1–3 phút</td><td><strong>Tự rollback</strong></td></tr>
+        <tr><td><strong>post</strong></td><td>Cuối</td><td><code>failure</code>: khôi phục <code>before-N.env</code> rồi compose up. <code>success</code>: giữ image của 5 lần deploy gần nhất, xoá phần còn lại. <code>cleanup</code>: xoá workspace</td><td class="num">vài giây</td><td>—</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout info"><span class="ct">Hai tham số khi bấm "Build with Parameters"</span>
+      <strong>BUILD_ALL</strong>: bỏ qua phát hiện thay đổi, build và deploy cả 6 service. Dùng cho lần đầu, sau khi đổi <code>prod.env</code>, hoặc sau rollback.<br>
+      <strong>ROLLBACK_TO</strong>: nhập số build (ví dụ <code>42</code>) để đưa hệ thống về đúng trạng thái sau build #42. Stage 2–5 được bỏ qua.
+    </div>
+    <div class="callout warn"><span class="ct">Lần chạy đầu tiên của job</span>
+      Jenkins chỉ biết đến hai tham số trên <strong>sau khi đã chạy Jenkinsfile một lần</strong>. Lần build đầu không có "commit thành công gần nhất" nên tự build tất cả, tức là tương đương <code>BUILD_ALL</code>.
+    </div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="design">
+    <h2><span class="n">05</span>6 quyết định thiết kế (và lý do)</h2>
+
+    <h3>5.1 Tag bất biến <code>&lt;số build&gt;-&lt;commit&gt;</code>, không dùng <code>latest</code></h3>
+    <p>Ví dụ <code>datn/work-service:57-a1b2c3d</code>: build #57, commit <code>a1b2c3d</code>. Nhìn tag là biết đang chạy code nào, mở được log build tương ứng. Tag <code>latest</code> bị ghi đè mỗi lần build nên không rollback được, và compose cũng không nhận ra có thay đổi.</p>
+
+    <h3>5.2 Build once: Maven chạy một lần, image chỉ chép jar</h3>
+    <p>Các Dockerfile hiện tại là multi-stage, mỗi Dockerfile tự chạy Maven bên trong. Build 5 service thì Maven chạy 5 lần, mỗi lần trong một container trắng và phải tải lại thư viện. Pipeline làm khác:</p>
+    <div class="grid g2">
+      <div class="card"><span class="k">Cách cũ (5 Dockerfile multi-stage)</span><p class="small">5 × (tải dependency + compile + package). Tốn RAM, chậm, và jar trong image không phải jar vừa được test.</p></div>
+      <div class="card"><span class="k">Pipeline (Dockerfile.runtime)</span><p class="small"><code>mvn package</code> một lần cho cả reactor (có cache <code>~/.m2</code>). Mỗi image chỉ <code>COPY *.jar</code> vào JRE, mất khoảng 10 giây. <strong>Jar được test chính là jar được deploy.</strong></p></div>
+    </div>
+    <p>Build context là <code>backend/&lt;svc&gt;/target</code>, trong đó chỉ có một file khớp <code>*.jar</code> (file <code>*.jar.original</code> do Spring Boot tạo không khớp glob). Image chạy bằng user thường, heap tự tính theo <code>mem_limit</code> (<code>-XX:MaxRAMPercentage=70</code>).</p>
+
+    <h3>5.3 Phát hiện thay đổi trong monorepo</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>File thay đổi</th><th>Build &amp; deploy lại</th></tr></thead>
+      <tbody>
+        <tr><td><code>backend/common/**</code>, <code>backend/pom.xml</code>, <code>backend/Dockerfile.runtime</code></td><td>Cả 5 service backend (thư viện chung đổi thì service nào cũng bị ảnh hưởng)</td></tr>
+        <tr><td><code>backend/work-service/**</code> (tương tự với service khác)</td><td>Chỉ <code>work-service</code></td></tr>
+        <tr><td><code>frontend/**</code></td><td>Chỉ <code>frontend</code></td></tr>
+        <tr><td><code>infrastructure/cicd/docker/**</code>, <code>infrastructure/keycloak/**</code></td><td>Không build image, nhưng vẫn chạy deploy để áp cấu hình compose mới (ví dụ đổi phiên bản Keycloak, đổi <code>mem_limit</code>)</td></tr>
+        <tr><td><code>docs/**</code> và các file khác</td><td>Không làm gì, pipeline xanh trong vài giây</td></tr>
+      </tbody>
+    </table></div>
+    <p class="small muted">Mốc so sánh là <code>GIT_PREVIOUS_SUCCESSFUL_COMMIT</code>, tức commit của lần build <em>thành công</em> gần nhất trên cùng nhánh. Nếu build trước lỗi, lần sau so với mốc cũ hơn nên các thay đổi của lần lỗi vẫn được build lại, không bị sót. Stage 3 vẫn test cả reactor (unit test nhanh, và thay đổi ở <code>common</code> có thể làm vỡ service khác).</p>
+
+    <h3>5.4 Bảng tag <code>deployed.env</code> = "trạng thái mong muốn"</h3>
+    <p>File <code>docker-compose.prod.yml</code> không ghi cứng tag mà đọc từ biến: <code>image: datn/work-service:${WORK_SERVICE_TAG:?…}</code>. Các biến này nằm trong <code>/opt/datn/state/deployed.env</code>:</p>
+    <div class="code"><div class="code-h"><span class="lang">ini</span><span class="t">/opt/datn/state/deployed.env (ví dụ sau build #57 chỉ sửa work-service)</span><button class="copy" type="button">Sao chép</button></div><pre><code>API_GATEWAY_TAG=12-1a2b3c4
+IDENTITY_SERVICE_TAG=41-9f8e7d6
+WORK_SERVICE_TAG=57-a1b2c3d
+WORKSPACE_SERVICE_TAG=55-0c9d8e7
+NOTIFICATION_SERVICE_TAG=12-1a2b3c4
+FRONTEND_TAG=56-7e6f5a4</code></pre></div>
+    <p>Mỗi service giữ tag của lần cuối nó được build. Deploy = sửa đúng dòng của service đổi rồi chạy <code>docker compose up -d</code>. Compose là công cụ <strong>khai báo</strong>: nó so cấu hình với thực tế và chỉ tạo lại <code>work-service</code>, 11 container còn lại đứng yên. Thiếu tag nào thì compose báo lỗi ngay nhờ cú pháp <code>${VAR:?}</code>, không chạy nhầm image rỗng.</p>
+    <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Lệnh deploy thực tế trong stage 6</span><button class="copy" type="button">Sao chép</button></div><pre><code>docker compose -p datn -f /opt/datn/deploy/docker-compose.prod.yml \
+  --env-file "$PROD_ENV" \
+  --env-file /opt/datn/state/deployed.env \
+  up -d --remove-orphans
+<span class="cm"># --env-file thứ nhất: bí mật + tên miền (Jenkins Credential, file tạm bị xoá sau stage)</span>
+<span class="cm"># --env-file thứ hai : bảng tag</span>
+<span class="cm"># --remove-orphans   : xoá container của service đã bị bỏ khỏi file compose</span></code></pre></div>
+
+    <h3>5.5 Jenkins điều khiển Docker của EC2 qua <code>docker.sock</code>, mount trùng đường dẫn</h3>
+    <p>Jenkins chạy trong container nhưng không có Docker bên trong (không dùng "Docker-in-Docker"). Nó mount <code>/var/run/docker.sock</code> của EC2, nên mọi lệnh <code>docker …</code> trong Jenkins thực chất do Docker Engine của EC2 thực thi.</p>
+    <div class="callout bad"><span class="ct">Hệ quả dễ vấp: đường dẫn được hiểu theo máy EC2</span>
+      Trong compose có <code>volumes: - /opt/datn/deploy/keycloak/realm.json:/opt/keycloak/…</code>. Lệnh do Jenkins gửi, nhưng Docker Engine của <strong>EC2</strong> mới là bên tìm file <code>/opt/datn/deploy/keycloak/realm.json</code>, và nó tìm trên ổ đĩa của EC2. Vì thế container Jenkins mount <code>/opt/datn:/opt/datn</code> (trùng đường dẫn hai phía): file Jenkins chép vào <code>/opt/datn/deploy</code> nằm đúng chỗ Docker Engine tìm. Nếu chạy compose từ workspace của Jenkins (<code>/var/jenkins_home/…</code>, nằm trong volume), Docker sẽ báo <em>bind source path does not exist</em>.
+    </div>
+    <div class="callout warn"><span class="ct">Bảo mật: docker.sock tương đương quyền root</span>
+      Ai chạy được lệnh trong Jenkins thì có quyền root trên EC2. Vì vậy: đặt mật khẩu admin mạnh, không cho tự đăng ký tài khoản, cho executors chạy trên built-in node (chấp nhận được với 1 server), và trong Multibranch đặt <em>Discover pull requests from forks → Trust</em> = <strong>"From users with Admin or Write permission"</strong>, để PR từ fork lạ không chạy được Jenkinsfile đã bị sửa trên server.
+    </div>
+
+    <h3>5.6 Healthcheck &amp; thứ tự khởi động</h3>
+    <ul>
+      <li><code>depends_on: condition: service_healthy</code>: identity-service chỉ khởi động khi <code>app-db</code> và <code>keycloak</code> đã healthy, tránh lỗi "connection refused" lúc boot.</li>
+      <li>Bốn service chưa có actuator dùng <code>nc -z 127.0.0.1 &lt;port&gt;</code>. Spring Boot chỉ mở cổng HTTP ở cuối quá trình khởi động, nên "cổng đã mở" xấp xỉ "đã sẵn sàng". Gateway có actuator nên kiểm tra <code>/actuator/health</code>.</li>
+      <li>Ở Hướng 1, healthcheck <strong>không chặn traffic</strong>. Trong 20–60 giây service mới khởi động, gateway có thể trả 502/503 cho request tới service đó. Đây là khác biệt chính so với Hướng 2.</li>
+      <li>Mỗi container có <code>mem_limit</code>, nên một service rò rỉ bộ nhớ chỉ tự chết và tự khởi động lại, không kéo sập cả máy.</li>
+    </ul>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="rollback">
+    <h2><span class="n">06</span>Rollback: tự động và bằng tay</h2>
+    <div class="grid g2">
+      <div class="card"><span class="k">Tự động</span><h4>Khi stage 6 hoặc 7 lỗi</h4>
+        <p class="small">Khối <code>post { failure }</code> chép <code>history/before-N.env</code> (chụp ngay trước khi sửa) đè lên <code>deployed.env</code>, rồi chạy lại <code>compose up -d</code>. Các service về đúng image cũ, khoảng 1 phút. Build vẫn đỏ để bạn biết có sự cố.</p></div>
+      <div class="card"><span class="k">Bằng tay</span><h4>Phát hiện lỗi sau vài giờ</h4>
+        <p class="small">Jenkins → job <code>main</code> → <em>Build with Parameters</em> → <code>ROLLBACK_TO=42</code>. Pipeline chép <code>history/42.env</code> thành <code>deployed.env</code>, deploy rồi smoke test. Chỉ chọn được build đã deploy <em>thành công</em> và image còn trên máy (giữ 5 lần gần nhất).</p></div>
+    </div>
+    <div class="callout warn"><span class="ct">Sau khi rollback tay, lần build kế tiếp nên bật BUILD_ALL</span>
+      Build rollback cũng được tính là "thành công", nên mốc so sánh của lần sau là commit mới nhất trong khi image đang chạy là bản cũ. Nếu không bật <code>BUILD_ALL</code>, các service đã bị rollback sẽ không được build lại.
+    </div>
+    <div class="callout bad"><span class="ct">Giới hạn: rollback KHÔNG quay ngược database</span>
+      Flyway (work-service V1…V8, workspace-service V1…V4) và Hibernate <code>ddl-auto: update</code> chỉ tiến, không lùi. Rollback code về bản cũ chỉ an toàn khi migration mới <strong>tương thích ngược</strong>, theo nguyên tắc <em>expand → contract</em>:
+      <ul class="small">
+        <li>Thêm bảng hoặc cột (nullable / có default): an toàn, code cũ bỏ qua cột mới.</li>
+        <li>Đổi tên hoặc xoá cột: chia thành 2 lần phát hành. Lần 1 thêm cột mới và ghi cả hai; lần 2, khi chắc chắn không cần quay lại nữa, mới xoá cột cũ.</li>
+        <li>Trước khi merge migration lớn vào <code>main</code>: chạy backup thủ công (<a href="#ops">mục 9</a>).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="sizing">
+    <h2><span class="n">07</span>RAM &amp; cấu hình máy</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Container</th><th><code>mem_limit</code></th><th>Thực tế (ước tính)</th></tr></thead>
+      <tbody>
+        <tr><td>jenkins (rảnh / đang build)</td><td class="num">3g</td><td class="num">0,8 / 2,5 GB</td></tr>
+        <tr><td>caddy</td><td class="num">128m</td><td class="num">~30 MB</td></tr>
+        <tr><td>keycloak</td><td class="num">1g</td><td class="num">600–800 MB</td></tr>
+        <tr><td>app-db + keycloak-db</td><td class="num">512m + 384m</td><td class="num">200–350 MB</td></tr>
+        <tr><td>redis</td><td class="num">256m</td><td class="num">~30 MB</td></tr>
+        <tr><td>kafka (tuỳ chọn)</td><td class="num">1g</td><td class="num">400–600 MB</td></tr>
+        <tr><td>minio</td><td class="num">512m</td><td class="num">100–200 MB</td></tr>
+        <tr><td>work-service</td><td class="num">1g</td><td class="num">450–650 MB</td></tr>
+        <tr><td>identity-service, workspace-service</td><td class="num">768m × 2</td><td class="num">700–1000 MB</td></tr>
+        <tr><td>api-gateway, notification-service</td><td class="num">512m × 2</td><td class="num">500–700 MB</td></tr>
+        <tr><td>frontend</td><td class="num">128m</td><td class="num">~10 MB</td></tr>
+        <tr><td>Ubuntu + Docker Engine</td><td class="num">—</td><td class="num">~500 MB</td></tr>
+        <tr><td><strong>Tổng</strong></td><td class="num">—</td><td class="num"><strong>4,5–5,5 GB rảnh · 7–8 GB lúc build</strong></td></tr>
+      </tbody>
+    </table></div>
+    <div class="grid g2">
+      <div class="card"><span class="k">Khuyên dùng</span><h4><code>t3.xlarge</code> · 16 GB</h4><p class="small">Dư khoảng 8 GB, build và deploy thoải mái, giữ được Kafka.</p></div>
+      <div class="card"><span class="k">Tiết kiệm</span><h4><code>t3.large</code> · 8 GB</h4><p class="small">Bắt buộc swap 4 GB (script đã tạo), xoá block <code>kafka</code> khỏi compose, giảm <code>mem_limit</code> của Jenkins xuống 2g. Build sẽ chậm hơn và có thể dùng swap.</p></div>
+    </div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="setup">
+    <h2><span class="n">08</span>Triển khai từng bước</h2>
+
+    <ol class="steps">
+      <li><h4>Đưa file mẫu vào repo (trên máy bạn)</h4>
+        <div class="tbl"><table>
+          <thead><tr><th>Từ <code>docs/cicd/…</code></th><th>Tới</th></tr></thead>
+          <tbody>
+            <tr><td><code>common/backend-Dockerfile.runtime</code></td><td><code>backend/Dockerfile.runtime</code></td></tr>
+            <tr><td><code>common/frontend.Dockerfile</code></td><td><code>frontend/Dockerfile</code></td></tr>
+            <tr><td><code>common/frontend-nginx.prod.conf</code></td><td><code>frontend/nginx.prod.conf</code></td></tr>
+            <tr><td><code>common/gateway-application-prod.yml</code></td><td><code>backend/api-gateway/src/main/resources/application-prod.yml</code></td></tr>
+            <tr><td><code>docker_only/files/Jenkinsfile</code></td><td><code>infrastructure/cicd/docker/Jenkinsfile</code></td></tr>
+            <tr><td><code>docker_only/files/docker-compose.prod.yml</code></td><td><code>infrastructure/cicd/docker/docker-compose.prod.yml</code></td></tr>
+          </tbody>
+        </table></div>
+        <p>Sửa <code>APP_DOMAIN</code>, <code>AUTH_DOMAIN</code> trong Jenkinsfile. Commit lên nhánh làm việc → PR → <code>develop</code> → <code>main</code>. Đợi Jenkins dựng xong (bước 6) rồi mới merge vào <code>main</code>.</p>
+      </li>
+      <li><h4>Tạo EC2, Elastic IP, Security Group</h4><p>Theo <a href="../00_TONG_QUAN_CICD.html#common-steps">Tổng quan · 8.2</a>: Ubuntu 24.04, <code>t3.xlarge</code>, gp3 50 GB, mở 22 (IP của bạn), 80, 443.</p></li>
+      <li><h4>Trỏ DNS</h4><p>3 bản ghi A (<code>datn</code>, <code>auth.datn</code>, <code>jenkins.datn</code>) về Elastic IP. Kiểm tra bằng <code>nslookup</code> trước khi sang bước 5, nếu không Caddy sẽ xin chứng chỉ thất bại.</p></li>
+      <li><h4>Cài Docker, swap, thư mục, network</h4>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Trên máy bạn (thư mục docs/cicd)</span><button class="copy" type="button">Sao chép</button></div><pre><code>scp -i datn-key.pem docker_only/files/setup-ec2.sh \
+    docker_only/files/docker-compose.platform.yml \
+    docker_only/files/Caddyfile \
+    common/jenkins.Dockerfile  ubuntu@&lt;ELASTIC_IP&gt;:~
+ssh -i datn-key.pem ubuntu@&lt;ELASTIC_IP&gt;</code></pre></div>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Trên EC2</span><button class="copy" type="button">Sao chép</button></div><pre><code>sudo bash setup-ec2.sh
+sudo mv ~/docker-compose.platform.yml ~/Caddyfile ~/jenkins.Dockerfile /opt/datn/platform/
+sudo nano /opt/datn/platform/.env        # sửa ACME_EMAIL + 3 tên miền
+exit                                     # đăng xuất rồi SSH lại để nhóm docker có hiệu lực</code></pre></div>
+      </li>
+      <li><h4>Dựng Jenkins + Caddy</h4>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Trên EC2</span><button class="copy" type="button">Sao chép</button></div><pre><code>cd /opt/datn/platform
+docker compose up -d --build             # lần đầu build image Jenkins ~3–5 phút
+docker compose logs -f caddy             # chờ dòng "certificate obtained successfully" cho 3 tên miền
+docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword</code></pre></div>
+      </li>
+      <li><h4>Cấu hình Jenkins lần đầu</h4>
+        <ul>
+          <li>Mở <code>https://jenkins.&lt;domain&gt;</code>, dán mật khẩu mở khoá → <em>Select plugins to install</em> → <em>None</em> (plugin cần thiết đã có trong image) → tạo tài khoản admin.</li>
+          <li>Manage Jenkins → System: <em>Jenkins URL</em> = <code>https://jenkins.&lt;domain&gt;/</code>.</li>
+          <li>Manage Jenkins → Nodes → Built-In Node → <em># of executors</em> = <code>2</code> (Jenkinsfile đã chặn hai lần deploy chạy chồng nhau).</li>
+          <li>Manage Jenkins → Security: <em>Jenkins' own user database</em>, bỏ chọn "Allow users to sign up"; Authorization: <em>Logged-in users can do anything</em>, bỏ chọn quyền đọc cho anonymous.</li>
+        </ul>
+      </li>
+      <li><h4>Tạo credential</h4>
+        <div class="tbl"><table>
+          <thead><tr><th>ID</th><th>Kind</th><th>Nội dung</th></tr></thead>
+          <tbody>
+            <tr><td><code>github-pat</code></td><td>Username with password</td><td>Tên GitHub + Personal Access Token (<a href="../00_TONG_QUAN_CICD.html#common-steps">Tổng quan · 8.3</a>)</td></tr>
+            <tr><td><code>datn-prod-env</code></td><td>Secret file</td><td>File <code>prod.env</code> điền từ <code>common/prod.env.example</code></td></tr>
+          </tbody>
+        </table></div>
+      </li>
+      <li><h4>Tạo Multibranch Pipeline + webhook</h4><p>Script Path: <code>infrastructure/cicd/docker/Jenkinsfile</code>. Webhook: <code>https://jenkins.&lt;domain&gt;/github-webhook/</code>. Chi tiết ở <a href="../00_TONG_QUAN_CICD.html#common-steps">Tổng quan · 8.3</a>.</p></li>
+      <li><h4>Lần deploy đầu tiên</h4>
+        <p>Merge PR vào <code>main</code> (hoặc bấm <em>Scan Multibranch Pipeline Now</em>). Build đầu tự chọn tất cả service. Theo dõi:</p>
+        <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Trên EC2 – theo dõi lần deploy đầu</span><button class="copy" type="button">Sao chép</button></div><pre><code>watch -n 3 'docker ps --format "table {{.Names}}\t{{.Status}}"'
+docker logs -f datn-keycloak-1          # lần đầu "start" + import realm mất 1–2 phút
+docker logs -f datn-work-service-1      # Flyway V1..V8 + seed template</code></pre></div>
+      </li>
+      <li><h4>Cấu hình Keycloak &amp; Google</h4><p>Làm theo <a href="../00_TONG_QUAN_CICD.html#common-steps">Tổng quan · 8.4</a>: thêm redirect URI, tạo lại client secret, cập nhật credential <code>datn-prod-env</code>, chạy lại với <code>BUILD_ALL=true</code>, thêm redirect URI vào Google Console.</p></li>
+      <li><h4>Kiểm tra toàn bộ luồng</h4>
+        <ul>
+          <li>☐ <code>https://datn.&lt;domain&gt;</code> có ổ khoá HTTPS, F5 ở một đường dẫn sâu (<code>/w/…</code>) không bị 404.</li>
+          <li>☐ Đăng ký → nhận mail xác thực (SMTP thật) → bấm link → đăng nhập được.</li>
+          <li>☐ Đăng nhập Google.</li>
+          <li>☐ Tạo workspace, project, task; kéo thả trên board; upload rồi tải file đính kèm (MinIO).</li>
+          <li>☐ Mời thành viên → người được mời nhận mail.</li>
+          <li>☐ Sửa một dòng chữ ở frontend → push <code>main</code> → sau vài phút thấy thay đổi, và chỉ container <code>frontend</code> được tạo lại.</li>
+          <li>☐ Thử rollback: <em>Build with Parameters</em> → <code>ROLLBACK_TO</code> = build trước.</li>
+        </ul>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="ops">
+    <h2><span class="n">09</span>Vận hành hằng ngày</h2>
+    <p>Tên container có dạng <code>datn-&lt;service&gt;-1</code> (project <code>datn</code>). Các lệnh <code>docker</code> trực tiếp không cần file compose hay bí mật.</p>
+    <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Lệnh hay dùng trên EC2</span><button class="copy" type="button">Sao chép</button></div><pre><code>docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'   # đang chạy gì, tag nào, healthy chưa
+docker stats --no-stream                                          # RAM/CPU từng container
+docker logs -f --tail 200 datn-work-service-1                     # log 1 service
+docker restart datn-work-service-1                                # khởi động lại 1 service
+cat /opt/datn/state/deployed.env                                  # bảng tag hiện tại
+ls -t /opt/datn/state/history | head                              # các mốc rollback được
+docker system df &amp;&amp; df -h /                                       # dung lượng</code></pre></div>
+    <div class="callout info"><span class="ct">Thay đổi cấu hình thì làm qua Git</span>
+      Muốn đổi phiên bản Keycloak, <code>mem_limit</code> hay biến môi trường: sửa <code>infrastructure/cicd/docker/docker-compose.prod.yml</code> → push <code>main</code>. Pipeline thấy hạ tầng đổi và chạy deploy. Đổi bí mật: cập nhật credential <code>datn-prod-env</code> rồi chạy <code>BUILD_ALL=true</code>. <strong>Không sửa tay</strong> file trong <code>/opt/datn/deploy</code>, vì lần deploy sau sẽ ghi đè.
+    </div>
+
+    <h3>Backup database</h3>
+    <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">/etc/cron.d/datn-backup (tạo bằng: sudo nano /etc/cron.d/datn-backup)</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># Mỗi ngày 2h sáng: dump 2 DB, giữ 7 ngày. Dấu % phải viết \% trong crontab.</span>
+0 2 * * * root docker exec datn-app-db-1 pg_dump -U datn -Fc datn_main_db &gt; /opt/datn/backups/datn_main_db_$(date +\%F).dump &amp;&amp; docker exec datn-keycloak-db-1 pg_dump -U keycloak -Fc keycloak &gt; /opt/datn/backups/keycloak_$(date +\%F).dump &amp;&amp; find /opt/datn/backups -name '*.dump' -mtime +7 -delete</code></pre></div>
+    <div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">Khôi phục (vd sau sự cố hoặc khi chuyển sang Hướng 2)</span><button class="copy" type="button">Sao chép</button></div><pre><code>docker stop datn-identity-service-1 datn-work-service-1 datn-workspace-service-1
+docker exec -i datn-app-db-1 pg_restore -U datn -d datn_main_db --clean --if-exists &lt; /opt/datn/backups/datn_main_db_2026-11-12.dump
+docker start datn-identity-service-1 datn-work-service-1 datn-workspace-service-1</code></pre></div>
+    <p class="small muted">Thêm một lớp an toàn: AWS → EC2 → Lifecycle Manager tạo snapshot EBS hằng tuần (khoảng 0,05 USD/GB-tháng cho phần thay đổi). Bản <code>.dump</code> nên chép định kỳ về máy bạn hoặc lên S3.</p>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="troubleshoot">
+    <h2><span class="n">10</span>Sự cố thường gặp</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>Triệu chứng</th><th>Nguyên nhân hay gặp</th><th>Cách xử lý</th></tr></thead>
+      <tbody>
+        <tr><td>Caddy log <em>challenge failed</em>, trình duyệt báo chứng chỉ không hợp lệ</td><td>DNS chưa trỏ đúng, cổng 80 chưa mở, hoặc Cloudflare đang bật proxy</td><td><code>nslookup</code>, kiểm tra Security Group, tắt proxy (DNS only), rồi <code>docker restart caddy</code></td></tr>
+        <tr><td><em>permission denied … /var/run/docker.sock</em> trong log Jenkins</td><td><code>DOCKER_GID</code> trong <code>.env</code> sai</td><td><code>getent group docker</code> → sửa <code>.env</code> → <code>docker compose up -d</code> lại platform</td></tr>
+        <tr><td><em>bind source path does not exist: /opt/datn/deploy/…</em></td><td>Container Jenkins thiếu mount <code>/opt/datn:/opt/datn</code></td><td>Kiểm tra <code>volumes</code> trong compose platform</td></tr>
+        <tr><td><em>thieu tag - chay pipeline voi BUILD_ALL=true</em></td><td><code>deployed.env</code> thiếu tag của một service</td><td>Build with Parameters → <code>BUILD_ALL=true</code></td></tr>
+        <tr><td>Đăng nhập xong nhưng mọi API trả <strong>401</strong></td><td>Lệch issuer (<a href="../00_TONG_QUAN_CICD.html#system">bẫy số 1</a>)</td><td><code>curl -s https://auth.&lt;domain&gt;/realms/datn-realm/.well-known/openid-configuration | grep -o '"issuer":"[^"]*"'</code> phải khớp <code>…_ISSUERURI</code> trong compose</td></tr>
+        <tr><td><code>/work/…</code> hoặc <code>/workspace/…</code> trả 404</td><td>Gateway không chạy profile <code>prod</code>, hoặc jar không có <code>application-prod.yml</code></td><td>Log gateway phải có <em>The following 1 profile is active: "prod"</em></td></tr>
+        <tr><td>Google login báo <em>redirect_uri_mismatch</em> hoặc <em>Invalid redirect uri</em></td><td>Chưa thêm URI production</td><td><a href="../00_TONG_QUAN_CICD.html#common-steps">Tổng quan · 8.4</a></td></tr>
+        <tr><td>Container restart liên tục; <code>docker inspect … | grep OOMKilled</code> ra <code>true</code></td><td>Vượt <code>mem_limit</code></td><td>Tăng <code>mem_limit</code> trong compose prod, hoặc giảm <code>MaxRAMPercentage</code></td></tr>
+        <tr><td>Máy treo khi pipeline chạy Maven/npm</td><td>Hết RAM</td><td>Kiểm tra swap (<code>free -h</code>), bỏ Kafka, hoặc nâng lên <code>t3.xlarge</code></td></tr>
+        <tr><td>Keycloak không khởi động, log nhắc tới <em>hostname</em></td><td>Cấu hình <code>KC_HOSTNAME*</code> sai</td><td>Kiểm tra 3 biến <code>KC_HOSTNAME*</code>; tạm đổi <code>command</code> sang <code>["start-dev", "--import-realm"]</code> để xác định nguyên nhân</td></tr>
+        <tr><td>Push mà Jenkins không chạy</td><td>Webhook sai URL, thiếu <code>/</code> cuối, hoặc chưa đặt Jenkins URL</td><td>GitHub → Webhooks → <em>Recent Deliveries</em> xem mã lỗi; thử "Redeliver"</td></tr>
+        <tr><td>Upload file lớn bị lỗi</td><td>Spring giới hạn multipart mặc định 1 MB</td><td>Thêm env cho work-service: <code>SPRING_SERVLET_MULTIPART_MAXFILESIZE: 20MB</code>, <code>SPRING_SERVLET_MULTIPART_MAXREQUESTSIZE: 25MB</code></td></tr>
+        <tr><td>Không gửi được mail</td><td>Gmail cần bật 2FA và dùng App Password. AWS chặn cổng 25 ra ngoài</td><td>Dùng cổng 587 + STARTTLS (đã đặt trong mẫu)</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="proscons">
+    <h2><span class="n">11</span>Ưu / nhược điểm</h2>
+    <div class="grid g2">
+      <div class="card"><span class="k" style="color:var(--ok)">Ưu điểm</span>
+        <ul class="small">
+          <li>Ít thành phần, dễ hiểu, dễ trình bày: mọi thứ là container, xem bằng <code>docker ps</code>.</li>
+          <li>Gần với cách nhóm đang chạy local (compose), học thêm rất ít.</li>
+          <li>Không cần registry, không có lớp mạng phức tạp.</li>
+          <li>Chạy được trên máy 8 GB.</li>
+          <li>Debug nhanh, ít điểm hỏng.</li>
+        </ul></div>
+      <div class="card"><span class="k" style="color:var(--bad)">Nhược điểm</span>
+        <ul class="small">
+          <li>Service bị thay sẽ <strong>gián đoạn 20–60 giây</strong> mỗi lần deploy.</li>
+          <li>Healthcheck chỉ để quan sát, không tự chặn traffic tới container chưa sẵn sàng.</li>
+          <li>Chỉ tự bật lại container <em>chết</em>; container <em>treo</em> vẫn nằm đó.</li>
+          <li>Muốn chạy nhiều bản một service thì phải tự lo cân bằng tải.</li>
+          <li>Phần trình diễn "điều phối container" khi bảo vệ yếu hơn Hướng 2.</li>
+        </ul></div>
+    </div>
+  </section>
+
+  <!-- ================================================================== -->
+  <section id="files">
+    <h2><span class="n">12</span>Toàn bộ file mẫu</h2>
+    <p>Nội dung dưới đây được nhúng nguyên văn từ <code>docs/cicd/docker_only/files/</code>. Bấm để mở, rồi dùng nút <em>Sao chép</em>.</p>
+    <details class="file"><summary><code>docs/cicd/docker_only/files/Jenkinsfile</code><span class="d">Pipeline 7 stage + rollback tự động · 309 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">groovy</span><span class="t">docker_only/files/Jenkinsfile</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm">// =============================================================================</span>
+<span class="cm">// Jenkinsfile – HƯỚNG 1: Docker thuần trên 1 EC2</span>
+<span class="cm">// Đặt trong repo tại: infrastructure/cicd/docker/Jenkinsfile</span>
+<span class="cm">// Jenkins: Multibranch Pipeline → Build Configuration → Script Path = infrastructure/cicd/docker/Jenkinsfile</span>
+<span class="cm">//</span>
+<span class="cm">// Luồng:</span>
+<span class="cm">//   1 Checkout → 2 Phát hiện thay đổi → 3 CI backend → 4 CI frontend</span>
+<span class="cm">//   → (chỉ nhánh main) 5 Build image → 6 Deploy (docker compose) → 7 Smoke test</span>
+<span class="cm">//   → lỗi ở 6/7 thì TỰ ĐỘNG ROLLBACK về trạng thái trước đó.</span>
+<span class="cm">// Nhánh khác / Pull Request: chỉ chạy 1→4 (CI), không đụng tới server đang chạy.</span>
+<span class="cm">//</span>
+<span class="cm">// Credential cần tạo trong Jenkins:</span>
+<span class="cm">//   - datn-prod-env : Secret file (nội dung theo docs/cicd/common/prod.env.example)</span>
+<span class="cm">//   - Credential GitHub (PAT) gắn vào nguồn Multibranch nếu repo private</span>
+<span class="cm">// =============================================================================</span>
+import groovy.transform.Field
+
+@Field List&lt;String&gt; BACKEND_SERVICES = ['identity-service', 'api-gateway', 'work-service', 'workspace-service', 'notification-service']
+
+<span class="cm">// work-service -&gt; WORK_SERVICE_TAG (tên biến trong deployed.env và docker-compose.prod.yml)</span>
+String tagKey(String svc) {
+  return svc.toUpperCase().replace('-', '_') + '_TAG'
+}
+
+void addOnce(List&lt;String&gt; list, String item) {
+  if (!list.contains(item)) { list.add(item) }
+}
+
+pipeline {
+  agent any
+
+  options {
+    skipDefaultCheckout(true)
+    timestamps()
+    disableConcurrentBuilds()                       // 1 server → không cho 2 lần deploy chồng nhau
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    timeout(time: 45, unit: 'MINUTES')
+  }
+
+  parameters {
+    booleanParam(name: 'BUILD_ALL', defaultValue: false,
+      description: 'Bỏ qua phát hiện thay đổi: build + deploy TẤT CẢ service (dùng cho lần đầu hoặc sau rollback)')
+    string(name: 'ROLLBACK_TO', defaultValue: '',
+      description: 'Số build muốn quay về, ví dụ 42 (phải là build deploy thành công). Để trống = chạy bình thường')
+  }
+
+  environment {
+<span class="cm">    // ĐỔI cho khớp APP_DOMAIN / AUTH_DOMAIN trong prod.env</span>
+    APP_DOMAIN    = 'datn.example.com'
+    AUTH_DOMAIN   = 'auth.datn.example.com'
+    DEPLOY_BRANCH = 'main'
+    CICD_DIR      = 'infrastructure/cicd/docker'
+    DEPLOY_DIR    = '/opt/datn/deploy'
+    STATE_DIR     = '/opt/datn/state'
+    COMPOSE       = 'docker compose -p datn -f /opt/datn/deploy/docker-compose.prod.yml'
+    MAVEN_OPTS    = '-Xmx1g'
+  }
+
+  stages {
+
+    stage('1. Checkout') {
+      steps {
+        script {
+          def scmVars = checkout scm
+          env.PREV_OK_COMMIT   = scmVars.GIT_PREVIOUS_SUCCESSFUL_COMMIT ?: ''
+          env.GIT_SHORT        = sh(returnStdout: true, script: 'git rev-parse --short=7 HEAD').trim()
+          env.TAG              = "${env.BUILD_NUMBER}-${env.GIT_SHORT}"      // vd 57-a1b2c3d: truy ngược được build + commit
+          env.IS_DEPLOY_BRANCH = (env.BRANCH_NAME == env.DEPLOY_BRANCH) ? 'true' : 'false'
+          env.MODE             = params.ROLLBACK_TO?.trim() ? 'rollback' : 'build'
+
+          if (env.MODE == 'rollback') {
+            if (env.IS_DEPLOY_BRANCH != 'true') { error("Chỉ rollback trên nhánh ${env.DEPLOY_BRANCH}") }
+            if (!params.ROLLBACK_TO.trim().matches(/\d+/)) { error('ROLLBACK_TO phải là số build') }
+          }
+          echo "Nhánh=${env.BRANCH_NAME} | TAG=${env.TAG} | Chế độ=${env.MODE} | Mốc so sánh=${env.PREV_OK_COMMIT ?: '(chưa có)'}"
+        }
+      }
+    }
+
+    stage('2. Phát hiện thay đổi') {
+      when { environment name: 'MODE', value: 'build' }
+      steps {
+        script {
+          List&lt;String&gt; files = null                       // null = không so sánh được → build tất cả
+          if (!params.BUILD_ALL &amp;&amp; env.PREV_OK_COMMIT) {
+            int rc = sh(returnStatus: true, script: "git diff --name-only ${env.PREV_OK_COMMIT} HEAD &gt; .changed-files")
+            if (rc == 0) {
+              files = []
+              for (String line : readFile('.changed-files').split('\n')) {
+                if (line.trim()) { files.add(line.trim()) }
+              }
+            }
+          }
+
+          List&lt;String&gt; selected = []
+          boolean infra = false
+          if (files == null) {
+            selected.addAll(BACKEND_SERVICES)
+            selected.add('frontend')
+            infra = true
+            echo 'Build đầu tiên / BUILD_ALL / không diff được → chọn TẤT CẢ service'
+          } else {
+            for (String f : files) {
+<span class="cm">              // Sửa thư viện dùng chung hoặc pom cha → mọi service backend bị ảnh hưởng</span>
+              if (f.startsWith('backend/common/') || f == 'backend/pom.xml' || f == 'backend/Dockerfile.runtime') {
+                for (String s : BACKEND_SERVICES) { addOnce(selected, s) }
+              }
+              for (String s : BACKEND_SERVICES) {
+                if (f.startsWith("backend/${s}/".toString())) { addOnce(selected, s) }
+              }
+              if (f.startsWith('frontend/')) { addOnce(selected, 'frontend') }
+              if (f.startsWith("${env.CICD_DIR}/".toString()) || f.startsWith('infrastructure/keycloak/')) { infra = true }
+            }
+            echo "Có ${files.size()} file thay đổi:\n" + files.join('\n')
+          }
+
+          boolean backendChanged = false
+          for (String s : selected) { if (s != 'frontend') { backendChanged = true } }
+
+          env.SERVICES         = selected.join(' ')
+          env.HAS_SERVICES     = selected ? 'true' : 'false'
+          env.BACKEND_CHANGED  = backendChanged ? 'true' : 'false'
+          env.FRONTEND_CHANGED = selected.contains('frontend') ? 'true' : 'false'
+          env.INFRA_CHANGED    = infra ? 'true' : 'false'
+          echo "Service cần build: [${env.SERVICES}] | Hạ tầng đổi: ${env.INFRA_CHANGED}"
+          if (!selected &amp;&amp; !infra) { echo 'Không có gì cần build/deploy (vd chỉ sửa docs) → các stage sau sẽ được bỏ qua' }
+        }
+      }
+    }
+
+    stage('3. CI · Backend: unit test + đóng gói jar') {
+      when { allOf { environment name: 'MODE', value: 'build'; environment name: 'BACKEND_CHANGED', value: 'true' } }
+      steps {
+        dir('backend') {
+<span class="cm">          // Một lệnh cho cả reactor: common build trước, test của MỌI module đều chạy.</span>
+<span class="cm">          // ~/.m2 nằm trong volume jenkins_home → lần sau không tải lại thư viện.</span>
+          sh 'mvn -B -ntp clean package'
+        }
+      }
+      post {
+        always { junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml' }
+      }
+    }
+
+    stage('4. CI · Frontend: lint + build') {
+      when { allOf { environment name: 'MODE', value: 'build'; environment name: 'FRONTEND_CHANGED', value: 'true' } }
+      steps {
+        dir('frontend') {
+          sh 'npm ci --no-audit --no-fund'
+          sh 'npm run lint'
+          sh 'npm run build'
+        }
+      }
+    }
+
+    stage('5. Build Docker images') {
+      when {
+        allOf {
+          environment name: 'MODE', value: 'build'
+          environment name: 'IS_DEPLOY_BRANCH', value: 'true'
+          environment name: 'HAS_SERVICES', value: 'true'
+        }
+      }
+      steps {
+        script {
+          for (String s : env.SERVICES.split(' ')) {
+            if (s == 'frontend') {
+<span class="cm">              // VITE_* bị "đóng băng" vào bundle lúc build → truyền URL Keycloak thật qua build-arg</span>
+              sh """
+                docker build -t datn/frontend:${env.TAG} \\
+                  --build-arg VITE_KEYCLOAK_URL=https://${env.AUTH_DOMAIN} \\
+                  --build-arg NGINX_CONF=nginx.prod.conf \\
+                  frontend
+              """
+            } else {
+<span class="cm">              // Jar đã có ở stage 3 → image chỉ chép jar (build once)</span>
+              sh "docker build -f backend/Dockerfile.runtime -t datn/${s}:${env.TAG} backend/${s}/target"
+            }
+          }
+          sh "docker images --filter reference='datn/*:${env.TAG}'"
+        }
+      }
+    }
+
+    stage('6. Deploy (docker compose)') {
+      when {
+        allOf {
+          environment name: 'IS_DEPLOY_BRANCH', value: 'true'
+          anyOf {
+            environment name: 'MODE', value: 'rollback'
+            environment name: 'HAS_SERVICES', value: 'true'
+            environment name: 'INFRA_CHANGED', value: 'true'
+          }
+        }
+      }
+      steps {
+        withCredentials([file(credentialsId: 'datn-prod-env', variable: 'PROD_ENV')]) {
+<span class="cm">          // a) Đồng bộ file triển khai từ repo sang thư mục CỐ ĐỊNH trên host + chụp lại trạng thái cũ</span>
+          sh '''
+            set -eu
+            mkdir -p "$DEPLOY_DIR/keycloak" "$STATE_DIR/history"
+            cp "$CICD_DIR/docker-compose.prod.yml" "$DEPLOY_DIR/docker-compose.prod.yml"
+            cp infrastructure/keycloak/realm-export_08082026.json "$DEPLOY_DIR/keycloak/realm.json"
+            touch "$STATE_DIR/deployed.env"
+            cp "$STATE_DIR/deployed.env" "$STATE_DIR/history/before-$BUILD_NUMBER.env"
+          '''
+<span class="cm">          // b) Cập nhật "bảng tag" deployed.env = trạng thái MONG MUỐN của hệ thống</span>
+          script {
+            if (env.MODE == 'rollback') {
+              sh """
+                test -f ${env.STATE_DIR}/history/${params.ROLLBACK_TO}.env || { echo 'Không có history/${params.ROLLBACK_TO}.env'; exit 1; }
+                cp ${env.STATE_DIR}/history/${params.ROLLBACK_TO}.env ${env.STATE_DIR}/deployed.env
+              """
+            } else if (env.HAS_SERVICES == 'true') {
+              for (String s : env.SERVICES.split(' ')) {
+                String key = tagKey(s)
+                sh """
+                  if grep -q '^${key}=' ${env.STATE_DIR}/deployed.env; then
+                    sed -i 's/^${key}=.*/${key}=${env.TAG}/' ${env.STATE_DIR}/deployed.env
+                  else
+                    echo '${key}=${env.TAG}' &gt;&gt; ${env.STATE_DIR}/deployed.env
+                  fi
+                """
+              }
+            }
+            env.DEPLOY_STARTED = 'true'
+          }
+<span class="cm">          // c) Áp trạng thái: compose chỉ tạo lại container nào có cấu hình/tag thay đổi</span>
+          sh '''
+            set -eu
+            echo "----- deployed.env -----"; cat "$STATE_DIR/deployed.env"
+            $COMPOSE --env-file "$PROD_ENV" --env-file "$STATE_DIR/deployed.env" up -d --remove-orphans
+          '''
+        }
+      }
+    }
+
+    stage('7. Smoke test') {
+      when { environment name: 'DEPLOY_STARTED', value: 'true' }
+      steps {
+        sh '''
+          set -u
+          echo "Chờ mọi container của project datn healthy (tối đa ~6 phút)..."
+          BAD=""
+          for i in $(seq 1 72); do
+            BAD=$(docker ps --filter label=com.docker.compose.project=datn --format '{{.Names}}: {{.Status}}' \
+                  | grep -E 'health: starting|unhealthy|Restarting' || true)
+            [ -z "$BAD" ] &amp;&amp; break
+            sleep 5
+          done
+          if [ -n "$BAD" ]; then echo "Container chưa ổn định:"; echo "$BAD"; exit 1; fi
+          docker ps --filter label=com.docker.compose.project=datn --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+
+          set -e
+<span class="cm">          # Đi đúng đường người dùng đi: DNS → Caddy (HTTPS) → container</span>
+          curl -fsS --retry 5 --retry-delay 5 -o /dev/null "https://$APP_DOMAIN/"
+<span class="cm">          # Keycloak sống + realm đã import + issuer đúng URL công khai (sai là login hỏng toàn bộ)</span>
+          curl -fsS --retry 5 --retry-delay 5 "https://$AUTH_DOMAIN/realms/datn-realm/.well-known/openid-configuration" \
+            | grep -q "\\"issuer\\":\\"https://$AUTH_DOMAIN/realms/datn-realm\\""
+<span class="cm">          # Gateway (Jenkins nằm chung network datn-net nên gọi được tên container)</span>
+          curl -fsS --retry 5 --retry-delay 5 http://api-gateway:8081/actuator/health | grep -q UP
+          echo "SMOKE TEST OK"
+        '''
+<span class="cm">        // Chỉ bản deploy QUA được smoke test mới được lưu vào lịch sử để rollback về sau</span>
+        sh 'cp "$STATE_DIR/deployed.env" "$STATE_DIR/history/$BUILD_NUMBER.env"'
+      }
+    }
+  }
+
+  post {
+    failure {
+      script {
+        if (env.DEPLOY_STARTED == 'true') {
+          echo 'Deploy hoặc smoke test lỗi → TỰ ĐỘNG ROLLBACK về trạng thái ngay trước build này'
+          withCredentials([file(credentialsId: 'datn-prod-env', variable: 'PROD_ENV')]) {
+            sh '''
+              cp "$STATE_DIR/history/before-$BUILD_NUMBER.env" "$STATE_DIR/deployed.env"
+              $COMPOSE --env-file "$PROD_ENV" --env-file "$STATE_DIR/deployed.env" up -d --remove-orphans \
+                || echo "ROLLBACK cũng lỗi (vd lần deploy đầu tiên) → vào server kiểm tra bằng tay"
+            '''
+          }
+        }
+      }
+<span class="cm">      // Gửi mail (cần cấu hình SMTP trong Manage Jenkins → System → Extended E-mail):</span>
+<span class="cm">      // emailext to: 'nhom@example.com', subject: "[DATN] FAILED ${env.JOB_NAME} #${env.BUILD_NUMBER}", body: "${env.BUILD_URL}"</span>
+    }
+    success {
+      script {
+        if (env.DEPLOY_STARTED == 'true') {
+<span class="cm">          // Dọn image cũ: chỉ giữ các tag còn xuất hiện trong 5 lần deploy thành công gần nhất</span>
+          sh '''
+            KEEP=$(ls -t "$STATE_DIR"/history/[0-9]*.env 2&gt;/dev/null | head -5 | xargs -r cat | cut -d= -f2 | sort -u)
+            docker images --format '{{.Repository}}:{{.Tag}}' | grep '^datn/' | grep -v '^datn/jenkins:' | while read -r img; do
+              echo "$KEEP" | grep -qx "${img#*:}" || docker rmi "$img" &gt;/dev/null 2&gt;&amp;1 || true
+            done
+            docker image prune -f &gt;/dev/null
+            docker builder prune -f --filter until=72h &gt;/dev/null || true
+            df -h / | tail -1
+          '''
+        }
+      }
+    }
+<span class="cm">    // "cleanup" luôn chạy SAU CÙNG (sau failure/success) → dọn workspace an toàn</span>
+    cleanup {
+      cleanWs(deleteDirs: true, notFailBuild: true)
+    }
+  }
+}</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/docker_only/files/docker-compose.prod.yml</code><span class="d">Toàn bộ ứng dụng + hạ tầng (project "datn") · 313 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">docker_only/files/docker-compose.prod.yml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># =============================================================================</span>
+<span class="cm"># docker-compose.prod.yml – HƯỚNG 1 (Docker thuần): toàn bộ hệ thống DATN trên 1 EC2</span>
+<span class="cm"># Đặt trong repo tại: infrastructure/cicd/docker/docker-compose.prod.yml</span>
+<span class="cm">#</span>
+<span class="cm"># Jenkins chép file này sang /opt/datn/deploy rồi chạy:</span>
+<span class="cm">#   docker compose -p datn -f /opt/datn/deploy/docker-compose.prod.yml \</span>
+<span class="cm">#     --env-file &lt;prod.env&gt; --env-file /opt/datn/state/deployed.env up -d --remove-orphans</span>
+<span class="cm">#   - prod.env     : bí mật + tên miền (Jenkins Credential "datn-prod-env")</span>
+<span class="cm">#   - deployed.env : TAG image đang chạy của từng service (Jenkins tự ghi)</span>
+<span class="cm">#</span>
+<span class="cm"># Nguyên tắc:</span>
+<span class="cm">#   - KHÔNG publish cổng DB/Redis/Kafka/MinIO/service ra Internet. Cửa vào duy nhất là</span>
+<span class="cm">#     Caddy (80/443) nằm ở docker-compose.platform.yml, nối chung network "datn-net".</span>
+<span class="cm">#   - Mọi container đều có mem_limit để 1 service rò rỉ RAM không kéo sập cả máy.</span>
+<span class="cm">#   - `docker compose up -d` là KHAI BÁO: compose so cấu hình mới với container đang chạy</span>
+<span class="cm">#     và CHỈ tạo lại service nào thay đổi (ví dụ tag image mới) → service khác không bị restart.</span>
+<span class="cm"># =============================================================================</span>
+name: datn
+
+<span class="cm"># ---------- Khối cấu hình dùng lại (YAML anchor) ----------</span>
+x-logging: &amp;logging
+  driver: json-file
+  options: { max-size: "20m", max-file: "3" }
+
+x-spring: &amp;spring
+  restart: unless-stopped
+  networks: [datn-net]
+  logging: *logging
+  mem_limit: 768m
+
+<span class="cm"># JWT: issuer là URL CÔNG KHAI của Keycloak (khớp claim "iss" trong token),</span>
+<span class="cm"># còn JWKS (khoá công khai) thì lấy qua mạng nội bộ cho nhanh.</span>
+x-jwt-env: &amp;jwt-env
+  SPRING_PROFILES_ACTIVE: prod
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI: https://${AUTH_DOMAIN}/realms/datn-realm
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/datn-realm/protocol/openid-connect/certs
+
+x-db-env: &amp;db-env
+  SPRING_DATASOURCE_URL: jdbc:postgresql://app-db:5432/datn_main_db
+  SPRING_DATASOURCE_USERNAME: ${APP_DB_USER}
+  SPRING_DATASOURCE_PASSWORD: ${APP_DB_PASSWORD}
+  SPRING_JPA_SHOW_SQL: "false"
+  LOGGING_LEVEL_ORG_HIBERNATE_SQL: WARN
+
+x-svc-urls: &amp;svc-urls
+  APP_FRONTEND_URL: https://${APP_DOMAIN}
+  APP_SERVICES_IDENTITY_URL: http://identity-service:8082
+  APP_SERVICES_WORKSPACE_URL: http://workspace-service:8087
+  APP_SERVICES_NOTIFICATION_URL: http://notification-service:9994
+
+services:
+
+<span class="cm">  # ═══════════════════════════ HẠ TẦNG (ít khi đổi) ═══════════════════════════</span>
+
+  app-db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: datn_main_db
+      POSTGRES_USER: ${APP_DB_USER}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - app_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER} -d datn_main_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+    logging: *logging
+    networks: [datn-net]
+
+  keycloak-db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: ${KC_DB_USER}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KC_DB_USER} -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 384m
+    logging: *logging
+    networks: [datn-net]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.1
+    restart: unless-stopped
+<span class="cm">    # "start" = chế độ production. Realm chỉ được import ở lần chạy đầu (realm đã tồn tại thì bỏ qua).</span>
+    command: ["start", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: ${KC_DB_USER}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KEYCLOAK_ADMIN: ${KC_ADMIN_USER}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+<span class="cm">      # Keycloak 24 (hostname v1): URL công khai CỐ ĐỊNH (cả https) → claim "iss" luôn là</span>
+<span class="cm">      # https://AUTH_DOMAIN/realms/datn-realm, kể cả khi identity-service gọi nội bộ qua http://keycloak:8080</span>
+      KC_HOSTNAME: ${AUTH_DOMAIN}
+      KC_HOSTNAME_URL: https://${AUTH_DOMAIN}
+      KC_HOSTNAME_ADMIN_URL: https://${AUTH_DOMAIN}
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+<span class="cm">      # Đứng sau Caddy (TLS kết thúc ở Caddy) → tin header X-Forwarded-*</span>
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - /opt/datn/deploy/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3&lt;&gt;/dev/tcp/127.0.0.1/8080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    mem_limit: 1g
+    logging: *logging
+    networks: [datn-net]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "200mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
+    logging: *logging
+    networks: [datn-net]
+
+<span class="cm">  # Kafka hiện mới có bean producer, CHƯA có code publish. Thiếu RAM có thể xoá block này</span>
+<span class="cm">  # (work-service vẫn khởi động được, chỉ log cảnh báo khi không kết nối được broker).</span>
+  kafka:
+    image: apache/kafka:3.8.0
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092     # tên trong Docker network, KHÔNG phải localhost
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    mem_limit: 1g
+    logging: *logging
+    networks: [datn-net]
+
+<span class="cm">  # Image minio/minio đã bị gỡ khỏi Docker Hub → dùng bitnamilegacy/minio (giống compose cá nhân).</span>
+<span class="cm">  # Bucket work-attachments do work-service tự tạo lúc khởi động (MinioConfig) → không cần minio-init.</span>
+<span class="cm">  # File tải xuống đi qua API của work-service nên MinIO KHÔNG cần mở ra ngoài.</span>
+  minio:
+    image: bitnamilegacy/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/bitnami/minio/data
+    mem_limit: 512m
+    logging: *logging
+    networks: [datn-net]
+
+<span class="cm">  # ═══════════════════════════ ỨNG DỤNG (Jenkins deploy) ═══════════════════════════</span>
+<span class="cm">  # Tag image lấy từ deployed.env. Thiếu tag → compose báo lỗi ngay (cú pháp ${VAR:?}).</span>
+
+  identity-service:
+    &lt;&lt;: *spring
+    image: datn/identity-service:${IDENTITY_SERVICE_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    environment:
+      &lt;&lt;: [*jwt-env, *db-env, *svc-urls]
+      KEYCLOAK_SERVERURL: http://keycloak:8080
+      KEYCLOAK_PUBLICURL: https://${AUTH_DOMAIN}
+      KEYCLOAK_REALM: datn-realm
+      KEYCLOAK_ADMIN_USERNAME: ${KC_ADMIN_USER}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      KEYCLOAK_ADMIN_CLIENTID: admin-cli
+      KEYCLOAK_ADMIN_REALM: master
+      KEYCLOAK_CLIENT_CLIENTID: datn-backend
+      KEYCLOAK_CLIENT_CLIENTSECRET: ${KC_CLIENT_SECRET}
+    depends_on:
+      app-db: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+<span class="cm">    # Chưa có spring-boot-starter-actuator → kiểm tra "cổng đã mở". Spring Boot chỉ mở cổng</span>
+<span class="cm">    # khi khởi động xong nên đây là tín hiệu "đã sẵn sàng" đủ dùng.</span>
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8082 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 40s
+
+  workspace-service:
+    &lt;&lt;: *spring
+    image: datn/workspace-service:${WORKSPACE_SERVICE_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    environment:
+      &lt;&lt;: [*jwt-env, *db-env, *svc-urls]
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+    depends_on:
+      app-db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8087 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 40s
+
+  work-service:
+    &lt;&lt;: *spring
+    image: datn/work-service:${WORK_SERVICE_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    mem_limit: 1g
+    environment:
+      &lt;&lt;: [*jwt-env, *db-env, *svc-urls]
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:9092
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET_NAME: work-attachments
+    depends_on:
+      app-db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_started }
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8083 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 60s
+
+  notification-service:
+    &lt;&lt;: *spring
+    image: datn/notification-service:${NOTIFICATION_SERVICE_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    mem_limit: 512m
+    environment:
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS}
+      MAIL_FROM: ${MAIL_FROM}
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 9994 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  api-gateway:
+    &lt;&lt;: *spring
+    image: datn/api-gateway:${API_GATEWAY_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    mem_limit: 512m
+    environment:
+      &lt;&lt;: *jwt-env
+      APP_FRONTEND_URL: https://${APP_DOMAIN}
+    depends_on:
+      keycloak: { condition: service_healthy }
+<span class="cm">    # gateway đã có actuator → kiểm tra sức khoẻ thật (busybox wget có sẵn trong alpine)</span>
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  frontend:
+    image: datn/frontend:${FRONTEND_TAG:?thieu tag - chay pipeline voi BUILD_ALL=true}
+    restart: unless-stopped
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ &gt;/dev/null || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    logging: *logging
+    networks: [datn-net]
+
+volumes:
+  app_db_data:
+  keycloak_db_data:
+  redis_data:
+  kafka_data:
+  minio_data:
+
+<span class="cm"># Network tạo sẵn 1 lần bằng `docker network create datn-net` (setup-ec2.sh)</span>
+<span class="cm"># để Caddy và Jenkins (ở compose khác) cùng nhìn thấy các container ứng dụng.</span>
+networks:
+  datn-net:
+    external: true</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/docker_only/files/docker-compose.platform.yml</code><span class="d">Jenkins + Caddy (project "datn-platform") · 74 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">yaml</span><span class="t">docker_only/files/docker-compose.platform.yml</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># =============================================================================</span>
+<span class="cm"># docker-compose.platform.yml – HƯỚNG 1: "nền móng" chạy 1 lần bằng tay trên EC2</span>
+<span class="cm"># Đặt trên server tại: /opt/datn/platform/  (cùng jenkins.Dockerfile, Caddyfile, .env)</span>
+<span class="cm">#</span>
+<span class="cm">#   cd /opt/datn/platform &amp;&amp; docker compose up -d --build</span>
+<span class="cm">#</span>
+<span class="cm"># Gồm 2 container KHÔNG do pipeline quản lý (pipeline không tự deploy lại chính nó):</span>
+<span class="cm">#   - jenkins : CI/CD server</span>
+<span class="cm">#   - caddy   : reverse proxy biên, tự xin/gia hạn chứng chỉ HTTPS Let's Encrypt</span>
+<span class="cm">#</span>
+<span class="cm"># File .env cạnh file này (tạo bởi setup-ec2.sh, sửa tên miền + email):</span>
+<span class="cm">#   DOCKER_GID=988</span>
+<span class="cm">#   ACME_EMAIL=ban@example.com</span>
+<span class="cm">#   APP_DOMAIN=datn.example.com</span>
+<span class="cm">#   AUTH_DOMAIN=auth.datn.example.com</span>
+<span class="cm">#   JENKINS_DOMAIN=jenkins.datn.example.com</span>
+<span class="cm"># =============================================================================</span>
+name: datn-platform
+
+services:
+
+  jenkins:
+    build:
+      context: .
+      dockerfile: jenkins.Dockerfile
+    image: datn/jenkins:lts
+    container_name: jenkins
+    restart: unless-stopped
+<span class="cm">    # user jenkins (uid 1000) được thêm vào group docker của HOST → dùng được docker.sock</span>
+    group_add:
+      - "${DOCKER_GID:?thieu DOCKER_GID trong .env}"
+    environment:
+      JAVA_OPTS: "-Xmx1g -Djava.awt.headless=true"
+      MAVEN_OPTS: "-Xmx1g"
+    volumes:
+      - jenkins_home:/var/jenkins_home              # job, credential, cache ~/.m2, ~/.npm
+      - /var/run/docker.sock:/var/run/docker.sock   # điều khiển Docker daemon của EC2
+<span class="cm">      # QUAN TRỌNG: mount CÙNG đường dẫn. Lệnh docker từ Jenkins được daemon của HOST thực thi,</span>
+<span class="cm">      # nên mọi đường dẫn bind-mount trong compose (vd /opt/datn/deploy/keycloak/realm.json)</span>
+<span class="cm">      # phải tồn tại y hệt trên host. Mount trùng đường dẫn → trong và ngoài container giống nhau.</span>
+      - /opt/datn:/opt/datn
+    mem_limit: 3g
+    networks: [datn-net]
+<span class="cm">    # Không publish cổng: truy cập qua Caddy https://JENKINS_DOMAIN</span>
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"     # HTTP/3
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      APP_DOMAIN: ${APP_DOMAIN}
+      AUTH_DOMAIN: ${AUTH_DOMAIN}
+      JENKINS_DOMAIN: ${JENKINS_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # chứng chỉ TLS – mất volume này là phải xin lại
+      - caddy_config:/config
+    mem_limit: 128m
+    networks: [datn-net]
+
+volumes:
+  jenkins_home:
+  caddy_data:
+  caddy_config:
+
+networks:
+  datn-net:
+    external: true</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/docker_only/files/Caddyfile</code><span class="d">Reverse proxy + HTTPS tự động · 39 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">caddyfile</span><span class="t">docker_only/files/Caddyfile</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm"># =============================================================================</span>
+<span class="cm"># Caddyfile – HƯỚNG 1: cửa vào duy nhất của hệ thống (cổng 80/443)</span>
+<span class="cm"># Đặt trên server tại: /opt/datn/platform/Caddyfile</span>
+<span class="cm">#</span>
+<span class="cm"># Caddy tự động: xin chứng chỉ Let's Encrypt cho từng tên miền, gia hạn trước hạn,</span>
+<span class="cm"># chuyển http → https, gắn header X-Forwarded-For/Proto/Host cho upstream.</span>
+<span class="cm"># Tên upstream (frontend, api-gateway, keycloak, jenkins) là tên container trong network datn-net;</span>
+<span class="cm"># Caddy phân giải lại DNS mỗi kết nối nên container được tạo lại (IP mới) vẫn chạy bình thường.</span>
+<span class="cm"># =============================================================================</span>
+{
+	email {$ACME_EMAIL}
+}
+
+<span class="cm"># ---------- Ứng dụng web ----------</span>
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+<span class="cm">	# API: chuyển thẳng tới API Gateway (gateway StripPrefix=1 rồi route tiếp tới service)</span>
+	@api path /identity/* /work/* /workspace/*
+	handle @api {
+		reverse_proxy api-gateway:8081
+	}
+
+<span class="cm">	# Còn lại: file tĩnh React (SPA)</span>
+	handle {
+		reverse_proxy frontend:80
+	}
+}
+
+<span class="cm"># ---------- Keycloak (đăng nhập, Google SSO) ----------</span>
+{$AUTH_DOMAIN} {
+	reverse_proxy keycloak:8080
+}
+
+<span class="cm"># ---------- Jenkins ----------</span>
+{$JENKINS_DOMAIN} {
+	reverse_proxy jenkins:8080
+}</code></pre></div></details>
+    <details class="file"><summary><code>docs/cicd/docker_only/files/setup-ec2.sh</code><span class="d">Cài Docker, swap, thư mục, network trên EC2 · 69 dòng</span></summary><div class="code"><div class="code-h"><span class="lang">bash</span><span class="t">docker_only/files/setup-ec2.sh</span><button class="copy" type="button">Sao chép</button></div><pre><code><span class="cm">#!/usr/bin/env bash</span>
+<span class="cm"># =============================================================================</span>
+<span class="cm"># setup-ec2.sh – HƯỚNG 1: chuẩn bị EC2 Ubuntu 24.04 (chạy MỘT lần)</span>
+<span class="cm">#   scp setup-ec2.sh ubuntu@&lt;EIP&gt;:~ &amp;&amp; ssh ubuntu@&lt;EIP&gt; 'sudo bash setup-ec2.sh'</span>
+<span class="cm"># =============================================================================</span>
+set -euo pipefail
+
+echo "==&gt; 1. Cài Docker Engine + Compose plugin (repo chính thức của Docker)"
+apt-get update
+apt-get install -y ca-certificates curl gnupg git
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release &amp;&amp; echo "$VERSION_CODENAME") stable" \
+  &gt; /etc/apt/sources.list.d/docker.list
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+usermod -aG docker ubuntu   # user ubuntu chạy docker không cần sudo (đăng nhập lại để có hiệu lực)
+
+echo "==&gt; 2. Giới hạn log mặc định của Docker (tránh đầy ổ đĩa)"
+cat &gt; /etc/docker/daemon.json &lt;&lt;'EOF'
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "20m", "max-file": "3" }
+}
+EOF
+systemctl restart docker
+
+echo "==&gt; 3. Tạo swap 4GB (đệm khi Maven/npm/docker build ăn RAM đột biến)"
+if ! swapon --show | grep -q /swapfile; then
+  fallocate -l 4G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' &gt;&gt; /etc/fstab
+fi
+echo 'vm.swappiness=10' &gt; /etc/sysctl.d/99-datn.conf
+sysctl --system &gt;/dev/null
+
+echo "==&gt; 4. Thư mục làm việc"
+<span class="cm">#   platform : jenkins.Dockerfile, docker-compose.platform.yml, Caddyfile, .env (bạn copy vào)</span>
+<span class="cm">#   deploy   : Jenkins chép docker-compose.prod.yml + realm.json vào mỗi lần deploy</span>
+<span class="cm">#   state    : deployed.env (tag đang chạy) + history/ (để rollback)</span>
+<span class="cm">#   backups  : file pg_dump hằng ngày</span>
+mkdir -p /opt/datn/{platform,deploy/keycloak,state/history,backups}
+chown -R 1000:1000 /opt/datn/deploy /opt/datn/state   # uid 1000 = user jenkins trong container
+
+echo "==&gt; 5. Network dùng chung giữa compose platform (Jenkins, Caddy) và compose ứng dụng"
+docker network inspect datn-net &gt;/dev/null 2&gt;&amp;1 || docker network create datn-net
+
+echo "==&gt; 6. Tạo file .env cho docker-compose.platform.yml"
+DOCKER_GID=$(getent group docker | cut -d: -f3)
+if [ ! -f /opt/datn/platform/.env ]; then
+  cat &gt; /opt/datn/platform/.env &lt;&lt;EOF
+DOCKER_GID=${DOCKER_GID}
+ACME_EMAIL=ban@example.com
+APP_DOMAIN=datn.example.com
+AUTH_DOMAIN=auth.datn.example.com
+JENKINS_DOMAIN=jenkins.datn.example.com
+EOF
+fi
+
+echo
+echo "XONG. Bước tiếp theo:"
+echo "  1) Sửa /opt/datn/platform/.env (email + 3 tên miền)"
+echo "  2) Copy jenkins.Dockerfile, docker-compose.platform.yml, Caddyfile vào /opt/datn/platform"
+echo "  3) cd /opt/datn/platform &amp;&amp; docker compose up -d --build"
+echo "  4) Lấy mật khẩu mở khoá Jenkins: docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword"</code></pre></div></details>
+    <p class="small muted">Các file dùng chung (Dockerfile runtime, Dockerfile frontend, nginx prod, gateway prod profile, image Jenkins, mẫu prod.env) nằm ở <a href="../00_TONG_QUAN_CICD.html#common-files">Tổng quan · mục 9</a>.</p>
+  </section>
+
+  <footer>Hướng 1 · Docker thuần · DATN-2026 · Cập nhật 12/11/2026 · Xem tiếp: <a href="../kubenetes/HUONG_2_KUBERNETES_K3S.html">Hướng 2 · Kubernetes (k3s)</a></footer>
+</main>
+</div>
+<script>(function () {
+  var root = document.documentElement, KEY = 'datn-cicd-theme';
+  try { var saved = localStorage.getItem(KEY); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  document.querySelectorAll('[data-theme-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var cur = root.getAttribute('data-theme') ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      var next = cur === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem(KEY, next); } catch (e) {}
+    });
+  });
+
+  document.querySelectorAll('.code').forEach(function (box) {
+    var btn = box.querySelector('.copy'), pre = box.querySelector('pre');
+    if (!btn || !pre) return;
+    btn.addEventListener('click', function () {
+      var done = function (msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = 'Sao chép'; }, 1600); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(pre.textContent).then(function () { done('Đã chép ✓'); }, function () { done('Không chép được'); });
+      } else {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); done('Đã bôi đen – Ctrl+C');
+      }
+    });
+  });
+
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[href^="#"]'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var byId = {};
+  links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+  var obs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      links.forEach(function (l) { l.classList.remove('active'); });
+      if (byId[e.target.id]) byId[e.target.id].classList.add('active');
+    });
+  }, { rootMargin: '-70px 0px -70% 0px' });
+  document.querySelectorAll('main section[id]').forEach(function (s) { obs.observe(s); });
+})();
+</script>
+</body>
+</html>

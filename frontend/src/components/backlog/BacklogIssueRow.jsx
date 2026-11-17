@@ -1,17 +1,18 @@
-import { AlertTriangle, Lock, MoreHorizontal } from 'lucide-react';
+import { AlertTriangle, Lock, MoreHorizontal, Hourglass } from 'lucide-react';
 import { typeToken, priorityToken, statusToken, SURFACE } from '../../constants/jiraTokens.js';
 import { getAvatarColor, getInitials } from '../../utils/avatarColor.js';
 
 /**
- * Mot hang cong viec tren man hinh Backlog (thuan trinh bay, khong biet gi ve keo tha).
- * Bo cuc theo 5_WORK_FRONTEND_UI_JIRA_SPEC: icon loai - ma - do uu tien - tieu de
- * - diem - trang thai - avatar.
+ * Một hàng công việc trên màn hình Backlog (thuần trình bày, không biết gì về kéo thả).
+ * Hỗ trợ hiển thị dạng cây phân cấp:
+ * isChild: hiển thị ký hiệu nhánh '↳' thụt vào dưới Hạng mục lớn.
  */
 export default function BacklogIssueRow({
   item,
   onSelect,
   isDragging = false,
   dragHandleProps = {},
+  isChild = false,
 }) {
   const type = typeToken(item.typeCode, item.typeName);
   const prio = priorityToken(item.priority);
@@ -35,7 +36,24 @@ export default function BacklogIssueRow({
         opacity: isDragging ? 0.6 : 1,
       }}
     >
-      {/* Loai cong viec */}
+      {/* Ký hiệu nhánh cây phân cấp con */}
+      {isChild && (
+        <span
+          style={{
+            flexShrink: 0,
+            color: '#8B5CF6',
+            fontSize: 14,
+            fontWeight: 700,
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
+          title="Công việc thuộc Hạng mục lớn"
+        >
+          ↳
+        </span>
+      )}
+
+      {/* Loại công việc */}
       <span
         title={type.label}
         style={{
@@ -48,7 +66,7 @@ export default function BacklogIssueRow({
         }}
       />
 
-      {/* Ma */}
+      {/* Mã */}
       <span
         style={{
           flexShrink: 0,
@@ -62,7 +80,7 @@ export default function BacklogIssueRow({
         {item.code}
       </span>
 
-      {/* Tieu de */}
+      {/* Tiêu đề */}
       <span
         style={{
           flex: 1,
@@ -77,7 +95,27 @@ export default function BacklogIssueRow({
         {item.summary}
       </span>
 
-      {/* Canh bao */}
+      {/* Nhãn Epic (Lozenge) nếu có */}
+      {(item.epicCode || item.parentCode) && (
+        <span
+          title={`Hạng mục lớn: ${item.epicSummary || item.parentSummary || ''}`}
+          style={{
+            flexShrink: 0,
+            padding: '1px 6px',
+            borderRadius: 3,
+            backgroundColor: '#F3F0FF',
+            color: '#6554C0',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: 0.2,
+            border: '1px solid #DDD6FE',
+          }}
+        >
+          {item.epicCode || item.parentCode}
+        </span>
+      )}
+
+      {/* Cảnh báo */}
       {item.isBlocked && (
         <span
           title="Đang bị công việc khác cản trở"
@@ -91,16 +129,24 @@ export default function BacklogIssueRow({
           <AlertTriangle size={13} />
         </span>
       )}
+      {item.completionPending && (
+        <span
+          title="Tạm hoàn thành – đã báo xong, chờ Admin dự án xác nhận"
+          style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3, color: '#B45309', fontSize: 11, fontWeight: 600 }}
+        >
+          <Hourglass size={12} /> Chờ duyệt HT
+        </span>
+      )}
 
-      {/* Do uu tien */}
+      {/* Độ ưu tiên */}
       <span title={prio.label} style={{ flexShrink: 0, color: prio.color, fontSize: 15, lineHeight: 1 }}>
         {priorityGlyph(item.priority)}
       </span>
 
-      {/* Diem */}
+      {/* Điểm */}
       {item.storyPoints != null && (
         <span
-          title="Story points"
+          title="Điểm ước lượng"
           style={{
             flexShrink: 0,
             minWidth: 22,
@@ -117,7 +163,7 @@ export default function BacklogIssueRow({
         </span>
       )}
 
-      {/* Trang thai */}
+      {/* Trạng thái */}
       <span
         style={{
           flexShrink: 0,
@@ -138,7 +184,7 @@ export default function BacklogIssueRow({
         {item.statusName || status.label}
       </span>
 
-      {/* Nguoi thuc hien */}
+      {/* Người thực hiện */}
       <span style={{ flexShrink: 0, width: 24, height: 24 }}>
         {item.assigneeId ? (
           <span

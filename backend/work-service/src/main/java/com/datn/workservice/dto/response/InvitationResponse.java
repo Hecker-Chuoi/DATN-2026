@@ -18,9 +18,9 @@ public class InvitationResponse {
     private UUID id;
     private InvitationType type;
     private UUID targetId;
-    /** Tên nhóm hoặc tên dự án */
+    /** Tên dự án */
     private String targetName;
-    /** LEADER/MEMBER/VIEWER với TEAM; tên project role với PROJECT */
+    /** Tên project role với PROJECT */
     private String roleName;
     private InvitationStatus status;
     private UUID invitedBy;

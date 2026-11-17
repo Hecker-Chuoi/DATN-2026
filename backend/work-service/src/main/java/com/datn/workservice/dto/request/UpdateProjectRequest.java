@@ -2,6 +2,7 @@ package com.datn.workservice.dto.request;
 
 import com.datn.workservice.enums.DefaultAssigneeType;
 import com.datn.workservice.enums.ProjectType;
+import com.datn.workservice.enums.TemplateCategory;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -22,8 +23,6 @@ public class UpdateProjectRequest {
     @Size(max = 255, message = "Project name cannot exceed 255 characters")
     private String name;
 
-    private UUID teamId;
-
     private String description;
 
     @Size(max = 500, message = "Icon URL cannot exceed 500 characters")
@@ -36,6 +35,8 @@ public class UpdateProjectRequest {
     private ProjectType projectType;
 
     private Boolean isTemplate;
+
+    private TemplateCategory templateCategory;
 
     private LocalDate startDate;
 

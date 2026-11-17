@@ -3,26 +3,21 @@ package com.datn.workservice.service.impl;
 import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.client.IdentityClient;
+import com.datn.workservice.client.WorkspaceClient;
+import com.datn.workservice.client.dto.EnsureWorkspaceMemberRequest;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.response.InvitationResponse;
 import com.datn.workservice.entity.Invitation;
 import com.datn.workservice.entity.Project;
 import com.datn.workservice.entity.ProjectRole;
 import com.datn.workservice.entity.RoleAssignment;
-import com.datn.workservice.entity.Team;
-import com.datn.workservice.entity.TeamMember;
 import com.datn.workservice.enums.InvitationStatus;
 import com.datn.workservice.enums.InvitationType;
 import com.datn.workservice.enums.PermissionKey;
-import com.datn.workservice.enums.TeamRole;
 import com.datn.workservice.repository.InvitationRepository;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.ProjectRoleRepository;
 import com.datn.workservice.repository.RoleAssignmentRepository;
-import com.datn.workservice.repository.TeamMemberRepository;
-import com.datn.workservice.repository.TeamRepository;
-import com.datn.workservice.security.TeamSecurity;
-import com.datn.workservice.service.InvitationMailer;
 import com.datn.workservice.service.InvitationService;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
@@ -41,43 +36,18 @@ import java.util.UUID;
 public class InvitationServiceImpl implements InvitationService {
 
     private final InvitationRepository invitationRepository;
-    private final TeamRepository teamRepository;
-    private final TeamMemberRepository teamMemberRepository;
     private final ProjectRepository projectRepository;
     private final ProjectRoleRepository projectRoleRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final ProjectMemberService projectMemberService;
-    private final TeamSecurity teamSecurity;
     private final IdentityClient identityClient;
-    private final InvitationMailer mailer;
-
-    @Override
-    @Transactional
-    public InvitationResponse inviteToTeam(UUID teamId, UUID inviteeUserId, TeamRole role, UUID invitedBy) {
-        Team team = teamRepository.findById(teamId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhóm: " + teamId));
-        UUID invitee = projectMemberService.canonicalUserId(inviteeUserId);
-        if (invitee.equals(team.getOwnerId()) || teamMemberRepository.existsByTeamIdAndUserId(teamId, invitee)) {
-            throw new BadRequestException("Người dùng đã là thành viên của nhóm");
-        }
-        assertNoPending(InvitationType.TEAM, teamId, invitee);
-        Invitation saved = invitationRepository.save(Invitation.builder()
-                .type(InvitationType.TEAM)
-                .targetId(teamId)
-                .inviteeUserId(invitee)
-                .invitedBy(invitedBy)
-                .teamRole(role == null ? TeamRole.MEMBER : role)
-                .build());
-        log.info("Team invitation created: team={}, invitee={}, by={}", teamId, invitee, invitedBy);
-        InvitationResponse res = toResponse(saved);
-        mailer.send(res);
-        return res;
-    }
+    private final com.datn.workservice.notification.ProjectNotifier projectNotifier;
+    private final WorkspaceClient workspaceClient;
 
     @Override
     @Transactional
     public InvitationResponse inviteToProject(UUID projectId, UUID inviteeUserId, UUID roleId, UUID invitedBy) {
-        projectRepository.findById(projectId)
+        Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
         ProjectRole role = projectRoleRepository.findById(roleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò: " + roleId));
@@ -98,7 +68,8 @@ public class InvitationServiceImpl implements InvitationService {
                 .build());
         log.info("Project invitation created: project={}, invitee={}, by={}", projectId, invitee, invitedBy);
         InvitationResponse res = toResponse(saved);
-        mailer.send(res);
+        // G1: thông báo trong ứng dụng + email lời mời (notification-service gửi, template invite-member)
+        projectNotifier.invitationCreated(project, saved, role.getName(), invitedBy);
         return res;
     }
 
@@ -120,25 +91,40 @@ public class InvitationServiceImpl implements InvitationService {
     @Transactional
     public InvitationResponse accept(UUID invitationId, UUID userId) {
         Invitation inv = requirePendingForInvitee(invitationId, userId);
-        if (inv.getType() == InvitationType.TEAM) {
-            TeamRole role = inv.getTeamRole() == null ? TeamRole.MEMBER : inv.getTeamRole();
-            if (!teamMemberRepository.existsByTeamIdAndUserId(inv.getTargetId(), userId)) {
-                teamMemberRepository.save(TeamMember.builder()
-                        .teamId(inv.getTargetId()).userId(userId).role(role).build());
-            }
-            projectMemberService.syncTeamMemberToProjects(inv.getTargetId(), userId, role);
-        } else {
-            ProjectRole role = projectRoleRepository.findById(inv.getProjectRoleId())
-                    .orElseThrow(() -> new BadRequestException("Vai trò trong lời mời không còn tồn tại"));
-            if (roleAssignmentRepository.findByProjectIdAndUserId(inv.getTargetId(), userId).isEmpty()) {
-                roleAssignmentRepository.save(RoleAssignment.builder()
-                        .projectId(inv.getTargetId()).userId(userId).roleId(role.getId()).build());
-            }
+        ProjectRole role = projectRoleRepository.findById(inv.getProjectRoleId())
+                .orElseThrow(() -> new BadRequestException("Vai trò trong lời mời không còn tồn tại"));
+        if (roleAssignmentRepository.findByProjectIdAndUserId(inv.getTargetId(), userId).isEmpty()) {
+            roleAssignmentRepository.save(RoleAssignment.builder()
+                    .projectId(inv.getTargetId()).userId(userId).roleId(role.getId()).build());
         }
+
+        // Tự động liên đới thành viên vào Không gian làm việc (Smart Auto-Cascade)
+        try {
+            projectRepository.findById(inv.getTargetId()).ifPresent(project -> {
+                if (project.getWorkspaceId() != null) {
+                    workspaceClient.ensureMember(
+                            project.getWorkspaceId(),
+                            EnsureWorkspaceMemberRequest.builder()
+                                    .userId(userId)
+                                    .role("MEMBER")
+                                    .invitedBy(inv.getInvitedBy())
+                                    .build()
+                    );
+                    log.info("Smart auto-cascade: Đã đảm bảo user {} là thành viên workspace {}", userId, project.getWorkspaceId());
+                }
+            });
+        } catch (Exception e) {
+            log.warn("Không thể auto-cascade user {} vào workspace cho project {}: {}", userId, inv.getTargetId(), e.getMessage());
+        }
+
         inv.setStatus(InvitationStatus.ACCEPTED);
         inv.setRespondedAt(LocalDateTime.now());
         log.info("Invitation {} accepted by {}", invitationId, userId);
-        return toResponse(invitationRepository.save(inv));
+        Invitation saved = invitationRepository.save(inv);
+        // G4 (+ đóng G1 của người được mời)
+        projectRepository.findById(inv.getTargetId())
+                .ifPresent(p -> projectNotifier.invitationAnswered(p, saved, true, role.getName(), userId));
+        return toResponse(saved);
     }
 
     @Override
@@ -147,7 +133,12 @@ public class InvitationServiceImpl implements InvitationService {
         Invitation inv = requirePendingForInvitee(invitationId, userId);
         inv.setStatus(InvitationStatus.DECLINED);
         inv.setRespondedAt(LocalDateTime.now());
-        return toResponse(invitationRepository.save(inv));
+        Invitation saved = invitationRepository.save(inv);
+        String roleName = inv.getProjectRoleId() == null ? null
+                : projectRoleRepository.findById(inv.getProjectRoleId()).map(ProjectRole::getName).orElse(null);
+        projectRepository.findById(inv.getTargetId())
+                .ifPresent(p -> projectNotifier.invitationAnswered(p, saved, false, roleName, userId));
+        return toResponse(saved);
     }
 
     @Override
@@ -156,7 +147,6 @@ public class InvitationServiceImpl implements InvitationService {
         Invitation inv = requirePending(invitationId);
         boolean allowed = globalAdmin
                 || userId.equals(inv.getInvitedBy())
-                || (inv.getType() == InvitationType.TEAM && teamSecurity.isLeader(inv.getTargetId()))
                 || (inv.getType() == InvitationType.PROJECT
                     && projectMemberService.hasPermission(inv.getTargetId(), userId, PermissionKey.PROJECT_ADMIN));
         if (!allowed) {
@@ -164,7 +154,11 @@ public class InvitationServiceImpl implements InvitationService {
         }
         inv.setStatus(InvitationStatus.CANCELLED);
         inv.setRespondedAt(LocalDateTime.now());
-        return toResponse(invitationRepository.save(inv));
+        Invitation saved = invitationRepository.save(inv);
+        // Đóng G1 của người được mời (sự kiện nội bộ, không tạo thông báo mới)
+        projectRepository.findById(inv.getTargetId())
+                .ifPresent(p -> projectNotifier.invitationCancelled(p, saved, userId));
+        return toResponse(saved);
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────
@@ -193,16 +187,10 @@ public class InvitationServiceImpl implements InvitationService {
     }
 
     private InvitationResponse toResponse(Invitation inv) {
-        String targetName;
-        String roleName;
-        if (inv.getType() == InvitationType.TEAM) {
-            targetName = teamRepository.findById(inv.getTargetId()).map(Team::getName).orElse(null);
-            roleName = inv.getTeamRole() != null ? inv.getTeamRole().name() : null;
-        } else {
-            targetName = projectRepository.findById(inv.getTargetId()).map(Project::getName).orElse(null);
-            roleName = inv.getProjectRoleId() == null ? null
-                    : projectRoleRepository.findById(inv.getProjectRoleId()).map(ProjectRole::getName).orElse(null);
-        }
+        String targetName = projectRepository.findById(inv.getTargetId()).map(Project::getName).orElse(null);
+        String roleName = inv.getProjectRoleId() == null ? null
+                : projectRoleRepository.findById(inv.getProjectRoleId()).map(ProjectRole::getName).orElse(null);
+
         UserResponse inviter = fetchUser(inv.getInvitedBy());
         UserResponse invitee = fetchUser(inv.getInviteeUserId());
         return InvitationResponse.builder()

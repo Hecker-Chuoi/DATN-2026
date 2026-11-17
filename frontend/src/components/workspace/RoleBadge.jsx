@@ -2,7 +2,7 @@ import { ROLE_COLORS, roleLabel } from '../../utils/workspaceRole';
 
 /**
  * Pill hiển thị vai trò workspace. Dùng inline style theo đúng quy ước của các
- * component xung quanh: Sidebar, TeamDetailPage, CreateTeamModal... đều 100%
+ * component xung quanh: Sidebar, WorkspaceMembersPage... đều 100%
  * inline style, còn các class trong index.css chỉ dùng cho trang auth/admin.
  */
 export default function RoleBadge({ role, size = 'sm' }) {

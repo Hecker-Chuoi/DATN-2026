@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Refactor Kiến Trúc: Bỏ Team, Giữ Workspace & Project — DATN-2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+  <style>
+    /* ─── DESIGN TOKENS (LIGHT SAAS THEME - DATN-2026 STANDARD) ─── */
+    :root {
+      --bg-base: #F8FAFC;
+      --bg-card: #FFFFFF;
+      --bg-card-alt: #F1F5F9;
+      --bg-hover: #F8FAFC;
+      --border: #E2E8F0;
+      --border-accent: #93C5FD;
+      --border-glow: rgba(37, 99, 235, 0.12);
+      --grid-line: rgba(148, 163, 184, 0.12);
+
+      --text-main: #0F172A;
+      --text-muted: #334155;
+      --text-dim: #64748B;
+
+      --blue: #2563EB;
+      --blue-dark: #1D4ED8;
+      --blue-soft: #EFF6FF;
+      --indigo: #4F46E5;
+      --indigo-soft: #EEF2FF;
+      --teal: #0D9488;
+      --teal-soft: #F0FDFA;
+      --emerald: #059669;
+      --emerald-soft: #ECFDF5;
+      --amber: #D97706;
+      --amber-soft: #FFFBEB;
+      --rose: #E11D48;
+      --rose-soft: #FFF1F2;
+
+      --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+      --font-body: "Be Vietnam Pro", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+      --shadow-deck: 0 25px 50px -12px rgba(15, 23, 42, 0.12), 0 0 0 1px #E2E8F0;
+      --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-base);
+      font-family: var(--font-body);
+      color: var(--text-main);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── STAGE & 16:9 DECK ─── */
+    .stage {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 16px 80px;
+      position: relative;
+    }
+
+    .deck {
+      width: 1280px;
+      height: 720px;
+      position: relative;
+      flex-shrink: 0;
+      transform-origin: center center;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-deck);
+      padding: 44px 56px 40px;
+      overflow: hidden;
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    .slide.active {
+      display: flex;
+      animation: slideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0.3; transform: translateY(6px) scale(0.996); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ─── TYPOGRAPHY ─── */
+    h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; }
+    h1 { font-size: 46px; font-weight: 800; line-height: 1.15; color: var(--text-main); }
+    h2 { font-size: 30px; color: var(--text-main); }
+    h3 { font-size: 18px; font-weight: 700; color: var(--text-main); }
+    h4 { font-size: 14px; font-weight: 600; color: var(--text-muted); }
+    p { font-size: 15px; line-height: 1.55; color: var(--text-muted); }
+    .mono { font-family: var(--font-mono); font-size: 0.9em; }
+
+    /* ─── HEADER / EYEBROW ─── */
+    .slide-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--blue);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+    .badge-blue { background: var(--blue-soft); border-color: var(--border-accent); color: var(--blue-dark); }
+    .badge-rose { background: var(--rose-soft); border-color: #FECDD3; color: var(--rose); }
+    .badge-emerald { background: var(--emerald-soft); border-color: #A7F3D0; color: var(--emerald); }
+    .badge-amber { background: var(--amber-soft); border-color: #FDE68A; color: var(--amber); }
+
+    /* ─── CARDS & GRIDS ─── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 18px 20px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .card-alt { background: var(--bg-card-alt); }
+    .card-danger { border-color: #FECDD3; background: #FFF5F6; }
+    .card-success { border-color: #A7F3D0; background: #F0FDF4; }
+    .card-primary { border-color: var(--border-accent); background: #F8FAFF; }
+
+    .card-header-icon {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .icon-box {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .icon-blue { background: var(--blue-soft); color: var(--blue); }
+    .icon-rose { background: var(--rose-soft); color: var(--rose); }
+    .icon-emerald { background: var(--emerald-soft); color: var(--emerald); }
+    .icon-amber { background: var(--amber-soft); color: var(--amber); }
+    .icon-indigo { background: var(--indigo-soft); color: var(--indigo); }
+
+    ul.bullet-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    ul.bullet-list li {
+      font-size: 13.5px;
+      line-height: 1.5;
+      color: var(--text-muted);
+      position: relative;
+      padding-left: 20px;
+    }
+    ul.bullet-list li::before {
+      content: "•";
+      position: absolute;
+      left: 6px;
+      color: var(--blue);
+      font-weight: bold;
+    }
+    ul.bullet-danger li::before { color: var(--rose); }
+    ul.bullet-lg { gap: 14px; margin-top: 8px; }
+    ul.bullet-lg li { font-size: 16px; line-height: 1.55; }
+
+    /* Slide ít nội dung: căn giữa phần thân theo chiều dọc */
+    .slide-body-center { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    .card-roomy { padding: 26px 28px; gap: 10px; }
+    ul.bullet-success li::before { color: var(--emerald); }
+
+    /* ─── CODE PILLS & TABLE ─── */
+    .code-pill {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #0F172A;
+    }
+    .table-container {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #FFF;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+    th { background: #F8FAFC; padding: 10px 14px; font-weight: 700; color: var(--text-muted); border-bottom: 1px solid var(--border); font-family: var(--font-display); }
+    td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--text-muted); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: #FAFAFA; }
+
+    /* ─── BOTTOM CONTROLS & HUD ─── */
+    .hud {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      padding: 8px 18px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+      z-index: 100;
+    }
+    .hud button {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hud button:hover { background: var(--bg-card-alt); color: var(--text-main); }
+    .hud-counter {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      padding: 0 8px;
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+    }
+    .hud-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-dim);
+      max-width: 260px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ─── DIAGRAM VISUALIZERS ─── */
+    .flow-compare {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+    .flow-arrow {
+      font-size: 24px;
+      font-weight: bold;
+      color: var(--blue);
+      text-align: center;
+    }
+    .box-step {
+      background: #FFFFFF;
+      border: 2px dashed #CBD5E1;
+      border-radius: 8px;
+      padding: 12px 14px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .box-step.active {
+      border: 2px solid var(--blue);
+      background: var(--blue-soft);
+      font-weight: bold;
+    }
+    .box-step.strike {
+      border-color: #FECDD3;
+      background: #FFF5F6;
+      text-decoration: line-through;
+      color: #94A3B8;
+    }
+  </style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="deck" id="deck">
+
+    <!-- ═══════════════ SLIDE 1: COVER ═══════════════ -->
+    <section class="slide active">
+      <div class="slide-header">
+        <div class="eyebrow">DATN-2026 // KIẾN TRÚC HỆ THỐNG</div>
+        <div class="badge badge-blue">ĐẶC TẢ REFACTOR CHI TIẾT</div>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 20px; max-width: 960px;">
+        <div class="badge badge-amber" style="width: fit-content;">ĐƠN GIẢN HÓA KIẾN TRÚC WORK SERVICE & FRONTEND</div>
+        <h1 style="font-size: 44px;">Loại Bỏ Khái Niệm <span style="color: var(--rose); text-decoration: line-through;">Team</span>,<br>Chuyển Sang Mô Hình <span style="color: var(--blue);">Workspace → Project</span></h1>
+        <p style="font-size: 18px; max-width: 820px; color: var(--text-muted); line-height: 1.6;">
+          Phân tích toàn diện nguyên nhân không hiệu quả của tầng Team, đánh giá Lợi – Hại, thiết kế mô hình phân quyền Jira 2 tầng tinh gọn và vạch ra lộ trình Refactor toàn diện Full-stack.
+        </p>
+        <div style="display: flex; gap: 14px; margin-top: 10px;">
+          <div class="card card-alt" style="padding: 10px 16px; flex-direction: row; align-items: center; gap: 10px;">
+            <span style="font-size: 18px;">🎯</span>
+            <div>
+              <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Mục tiêu</div>
+              <div style="font-size: 13px; font-weight: 600;">UX mượt mà, loại bỏ 100% bug đồng bộ role</div>
+            </div>
+          </div>
+          <div class="card card-alt" style="padding: 10px 16px; flex-direction: row; align-items: center; gap: 10px;">
+            <span style="font-size: 18px;">📉</span>
+            <div>
+              <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Mã nguồn</div>
+              <div style="font-size: 13px; font-weight: 600;">Cắt giảm hơn 4.000 dòng code dư thừa</div>
+            </div>
+          </div>
+          <div class="card card-alt" style="padding: 10px 16px; flex-direction: row; align-items: center; gap: 10px;">
+            <span style="font-size: 18px;">⚡</span>
+            <div>
+              <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Tiêu chuẩn</div>
+              <div style="font-size: 13px; font-weight: 600;">Tiệm cận chuẩn Linear.app & Jira Cloud</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ SLIDE 2: VÌ SAO TEAM KHÔNG HIỆU QUẢ ═══════════════ -->
+    <section class="slide">
+      <div class="slide-header">
+        <div class="eyebrow">01. BỐI CẢNH & VẤN ĐỀ</div>
+        <div class="badge badge-rose">NGUYÊN NHÂN GÂY KÉM HIỆU QUẢ</div>
+      </div>
+      <h2>Tại Sao Mô Hình <span style="color: var(--rose);">Team</span> Hiện Tại Gây Tắc Nghẽn?</h2>
+      <p>Trải nghiệm thực tế cho thấy 3 nút thắt chính:</p>
+
+      <div class="slide-body-center">
+        <div class="grid-3">
+          <div class="card card-danger card-roomy">
+            <div class="card-header-icon">
+              <div class="icon-box icon-rose">🛑</div>
+              <h3>1. Rào Cản Trải Nghiệm</h3>
+            </div>
+            <ul class="bullet-list bullet-danger bullet-lg">
+              <li>Phải tạo Team trước mới tạo được dự án.</li>
+              <li>Chỉ Trưởng nhóm mới được tạo dự án.</li>
+              <li>Sidebar lồng 3 cấp, khó theo dõi.</li>
+            </ul>
+          </div>
+
+          <div class="card card-danger card-roomy">
+            <div class="card-header-icon">
+              <div class="icon-box icon-rose">🔀</div>
+              <h3>2. Bẫy Đồng Bộ Quyền</h3>
+            </div>
+            <ul class="bullet-list bullet-danger bullet-lg">
+              <li>3 tầng vai trò chồng chéo: Workspace, Team, Dự án.</li>
+              <li>Đổi vai trò trong Team phải cập nhật lại mọi dự án con.</li>
+              <li>Thành viên đã rời Workspace vẫn còn là Trưởng nhóm.</li>
+            </ul>
+          </div>
+
+          <div class="card card-alt card-roomy">
+            <div class="card-header-icon">
+              <div class="icon-box icon-amber">📬</div>
+              <h3>3. Dư Thừa Tầng Lời Mời</h3>
+            </div>
+            <ul class="bullet-list bullet-lg">
+              <li>3 loại lời mời: Workspace, Team, Dự án.</li>
+              <li>Người nhận dễ nhầm mình được mời vào đâu.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ SLIDE 3: KIẾN TRÚC TRƯỚC VÀ SAU ═══════════════ -->
+    <section class="slide">
+      <div class="slide-header">
+        <div class="eyebrow">02. KIẾN TRÚC ĐỐI ỨNG</div>
+        <div class="badge badge-blue">SO SÁNH CẤU TRÚC 3 TẦNG VS 2 TẦNG</div>
+      </div>
+      <h2>Chuyển Đổi Mô Hình: Trước & Sau Khi Refactor</h2>
+      <p style="margin-bottom: 22px;">Thu gọn luồng truy cập và quản lý dữ liệu thành 2 tầng trực tiếp:</p>
+
+      <div class="flow-compare" style="flex: 1;">
+        <!-- KIEN TRUC CU -->
+        <div class="card card-danger" style="height: 100%; justify-content: space-around;">
+          <div style="text-align: center; border-bottom: 1px solid #FECDD3; padding-bottom: 8px;">
+            <span class="badge badge-rose">KIẾN TRÚC CŨ (3 TẦNG PHỨC TẠP)</span>
+          </div>
+          <div class="box-step">
+            <strong>🏢 WORKSPACE</strong><br>
+            <span style="font-size: 11px; color: var(--text-dim);">OWNER, ADMIN, MEMBER, GUEST</span>
+          </div>
+          <div style="text-align: center; color: var(--rose);">⬇️ <i>Bắt buộc thuộc Team</i></div>
+          <div class="box-step strike">
+            <strong>👥 TEAM (TẦNG TRUNG GIAN)</strong><br>
+            <span style="font-size: 11px; color: var(--rose);">LEADER, MEMBER, VIEWER</span><br>
+            <small style="color: red;">(Điểm nghẽn quyền & sync)</small>
+          </div>
+          <div style="text-align: center; color: var(--rose);">⬇️ <i>Phải là LEADER mới tạo được</i></div>
+          <div class="box-step">
+            <strong>📁 PROJECTS (Scrum / Kanban)</strong><br>
+            <span style="font-size: 11px; color: var(--text-dim);">ADMINISTRATOR, MEMBER, VIEWER</span>
+          </div>
+        </div>
+
+        <div class="flow-arrow">➔</div>
+
+        <!-- KIEN TRUC MOI -->
+        <div class="card card-success" style="height: 100%; justify-content: space-around;">
+          <div style="text-align: center; border-bottom: 1px solid #A7F3D0; padding-bottom: 8px;">
+            <span class="badge badge-emerald">KIẾN TRÚC MỚI (2 TẦNG TINH GỌN)</span>
+          </div>
+          <div class="box-step active">
+            <strong>🏢 WORKSPACE (Không Gian Làm Việc)</strong><br>
+            <span style="font-size: 12px; color: var(--blue-dark); font-weight: 600;">OWNER • ADMIN • MEMBER • GUEST</span>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">MEMBER trở lên được tạo dự án trực tiếp</div>
+          </div>
+          <div style="text-align: center; color: var(--emerald); font-weight: bold;">
+            ⬇️ <i>Liên kết trực tiếp 1-N (projects.workspace_id)</i>
+          </div>
+          <div class="box-step active" style="background: #F0FDF4; border-color: var(--emerald);">
+            <strong>📁 PROJECTS (Dự Án Độc Lập)</strong><br>
+            <span style="font-size: 12px; color: var(--emerald); font-weight: 600;">ADMINISTRATOR • MEMBER • VIEWER</span>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">16 PermissionKey Jira • Quản lý thành viên riêng</div>
+          </div>
+          <div style="background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 6px; padding: 8px; text-align: center; font-size: 12px; color: #065F46;">
+            ✨ <strong>Kết quả:</strong> Luồng thẳng, không sync chéo, người dùng bấm tạo dự án trong 1 click!
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ SLIDE 4: PHÂN TÍCH LỢI ÍCH (PROS) ═══════════════ -->
+    <section class="slide">
+      <div class="slide-header">
+        <div class="eyebrow">03. PHÂN TÍCH HIỆU QUẢ</div>
+        <div class="badge badge-emerald">LỢI ÍCH CỐT LÕI</div>
+      </div>
+      <h2>Lợi Ích Khi Loại Bỏ Team Khỏi Hệ Thống</h2>
+
+      <div class="slide-body-center">
+        <div class="grid-2">
+          <div class="card card-primary card-roomy">
+            <div class="card-header-icon">
+              <div class="icon-box icon-indigo">🛡️</div>
+              <h3>1. Phân Quyền Trong Sáng</h3>
+            </div>
+            <ul class="bullet-list bullet-lg">
+              <li>Chỉ còn 2 tầng: Quản trị Workspace và Quản trị Dự án.</li>
+              <li>Không còn vai trò Team chen giữa, không phải đồng bộ quyền.</li>
+            </ul>
+          </div>
+
+          <div class="card card-primary card-roomy">
+            <div class="card-header-icon">
+              <div class="icon-box icon-blue">💌</div>
+              <h3>2. Tối Giản Luồng Mời</h3>
+            </div>
+            <ul class="bullet-list bullet-lg">
+              <li>Chỉ còn 2 loại lời mời: vào Workspace và vào Dự án.</li>
+              <li>Người nhận biết ngay mình được mời vào đâu.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ SLIDE 5: ĐÁNH ĐỔI & ĐỐI SÁCH (CONS) ═══════════════ -->
+    <section class="slide">
+      <div class="slide-header">
+        <div class="eyebrow">04. ĐÁNH GIÁ THÁCH THỨC</div>
+        <div class="badge badge-amber">ĐÁNH ĐỔI (CONS) & ĐỐI SÁCH GIẢI QUYẾT</div>
+      </div>
+      <h2>Các Thách Thức Khi Bỏ Team & Giải Pháp Hóa Giải</h2>
+      <p style="margin-bottom: 20px;">Dự báo trước các rủi ro để đưa ra giải pháp xử lý triệt để ngay trong đợt refactor:</p>
+
+      <div class="grid-3" style="flex: 1;">
+        <div class="card">
+          <div class="card-header-icon">
+            <div class="icon-box icon-amber">👥</div>
+            <h3>1. Gán Hàng Loạt Thành Viên</h3>
+          </div>
+          <div style="font-size: 12.5px; color: var(--rose); font-weight: 600; margin-bottom: 4px;">⚠️ Hạn chế:</div>
+          <p style="font-size: 12.5px; margin-bottom: 10px;">Không còn gắn cả phòng ban vào dự án chỉ trong 1 thao tác như trước.</p>
+          <div style="font-size: 12.5px; color: var(--emerald); font-weight: 600; margin-bottom: 4px;">✅ Đối sách giải quyết:</div>
+          <ul class="bullet-list bullet-success" style="font-size: 12px;">
+            <li>Trong tab Thành viên dự án: Bổ sung chức năng <strong>"Thêm nhanh từ Workspace Members"</strong> với danh sách chọn nhiều người.</li>
+            <li>Đặc thù đồ án và nhóm vừa/nhỏ (3 - 15 người) quản lý trực tiếp theo dự án là chuẩn xác nhất.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-header-icon">
+            <div class="icon-box icon-amber">📄</div>
+            <h3>2. Không Gian Chia Sẻ Tài Liệu</h3>
+          </div>
+          <div style="font-size: 12.5px; color: var(--rose); font-weight: 600; margin-bottom: 4px;">⚠️ Hạn chế:</div>
+          <p style="font-size: 12.5px; margin-bottom: 10px;">Mất tab Documents và Overview từng có ở trang TeamDetailPage cũ.</p>
+          <div style="font-size: 12.5px; color: var(--emerald); font-weight: 600; margin-bottom: 4px;">✅ Đối sách giải quyết:</div>
+          <ul class="bullet-list bullet-success" style="font-size: 12px;">
+            <li>Thực tế tab Documents cũ chỉ là mockup giao diện, chưa lưu database.</li>
+            <li>Tài liệu kỹ thuật được quản lý trực tiếp trong Epic/Task của Dự án; thông tin tổ chức chuyển về Workspace Settings.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-header-icon">
+            <div class="icon-box icon-amber">💾</div>
+            <h3>3. Rủi Ro Di Trú Dữ Liệu</h3>
+          </div>
+          <div style="font-size: 12.5px; color: var(--rose); font-weight: 600; margin-bottom: 4px;">⚠️ Hạn chế:</div>
+          <p style="font-size: 12.5px; margin-bottom: 10px;">Dữ liệu dự án cũ đang trỏ <code class="code-pill">team_id</code>, có thể mất quyền nếu xóa bảng ẩu.</p>
+          <div style="font-size: 12.5px; color: var(--emerald); font-weight: 600; margin-bottom: 4px;">✅ Đối sách giải quyết:</div>
+          <ul class="bullet-list bullet-success" style="font-size: 12px;">
+            <li>Flyway V8 có bước <strong>Data Migration</strong> tự động copy quyền từ <code class="code-pill">team_members</code> sang <code class="code-pill">role_assignments</code> trước khi drop bảng.</li>
+            <li>Sao lưu database trước khi chạy script.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ SLIDE 6: MÔ HÌNH PHÂN QUYỀN MỚI ═══════════════ -->
+    <section class="slide">
+      <div class="slide-header">
+        <div class="eyebrow">05. MÔ HÌNH PHÂN QUYỀN MỚI</div>
+        <div class="badge badge-blue">FAIL-CLOSED • CHUẨN JIRA 2 TẦNG</div>
+      </div>
+      <h2>Cấu Trúc Phân Quyền Chuẩn Hóa Sau Khi Bỏ Team</h2>
+      <p style="margin-bottom: 16px;">Mọi quyền hạn được quy định rõ ràng, fail-closed ở cả 2 cấp độ:</p>
+
+      <div class="grid-2" style="flex: 1; gap: 20px;">
+        <div class="card card-primary">
+          <div class="card-header-icon">
+            <div class="icon-box icon-indigo">🏢</div>
+            <div>
+              <h3>TẦNG 1: QUYỀN WORKSPACE</h3>
+              <span style="font-size: 12px; color: var(--text-dim);">Lưu tại bảng workspace_members (workspace-service)</span>
+            </div>
+          </div>
+          <table style="margin-top: 8px;">
+            <thead>
+              <tr><th>Vai trò</th><th>Quyền hạn trên Không gian</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>OWNER</strong></td><td>Toàn quyền quản trị, xóa workspace, chuyển quyền sở hữu</td></tr>
+              <tr><td><strong>ADMIN</strong></td><td>Mời/gỡ thành viên, sửa thông tin workspace, quản lý cài đặt</td></tr>
+              <tr><td><strong style="color: var(--blue);">MEMBER</strong></td><td><strong>Được tạo dự án mới</strong>, xem danh sách thành viên</td></tr>
+              <tr><td><strong>GUEST</strong></td><td>Chỉ xem các dự án được chỉ định, không được tạo mới</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card card-primary">
+          <div class="card-header-icon">
+            <div class="icon-box icon-blue">📁</div>
+            <div>
+              <h3>TẦNG 2: QUYỀN DỰ ÁN (JIRA SCOPE)</h3>
+              <span style="font-size: 12px; color: var(--text-dim);">Lưu tại role_assignments & permission_schemes (work-service)</span>
+            </div>
+          </div>
+          <table style="margin-top: 8px;">
+            <thead>
+              <tr><th>Vai trò Dự án</th><th>16 Quyền Hạt Mịn (PermissionKey)</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong style="color: var(--rose);">ADMINISTRATOR</strong></td>
+                <td>PROJECT_ADMIN, cấu hình Workflow, Sprints, quản lý thành viên, xóa dự án, xóa comment/file bất kỳ.</td>
+              </tr>
+              <tr>
+                <td><strong style="color: var(--blue);">MEMBER</strong></td>
+                <td>PROJECT_VIEW, ISSUE_CREATE, ISSUE_EDIT, ISSUE_TRANSITION, ISSUE_ASSIGN, COMMENT_CREATE, sửa/xóa nội dung của mình.</td>
+              </tr>
+              <tr>
+                <td><strong>VIEWER</strong></td>
+                <td>PROJECT_VIEW (Chỉ xem bảng Scrum, Kanban, Backlog, danh sách công việc; không chỉnh sửa).</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ SLIDE 10: TỔNG KẾT ═══════════════ -->
+    <section class="slide">
+      <div class="slide-header">
+        <div class="eyebrow">06. TỔNG KẾT & KẾT LUẬN</div>
+        <div class="badge badge-blue">KIẾN TRÚC MỚI VỮNG CHẮC</div>
+      </div>
+      <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 20px;">
+        <h2>Kiến Trúc Tối Giản Mang Lại Sức Mạnh Tối Đa</h2>
+        <p style="font-size: 17px; max-width: 920px; line-height: 1.6;">
+          Việc loại bỏ <span style="color: var(--rose); font-weight: bold;">Team</span> không làm giảm chức năng của hệ thống, mà trái lại giúp DATN-2026 trở thành một nền tảng quản lý công việc <strong>mạch lạc, hiện đại và chuẩn mực</strong> theo đúng tinh thần của Jira Software và Linear.
+        </p>
+
+        <div class="grid-3" style="margin-top: 10px;">
+          <div class="card card-success">
+            <div style="font-size: 24px; font-weight: 800; color: var(--emerald);">0 Rào Cản</div>
+            <div style="font-size: 13px; color: var(--text-muted);">Tạo dự án trực tiếp từ Workspace, loại bỏ 100% bước trung gian vô lý.</div>
+          </div>
+          <div class="card card-primary">
+            <div style="font-size: 24px; font-weight: 800; color: var(--blue);">16 Quyền Jira</div>
+            <div style="font-size: 13px; color: var(--text-muted);">Phân quyền hạt mịn trên từng dự án được giữ nguyên vẹn và độc lập tuyệt đối.</div>
+          </div>
+          <div class="card card-alt">
+            <div style="font-size: 24px; font-weight: 800; color: var(--indigo);">-4.000 Lines</div>
+            <div style="font-size: 13px; color: var(--text-muted);">Hệ thống nhẹ hơn, tốc độ build nhanh hơn, dễ dàng bảo vệ trước hội đồng bảo vệ DATN.</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 10px; padding: 14px 20px; background: #F1F5F9; border-radius: 8px; border-left: 4px solid var(--blue); font-size: 13.5px; color: var(--text-muted);">
+          📖 <strong>Tài liệu kỹ thuật chi tiết đính kèm:</strong><br>
+          • <span class="code-pill">docs/services/work_service/new structure/01_PHAN_TICH_LOI_HAI_BO_TEAM.md</span><br>
+          • <span class="code-pill">docs/services/work_service/new structure/02_CHI_TIET_HANG_MUC_REFACTOR.md</span><br>
+          • <span class="code-pill">docs/services/work_service/new structure/03_LO_TRINH_TRIEN_KHAI_MIGRATION.md</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- ═══════════════ HUD CONTROLS ═══════════════ -->
+<div class="hud">
+  <button id="btnPrev" title="Phím mũi tên trái [←]">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+    Trước
+  </button>
+  <div class="hud-counter" id="slideCounter">1 / 7</div>
+  <button id="btnNext" title="Phím mũi tên phải [→] hoặc Space">
+    Tiếp
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+  <div class="hud-title" id="hudTitle">Bắt đầu</div>
+  <button id="btnFullscreen" title="Toàn màn hình [F]">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+  </button>
+</div>
+
+<script>
+  (function() {
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const deck = document.getElementById('deck');
+    const counter = document.getElementById('slideCounter');
+    const hudTitle = document.getElementById('hudTitle');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnNext = document.getElementById('btnNext');
+    const btnFullscreen = document.getElementById('btnFullscreen');
+    let currentIdx = 0;
+
+    // ─── 16:9 AUTO SCALING ───
+    function scaleDeck() {
+      const stageW = window.innerWidth - 32;
+      const stageH = window.innerHeight - 100;
+      const scale = Math.min(stageW / 1280, stageH / 720, 1.25);
+      deck.style.transform = `scale(${Math.max(scale, 0.4)})`;
+    }
+    window.addEventListener('resize', scaleDeck);
+    scaleDeck();
+
+    // ─── SLIDE NAVIGATION ───
+    function showSlide(idx) {
+      if (idx < 0) idx = 0;
+      if (idx >= slides.length) idx = slides.length - 1;
+      currentIdx = idx;
+
+      slides.forEach((s, i) => {
+        s.classList.toggle('active', i === currentIdx);
+      });
+
+      counter.textContent = `${currentIdx + 1} / ${slides.length}`;
+      const titleEl = slides[currentIdx].querySelector('h2, h1');
+      hudTitle.textContent = titleEl ? titleEl.textContent.trim().replace(/\s+/g, ' ') : '';
+      btnPrev.disabled = currentIdx === 0;
+      btnNext.disabled = currentIdx === slides.length - 1;
+    }
+
+    btnPrev.addEventListener('click', () => showSlide(currentIdx - 1));
+    btnNext.addEventListener('click', () => showSlide(currentIdx + 1));
+
+    btnFullscreen.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+
+    // ─── KEYBOARD SHORTCUTS ───
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        showSlide(currentIdx + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        showSlide(currentIdx - 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        showSlide(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        showSlide(slides.length - 1);
+      } else if (e.key.toLowerCase() === 'f') {
+        btnFullscreen.click();
+      }
+    });
+
+    showSlide(0);
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,1258 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Danh mục thông báo</title>
+<meta name="description" content="Danh mục 53 loại thông báo của DATN-2026: khi nào gửi, gửi cho ai, mức độ, đường dẫn, kèm bản xem trước chuông thông báo.">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #F8FAFC; --surface: #FFFFFF; --surface-2: #F1F5F9; --surface-3: #E2E8F0;
+  --text: #0F172A; --text-2: #334155; --muted: #64748B; --border: #E2E8F0; --border-strong: #CBD5E1;
+  --primary: #2563EB; --primary-hover: #1D4ED8; --primary-on: #FFFFFF; --primary-soft: #EFF6FF; --primary-ink: #1D4ED8;
+  --info: #2563EB; --info-soft: #EFF6FF; --info-ink: #1D4ED8;
+  --success: #16A34A; --success-soft: #F0FDF4; --success-ink: #15803D;
+  --warning: #D97706; --warning-soft: #FFFBEB; --warning-ink: #B45309;
+  --urgent: #DC2626; --urgent-soft: #FEF2F2; --urgent-ink: #B91C1C;
+  --action: #7C3AED; --action-soft: #F5F3FF; --action-ink: #6D28D9;
+  --code-bg: #F1F5F9; --unread-bg: #F5F9FF;
+  --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 4px 14px rgba(15, 23, 42, .06);
+  --shadow-lg: 0 10px 30px rgba(15, 23, 42, .14);
+  --radius: 12px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0B1120; --surface: #111827; --surface-2: #172033; --surface-3: #243044;
+    --text: #E5E7EB; --text-2: #CBD5E1; --muted: #94A3B8; --border: #243044; --border-strong: #334155;
+    --primary: #60A5FA; --primary-hover: #93C5FD; --primary-on: #0B1120; --primary-soft: rgba(96, 165, 250, .14); --primary-ink: #93C5FD;
+    --info: #60A5FA; --info-soft: rgba(96, 165, 250, .14); --info-ink: #93C5FD;
+    --success: #4ADE80; --success-soft: rgba(74, 222, 128, .12); --success-ink: #86EFAC;
+    --warning: #FBBF24; --warning-soft: rgba(251, 191, 36, .12); --warning-ink: #FCD34D;
+    --urgent: #F87171; --urgent-soft: rgba(248, 113, 113, .13); --urgent-ink: #FCA5A5;
+    --action: #A78BFA; --action-soft: rgba(167, 139, 250, .15); --action-ink: #C4B5FD;
+    --code-bg: #1B2537; --unread-bg: #142036;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .3);
+    --shadow-lg: 0 12px 34px rgba(0, 0, 0, .5);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0B1120; --surface: #111827; --surface-2: #172033; --surface-3: #243044;
+  --text: #E5E7EB; --text-2: #CBD5E1; --muted: #94A3B8; --border: #243044; --border-strong: #334155;
+  --primary: #60A5FA; --primary-hover: #93C5FD; --primary-on: #0B1120; --primary-soft: rgba(96, 165, 250, .14); --primary-ink: #93C5FD;
+  --info: #60A5FA; --info-soft: rgba(96, 165, 250, .14); --info-ink: #93C5FD;
+  --success: #4ADE80; --success-soft: rgba(74, 222, 128, .12); --success-ink: #86EFAC;
+  --warning: #FBBF24; --warning-soft: rgba(251, 191, 36, .12); --warning-ink: #FCD34D;
+  --urgent: #F87171; --urgent-soft: rgba(248, 113, 113, .13); --urgent-ink: #FCA5A5;
+  --action: #A78BFA; --action-soft: rgba(167, 139, 250, .15); --action-ink: #C4B5FD;
+  --code-bg: #1B2537; --unread-bg: #142036;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .3);
+  --shadow-lg: 0 12px 34px rgba(0, 0, 0, .5);
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: 76px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 var(--font); overflow-x: hidden; }
+a { color: var(--primary-ink); }
+code { font-family: var(--mono); font-size: 12px; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+h1, h2, h3, h4 { margin: 0; line-height: 1.25; }
+button { font: inherit; color: inherit; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 720px) { .wrap { padding: 0 24px; } }
+.ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; vertical-align: -3px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ---------- Header ---------- */
+.top { background: var(--surface); border-bottom: 1px solid var(--border); }
+.top .wrap { padding-top: 28px; padding-bottom: 20px; }
+.eyebrow { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.eyebrow .pill { border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; background: var(--surface-2); color: var(--text-2); }
+.top h1 { font-size: 26px; letter-spacing: -.01em; }
+.lead { color: var(--text-2); max-width: 780px; margin: 8px 0 16px; font-size: 15px; }
+.topnav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.topnav a { text-decoration: none; font-size: 13px; color: var(--text-2); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; background: var(--surface); }
+.topnav a:hover { border-color: var(--border-strong); color: var(--text); }
+.theme-btn { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 13px; color: var(--text-2); }
+.theme-btn:hover { border-color: var(--border-strong); color: var(--text); }
+.kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--muted); }
+
+/* ---------- Sections ---------- */
+main section { padding: 28px 0 8px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 14px; }
+.sec-head h2 { font-size: 19px; }
+.sec-head p { margin: 0; color: var(--muted); font-size: 13px; flex-basis: 100%; }
+.sub-title { font-size: 14px; font-weight: 650; margin: 18px 0 10px; color: var(--text-2); }
+
+/* ---------- Stats ---------- */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.stat .n { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat .l { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+.stat .s { font-size: 12px; color: var(--muted); }
+
+/* ---------- Legend ---------- */
+.sev-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.sev-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; border-top: 4px solid var(--c); }
+.sev-card .h { display: flex; align-items: center; gap: 8px; font-weight: 650; color: var(--ink); }
+.sev-card .h .cnt { margin-left: auto; font-weight: 600; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sev-card p { margin: 6px 0 0; font-size: 13px; color: var(--text-2); }
+.sev-card .meta { margin-top: 8px; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.c-info { --c: var(--info); --soft: var(--info-soft); --ink: var(--info-ink); }
+.c-success { --c: var(--success); --soft: var(--success-soft); --ink: var(--success-ink); }
+.c-warning { --c: var(--warning); --soft: var(--warning-soft); --ink: var(--warning-ink); }
+.c-urgent { --c: var(--urgent); --soft: var(--urgent-soft); --ink: var(--urgent-ink); }
+.c-action { --c: var(--action); --soft: var(--action-soft); --ink: var(--action-ink); }
+.legend-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+.box h3 { font-size: 14px; margin-bottom: 8px; }
+.role-list, .group-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.role-list li { display: grid; grid-template-columns: 44px 1fr; gap: 8px; align-items: baseline; font-size: 13px; color: var(--text-2); }
+.role { display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); text-align: center; }
+.group-list { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.group-list li { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-2); }
+.group-list .gi { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); flex: none; }
+.group-list .cnt { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* ---------- Notification item (dùng chung) ---------- */
+.notif { position: relative; display: flex; gap: 10px; padding: 11px 12px 11px 15px; background: var(--surface); text-align: left; }
+.notif::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
+.notif.is-unread { background: var(--unread-bg); }
+.notif .n-ic { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--soft); color: var(--ink); flex: none; }
+.notif .n-main { min-width: 0; flex: 1; }
+.notif .n-title { font-size: 13.5px; color: var(--text-2); overflow-wrap: anywhere; }
+.notif .n-title b { color: var(--text); font-weight: 650; }
+.notif.is-unread .n-title { color: var(--text); font-weight: 500; }
+.notif .n-body { font-size: 12.5px; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+.notif .n-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 5px; }
+.notif .n-dot { width: 8px; height: 8px; border-radius: 50%; background: transparent; flex: none; margin-top: 6px; }
+.notif.is-unread .n-dot { background: var(--primary); }
+.notif.is-resolved { opacity: .72; }
+.tag { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; line-height: 1.6; white-space: nowrap; }
+.tag .ic { width: 12px; height: 12px; vertical-align: 0; }
+.tag-success { background: var(--success-soft); color: var(--success-ink); }
+.tag-warning { background: var(--warning-soft); color: var(--warning-ink); }
+.tag-urgent { background: var(--urgent-soft); color: var(--urgent-ink); }
+.tag-info { background: var(--info-soft); color: var(--info-ink); }
+.tag-act { background: var(--action-soft); color: var(--action-ink); }
+.tag-done { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+
+/* ---------- Demo ---------- */
+.demo { display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 880px) { .demo { grid-template-columns: minmax(0, 1fr); } }
+.demo-app { position: relative; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); overflow: hidden; box-shadow: var(--shadow); }
+.demo-top { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.demo-top .crumbs { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.demo-top .crumbs b { color: var(--text); font-weight: 600; }
+.bell { position: relative; width: 38px; height: 38px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface); display: grid; place-items: center; cursor: pointer; color: var(--text-2); flex: none; }
+.bell[aria-expanded="true"] { background: var(--primary-soft); border-color: var(--primary); color: var(--primary-ink); }
+.bell .ic { width: 18px; height: 18px; }
+.bell .badge { position: absolute; top: -6px; right: -7px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px; background: var(--urgent); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; border: 2px solid var(--surface); font-variant-numeric: tabular-nums; }
+.bell .badge[hidden] { display: none; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: var(--primary-on); display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: none; }
+.panel { margin: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); overflow: hidden; }
+.panel[hidden] { display: none; }
+.panel-closed { padding: 40px 16px; text-align: center; color: var(--muted); font-size: 13px; }
+.p-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px 14px; }
+.p-head h3 { font-size: 15px; flex: 1; }
+.link-btn { border: 0; background: none; color: var(--primary-ink); cursor: pointer; font-size: 12.5px; font-weight: 600; display: inline-flex; gap: 4px; align-items: center; padding: 4px 6px; border-radius: 6px; }
+.link-btn:hover { background: var(--primary-soft); }
+.link-btn:disabled { color: var(--muted); cursor: default; background: none; }
+.tabs { display: flex; gap: 4px; padding: 0 10px 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.tab { border: 1px solid transparent; background: none; border-radius: 7px; padding: 4px 9px; font-size: 12.5px; color: var(--text-2); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.tab .c { font-size: 11px; font-weight: 700; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-variant-numeric: tabular-nums; }
+.tab[aria-selected="true"] { background: var(--primary-soft); color: var(--primary-ink); border-color: var(--primary); font-weight: 600; }
+.tab[aria-selected="true"] .c { background: var(--primary); color: var(--primary-on); }
+.tab.t-action[aria-selected="true"] { background: var(--action-soft); color: var(--action-ink); border-color: var(--action); }
+.tab.t-action[aria-selected="true"] .c { background: var(--action); color: #fff; }
+.p-list { max-height: 460px; overflow-y: auto; }
+.p-list .notif { border-bottom: 1px solid var(--border); cursor: pointer; }
+.p-list .notif:hover { filter: brightness(.985); }
+.p-list .notif:last-child { border-bottom: 0; }
+.n-actions { display: flex; flex-direction: column; gap: 2px; align-items: center; flex: none; }
+.icon-btn { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid transparent; background: none; border-radius: 7px; cursor: pointer; color: var(--muted); }
+.icon-btn:hover { background: var(--surface-2); border-color: var(--border); color: var(--text); }
+.icon-btn.del:hover { color: var(--urgent-ink); background: var(--urgent-soft); border-color: transparent; }
+.icon-btn .ic { width: 15px; height: 15px; }
+.p-empty { padding: 36px 16px; text-align: center; color: var(--muted); font-size: 13px; }
+.p-empty .ic { width: 28px; height: 28px; display: block; margin: 0 auto 8px; opacity: .6; }
+.p-foot { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.toast-area { position: absolute; left: 10px; right: 10px; bottom: 10px; display: grid; gap: 6px; pointer-events: none; z-index: 3; }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 10px; background: var(--text); color: var(--bg); border-radius: 9px; padding: 9px 12px; font-size: 13px; box-shadow: var(--shadow-lg); animation: rise .18s ease-out; }
+.toast .t-msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toast .t-msg b { font-weight: 650; }
+.toast button { border: 0; background: none; color: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; padding: 2px 4px; }
+.toast.t-urgent { border-left: 4px solid var(--urgent); }
+.toast.t-action { border-left: 4px solid var(--action); }
+@keyframes rise { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+.demo-side { display: grid; gap: 12px; }
+.demo-side .box p { margin: 0 0 8px; font-size: 13px; color: var(--text-2); }
+.how { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; font-size: 13px; color: var(--text-2); }
+.how li { display: grid; grid-template-columns: 24px 1fr; gap: 6px; align-items: start; }
+.how .ic { margin-top: 2px; color: var(--muted); }
+.sim-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 8px; padding: 6px 11px; font-size: 13px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; color: var(--text); }
+.btn:hover { border-color: var(--primary); color: var(--primary-ink); }
+.btn:disabled { opacity: .55; cursor: default; border-color: var(--border); color: var(--muted); }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-on); }
+.btn.primary:hover { background: var(--primary-hover); color: var(--primary-on); }
+.btn.primary:disabled { background: var(--surface-2); color: var(--muted); border-color: var(--border); }
+.nav-out { font-size: 13px; color: var(--text-2); display: grid; gap: 4px; }
+.nav-out .ph { color: var(--muted); }
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-family: var(--mono); font-size: 12px; max-height: 260px; overflow-y: auto; }
+.log li { display: grid; grid-template-columns: 64px 1fr; gap: 8px; align-items: start; padding: 6px 8px; border-radius: 7px; background: var(--surface-2); animation: rise .18s ease-out; }
+.log .m { font-weight: 700; font-size: 11px; text-align: center; border-radius: 5px; padding: 1px 0; }
+.log .p { overflow-wrap: anywhere; color: var(--text-2); }
+.log .p small { display: block; color: var(--muted); font-size: 11px; }
+.m-GET, .m-PATCH { background: var(--info-soft); color: var(--info-ink); }
+.m-POST { background: var(--success-soft); color: var(--success-ink); }
+.m-DELETE { background: var(--urgent-soft); color: var(--urgent-ink); }
+.m-WS { background: var(--action-soft); color: var(--action-ink); }
+.m-NAV { background: var(--warning-soft); color: var(--warning-ink); }
+.log .empty { display: block; background: none; color: var(--muted); font-family: var(--font); padding: 0; }
+
+/* ---------- Toolbar & filters ---------- */
+.toolbar { position: sticky; top: 0; z-index: 6; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); padding: 10px 0; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.search { position: relative; flex: 1 1 260px; min-width: 0; }
+.search .ic { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.search input { width: 100%; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); border-radius: 9px; padding: 8px 34px 8px 32px; font: inherit; font-size: 14px; }
+.search input::placeholder { color: var(--muted); }
+.search .kbd { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); }
+.count { font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.count b { color: var(--text); }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 9px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 6px 11px; font-size: 13px; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; color: var(--text-2); }
+.seg button + button { border-left: 1px solid var(--border-strong); }
+.seg button[aria-pressed="true"] { background: var(--primary-soft); color: var(--primary-ink); font-weight: 600; }
+.filters { display: grid; gap: 8px; padding: 12px 0 4px; }
+.frow { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; align-items: start; }
+.frow > .fl { font-size: 12.5px; font-weight: 600; color: var(--muted); padding-top: 5px; }
+@media (max-width: 640px) { .frow { grid-template-columns: minmax(0, 1fr); gap: 4px; } .frow > .fl { padding-top: 0; } }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; color: var(--text-2); }
+.chip:hover { border-color: var(--primary); }
+.chip .k { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip[aria-pressed="true"] { background: var(--primary-soft); border-color: var(--primary); color: var(--primary-ink); font-weight: 600; }
+.chip[aria-pressed="true"] .k { color: var(--primary-ink); }
+.chip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.chip .ic { width: 14px; height: 14px; }
+
+/* ---------- Catalog cards ---------- */
+.grp { margin-top: 22px; }
+.grp-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.grp-head .gi { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--border); color: var(--text-2); flex: none; }
+.grp-head h3 { font-size: 16px; }
+.grp-head p { margin: 1px 0 0; font-size: 12.5px; color: var(--muted); }
+.grp-head .cnt { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.cards { display: grid; gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--c); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); scroll-margin-top: 80px; }
+.card.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0%, 30% { box-shadow: 0 0 0 3px var(--primary); } 100% { box-shadow: var(--shadow); } }
+.card-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.tid { font-family: var(--mono); font-weight: 700; font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; }
+.card-head h4 { font-size: 15px; }
+.tcode { font-size: 11.5px; }
+.badges { display: flex; flex-wrap: wrap; gap: 5px; margin-left: auto; }
+.b { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; border-radius: 6px; padding: 1px 7px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+.b .ic { width: 12px; height: 12px; vertical-align: 0; }
+.b.p0 { background: var(--text); color: var(--bg); border-color: var(--text); }
+.b.sev { background: var(--soft); color: var(--ink); border-color: transparent; }
+.b.act { background: var(--action-soft); color: var(--action-ink); border-color: transparent; }
+.card-body { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; margin-top: 12px; }
+@media (max-width: 820px) { .card-body { grid-template-columns: minmax(0, 1fr); } }
+.card dl { margin: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 6px 12px; font-size: 13px; }
+.card dt { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+.card dd { margin: 0; color: var(--text-2); overflow-wrap: anywhere; }
+@media (max-width: 480px) { .card dl { grid-template-columns: minmax(0, 1fr); gap: 2px; } .card dd { margin-bottom: 6px; } }
+.preview { align-self: start; }
+.preview .pl { font-size: 11.5px; font-weight: 600; color: var(--muted); margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
+.preview .frame { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.note { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+.empty-state { text-align: center; padding: 40px 16px; color: var(--muted); border: 1px dashed var(--border-strong); border-radius: var(--radius); margin-top: 16px; }
+
+/* ---------- Table view ---------- */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); margin-top: 16px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--surface-2); position: sticky; top: 0; white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+.tbl-cat tbody tr { cursor: pointer; }
+.tbl-cat tbody tr:hover td { background: var(--surface-2); }
+.tbl-cat td.sevc { white-space: nowrap; }
+.tbl-cat .grp-row td { background: var(--surface-2); font-weight: 650; color: var(--text); cursor: default; }
+.sw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c); margin-right: 6px; vertical-align: 0; }
+
+/* ---------- Rules ---------- */
+.rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
+.rule { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+.rule .rh { display: flex; gap: 8px; align-items: center; font-weight: 650; font-size: 13.5px; }
+.rule .rh .tid { font-size: 11px; }
+.rule p { margin: 6px 0 0; font-size: 13px; color: var(--text-2); }
+
+footer { margin-top: 36px; border-top: 1px solid var(--border); background: var(--surface); }
+footer .wrap { padding-top: 18px; padding-bottom: 28px; font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; scroll-behavior: auto !important; } }
+@media print { .toolbar, .filters, #xem-truoc, .theme-btn { display: none !important; } .card { break-inside: avoid; box-shadow: none; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="eyebrow">
+      <span class="pill">DATN-2026</span>
+      <span class="pill">notification-service</span>
+      <span>Đề xuất · đối chiếu code nhánh <code>develop</code> tới commit <code>f303aa9</code> · 14/11/2026</span>
+    </div>
+    <h1>Danh mục loại thông báo</h1>
+    <p class="lead">Mọi trường hợp cần gửi thông báo trong Không gian làm việc và Dự án: khi nào gửi, gửi cho ai, mức độ nào, gắn vào đâu trong code và dẫn tới đâu. Ví dụ dùng dữ liệu kịch bản demo <b>Mộc Coffee</b> (An là Trưởng dự án, Bình là Thành viên, Chi là Người xem).</p>
+    <nav class="topnav" aria-label="Mục lục">
+      <a href="#tong-quan">Tổng quan</a>
+      <a href="#quy-uoc">Quy ước</a>
+      <a href="#xem-truoc">Xem trước chuông</a>
+      <a href="#danh-muc">Danh mục</a>
+      <a href="#quy-tac">Quy tắc chung</a>
+      <a href="#khong-thong-bao">Không đưa vào chuông</a>
+      <button class="theme-btn" id="themeBtn" type="button" title="Đổi giao diện sáng / tối (phím T)"><span id="themeIcon"></span><span id="themeLabel">Giao diện</span> <span class="kbd">T</span></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="tong-quan" aria-labelledby="h-tong-quan">
+    <div class="sec-head"><h2 id="h-tong-quan">Tổng quan</h2></div>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section id="quy-uoc" aria-labelledby="h-quy-uoc">
+    <div class="sec-head">
+      <h2 id="h-quy-uoc">Quy ước</h2>
+      <p>Mỗi thông báo có ba thuộc tính độc lập: <b>mức độ</b> (màu và cách hiện), <b>nhóm</b> (biểu tượng, bộ lọc) và cờ <b>Cần xử lý</b>.</p>
+    </div>
+    <div class="sev-grid" id="sevLegend"></div>
+    <div class="legend-2" style="margin-top:12px">
+      <div class="box">
+        <h3>Người nhận</h3>
+        <ul class="role-list" id="roleLegend"></ul>
+      </div>
+      <div class="box">
+        <h3>Nhóm</h3>
+        <ul class="group-list" id="groupLegend"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="xem-truoc" aria-labelledby="h-xem-truoc">
+    <div class="sec-head">
+      <h2 id="h-xem-truoc">Xem trước chuông thông báo</h2>
+      <p>Bản dùng thử bằng dữ liệu mẫu, nhìn từ tài khoản của An (Trưởng dự án). Thao tác ở đây không gọi API thật; khung bên phải ghi lại API và thông điệp WebSocket tương ứng theo thiết kế.</p>
+    </div>
+    <div class="demo">
+      <div class="demo-app" id="demoApp">
+        <div class="demo-top">
+          <div class="crumbs">Dự án › <b>Mộc Coffee</b> › Bảng công việc</div>
+          <button class="bell" id="bellBtn" type="button" aria-expanded="true" aria-controls="panel" aria-label="Thông báo">
+            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            <span class="badge" id="bellBadge">0</span>
+          </button>
+          <div class="avatar" title="An · Trưởng dự án">A</div>
+        </div>
+        <div class="panel" id="panel" role="region" aria-label="Bảng thông báo">
+          <div class="p-head">
+            <h3>Thông báo</h3>
+            <button class="link-btn" id="readAllBtn" type="button"></button>
+          </div>
+          <div class="tabs" role="tablist" aria-label="Lọc thông báo">
+            <button class="tab" role="tab" data-tab="all" aria-selected="true" type="button">Tất cả <span class="c" id="cAll">0</span></button>
+            <button class="tab" role="tab" data-tab="unread" aria-selected="false" type="button">Chưa đọc <span class="c" id="cUnread">0</span></button>
+            <button class="tab t-action" role="tab" data-tab="action" aria-selected="false" type="button">Cần xử lý <span class="c" id="cAction">0</span></button>
+          </div>
+          <div class="p-list" id="pList" role="list"></div>
+          <div class="p-foot">
+            <button class="link-btn" id="viewAllBtn" type="button">Xem tất cả thông báo →</button>
+            <button class="link-btn" id="resetBtn" type="button">Khôi phục dữ liệu mẫu</button>
+          </div>
+        </div>
+        <div class="panel-closed" id="panelClosed" hidden>Bấm vào chuông để mở bảng thông báo.</div>
+        <div class="toast-area" id="toastArea" aria-live="polite"></div>
+      </div>
+
+      <div class="demo-side">
+        <div class="box">
+          <h3>Thử các thao tác</h3>
+          <ul class="how" id="howList"></ul>
+        </div>
+        <div class="box">
+          <h3>Giả lập sự kiện từ server</h3>
+          <p>Như khi WebSocket đẩy xuống: thông báo mới, thông báo được gộp, và một yêu cầu “Cần xử lý” được Quản lý khác giải quyết.</p>
+          <div class="sim-row">
+            <button class="btn primary" id="simBtn" type="button"></button>
+            <button class="btn" id="resolveBtn" type="button">Quản lý khác đã xác nhận MOC-2</button>
+          </div>
+        </div>
+        <div class="box">
+          <h3>Đường dẫn sẽ mở</h3>
+          <div class="nav-out" id="navOut"><span class="ph">Bấm vào một thông báo để xem nó dẫn tới đâu.</span></div>
+        </div>
+        <div class="box">
+          <h3>Nhật ký API &amp; WebSocket</h3>
+          <ol class="log" id="apiLog"><li class="empty">Chưa có thao tác nào.</li></ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="danh-muc" aria-labelledby="h-danh-muc">
+    <div class="sec-head">
+      <h2 id="h-danh-muc">Danh mục chi tiết</h2>
+      <p>Các bộ lọc trong cùng một hàng là “hoặc”, giữa các hàng là “và”. Bấm một dòng ở dạng Bảng để mở thẻ chi tiết.</p>
+    </div>
+    <div class="toolbar">
+      <label class="search">
+        <span class="sr">Tìm kiếm loại thông báo</span>
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="q" type="search" placeholder="Tìm mã, tên, người nhận, điểm gắn code… (không cần dấu)" autocomplete="off">
+        <span class="kbd">/</span>
+      </label>
+      <span class="count" id="count"></span>
+      <div class="seg" role="group" aria-label="Kiểu hiển thị">
+        <button type="button" data-view="cards" aria-pressed="true">Thẻ</button>
+        <button type="button" data-view="table" aria-pressed="false">Bảng</button>
+      </div>
+      <button class="btn" id="clearBtn" type="button">Bỏ lọc</button>
+    </div>
+    <div class="filters" id="filters"></div>
+    <div id="results"></div>
+  </section>
+
+  <section id="quy-tac" aria-labelledby="h-quy-tac">
+    <div class="sec-head">
+      <h2 id="h-quy-tac">Quy tắc chung</h2>
+      <p>Áp dụng cho mọi loại, để chuông hữu ích chứ không ồn.</p>
+    </div>
+    <div class="rules" id="rules"></div>
+  </section>
+
+  <section id="khong-thong-bao" aria-labelledby="h-khong">
+    <div class="sec-head">
+      <h2 id="h-khong">Những gì không đưa vào chuông</h2>
+      <p>Các thay đổi này hiện qua realtime (Board tải lại, ô nháy, banner) theo kế hoạch realtime R1, không lưu thành thông báo.</p>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Thay đổi</th><th>Lý do</th><th>Xử lý thay thế</th></tr></thead>
+        <tbody id="skipBody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>Tài liệu đi kèm: <a href="1_DANH_MUC_LOAI_THONG_BAO.md">1_DANH_MUC_LOAI_THONG_BAO.md</a> · <a href="2_KIEN_TRUC_VA_THIET_KE.md">2_KIEN_TRUC_VA_THIET_KE.md</a> · <a href="README.md">README.md</a></div>
+    <div>Phím tắt: <span class="kbd">/</span> tìm kiếm · <span class="kbd">T</span> đổi sáng/tối. Trang tự chứa, không tải tài nguyên ngoài.</div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ================= Biểu tượng (theo bộ lucide) ================= */
+  var ICONS = {
+    task: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
+    link: '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/>',
+    approval: '<path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/>',
+    comment: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    sprint: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+    alarm: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    project: '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><path d="M8 10v4"/><path d="M12 10v2"/><path d="M16 10v6"/>',
+    award: '<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>',
+    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+    success: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+    warning: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    urgent: '<path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/>',
+    target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+    zap: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    checks: '<path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/>',
+    circle: '<circle cx="12" cy="12" r="9"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+    pointer: '<path d="M14 4.1 12 6"/><path d="m5.1 8-2.9-.8"/><path d="m6 12-1.9 2"/><path d="M7.2 2.2 8 5.1"/><path d="M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z"/>',
+    undo: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+    inbox: '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+    moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    tab: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/>'
+  };
+  function icon(name, cls) { return '<svg class="ic' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || '') + '</svg>'; }
+
+  /* ================= Từ điển ================= */
+  var SEV = {
+    INFO:    { label: 'Thông thường', cls: 'info',    icon: 'info',    hex: '#2563EB', desc: 'Cập nhật bình thường.', ui: 'Tăng số trên chuông.' },
+    SUCCESS: { label: 'Tích cực',     cls: 'success', icon: 'success', hex: '#16A34A', desc: 'Kết quả tốt: được xác nhận, hết bị cản trở.', ui: 'Tăng số trên chuông.' },
+    WARNING: { label: 'Cảnh báo',     cls: 'warning', icon: 'warning', hex: '#D97706', desc: 'Cần chú ý sớm: sắp hạn, bị cản trở, bị từ chối.', ui: 'Tăng số, viền cam.' },
+    URGENT:  { label: 'Khẩn cấp',     cls: 'urgent',  icon: 'urgent',  hex: '#DC2626', desc: 'Đã trễ, hoặc mất quyền.', ui: 'Tăng số + hiện toast.' }
+  };
+  var ROLES = {
+    NTH: { label: 'Người thực hiện', desc: 'work_items.assignee_id' },
+    NT:  { label: 'Người tạo', desc: 'Người báo cáo, work_items.reporter_id' },
+    QL:  { label: 'Quản lý dự án', desc: 'Trưởng dự án, người tạo dự án, vai trò có quyền PROJECT_ADMIN' },
+    TV:  { label: 'Thành viên', desc: 'Mọi người có vai trò trong dự án' },
+    CN:  { label: 'Người cụ thể', desc: 'Người được nhắc tên, được mời, bị xoá, người gửi yêu cầu…' }
+  };
+  var SRC = { EVENT: { label: 'Sự kiện', icon: 'zap' }, SCHEDULE: { label: 'Theo lịch', icon: 'clock' } };
+  var PRIO = { P0: 'Bắt buộc cho bản demo', P1: 'Nên có', P2: 'Mở rộng' };
+
+  var GROUPS = [
+    { id: 'TASK',         letter: 'A', name: 'Công việc',            icon: 'task',     desc: 'Giao việc và các thay đổi quan trọng trên một công việc.' },
+    { id: 'DEPENDENCY',   letter: 'B', name: 'Phụ thuộc',            icon: 'link',     desc: 'Liên kết “Cản trở / Chặn tiến độ” (BLOCKS) giữa hai công việc.' },
+    { id: 'APPROVAL',     letter: 'C', name: 'Xác nhận hoàn thành',  icon: 'approval', desc: 'Luồng “Tạm hoàn thành” BR-W03…W08. Mọi kết cục đi qua WorkItemCompletionGate.close.' },
+    { id: 'COMMENT',      letter: 'D', name: 'Bình luận',            icon: 'comment',  desc: 'Bình luận, trả lời và nhắc tên (@).' },
+    { id: 'SPRINT',       letter: 'E', name: 'Chu kỳ / Giai đoạn',   icon: 'sprint',   desc: 'Tên có “giai đoạn” thì gọi giai đoạn, còn lại gọi chu kỳ (giống sprintTerm).' },
+    { id: 'REMINDER',     letter: 'F', name: 'Nhắc hạn',             icon: 'alarm',    desc: 'Job 08:00 giờ Việt Nam. Bỏ qua việc đã xong hoặc đang chờ xác nhận.' },
+    { id: 'MEMBER',       letter: 'G', name: 'Thành viên & quyền',   icon: 'users',    desc: 'Lời mời, vai trò, thêm và xoá thành viên ở cấp dự án và không gian làm việc.' },
+    { id: 'PROJECT',      letter: 'H', name: 'Dự án',                icon: 'project',  desc: 'Lưu trữ, khôi phục và thay đổi lịch của dự án.' },
+    { id: 'CONTRIBUTION', letter: 'I', name: 'Đóng góp',             icon: 'award',    desc: 'Điểm đóng góp của thành viên.' }
+  ];
+
+  /* ================= Danh mục 53 loại (khớp 1_DANH_MUC_LOAI_THONG_BAO.md) ================= */
+  var TYPES = [
+    // ---- A. Công việc ----
+    { id: 'A1', code: 'TASK_ASSIGNED', g: 'TASK', name: 'Được giao công việc', src: 'EVENT', prio: 'P0',
+      when: 'Tạo công việc / công việc con có sẵn người thực hiện, hoặc đổi người thực hiện.',
+      hook: '`WorkItemServiceImpl.createWorkItem`, `createSubtask`, `changeAssignee` (PUT /items/{id}/assignee), `updateWorkItem`; `WorkflowEngineServiceImpl.executeTransition` (đổi người qua màn chuyển trạng thái). Gắn cạnh lời gọi `recordAssigneeChange` / `recordDiff` (BR-W02).',
+      to: ['NTH'], toText: 'Người thực hiện mới', sev: 'INFO', sevNote: 'Cảnh báo nếu ưu tiên Cao/Rất cao hoặc còn ≤ 2 ngày đến hạn.',
+      email: 'yes', emailNote: 'template task-assigned (đã có)',
+      title: '<b>An</b> đã giao cho bạn <b>MOC-2</b> · Khảo sát lưu lượng khách và lựa chọn mặt bằng', body: 'Ưu tiên Cao · Hạn chót 20/11/2026', link: '/browse/MOC-2' },
+    { id: 'A2', code: 'TASK_UNASSIGNED', g: 'TASK', name: 'Bị chuyển khỏi công việc', src: 'EVENT', prio: 'P1',
+      when: 'Người thực hiện bị đổi sang người khác, hoặc bị huỷ giao (assigneeId = null, BR-W01).',
+      hook: 'Như A1.', to: ['NTH'], toText: 'Người thực hiện cũ', sev: 'INFO',
+      title: '<b>An</b> đã giao <b>MOC-5</b> cho người khác', body: 'Bạn không còn là người thực hiện công việc này', link: '/browse/MOC-5' },
+    { id: 'A3', code: 'TASK_STATUS_CHANGED', g: 'TASK', name: 'Công việc đổi trạng thái', src: 'EVENT', prio: 'P0',
+      when: 'Trạng thái thật sự thay đổi (menu trạng thái hoặc kéo thẻ sang cột khác). Thành viên thường kéo vào nhóm Hoàn thành thì trạng thái không đổi (BR-W03): đó là C1.',
+      hook: '`WorkflowEngineServiceImpl.executeTransition`, sau bước lưu (`BoardServiceImpl.moveCard` cũng đi qua hàm này).',
+      to: ['NT', 'NTH'], toText: 'Người tạo + Người thực hiện', sev: 'INFO', sevNote: 'Tích cực khi vào nhóm Hoàn thành. Gộp trong 10 phút.',
+      title: '<b>Bình</b> đã chuyển <b>MOC-2</b> sang “Đang thực hiện”', body: 'Khảo sát lưu lượng khách và lựa chọn mặt bằng', link: '/browse/MOC-2' },
+    { id: 'A4', code: 'TASK_PRIORITY_RAISED', g: 'TASK', name: 'Ưu tiên được nâng lên', src: 'EVENT', prio: 'P1',
+      when: 'Mức ưu tiên tăng lên Cao hoặc Rất cao.',
+      hook: '`WorkItemServiceImpl.updateWorkItem` (so với `oldState`).', to: ['NTH'], toText: 'Người thực hiện', sev: 'WARNING',
+      title: '<b>An</b> đã nâng ưu tiên <b>MOC-12</b> lên Rất cao', body: 'Chốt menu signature: cà phê muối, bạc xỉu, cold brew', link: '/browse/MOC-12' },
+    { id: 'A5', code: 'TASK_DUE_DATE_CHANGED', g: 'TASK', name: 'Hạn chót thay đổi', src: 'EVENT', prio: 'P1',
+      when: 'Hạn chót được đặt mới hoặc thay đổi.',
+      hook: '`WorkItemServiceImpl.updateWorkItem` (so với `oldState`).', to: ['NTH'], toText: 'Người thực hiện', sev: 'INFO', sevNote: 'Cảnh báo khi dời sớm hơn.',
+      title: '<b>An</b> đã dời hạn chót <b>MOC-5</b> sớm hơn 5 ngày', body: 'Từ 25/11/2026 sang 20/11/2026', link: '/browse/MOC-5' },
+    { id: 'A6', code: 'TASK_DELETED', g: 'TASK', name: 'Công việc bị xoá', src: 'EVENT', prio: 'P1',
+      when: 'Công việc bị xoá (xoá mềm).',
+      hook: '`WorkItemServiceImpl.deleteWorkItem`.', to: ['NTH', 'NT'], toText: 'Người thực hiện + Người tạo', sev: 'WARNING',
+      title: '<b>An</b> đã xoá <b>MOC-24</b> · Khảo sát 5 quán cà phê đối thủ', body: 'Công việc không còn trong dự án Mộc Coffee', link: '/w/{ws}/projects/{pid}/backlog',
+      note: 'Không trỏ vào công việc đã xoá.' },
+    { id: 'A7', code: 'PARENT_AUTO_REOPENED', g: 'TASK', name: 'Công việc cha tự mở lại', src: 'EVENT', prio: 'P1',
+      when: 'Công việc con chuyển về trạng thái chưa xong trong khi công việc cha đã Hoàn thành; hệ thống tự mở lại công việc cha.',
+      hook: '`WorkflowEngineServiceImpl.cascadeAncestorStatusTransitions` (quy tắc 1).', to: ['NTH', 'NT'], toText: 'Người thực hiện + Người tạo của công việc cha', sev: 'WARNING',
+      title: '<b>MOC-2</b> tự mở lại vì công việc con <b>MOC-3</b> chuyển sang “Đang thực hiện”', body: 'Do Bình thao tác trên MOC-3', link: '/browse/MOC-2' },
+    { id: 'A8', code: 'SUBTASKS_AUTO_RESOLVED', g: 'TASK', name: 'Công việc con hoàn thành theo cha', src: 'EVENT', prio: 'P2',
+      when: 'Công việc cha được hoàn thành kèm lựa chọn “Hoàn thành tất cả công việc con”.',
+      hook: '`WorkflowEngineServiceImpl.executeTransition`, bước 4b (`resolveAllSubtasks`).', to: ['NTH'], toText: 'Người thực hiện của từng công việc con (gộp 1 thông báo/người)', sev: 'INFO',
+      title: '<b>An</b> đã hoàn thành <b>MOC-2</b> kèm 2 công việc con của bạn', body: 'MOC-3, MOC-4', link: '/browse/MOC-2' },
+    { id: 'A9', code: 'TASK_MARKED_DUPLICATE', g: 'TASK', name: 'Bị đóng do trùng lặp', src: 'EVENT', prio: 'P2',
+      when: 'Admin dự án tạo liên kết “Trùng lặp với”; công việc nguồn tự hoàn thành với kết quả DUPLICATE. Thành viên thường làm việc này thì chỉ tạo yêu cầu Tạm hoàn thành (C1).',
+      hook: '`WorkItemLinkServiceImpl.createLink` (quy tắc 3, `DUPLICATES`).', to: ['NTH', 'NT'], toText: 'Người thực hiện + Người tạo của công việc nguồn', sev: 'INFO',
+      title: '<b>MOC-24</b> được đóng vì trùng lặp với <b>MOC-2</b>', body: 'Do An tạo liên kết', link: '/browse/MOC-24' },
+    { id: 'A10', code: 'TASK_SPRINT_CHANGED', g: 'TASK', name: 'Công việc đổi chu kỳ', src: 'EVENT', prio: 'P2',
+      when: 'Một công việc được chuyển sang chu kỳ khác hoặc về Kho việc từ màn chi tiết (công việc con đi theo cha).',
+      hook: '`WorkItemServiceImpl.updateWorkItem` (đổi `sprintId`).', to: ['NTH'], toText: 'Người thực hiện', sev: 'INFO',
+      title: '<b>An</b> đã chuyển <b>MOC-13</b> sang Giai đoạn 2', body: 'Giai đoạn 2 dự kiến bắt đầu 01/12/2026', link: '/browse/MOC-13' },
+
+    // ---- B. Phụ thuộc ----
+    { id: 'B1', code: 'TASK_BLOCKED', g: 'DEPENDENCY', name: 'Công việc bị cản trở', src: 'EVENT', prio: 'P1',
+      when: 'Tạo liên kết “Cản trở / Chặn tiến độ” (BLOCKS): A chặn B.',
+      hook: '`WorkItemLinkServiceImpl.createLink` (`BLOCKS`).', to: ['NTH'], toText: 'Người thực hiện của công việc bị chặn', sev: 'WARNING',
+      title: '<b>MOC-7</b> đang bị cản trở bởi <b>MOC-2</b>', body: 'Chưa thể chuyển sang “Đang thực hiện” cho tới khi MOC-2 hoàn thành', link: '/browse/MOC-7' },
+    { id: 'B2', code: 'TASK_UNBLOCKED', g: 'DEPENDENCY', name: 'Hết bị cản trở', src: 'EVENT', prio: 'P1',
+      when: 'Công việc chặn vào nhóm Hoàn thành, liên kết bị xoá, hoặc công việc chặn bị xoá, và công việc bị chặn không còn công việc chặn nào chưa xong.',
+      hook: '`WorkflowEngineServiceImpl.executeTransition`, `WorkItemLinkServiceImpl.deleteLink`, `WorkItemServiceImpl.deleteWorkItem`.', to: ['NTH'], toText: 'Người thực hiện của công việc bị chặn', sev: 'SUCCESS',
+      title: '<b>MOC-7</b> đã hết bị cản trở, có thể bắt đầu', body: 'MOC-2 vừa được xác nhận hoàn thành', link: '/browse/MOC-7' },
+
+    // ---- C. Xác nhận hoàn thành ----
+    { id: 'C1', code: 'COMPLETION_REQUESTED', g: 'APPROVAL', name: 'Yêu cầu xác nhận hoàn thành', src: 'EVENT', prio: 'P0', act: true,
+      when: 'Thành viên không có quyền xác nhận chuyển công việc vào nhóm Hoàn thành (menu trạng thái, kéo thả Board, đánh dấu Trùng lặp); hệ thống tạo yêu cầu “Tạm hoàn thành”.',
+      hook: '`WorkItemCompletionGate.submit` (gọi từ `executeTransition`, bước 4d).', to: ['QL'], toText: 'Quản lý dự án', sev: 'INFO',
+      email: 'yes', emailNote: 'template mới completion-request',
+      title: '<b>Bình</b> báo đã hoàn thành <b>MOC-2</b>, chờ bạn xác nhận', body: 'Ghi chú: “Đã khảo sát đủ 3 địa điểm, số liệu trong tệp đính kèm.”', link: '/browse/MOC-2',
+      note: 'Mở khung “Tạm hoàn thành” có nút Xác nhận / Từ chối. Một Quản lý xử lý xong thì thông báo này của mọi Quản lý khác tự chuyển sang “Đã xử lý”.' },
+    { id: 'C2', code: 'COMPLETION_APPROVED', g: 'APPROVAL', name: 'Được xác nhận hoàn thành', src: 'EVENT', prio: 'P0',
+      when: 'Yêu cầu được xác nhận: Admin bấm Xác nhận, hoặc Admin tự chuyển thẳng vào DONE (BR-W07).',
+      hook: '`WorkItemCompletionGate.close(… APPROVED …)`, từ `WorkItemCompletionServiceImpl.approve` hoặc `onStatusChanged`.', to: ['CN', 'NTH'], toText: 'Người gửi yêu cầu (+ Người thực hiện nếu khác người)', sev: 'SUCCESS',
+      title: '<b>An</b> đã xác nhận hoàn thành <b>MOC-2</b>', body: 'Điểm đóng góp đã được ghi cho người thực hiện', link: '/browse/MOC-2' },
+    { id: 'C3', code: 'COMPLETION_REJECTED', g: 'APPROVAL', name: 'Không được xác nhận hoàn thành', src: 'EVENT', prio: 'P0',
+      when: 'Admin từ chối yêu cầu (lý do không bắt buộc).',
+      hook: '`WorkItemCompletionServiceImpl.reject` → `WorkItemCompletionGate.close(… REJECTED …)`.', to: ['CN'], toText: 'Người gửi yêu cầu', sev: 'WARNING',
+      title: '<b>An</b> chưa xác nhận hoàn thành <b>MOC-2</b>', body: 'Lý do: “Thiếu số liệu khung 17h–19h.”', link: '/browse/MOC-2',
+      note: 'Lý do từ chối được lưu thành bình luận nhưng không sinh thêm D2.' },
+    { id: 'C4', code: 'COMPLETION_PENDING_REMINDER', g: 'APPROVAL', name: 'Nhắc yêu cầu chờ xác nhận', src: 'SCHEDULE', prio: 'P1', act: true,
+      when: 'Có yêu cầu PENDING quá 48 giờ. Chạy 08:00 hằng ngày, gộp theo dự án.',
+      hook: 'Job mới `CompletionReminderJob` (work-service), đọc như `GET /projects/{projectId}/completion-requests`.', to: ['QL'], toText: 'Quản lý dự án', sev: 'WARNING',
+      title: 'Mộc Coffee có 2 yêu cầu xác nhận hoàn thành chờ quá 2 ngày', body: 'MOC-2, MOC-5', link: '/w/{ws}/projects/{pid}/board',
+      note: 'Trên Board đã có nút “Chờ xác nhận HT (n)”.' },
+    { id: 'C5', code: 'COMPLETION_CANCELLED', g: 'APPROVAL', name: 'Yêu cầu xác nhận bị huỷ', src: 'EVENT', prio: 'P2',
+      when: 'Admin rút lại yêu cầu của người khác, hoặc yêu cầu tự huỷ vì trạng thái công việc bị đổi trước khi duyệt (BR-W07). Người gửi tự rút lại hoặc gửi yêu cầu mới thay thế (BR-W05) thì không gửi gì, chỉ đóng C1 của Quản lý.',
+      hook: '`WorkItemCompletionServiceImpl.cancel`, `WorkItemCompletionGate.onStatusChanged` → `close(… CANCELLED …)`.', to: ['CN'], toText: 'Người gửi yêu cầu', sev: 'INFO',
+      title: 'Yêu cầu xác nhận hoàn thành <b>MOC-5</b> đã bị huỷ', body: 'An đã đổi trạng thái sang “Cần làm” trước khi duyệt', link: '/browse/MOC-5' },
+
+    // ---- D. Bình luận ----
+    { id: 'D1', code: 'COMMENT_MENTION', g: 'COMMENT', name: 'Được nhắc tên trong bình luận', src: 'EVENT', prio: 'P0',
+      when: 'Bình luận mới, hoặc bình luận được sửa, có @nhắc tên. Chưa có: cần ô chọn người khi gõ @, lưu dạng @[Tên](sub), và chỉ cho nhắc người có quyền xem dự án.',
+      hook: '`WorkItemCommentServiceImpl.addComment`, `updateComment` (chỉ gửi cho người mới được nhắc).', to: ['CN'], toText: 'Người được nhắc tên', sev: 'INFO',
+      email: 'yes', emailNote: 'template comment-mention (đã có)',
+      title: '<b>Bình</b> đã nhắc đến bạn trong <b>MOC-2</b>', body: '“@An ưu tiên khung 7h–9h sáng, giờ cao điểm cà phê.”', link: '/browse/MOC-2?comment={commentId}',
+      note: 'Người vừa được nhắc tên vừa là người thực hiện chỉ nhận D1 (lý do mạnh nhất).' },
+    { id: 'D2', code: 'COMMENT_ADDED', g: 'COMMENT', name: 'Có bình luận mới', src: 'EVENT', prio: 'P0',
+      when: 'Có bình luận mới trên công việc mình thực hiện hoặc đã tạo.',
+      hook: '`WorkItemCommentServiceImpl.addComment`.', to: ['NTH', 'NT'], toText: 'Người thực hiện + Người tạo', sev: 'INFO', sevNote: 'Gộp các bình luận chưa đọc trong 10 phút.',
+      title: '<b>An</b> và 1 người khác đã bình luận trong <b>MOC-2</b>', body: '“Nhớ chụp ảnh lối thoát hiểm PCCC nhé.”', link: '/browse/MOC-2?comment={commentId}',
+      note: 'Bình luận do hệ thống tự ghi (ghi chú kèm yêu cầu, lý do từ chối) không sinh D2.' },
+    { id: 'D3', code: 'COMMENT_REPLIED', g: 'COMMENT', name: 'Có người trả lời bình luận', src: 'EVENT', prio: 'P1',
+      when: 'Có người trả lời (parentCommentId) bình luận của mình.',
+      hook: '`WorkItemCommentServiceImpl.addComment` (có `parentCommentId`).', to: ['CN'], toText: 'Tác giả bình luận gốc', sev: 'INFO',
+      title: '<b>An</b> đã trả lời bình luận của bạn trong <b>MOC-2</b>', body: '“Đồng ý, chốt khung 7h–9h.”', link: '/browse/MOC-2?comment={commentId}' },
+
+    // ---- E. Chu kỳ / Giai đoạn ----
+    { id: 'E1', code: 'SPRINT_STARTED', g: 'SPRINT', name: 'Chu kỳ / giai đoạn bắt đầu', src: 'EVENT', prio: 'P0',
+      when: 'Bấm “Bắt đầu chu kỳ / giai đoạn”.',
+      hook: '`SprintServiceImpl.startSprint` (đã ghi outbox `SPRINT_STARTED`).', to: ['TV'], toText: 'Thành viên dự án', sev: 'INFO',
+      title: 'Giai đoạn 1 của Mộc Coffee đã bắt đầu', body: '14/11 → 28/11/2026 · Bạn có 3 công việc trong giai đoạn này', link: '/w/{ws}/projects/{pid}/board' },
+    { id: 'E2', code: 'SPRINT_COMPLETED', g: 'SPRINT', name: 'Chu kỳ / giai đoạn hoàn tất', src: 'EVENT', prio: 'P0',
+      when: 'Bấm “Hoàn tất chu kỳ / giai đoạn”. Người thực hiện còn công việc chưa xong nhận thêm dòng riêng cho biết công việc được chuyển đi đâu.',
+      hook: '`SprintServiceImpl.completeSprint` (đã ghi outbox `SPRINT_COMPLETED`).', to: ['TV', 'NTH'], toText: 'Thành viên dự án', sev: 'INFO', sevNote: 'Cảnh báo cho dòng riêng gửi người còn việc dở.',
+      title: 'Giai đoạn 1 đã hoàn tất: 5/6 công việc xong', body: 'Riêng bạn: 1 công việc chưa xong được chuyển sang Giai đoạn 2', link: '/w/{ws}/projects/{pid}/reports?sprint={sid}' },
+    { id: 'E3', code: 'SPRINT_OVERDUE', g: 'SPRINT', name: 'Chu kỳ / giai đoạn quá hạn', src: 'SCHEDULE', prio: 'P0', act: true,
+      when: 'Chu kỳ đang chạy đã qua ngày kết thúc mà chưa được hoàn tất.',
+      hook: 'Job mới `SprintDeadlineJob` (work-service).', to: ['QL'], toText: 'Quản lý dự án', sev: 'URGENT',
+      title: 'Giai đoạn 1 đã quá ngày kết thúc 2 ngày', body: 'Hãy hoàn tất giai đoạn hoặc dời ngày kết thúc', link: '/w/{ws}/projects/{pid}/backlog',
+      note: 'Tự chuyển “Đã xử lý” khi giai đoạn được hoàn tất hoặc gia hạn.' },
+    { id: 'E4', code: 'SPRINT_ENDING_SOON', g: 'SPRINT', name: 'Chu kỳ / giai đoạn sắp kết thúc', src: 'SCHEDULE', prio: 'P1',
+      when: 'Chu kỳ đang chạy kết thúc trong 24 giờ tới.',
+      hook: '`SprintDeadlineJob`.', to: ['QL', 'NTH'], toText: 'Quản lý dự án + người còn việc chưa xong', sev: 'WARNING',
+      title: 'Giai đoạn 1 kết thúc vào ngày mai', body: 'Bạn còn 2 công việc chưa xong: MOC-5, MOC-24', link: '/w/{ws}/projects/{pid}/board' },
+    { id: 'E5', code: 'SPRINT_SCOPE_ADDED', g: 'SPRINT', name: 'Được thêm việc vào chu kỳ đang chạy', src: 'EVENT', prio: 'P1',
+      when: 'Công việc được thêm vào chu kỳ đang chạy (đổi phạm vi giữa chừng).',
+      hook: '`SprintServiceImpl.addItemsToSprint`.', to: ['NTH'], toText: 'Người thực hiện (gộp 1 thông báo/người)', sev: 'INFO',
+      title: '<b>An</b> đã thêm 2 công việc của bạn vào Giai đoạn 1 đang chạy', body: 'MOC-24, MOC-5', link: '/w/{ws}/projects/{pid}/board' },
+    { id: 'E6', code: 'NEXT_SPRINT_DUE', g: 'SPRINT', name: 'Đến ngày bắt đầu giai đoạn tiếp theo', src: 'SCHEDULE', prio: 'P1', act: true,
+      when: 'Không có chu kỳ đang chạy, và chu kỳ đứng đầu kế hoạch (BR-S15) đã tới ngày bắt đầu dự kiến nhưng chưa được bắt đầu.',
+      hook: '`SprintDeadlineJob`.', to: ['QL'], toText: 'Quản lý dự án', sev: 'WARNING',
+      title: 'Đã đến ngày bắt đầu Giai đoạn 2', body: 'Giai đoạn 1 đã hoàn tất, Giai đoạn 2 đang chờ bạn bấm “Bắt đầu”', link: '/w/{ws}/projects/{pid}/backlog' },
+    { id: 'E7', code: 'SPRINT_SCOPE_REMOVED', g: 'SPRINT', name: 'Bị đưa ra khỏi chu kỳ đang chạy', src: 'EVENT', prio: 'P2',
+      when: 'Công việc bị đưa ra khỏi chu kỳ đang chạy.',
+      hook: '`SprintServiceImpl.removeItemsFromSprint`.', to: ['NTH'], toText: 'Người thực hiện', sev: 'INFO',
+      title: '<b>An</b> đã đưa <b>MOC-5</b> ra khỏi Giai đoạn 1', body: 'Công việc trở về Kho việc', link: '/browse/MOC-5' },
+    { id: 'E8', code: 'SPRINT_DATES_CHANGED', g: 'SPRINT', name: 'Chu kỳ đổi ngày', src: 'EVENT', prio: 'P2',
+      when: 'Ngày kết thúc của chu kỳ đang chạy bị đổi.',
+      hook: '`SprintServiceImpl.update`.', to: ['TV'], toText: 'Thành viên có công việc trong chu kỳ', sev: 'INFO',
+      title: 'Giai đoạn 1 đổi ngày kết thúc sang 30/11/2026', body: 'Do An cập nhật', link: '/w/{ws}/projects/{pid}/backlog' },
+    { id: 'E9', code: 'SPRINT_DELETED', g: 'SPRINT', name: 'Chu kỳ bị xoá', src: 'EVENT', prio: 'P2',
+      when: 'Chu kỳ bị xoá, công việc bên trong trở về Kho việc.',
+      hook: '`SprintServiceImpl.delete`.', to: ['NTH'], toText: 'Người thực hiện của các công việc bị trả về', sev: 'INFO',
+      title: '<b>An</b> đã xoá Giai đoạn 3', body: '2 công việc của bạn đã trở về Kho việc', link: '/w/{ws}/projects/{pid}/backlog' },
+
+    // ---- F. Nhắc hạn ----
+    { id: 'F1', code: 'TASK_DUE_SOON', g: 'REMINDER', name: 'Sắp đến hạn', src: 'SCHEDULE', prio: 'P0',
+      when: 'Hạn chót là ngày mai; thêm mốc trước 3 ngày nếu ưu tiên Cao/Rất cao.',
+      hook: 'Job mới `DueDateReminderJob` (work-service).', to: ['NTH'], toText: 'Người thực hiện', sev: 'WARNING',
+      email: 'yes', emailNote: 'template due-date-reminder (đã có)',
+      title: '<b>MOC-5</b> đến hạn vào ngày mai (20/11)', body: 'Nộp hồ sơ ĐKKD và Giấy chứng nhận Đủ điều kiện ATTP', link: '/browse/MOC-5' },
+    { id: 'F2', code: 'TASK_DUE_TODAY', g: 'REMINDER', name: 'Đến hạn hôm nay', src: 'SCHEDULE', prio: 'P0',
+      when: 'Hạn chót là hôm nay.',
+      hook: '`DueDateReminderJob`.', to: ['NTH'], toText: 'Người thực hiện', sev: 'WARNING',
+      title: '<b>MOC-5</b> đến hạn hôm nay', body: 'Nộp hồ sơ ĐKKD và Giấy chứng nhận Đủ điều kiện ATTP', link: '/browse/MOC-5' },
+    { id: 'F3', code: 'TASK_OVERDUE', g: 'REMINDER', name: 'Quá hạn', src: 'SCHEDULE', prio: 'P0',
+      when: 'Đã qua hạn chót. Chỉ gửi vào ngày quá hạn thứ 1, 3 và 7; sau đó chỉ còn trong tổng hợp F4.',
+      hook: '`DueDateReminderJob`.', to: ['NTH'], toText: 'Người thực hiện', sev: 'URGENT',
+      email: 'yes', emailNote: 'ngày quá hạn thứ 1; template task-overdue mới hoặc dùng lại due-date-reminder',
+      title: '<b>MOC-5</b> đã quá hạn 3 ngày', body: 'Hạn chót 20/11/2026', link: '/browse/MOC-5' },
+    { id: 'F4', code: 'PROJECT_DAILY_DIGEST', g: 'REMINDER', name: 'Tổng hợp hằng ngày cho Quản lý', src: 'SCHEDULE', prio: 'P1',
+      when: '08:00 mỗi ngày, chỉ gửi khi có ít nhất một con số khác 0.',
+      hook: 'Job mới `ProjectDigestJob` (work-service).', to: ['QL'], toText: 'Quản lý dự án', sev: 'WARNING',
+      email: 'opt', emailNote: 'tuỳ chọn, template project-digest mới',
+      title: 'Mộc Coffee hôm nay: 2 quá hạn · 1 đến hạn · 1 chờ xác nhận', body: '3 công việc trong Giai đoạn 1 chưa có người thực hiện', link: '/w/{ws}/projects/{pid}/backlog?filter=overdue',
+      note: 'Cần thêm bộ lọc “Quá hạn” ở Kho việc.' },
+    { id: 'F5', code: 'TASK_START_TODAY', g: 'REMINDER', name: 'Hôm nay bắt đầu', src: 'SCHEDULE', prio: 'P2',
+      when: 'Ngày bắt đầu là hôm nay mà công việc vẫn ở nhóm Cần làm.',
+      hook: '`DueDateReminderJob`.', to: ['NTH'], toText: 'Người thực hiện', sev: 'INFO',
+      title: 'Hôm nay là ngày bắt đầu <b>MOC-7</b>', body: 'Thiết kế bản vẽ mặt bằng 2D và phối cảnh 3D', link: '/browse/MOC-7' },
+    { id: 'F6', code: 'TASK_STALE', g: 'REMINDER', name: 'Lâu không cập nhật', src: 'SCHEDULE', prio: 'P2',
+      when: 'Công việc ở nhóm Đang thực hiện quá 5 ngày không có thay đổi.',
+      hook: '`DueDateReminderJob`.', to: ['NTH'], toText: 'Người thực hiện', sev: 'INFO',
+      title: '<b>MOC-7</b> đã 6 ngày chưa được cập nhật', body: 'Đang ở trạng thái “Đang thực hiện”', link: '/browse/MOC-7' },
+    { id: 'F7', code: 'PROJECT_ENDING_SOON', g: 'REMINDER', name: 'Dự án sắp kết thúc', src: 'SCHEDULE', prio: 'P2',
+      when: 'Ngày kết thúc dự án (projects.end_date) còn 7 ngày mà vẫn còn công việc chưa xong.',
+      hook: '`ProjectDigestJob`.', to: ['QL'], toText: 'Quản lý dự án', sev: 'WARNING',
+      title: 'Mộc Coffee kết thúc sau 7 ngày (21/12/2026)', body: 'Còn 8 công việc chưa hoàn thành', link: '/w/{ws}/projects/{pid}/backlog' },
+    { id: 'F8', code: 'PROJECT_OVERDUE', g: 'REMINDER', name: 'Dự án quá hạn', src: 'SCHEDULE', prio: 'P2',
+      when: 'Đã qua ngày kết thúc dự án mà còn công việc chưa xong (gửi ngày 1, 3, 7).',
+      hook: '`ProjectDigestJob`.', to: ['QL'], toText: 'Quản lý dự án', sev: 'URGENT',
+      title: 'Mộc Coffee đã quá ngày kết thúc 3 ngày', body: 'Còn 4 công việc chưa hoàn thành', link: '/w/{ws}/projects/{pid}/backlog' },
+
+    // ---- G. Thành viên & quyền ----
+    { id: 'G1', code: 'PROJECT_INVITATION_RECEIVED', g: 'MEMBER', name: 'Được mời vào dự án', src: 'EVENT', prio: 'P0', act: true,
+      when: 'Được mời vào dự án. Hiện chỉ có email (InvitationMailer).',
+      hook: '`InvitationServiceImpl.inviteToProject`.', to: ['CN'], toText: 'Người được mời', sev: 'INFO',
+      email: 'yes', emailNote: 'template invite-member (đã có)',
+      title: '<b>An</b> mời bạn tham gia dự án Mộc Coffee', body: 'Vai trò: Thành viên', link: '/invitations',
+      note: 'Tự chuyển “Đã xử lý” khi lời mời được chấp nhận, từ chối hoặc bị huỷ.' },
+    { id: 'G2', code: 'PROJECT_MEMBER_REMOVED', g: 'MEMBER', name: 'Bị xoá khỏi dự án', src: 'EVENT', prio: 'P0',
+      when: 'Bị xoá khỏi dự án.',
+      hook: '`ProjectMemberServiceImpl.removeMemberFromProject`.', to: ['CN'], toText: 'Người bị xoá', sev: 'URGENT',
+      title: 'Bạn không còn là thành viên dự án Mộc Coffee', body: 'Do An thực hiện', link: '/w/{ws}/projects',
+      note: 'Không trỏ vào dự án vừa mất quyền. G2 và G9 là hai loại duy nhất gửi cho người vừa mất quyền xem.' },
+    { id: 'G3', code: 'MEMBER_REMOVED_OPEN_ITEMS', g: 'MEMBER', name: 'Thành viên rời đi còn việc dở', src: 'EVENT', prio: 'P1',
+      when: 'Người bị xoá vẫn đang là người thực hiện của công việc chưa xong (code hiện tại không tự huỷ giao).',
+      hook: '`ProjectMemberServiceImpl.removeMemberFromProject`.', to: ['QL'], toText: 'Quản lý dự án', sev: 'WARNING',
+      title: 'Bình rời Mộc Coffee, còn 2 công việc chưa xong đứng tên', body: 'MOC-5, MOC-24: hãy giao lại cho người khác', link: '/w/{ws}/projects/{pid}/backlog' },
+    { id: 'G4', code: 'PROJECT_INVITATION_ANSWERED', g: 'MEMBER', name: 'Lời mời được trả lời', src: 'EVENT', prio: 'P1',
+      when: 'Người được mời chấp nhận hoặc từ chối lời mời vào dự án.',
+      hook: '`InvitationServiceImpl.accept`, `decline`.', to: ['CN', 'QL'], toText: 'Người mời (invitedBy) + Trưởng dự án', sev: 'SUCCESS', sevNote: 'Thông thường khi bị từ chối.',
+      title: '<b>Bình</b> đã chấp nhận lời mời vào Mộc Coffee', body: 'Vai trò: Thành viên', link: '/w/{ws}/projects/{pid}/members' },
+    { id: 'G5', code: 'PROJECT_MEMBER_ADDED', g: 'MEMBER', name: 'Được thêm vào dự án', src: 'EVENT', prio: 'P1',
+      when: 'Được thêm thẳng vào dự án (không qua lời mời).',
+      hook: '`ProjectMemberServiceImpl.addMemberToProject`.', to: ['CN'], toText: 'Người được thêm', sev: 'INFO',
+      title: '<b>An</b> đã thêm bạn vào dự án Mộc Coffee', body: 'Vai trò: Người xem', link: '/w/{ws}/projects/{pid}' },
+    { id: 'G6', code: 'PROJECT_ROLE_CHANGED', g: 'MEMBER', name: 'Vai trò trong dự án thay đổi', src: 'EVENT', prio: 'P1',
+      when: 'Vai trò dự án của mình bị đổi.',
+      hook: '`ProjectMemberServiceImpl.updateMemberRole`.', to: ['CN'], toText: 'Người bị đổi vai trò', sev: 'INFO', sevNote: 'Cảnh báo khi bị hạ quyền.',
+      title: 'Vai trò của bạn trong Mộc Coffee đổi sang Quản trị viên', body: 'Do An thực hiện', link: '/w/{ws}/projects/{pid}' },
+    { id: 'G7', code: 'PROJECT_LEAD_CHANGED', g: 'MEMBER', name: 'Đổi Trưởng dự án', src: 'EVENT', prio: 'P1',
+      when: 'Trưởng dự án (leadUserId) được thay.',
+      hook: '`ProjectServiceImpl.updateProject` (đổi `leadUserId`).', to: ['CN'], toText: 'Trưởng dự án mới + cũ', sev: 'INFO',
+      title: 'Bạn trở thành Trưởng dự án Mộc Coffee', body: 'Thay cho An', link: '/w/{ws}/projects/{pid}' },
+    { id: 'G8', code: 'WORKSPACE_INVITATION_RECEIVED', g: 'MEMBER', name: 'Được mời vào không gian làm việc', src: 'EVENT', prio: 'P1', act: true, ctx: 'Mộc Group',
+      when: 'Được mời vào không gian làm việc. Hiện chỉ có email.',
+      hook: 'workspace-service: `WorkspaceMemberServiceImpl.invite`.', to: ['CN'], toText: 'Người được mời', sev: 'INFO',
+      email: 'yes', emailNote: 'template invite-member (đã có)',
+      title: '<b>An</b> mời bạn vào không gian làm việc Mộc Group', body: 'Vai trò: Thành viên', link: '/invitations' },
+    { id: 'G9', code: 'WORKSPACE_MEMBER_REMOVED', g: 'MEMBER', name: 'Bị xoá khỏi không gian làm việc', src: 'EVENT', prio: 'P1', ctx: 'Mộc Group',
+      when: 'Bị xoá khỏi không gian làm việc.',
+      hook: '`WorkspaceMemberServiceImpl.removeMember`.', to: ['CN'], toText: 'Người bị xoá', sev: 'URGENT',
+      title: 'Bạn không còn là thành viên không gian làm việc Mộc Group', body: 'Do An thực hiện', link: '/workspaces' },
+    { id: 'G10', code: 'WORKSPACE_ROLE_CHANGED', g: 'MEMBER', name: 'Vai trò trong không gian làm việc thay đổi', src: 'EVENT', prio: 'P2', ctx: 'Mộc Group',
+      when: 'Vai trò trong không gian làm việc bị đổi.',
+      hook: '`WorkspaceMemberServiceImpl.updateMemberRole`.', to: ['CN'], toText: 'Người bị đổi vai trò', sev: 'INFO',
+      title: 'Vai trò của bạn trong Mộc Group đổi sang Quản trị viên', body: 'Do An thực hiện', link: '/w/{ws}/members' },
+    { id: 'G11', code: 'WORKSPACE_INVITATION_ANSWERED', g: 'MEMBER', name: 'Lời mời không gian làm việc được trả lời', src: 'EVENT', prio: 'P2', ctx: 'Mộc Group',
+      when: 'Lời mời vào không gian làm việc được chấp nhận hoặc từ chối.',
+      hook: '`WorkspaceMemberServiceImpl.acceptInvitation`, `declineInvitation`.', to: ['CN'], toText: 'Người mời', sev: 'INFO',
+      title: '<b>Chi</b> đã chấp nhận lời mời vào Mộc Group', body: 'Vai trò: Thành viên', link: '/w/{ws}/members' },
+
+    // ---- H. Dự án ----
+    { id: 'H1', code: 'PROJECT_ARCHIVED', g: 'PROJECT', name: 'Dự án bị lưu trữ', src: 'EVENT', prio: 'P1',
+      when: 'Dự án bị lưu trữ (xoá mềm).',
+      hook: '`ProjectServiceImpl.deleteProject`.', to: ['TV'], toText: 'Thành viên dự án', sev: 'WARNING',
+      title: '<b>An</b> đã lưu trữ dự án Mộc Coffee', body: 'Có thể khôi phục lại dự án nếu cần', link: '/w/{ws}/projects' },
+    { id: 'H2', code: 'PROJECT_RESTORED', g: 'PROJECT', name: 'Dự án được khôi phục', src: 'EVENT', prio: 'P2',
+      when: 'Dự án được khôi phục.',
+      hook: '`ProjectServiceImpl.restoreProject`.', to: ['TV'], toText: 'Thành viên dự án', sev: 'INFO',
+      title: '<b>An</b> đã khôi phục dự án Mộc Coffee', body: 'Dự án hoạt động trở lại', link: '/w/{ws}/projects/{pid}' },
+    { id: 'H3', code: 'PROJECT_SCHEDULE_CHANGED', g: 'PROJECT', name: 'Dự án đổi lịch', src: 'EVENT', prio: 'P2',
+      when: 'Ngày bắt đầu hoặc kết thúc dự án thay đổi.',
+      hook: '`ProjectServiceImpl.updateProject`.', to: ['TV'], toText: 'Thành viên dự án', sev: 'INFO',
+      title: 'Mộc Coffee đổi ngày kết thúc sang 15/12/2026', body: 'Do An cập nhật', link: '/w/{ws}/projects/{pid}' },
+
+    // ---- I. Đóng góp ----
+    { id: 'I1', code: 'CONTRIBUTION_ADJUSTED', g: 'CONTRIBUTION', name: 'Điểm đóng góp được điều chỉnh', src: 'EVENT', prio: 'P1',
+      when: 'Quản lý điều chỉnh điểm thủ công (tối đa ±8, bắt buộc có lý do). API đã có, nút trên giao diện đang ẩn.',
+      hook: '`ContributionReportServiceImpl.manualAdjustment`.', to: ['CN'], toText: 'Thành viên được điều chỉnh', sev: 'SUCCESS', sevNote: 'Cảnh báo khi bị trừ điểm.',
+      title: '<b>An</b> đã cộng 3 điểm đóng góp cho bạn', body: 'Lý do: “Hỗ trợ khảo sát ngoài giờ.”', link: '/w/{ws}/projects/{pid}/reports?tab=contributions' },
+    { id: 'I2', code: 'CONTRIBUTION_FROZEN', g: 'CONTRIBUTION', name: 'Chốt bảng đóng góp', src: 'EVENT', prio: 'P2',
+      when: 'Chu kỳ hoàn tất, hệ thống chốt số liệu đóng góp.',
+      hook: '`ContributionReportServiceImpl.freezeSprintContributionSnapshot`.', to: ['TV'], toText: 'Thành viên dự án', sev: 'INFO',
+      title: 'Bảng đóng góp Giai đoạn 1 đã được chốt', body: 'Bạn được ghi nhận 13 điểm', link: '/w/{ws}/projects/{pid}/reports?tab=contributions&sprint={sid}' }
+  ];
+
+  var RULES = [
+    ['R1', 'Không gửi cho chính người thao tác', 'Bỏ actorId khỏi danh sách người nhận.'],
+    ['R2', 'Chỉ gửi cho người còn quyền xem dự án', 'Phía phát chỉ chọn người đang có vai trò trong dự án. Ngoại lệ: G2, G9.'],
+    ['R3', 'Một sự kiện, một người, một thông báo', 'Chọn lý do mạnh nhất: được nhắc tên > được giao > người thực hiện > người tạo > thành viên.'],
+    ['R4', 'Gộp thông báo', 'Cùng group_key, chưa đọc, trong 10 phút thì cập nhật thông báo cũ (“An và 2 người khác…”) và đẩy lên đầu. Áp dụng A3, A10, D2, E5, E7.'],
+    ['R5', 'Thao tác hàng loạt', 'Hoàn tất chu kỳ, thêm nhiều việc vào chu kỳ, hoàn thành dây chuyền việc con, xoá chu kỳ: mỗi người nhận đúng một thông báo.'],
+    ['R6', 'Job chạy lại không trùng', 'dedup_key UNIQUE, ví dụ TASK_DUE_SOON:{itemId}:{dueDate}:{recipient}. Đổi hạn chót thì sinh khoá mới.'],
+    ['R7', 'Bỏ qua dữ liệu không hoạt động', 'Dự án mẫu (is_template), dự án hoặc công việc đã xoá (deleted_at).'],
+    ['R8', 'Dùng đúng thuật ngữ giao diện', '“chu kỳ” / “giai đoạn” theo sprintTerm; “Kho việc” thay Backlog; “Trưởng dự án” thay Lead.'],
+    ['R9', 'Cần xử lý tự đóng', 'Đặt action_resolved_at khi việc đã xong ở nơi khác: Quản lý khác đã duyệt, yêu cầu bị rút / thay thế, lời mời bị huỷ / đã trả lời, chu kỳ đã hoàn tất, giai đoạn đã bắt đầu.'],
+    ['R10', 'Không nhắc mỗi ngày', 'Quá hạn chỉ nhắc ngày thứ 1, 3, 7; sau đó chỉ còn trong tổng hợp F4.'],
+    ['R11', 'Không nhắc khi đang chờ xác nhận', 'Công việc có yêu cầu Tạm hoàn thành PENDING không nhận F1–F3, F6; Quản lý nhận C4.'],
+    ['R12', 'Không lộ nội dung', 'Sự kiện chỉ chứa id, mã, tiêu đề ngắn. Trích bình luận tối đa 200 ký tự, chỉ cho người có quyền xem.']
+  ];
+
+  var SKIP = [
+    ['Kéo đổi thứ tự (rank), kéo thẻ trong cùng cột', 'Rất nhiều, không cần ai hành động', 'Realtime: Board tải lại im lặng'],
+    ['Sửa tiêu đề, mô tả, điểm ước lượng, nhãn, thành phần', 'Gây ồn', 'Realtime: ô nháy + lịch sử thay đổi'],
+    ['Thêm / xoá tệp đính kèm; liên kết “Liên quan tới”, “Gây ra”', 'Ít giá trị', 'Realtime'],
+    ['Cấu hình Board, quy trình, trạng thái, loại công việc', 'Ảnh hưởng chung, không theo người', 'Realtime PROJECT_CONFIG_CHANGED (banner)'],
+    ['Bình luận do hệ thống ghi kèm yêu cầu / lý do từ chối', 'Đã có C1, C3', '—'],
+    ['Mọi hành động của chính mình', '—', '—']
+  ];
+
+  /* ================= Tiện ích ================= */
+  var byId = {}; TYPES.forEach(function (t) { byId[t.id] = t; });
+  var groupById = {}; GROUPS.forEach(function (g) { groupById[g.id] = g; });
+  function $(s, r) { return (r || document).querySelector(s); }
+  function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function fmt(s) { return esc(s).replace(/`([^`]+)`/g, '<code>$1</code>'); }
+  function strip(s) { return String(s == null ? '' : s).replace(/<[^>]+>/g, ''); }
+  function fold(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd'); }
+  function count(fn) { return TYPES.filter(fn).length; }
+  function store(key, val) { try { if (val === undefined) return localStorage.getItem(key); localStorage.setItem(key, val); } catch (e) { return null; } return null; }
+  function sevTag(sev) {
+    if (sev === 'INFO') return '';
+    var s = SEV[sev];
+    return '<span class="tag tag-' + s.cls + '">' + icon(s.icon) + s.label + '</span>';
+  }
+  function targetOf(link) {
+    var m = /^\/browse\/([A-Z]+-\d+)(\?comment=.*)?$/.exec(link);
+    if (m) return '/w/{ws}/projects/{pid}/board?item=' + m[1] + (m[2] ? '&' + m[2].slice(1) : '') + ' (mở chi tiết công việc' + (m[2] ? ', cuộn tới bình luận' : '') + ')';
+    return null;
+  }
+
+  /* ================= Thông báo (dùng chung cho xem trước & demo) ================= */
+  function notifHTML(n, interactive) {
+    var t = byId[n.type];
+    var sev = n.sev || t.sev;
+    var s = SEV[sev];
+    var g = groupById[t.g];
+    var unread = !n.read;
+    var actTag = '';
+    if (t.act) actTag = n.resolved ? '<span class="tag tag-done">Đã xử lý</span>' : '<span class="tag tag-act">' + icon('target') + 'Cần xử lý</span>';
+    var body = n.body != null ? n.body : t.body;
+    var html = '<div class="notif c-' + s.cls + (unread ? ' is-unread' : '') + (n.resolved ? ' is-resolved' : '') + '"' +
+      (interactive ? ' role="listitem" tabindex="0" data-id="' + esc(n.id) + '"' : '') + '>' +
+      '<span class="n-ic" title="' + esc(g.name) + '">' + icon(g.icon) + '</span>' +
+      '<div class="n-main">' +
+        '<div class="n-title">' + (n.title || t.title) + '</div>' +
+        (body ? '<div class="n-body">' + esc(body) + '</div>' : '') +
+        '<div class="n-meta"><span>' + esc(n.ctx || t.ctx || 'Mộc Coffee') + ' · ' + esc(n.time || 'vừa xong') + '</span>' + sevTag(sev) + actTag + '</div>' +
+      '</div>';
+    if (interactive) {
+      html += '<div class="n-actions">' +
+        '<button class="icon-btn js-read" type="button" title="' + (unread ? 'Đánh dấu đã đọc' : 'Đánh dấu chưa đọc') + '" aria-label="' + (unread ? 'Đánh dấu đã đọc' : 'Đánh dấu chưa đọc') + '">' + icon(unread ? 'check' : 'circle') + '</button>' +
+        '<button class="icon-btn del js-del" type="button" title="Xoá thông báo" aria-label="Xoá thông báo">' + icon('trash') + '</button>' +
+        '</div>';
+    } else {
+      html += '<span class="n-dot" aria-hidden="true"></span>';
+    }
+    return html + '</div>';
+  }
+
+  /* ================= Tổng quan & chú giải ================= */
+  function renderStatic() {
+    var stats = [
+      [TYPES.length, 'loại thông báo', GROUPS.length + ' nhóm A–I'],
+      [count(function (t) { return t.prio === 'P0'; }), 'loại P0', 'bắt buộc cho bản demo'],
+      [count(function (t) { return t.src === 'EVENT'; }), 'từ sự kiện', 'phát sau khi commit'],
+      [count(function (t) { return t.src === 'SCHEDULE'; }), 'theo lịch', 'job 08:00 hằng ngày'],
+      [count(function (t) { return t.act; }), 'có cờ Cần xử lý', 'tự đóng khi đã giải quyết'],
+      [count(function (t) { return t.email === 'yes'; }), 'gửi kèm email', '+ ' + count(function (t) { return t.email === 'opt'; }) + ' tuỳ chọn']
+    ];
+    $('#stats').innerHTML = stats.map(function (s) {
+      return '<div class="stat"><div class="n">' + s[0] + '</div><div class="l">' + s[1] + '</div><div class="s">' + s[2] + '</div></div>';
+    }).join('');
+
+    var sevCards = Object.keys(SEV).map(function (k) {
+      var s = SEV[k];
+      return '<div class="sev-card c-' + s.cls + '"><div class="h">' + icon(s.icon) + s.label + '<span class="cnt">' + count(function (t) { return t.sev === k; }) + ' loại</span></div>' +
+        '<p>' + esc(s.desc) + '</p><div class="meta"><code>' + k + '</code><span>' + s.hex + '</span><span>· ' + esc(s.ui) + '</span></div></div>';
+    });
+    sevCards.push('<div class="sev-card c-action"><div class="h">' + icon('target') + 'Cần xử lý<span class="cnt">' + count(function (t) { return t.act; }) + ' loại</span></div>' +
+      '<p>Cờ riêng, đi cùng bất kỳ mức nào: người nhận phải làm gì đó (xác nhận, chấp nhận lời mời, hoàn tất chu kỳ).</p>' +
+      '<div class="meta"><code>action_required</code><span>#7C3AED</span><span>· Tab riêng + toast, tự đóng khi xong.</span></div></div>');
+    $('#sevLegend').innerHTML = sevCards.join('');
+
+    $('#roleLegend').innerHTML = Object.keys(ROLES).map(function (k) {
+      return '<li><span class="role">' + k + '</span><span><b>' + esc(ROLES[k].label) + '</b> · ' + esc(ROLES[k].desc) + '</span></li>';
+    }).join('');
+    $('#groupLegend').innerHTML = GROUPS.map(function (g) {
+      return '<li><span class="gi">' + icon(g.icon) + '</span><span>' + g.letter + '. ' + esc(g.name) + '</span><span class="cnt">' + count(function (t) { return t.g === g.id; }) + '</span></li>';
+    }).join('');
+
+    $('#rules').innerHTML = RULES.map(function (r) {
+      return '<div class="rule"><div class="rh"><span class="tid">' + r[0] + '</span>' + esc(r[1]) + '</div><p>' + esc(r[2]) + '</p></div>';
+    }).join('');
+    $('#skipBody').innerHTML = SKIP.map(function (r) {
+      return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td>' + esc(r[2]) + '</td></tr>';
+    }).join('');
+  }
+
+  /* ================= Bộ lọc & danh mục ================= */
+  var state = { q: '', view: store('notif-catalog-view') === 'table' ? 'table' : 'cards', act: false, mail: false,
+    f: { g: {}, sev: {}, prio: {}, src: {}, to: {} } };
+  var FILTERS = [
+    { key: 'g', label: 'Nhóm', opts: GROUPS.map(function (g) { return { v: g.id, t: g.letter + '. ' + g.name, ic: g.icon, n: count(function (t) { return t.g === g.id; }) }; }) },
+    { key: 'sev', label: 'Mức độ', opts: Object.keys(SEV).map(function (k) { return { v: k, t: SEV[k].label, dot: SEV[k].cls, n: count(function (t) { return t.sev === k; }) }; }) },
+    { key: 'prio', label: 'Ưu tiên', opts: ['P0', 'P1', 'P2'].map(function (p) { return { v: p, t: p + ' · ' + PRIO[p], n: count(function (t) { return t.prio === p; }) }; }) },
+    { key: 'src', label: 'Nguồn', opts: Object.keys(SRC).map(function (k) { return { v: k, t: SRC[k].label, ic: SRC[k].icon, n: count(function (t) { return t.src === k; }) }; }) },
+    { key: 'to', label: 'Người nhận', opts: Object.keys(ROLES).map(function (k) { return { v: k, t: k + ' · ' + ROLES[k].label, n: count(function (t) { return t.to.indexOf(k) >= 0; }) }; }) }
+  ];
+
+  function renderFilters() {
+    var html = FILTERS.map(function (f) {
+      return '<div class="frow"><div class="fl">' + f.label + '</div><div class="chips">' + f.opts.map(function (o) {
+        var lead = o.dot ? '<span class="dot c-' + o.dot + '"></span>' : (o.ic ? icon(o.ic) : '');
+        return '<button type="button" class="chip" data-f="' + f.key + '" data-v="' + o.v + '" aria-pressed="false">' + lead + esc(o.t) + ' <span class="k">' + o.n + '</span></button>';
+      }).join('') + '</div></div>';
+    }).join('');
+    html += '<div class="frow"><div class="fl">Khác</div><div class="chips">' +
+      '<button type="button" class="chip" data-t="act" aria-pressed="false">' + icon('target') + 'Chỉ loại Cần xử lý <span class="k">' + count(function (t) { return t.act; }) + '</span></button>' +
+      '<button type="button" class="chip" data-t="mail" aria-pressed="false">' + icon('mail') + 'Có gửi email <span class="k">' + count(function (t) { return !!t.email; }) + '</span></button>' +
+      '</div></div>';
+    $('#filters').innerHTML = html;
+  }
+
+  function anyOn(obj) { for (var k in obj) { if (obj[k]) return true; } return false; }
+  function matches(t) {
+    var f = state.f;
+    if (anyOn(f.g) && !f.g[t.g]) return false;
+    if (anyOn(f.sev) && !f.sev[t.sev]) return false;
+    if (anyOn(f.prio) && !f.prio[t.prio]) return false;
+    if (anyOn(f.src) && !f.src[t.src]) return false;
+    if (anyOn(f.to) && !t.to.some(function (r) { return f.to[r]; })) return false;
+    if (state.act && !t.act) return false;
+    if (state.mail && !t.email) return false;
+    if (state.q) {
+      var hay = fold([t.id, t.code, t.name, t.when, t.hook, t.toText, t.to.join(' '), strip(t.title), t.body, t.link, t.note, groupById[t.g].name, SEV[t.sev].label, t.prio].join(' '));
+      var words = fold(state.q).split(/\s+/).filter(Boolean);
+      for (var i = 0; i < words.length; i++) { if (hay.indexOf(words[i]) < 0) return false; }
+    }
+    return true;
+  }
+
+  function badgesHTML(t) {
+    var s = SEV[t.sev];
+    var h = '<span class="b ' + (t.prio === 'P0' ? 'p0' : '') + '" title="' + esc(PRIO[t.prio]) + '">' + t.prio + '</span>' +
+      '<span class="b">' + icon(SRC[t.src].icon) + SRC[t.src].label + '</span>' +
+      '<span class="b sev c-' + s.cls + '">' + icon(s.icon) + s.label + '</span>';
+    if (t.act) h += '<span class="b act">' + icon('target') + 'Cần xử lý</span>';
+    if (t.email) h += '<span class="b" title="' + esc(t.emailNote || '') + '">' + icon('mail') + (t.email === 'opt' ? 'Email (tuỳ chọn)' : 'Email') + '</span>';
+    return h;
+  }
+
+  function cardHTML(t) {
+    var s = SEV[t.sev];
+    var target = targetOf(t.link);
+    var rows = [
+      ['Khi nào', fmt(t.when)],
+      ['Điểm gắn', fmt(t.hook)],
+      ['Người nhận', t.to.map(function (r) { return '<span class="role" title="' + esc(ROLES[r].label) + '">' + r + '</span>'; }).join(' ') + ' ' + esc(t.toText)],
+      ['Mức độ', esc(s.label) + (t.sevNote ? ' · ' + esc(t.sevNote) : '')],
+      ['Đường dẫn', '<code>' + esc(t.link) + '</code>' + (target ? '<div class="note">→ ' + esc(target) + '</div>' : '')]
+    ];
+    if (t.email) rows.push(['Email', esc(t.emailNote || 'Có')]);
+    if (t.note) rows.push(['Ghi chú', esc(t.note)]);
+    return '<article class="card c-' + s.cls + '" id="loai-' + t.id + '">' +
+      '<div class="card-head"><span class="tid">' + t.id + '</span><h4>' + esc(t.name) + '</h4><code class="tcode">' + t.code + '</code>' +
+      '<div class="badges">' + badgesHTML(t) + '</div></div>' +
+      '<div class="card-body"><dl>' + rows.map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('') + '</dl>' +
+      '<div class="preview"><div class="pl">' + icon('tab') + 'Xem trước trong chuông</div><div class="frame">' +
+      notifHTML({ type: t.id, read: false, time: t.src === 'SCHEDULE' ? '08:00' : '2 phút trước' }, false) + '</div></div></div></article>';
+  }
+
+  function renderResults() {
+    var list = TYPES.filter(matches);
+    $('#count').innerHTML = 'Hiển thị <b>' + list.length + '</b>/' + TYPES.length + ' loại';
+    var out = $('#results');
+    if (!list.length) {
+      out.innerHTML = '<div class="empty-state">' + icon('inbox') + '<p>Không có loại thông báo nào khớp bộ lọc.</p><button class="btn" type="button" id="emptyClear">Bỏ lọc</button></div>';
+      $('#emptyClear').addEventListener('click', clearFilters);
+      return;
+    }
+    if (state.view === 'table') {
+      var rows = '';
+      GROUPS.forEach(function (g) {
+        var items = list.filter(function (t) { return t.g === g.id; });
+        if (!items.length) return;
+        rows += '<tr class="grp-row"><td colspan="8">' + g.letter + '. ' + esc(g.name) + ' (' + items.length + ')</td></tr>';
+        items.forEach(function (t) {
+          var s = SEV[t.sev];
+          rows += '<tr data-go="' + t.id + '" tabindex="0"><td><span class="tid">' + t.id + '</span></td><td><code>' + t.code + '</code></td><td>' + esc(t.name) + (t.act ? ' <span class="tag tag-act">Cần xử lý</span>' : '') + '</td>' +
+            '<td>' + SRC[t.src].label + '</td><td>' + t.to.join(', ') + '</td><td class="sevc"><span class="sw c-' + s.cls + '"></span>' + s.label + '</td><td>' + t.prio + '</td><td>' + (t.email === 'yes' ? 'App + Email' : t.email === 'opt' ? 'App (+ Email)' : 'App') + '</td></tr>';
+        });
+      });
+      out.innerHTML = '<div class="tbl-wrap"><table class="tbl-cat"><thead><tr><th>#</th><th>Mã</th><th>Tên</th><th>Nguồn</th><th>Người nhận</th><th>Mức độ</th><th>Ưu tiên</th><th>Kênh</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+      return;
+    }
+    out.innerHTML = GROUPS.map(function (g) {
+      var items = list.filter(function (t) { return t.g === g.id; });
+      if (!items.length) return '';
+      return '<div class="grp"><div class="grp-head"><span class="gi">' + icon(g.icon) + '</span><div><h3>' + g.letter + '. ' + esc(g.name) + '</h3><p>' + esc(g.desc) + '</p></div><span class="cnt">' + items.length + ' loại</span></div>' +
+        '<div class="cards">' + items.map(cardHTML).join('') + '</div></div>';
+    }).join('');
+  }
+
+  function syncFilterUI() {
+    $$('#filters .chip[data-f]').forEach(function (b) { b.setAttribute('aria-pressed', state.f[b.dataset.f][b.dataset.v] ? 'true' : 'false'); });
+    $$('#filters .chip[data-t]').forEach(function (b) { b.setAttribute('aria-pressed', state[b.dataset.t] ? 'true' : 'false'); });
+    $$('.seg button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.view === state.view ? 'true' : 'false'); });
+  }
+  function clearFilters() {
+    state.q = ''; $('#q').value = ''; state.act = false; state.mail = false;
+    Object.keys(state.f).forEach(function (k) { state.f[k] = {}; });
+    syncFilterUI(); renderResults();
+  }
+  function goToCard(id) {
+    state.view = 'cards'; store('notif-catalog-view', 'cards'); syncFilterUI(); renderResults();
+    var el = document.getElementById('loai-' + id);
+    if (el) { el.scrollIntoView({ block: 'start' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+  }
+
+  function bindCatalog() {
+    $('#filters').addEventListener('click', function (e) {
+      var b = e.target.closest('.chip'); if (!b) return;
+      if (b.dataset.f) { var m = state.f[b.dataset.f]; m[b.dataset.v] = !m[b.dataset.v]; }
+      else if (b.dataset.t) { state[b.dataset.t] = !state[b.dataset.t]; }
+      syncFilterUI(); renderResults();
+    });
+    $('#q').addEventListener('input', function (e) { state.q = e.target.value; renderResults(); });
+    $$('.seg button').forEach(function (b) {
+      b.addEventListener('click', function () { state.view = b.dataset.view; store('notif-catalog-view', state.view); syncFilterUI(); renderResults(); });
+    });
+    $('#clearBtn').addEventListener('click', clearFilters);
+    $('#results').addEventListener('click', function (e) { var tr = e.target.closest('tr[data-go]'); if (tr) goToCard(tr.dataset.go); });
+    $('#results').addEventListener('keydown', function (e) { if (e.key === 'Enter') { var tr = e.target.closest('tr[data-go]'); if (tr) goToCard(tr.dataset.go); } });
+  }
+
+  /* ================= Demo chuông ================= */
+  var SEED = [
+    { id: 'n1', type: 'C1', time: '5 phút trước', read: false },
+    { id: 'n2', type: 'D1', time: '12 phút trước', read: false },
+    { id: 'n3', type: 'E3', time: '08:00', read: false },
+    { id: 'n4', type: 'F3', time: '08:00', read: false, title: '<b>MOC-24</b> đã quá hạn 1 ngày', body: 'Khảo sát 5 quán cà phê đối thủ trong bán kính 500m', link: '/browse/MOC-24' },
+    { id: 'n5', type: 'F4', time: '08:05', read: false },
+    { id: 'n6', type: 'G4', time: 'Hôm qua', read: true },
+    { id: 'n7', type: 'A3', time: 'Hôm qua', read: true },
+    { id: 'n8', type: 'E1', time: '3 ngày trước', read: true }
+  ];
+  var SIM = [
+    { type: 'C1', title: '<b>Bình</b> báo đã hoàn thành <b>MOC-5</b>, chờ bạn xác nhận', body: 'Ghi chú: “Đã nộp hồ sơ tại phường, có biên nhận.”', link: '/browse/MOC-5' },
+    { type: 'D2', group: 'D2:MOC-5', title: '<b>Bình</b> đã bình luận trong <b>MOC-5</b>', body: '“Hẹn 5 ngày làm việc sẽ có kết quả.”', link: '/browse/MOC-5?comment={commentId}' },
+    { type: 'D2', group: 'D2:MOC-5', title: '<b>Bình</b> và <b>Chi</b> đã bình luận trong <b>MOC-5</b>', body: '“Nhớ chụp lại biên nhận nhé.”', link: '/browse/MOC-5?comment={commentId}' },
+    { type: 'A1', sev: 'WARNING', title: '<b>Bình</b> đã giao cho bạn <b>MOC-12</b> · Chốt menu signature: cà phê muối, bạc xỉu, cold brew', body: 'Ưu tiên Rất cao · Hạn chót 16/11/2026', link: '/browse/MOC-12' },
+    // Minh hoạ mức Khẩn cấp: loại này hiện toast ngay khi tới.
+    { type: 'F3', title: '<b>MOC-12</b> đã quá hạn 1 ngày', body: 'Chốt menu signature: cà phê muối, bạc xỉu, cold brew', link: '/browse/MOC-12', time: '08:00' }
+  ];
+
+  var demo = { items: [], tab: 'all', sim: 0, seq: 100, undo: null, open: true };
+
+  function demoReset() {
+    demo.items = SEED.map(function (x) { var o = {}; for (var k in x) o[k] = x[k]; return o; });
+    demo.tab = 'all'; demo.sim = 0; clearUndo(true);
+    $('#apiLog').innerHTML = '<li class="empty">Chưa có thao tác nào.</li>';
+    $('#navOut').innerHTML = '<span class="ph">Bấm vào một thông báo để xem nó dẫn tới đâu.</span>';
+    $('#resolveBtn').disabled = false;
+    renderDemo();
+  }
+  function live() { return demo.items.filter(function (n) { return !n.deleted; }); }
+  function isAction(n) { return byId[n.type].act && !n.resolved; }
+  function visible() {
+    return live().filter(function (n) {
+      if (demo.tab === 'unread') return !n.read;
+      if (demo.tab === 'action') return isAction(n);
+      return true;
+    });
+  }
+  function unreadCount() { return live().filter(function (n) { return !n.read; }).length; }
+
+  function renderDemo() {
+    var all = live(), unread = unreadCount(), action = all.filter(isAction).length;
+    var badge = $('#bellBadge');
+    badge.textContent = unread > 99 ? '99+' : String(unread);
+    badge.hidden = unread === 0;
+    $('#bellBtn').setAttribute('aria-label', 'Thông báo, ' + unread + ' chưa đọc');
+    $('#cAll').textContent = all.length; $('#cUnread').textContent = unread; $('#cAction').textContent = action;
+    $$('.tab').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.tab === demo.tab ? 'true' : 'false'); });
+    var vis = visible();
+    var hasUnreadVis = vis.some(function (n) { return !n.read; });
+    var rab = $('#readAllBtn');
+    rab.innerHTML = icon('checks') + 'Đánh dấu tất cả đã đọc';
+    rab.disabled = !hasUnreadVis;
+    if (!vis.length) {
+      var msg = demo.tab === 'unread' ? 'Bạn đã đọc hết thông báo.' : demo.tab === 'action' ? 'Không còn việc nào cần bạn xử lý.' : 'Chưa có thông báo nào.';
+      $('#pList').innerHTML = '<div class="p-empty">' + icon('inbox') + msg + '</div>';
+    } else {
+      $('#pList').innerHTML = vis.map(function (n) { return notifHTML(n, true); }).join('');
+    }
+    var sb = $('#simBtn');
+    if (demo.sim >= SIM.length) { sb.disabled = true; sb.innerHTML = 'Đã hết thông báo mẫu'; }
+    else { sb.disabled = false; sb.innerHTML = icon('zap') + 'Thông báo mới đến (' + (SIM.length - demo.sim) + ')'; }
+    $('#panel').hidden = !demo.open; $('#panelClosed').hidden = demo.open;
+    $('#bellBtn').setAttribute('aria-expanded', demo.open ? 'true' : 'false');
+  }
+
+  function log(method, path, note) {
+    var ul = $('#apiLog');
+    var empty = ul.querySelector('.empty'); if (empty) empty.remove();
+    var li = document.createElement('li');
+    li.innerHTML = '<span class="m m-' + method + '">' + method + '</span><span class="p">' + esc(path) + (note ? '<small>' + esc(note) + '</small>' : '') + '</span>';
+    ul.insertBefore(li, ul.firstChild);
+    while (ul.children.length > 8) ul.removeChild(ul.lastChild);
+  }
+  var API = '/notification/api/v1/notifications';
+
+  function toast(html, cls, ms, action) {
+    var area = $('#toastArea');
+    var el = document.createElement('div');
+    el.className = 'toast' + (cls ? ' ' + cls : '');
+    el.innerHTML = '<span class="t-msg">' + html + '</span>' + (action ? '<button type="button">' + action.label + '</button>' : '');
+    if (action) el.querySelector('button').addEventListener('click', function () { action.fn(); el.remove(); });
+    area.appendChild(el);
+    var timer = setTimeout(function () { el.remove(); if (action && action.onTimeout) action.onTimeout(); }, ms || 4000);
+    return { el: el, timer: timer };
+  }
+  function clearUndo(silent) {
+    if (demo.undo) { clearTimeout(demo.undo.timer); demo.undo.el.remove(); demo.undo = null; }
+  }
+
+  function setRead(n, read) {
+    n.read = read;
+    log('PATCH', API + '/' + n.id, 'body {"read": ' + read + '} → WS READ/UNREAD tới các tab khác');
+  }
+  function openNotif(n) {
+    if (!n.read) setRead(n, true);
+    var link = n.link || byId[n.type].link;
+    var target = targetOf(link);
+    $('#navOut').innerHTML = '<div><b>navigate(</b><code>' + esc(link) + '</code><b>)</b></div>' + (target ? '<div class="ph">→ ' + esc(target) + '</div>' : '');
+    log('NAV', link, target ? '→ ' + target : 'điều hướng trong ứng dụng');
+    renderDemo();
+  }
+  function deleteNotif(n) {
+    clearUndo();
+    n.deleted = true;
+    log('DELETE', API + '/' + n.id, 'xoá mềm (deleted_at)');
+    renderDemo();
+    demo.undo = toast('Đã xoá thông báo', '', 5000, {
+      label: 'Hoàn tác',
+      fn: function () { clearTimeout(demo.undo && demo.undo.timer); demo.undo = null; n.deleted = false; log('POST', API + '/' + n.id + '/restore', 'hoàn tác xoá'); renderDemo(); },
+      onTimeout: function () { demo.undo = null; }
+    });
+  }
+  function findItem(el) { var id = el.closest('.notif').dataset.id; return demo.items.filter(function (n) { return n.id === id; })[0]; }
+
+  function bindDemo() {
+    $('#bellBtn').addEventListener('click', function () {
+      demo.open = !demo.open;
+      if (demo.open) log('GET', API + '?filter=' + demo.tab + '&size=20', 'mở bảng: tải trang đầu');
+      renderDemo();
+    });
+    $$('.tab').forEach(function (b) {
+      b.addEventListener('click', function () { demo.tab = b.dataset.tab; log('GET', API + '?filter=' + demo.tab + '&size=20'); renderDemo(); });
+    });
+    $('#pList').addEventListener('click', function (e) {
+      var nEl = e.target.closest('.notif'); if (!nEl) return;
+      var n = findItem(nEl); if (!n) return;
+      if (e.target.closest('.js-read')) { setRead(n, !n.read); renderDemo(); return; }
+      if (e.target.closest('.js-del')) { deleteNotif(n); return; }
+      openNotif(n);
+    });
+    $('#pList').addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (e.target.closest('button')) return;
+      var nEl = e.target.closest('.notif'); if (!nEl) return;
+      e.preventDefault(); openNotif(findItem(nEl));
+    });
+    $('#readAllBtn').addEventListener('click', function () {
+      var vis = visible().filter(function (n) { return !n.read; });
+      vis.forEach(function (n) { n.read = true; });
+      log('POST', API + '/read-all' + (demo.tab === 'action' ? '?filter=action' : ''), vis.length + ' thông báo → WS READ_ALL');
+      renderDemo();
+    });
+    $('#resetBtn').addEventListener('click', demoReset);
+    $('#viewAllBtn').addEventListener('click', function () {
+      $('#navOut').innerHTML = '<div><b>navigate(</b><code>/w/{ws}/notifications</code><b>)</b></div><div class="ph">Trang đầy đủ: lọc theo dự án và nhóm, chọn nhiều, xoá tất cả đã đọc.</div>';
+      log('NAV', '/w/{ws}/notifications', 'trang thông báo đầy đủ');
+    });
+    $('#simBtn').addEventListener('click', function () {
+      if (demo.sim >= SIM.length) return;
+      var s = SIM[demo.sim++];
+      var t = byId[s.type];
+      var merged = null;
+      if (s.group) merged = live().filter(function (n) { return n.group === s.group && !n.read; })[0];
+      if (merged) {
+        merged.title = s.title; merged.body = s.body; merged.time = 'vừa xong';
+        demo.items.splice(demo.items.indexOf(merged), 1); demo.items.unshift(merged);
+        log('WS', '/user/queue/notifications', '{"kind":"UPDATED"}: gộp vào thông báo chưa đọc cùng group_key (R4)');
+      } else {
+        var n = { id: 'n' + (demo.seq++), type: s.type, sev: s.sev, title: s.title, body: s.body, link: s.link, group: s.group, ctx: s.ctx, time: s.time || 'vừa xong', read: false };
+        demo.items.unshift(n);
+        log('WS', '/user/queue/notifications', '{"kind":"CREATED"} · ' + t.code);
+        var sev = s.sev || t.sev;
+        if (sev === 'URGENT' || t.act) {
+          toast('<b>' + (sev === 'URGENT' ? 'Khẩn cấp' : 'Cần xử lý') + ':</b> ' + strip(s.title), sev === 'URGENT' ? 't-urgent' : 't-action', 4000);
+        }
+      }
+      renderDemo();
+    });
+    $('#resolveBtn').addEventListener('click', function () {
+      var n = demo.items.filter(function (x) { return x.id === 'n1'; })[0];
+      if (!n || n.resolved) return;
+      n.resolved = true;
+      $('#resolveBtn').disabled = true;
+      log('WS', '/user/queue/notifications', '{"kind":"UPDATED","actionResolved":true}: C1 của mọi Quản lý chuyển “Đã xử lý” (R9)');
+      renderDemo();
+    });
+
+    $('#howList').innerHTML = [
+      ['pointer', '<b>Bấm vào thông báo</b>: tự đánh dấu đã đọc rồi mở đường dẫn.'],
+      ['check', '<b>Nút ✓ / ○</b>: đánh dấu đã đọc hoặc chưa đọc, không chuyển trang.'],
+      ['trash', '<b>Nút thùng rác</b>: xoá mềm, có <b>Hoàn tác</b> trong 5 giây.'],
+      ['checks', '<b>Đánh dấu tất cả đã đọc</b>: áp dụng cho tab đang mở.'],
+      ['target', '<b>Tab Cần xử lý</b>: chỉ còn việc chưa ai giải quyết.']
+    ].map(function (r) { return '<li>' + icon(r[0]) + '<span>' + r[1] + '</span></li>'; }).join('');
+  }
+
+  /* ================= Giao diện sáng / tối ================= */
+  function effectiveDark() {
+    var t = document.documentElement.getAttribute('data-theme');
+    if (t) return t === 'dark';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function paintThemeBtn() {
+    var dark = effectiveDark();
+    $('#themeIcon').innerHTML = icon(dark ? 'sun' : 'moon');
+    $('#themeLabel').textContent = dark ? 'Sáng' : 'Tối';
+  }
+  function toggleTheme() {
+    var next = effectiveDark() ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    store('notif-catalog-theme', next);
+    paintThemeBtn();
+  }
+
+  /* ================= Khởi động ================= */
+  var savedTheme = store('notif-catalog-theme');
+  if (savedTheme === 'light' || savedTheme === 'dark') document.documentElement.setAttribute('data-theme', savedTheme);
+  paintThemeBtn();
+  $('#themeBtn').addEventListener('click', toggleTheme);
+  document.addEventListener('keydown', function (e) {
+    var tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === '/') { e.preventDefault(); $('#q').focus(); }
+    else if (e.key === 't' || e.key === 'T') { toggleTheme(); }
+  });
+
+  renderStatic();
+  renderFilters();
+  syncFilterUI();
+  bindCatalog();
+  renderResults();
+  bindDemo();
+  demoReset();
+})();
+</script>
+</body>
+</html>

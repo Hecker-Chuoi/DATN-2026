@@ -23,16 +23,19 @@ import {
 import toast from 'react-hot-toast';
 import { workItemApi, projectApi } from '../../api.js';
 import MemberSelect from '../common/MemberSelect.jsx';
+import CustomSelect from '../common/CustomSelect.jsx';
+import StoryPointsPicker from '../common/StoryPointsPicker.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import { PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 import { getTypeDisplayName } from '../../constants/workConstants.js';
+import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
 
 const TYPE_CONFIGS = {
   EPIC: { label: 'Hạng mục lớn', icon: Zap, color: '#9333EA', bgColor: '#F5F3FF', level: 1 },
-  STORY: { label: 'Câu chuyện người dùng', icon: Bookmark, color: '#10B981', bgColor: '#ECFDF5', level: 0 },
-  TASK: { label: 'Nhiệm vụ', icon: CheckSquare, color: '#3B82F6', bgColor: '#EFF6FF', level: 0 },
-  BUG: { label: 'Lỗi phần mềm', icon: AlertCircle, color: '#EF4444', bgColor: '#FEF2F2', level: 0 },
-  SUBTASK: { label: 'Nhiệm vụ con', icon: GitCommit, color: '#06B6D4', bgColor: '#ECFEFF', level: -1 },
+  STORY: { label: 'Yêu cầu', icon: Bookmark, color: '#10B981', bgColor: '#ECFDF5', level: 0 },
+  TASK: { label: 'Công việc', icon: CheckSquare, color: '#3B82F6', bgColor: '#EFF6FF', level: 0 },
+  BUG: { label: 'Sự cố', icon: AlertCircle, color: '#EF4444', bgColor: '#FEF2F2', level: 0 },
+  SUBTASK: { label: 'Công việc con', icon: GitCommit, color: '#06B6D4', bgColor: '#ECFEFF', level: -1 },
 };
 
 const renderTypeIcon = (iconName, color = '#2563EB', size = 14) => {
@@ -72,6 +75,7 @@ export default function CreateWorkItemModal({
   sprints = [],
   onItemCreated
 }) {
+  const backdropProps = useModalBackdrop(onClose);
   const [types, setTypes] = useState([]);
   const [sprintId, setSprintId] = useState(defaultSprintId);
   const [selectedType, setSelectedType] = useState(null);
@@ -151,7 +155,7 @@ export default function CreateWorkItemModal({
 
     const isEp = t.hierarchyLevel === 1 || t.code === 'EPIC';
     const isSub = t.hierarchyLevel === -1 || t.code === 'SUBTASK' || Boolean(t.isSubtask);
-    const levelBadgeText = isEp ? 'Cấp 1' : isSub ? 'Cấp -1' : 'Cấp 0';
+    const levelBadgeText = isEp ? 'Cấp 3' : isSub ? 'Cấp 1' : 'Cấp 2';
 
     return (
       <button
@@ -231,12 +235,12 @@ export default function CreateWorkItemModal({
       errs.typeId = 'Vui lòng chọn loại công việc';
     }
     if (isSubtask && !parentId) {
-      errs.parentId = 'Nhiệm vụ con bắt buộc phải có công việc cha';
+      errs.parentId = 'Công việc con bắt buộc phải có công việc cha';
     }
     if (isEpic && parentId) {
       errs.parentId = 'Hạng mục lớn không thể có công việc cha';
     }
-    if (storyPoints && !isSubtask && !isEpic) {
+    if (storyPoints && !isEpic) {
       const spNum = parseFloat(storyPoints);
       if (isNaN(spNum) || spNum < 0) {
         errs.storyPoints = 'Điểm ước lượng không thể âm';
@@ -260,7 +264,7 @@ export default function CreateWorkItemModal({
         priority,
         parentId: isEpic ? null : (parentId || null),
         assigneeId: assigneeId || null,
-        storyPoints: isSubtask || isEpic ? null : (storyPoints ? parseFloat(storyPoints) : null),
+        storyPoints: isEpic ? null : (storyPoints ? parseFloat(storyPoints) : null),
         dueDate: dueDate || null,
         // Sub-task di theo Sprint cua cong viec cha, khong gan rieng.
         sprintId: isSubtask ? null : (sprintId || null),
@@ -296,7 +300,7 @@ export default function CreateWorkItemModal({
         zIndex: 9999,
         padding: 16,
       }}
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
         style={{
@@ -384,7 +388,7 @@ export default function CreateWorkItemModal({
                 Loại công việc <span style={{ color: '#EF4444' }}>*</span>
               </label>
               <span style={{ fontSize: 11, color: '#64748B' }}>
-                Phân cấp 3 tầng (Cấp 1, Cấp 0, Cấp -1)
+                Phân cấp 3 tầng (Cấp 3, Cấp 2, Cấp 1)
               </span>
             </div>
 
@@ -419,7 +423,7 @@ export default function CreateWorkItemModal({
                         gap: 4,
                       }}
                     >
-                      <Zap size={10} /> Cấp 1 • Hạng mục lớn
+                      <Zap size={10} /> Cấp 3 • Hạng mục lớn
                     </span>
                     <span style={{ fontSize: 11, color: '#94A3B8' }}>Cấp cao nhất, không có cha</span>
                   </div>
@@ -449,7 +453,7 @@ export default function CreateWorkItemModal({
                         gap: 4,
                       }}
                     >
-                      <CheckSquare size={10} /> Cấp 0 • Tiêu chuẩn
+                      <CheckSquare size={10} /> Cấp 2 • Tiêu chuẩn
                     </span>
                     <span style={{ fontSize: 11, color: '#94A3B8' }}>Công việc chính, có thể gắn vào Hạng mục lớn</span>
                   </div>
@@ -479,9 +483,9 @@ export default function CreateWorkItemModal({
                         gap: 4,
                       }}
                     >
-                      <GitCommit size={10} /> Cấp -1 • Nhiệm vụ con
+                      <GitCommit size={10} /> Cấp 1 • Công việc con
                     </span>
-                    <span style={{ fontSize: 11, color: '#94A3B8' }}>Phụ thuộc, bắt buộc có cha Cấp 0</span>
+                    <span style={{ fontSize: 11, color: '#94A3B8' }}>Phụ thuộc, bắt buộc có cha Cấp 2</span>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {subtaskTypes.map(renderTypeButton)}
@@ -520,14 +524,14 @@ export default function CreateWorkItemModal({
                       color: '#FFFFFF',
                     }}
                   >
-                    {isEpic ? 'Cấp 1 (Hạng mục lớn)' : isSubtask ? 'Cấp -1 (Nhiệm vụ con)' : 'Cấp 0 (Tiêu chuẩn)'}
+                    {isEpic ? 'Cấp 3 (Hạng mục lớn)' : isSubtask ? 'Cấp 1 (Công việc con)' : 'Cấp 2 (Tiêu chuẩn)'}
                   </span>
                 </div>
                 <span style={{ color: '#64748B', fontSize: 11, fontStyle: 'italic' }}>
                   {isEpic
                     ? 'Không có công việc cha'
                     : isSubtask
-                    ? 'Bắt buộc chọn công việc cha (Cấp 0)'
+                    ? 'Bắt buộc chọn công việc cha (Cấp 2)'
                     : 'Tùy chọn gắn vào Hạng mục lớn cha'}
                 </span>
               </div>
@@ -548,7 +552,7 @@ export default function CreateWorkItemModal({
             </label>
             <input
               type="text"
-              placeholder="VD: Khách hàng quét mã QR VNPay để thanh toán..."
+              placeholder="VD: Triển khai kế hoạch khảo sát, chuẩn bị báo cáo tiến độ..."
               value={summary}
               onChange={(e) => {
                 setSummary(e.target.value);
@@ -591,36 +595,27 @@ export default function CreateWorkItemModal({
                   border: '1px dashed #CBD5E1',
                 }}
               >
-                ℹ️ Hạng mục lớn là cấp cao nhất (Cấp 1) và không thể trực thuộc công việc khác.
+                ℹ️ Hạng mục lớn là cấp cao nhất (Cấp 3) và không thể trực thuộc công việc khác.
               </div>
             ) : (
-              <select
+              <CustomSelect
                 value={parentId}
-                onChange={(e) => {
-                  setParentId(e.target.value);
+                onChange={(val) => {
+                  setParentId(val);
                   if (errors.parentId) setErrors((prev) => ({ ...prev, parentId: undefined }));
                 }}
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: 8,
-                  border: `1px solid ${errors.parentId ? '#EF4444' : '#CBD5E1'}`,
-                  fontSize: 13,
-                  color: '#0F172A',
-                  backgroundColor: '#FFFFFF',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <option value="">
-                  {isSubtask ? '-- Bắt buộc chọn công việc cha --' : '-- Không có (Độc lập / Danh sách tồn đọng) --'}
-                </option>
-                {availableParents.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    [{p.code}] {p.summary} ({getTypeDisplayName(p.typeName || p.typeCode)})
-                  </option>
-                ))}
-              </select>
+                options={[
+                  {
+                    value: '',
+                    label: isSubtask ? '-- Bắt buộc chọn công việc cha --' : '-- Không có (Độc lập / Kho việc) --',
+                  },
+                  ...availableParents.map((p) => ({
+                    value: p.id,
+                    label: `[${p.code}] ${p.summary} (${getTypeDisplayName(p.typeName || p.typeCode)})`,
+                  })),
+                ]}
+                placeholder={isSubtask ? 'Chọn công việc cha...' : 'Không có (Độc lập)'}
+              />
             )}
             {errors.parentId && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#EF4444', fontSize: 12, marginTop: 4 }}>
@@ -702,7 +697,7 @@ export default function CreateWorkItemModal({
                 </label>
                 <StoryPointsHelpTooltip align="center" />
               </div>
-              {isSubtask || isEpic ? (
+              {isEpic ? (
                 <div>
                   <input
                     type="text"
@@ -719,35 +714,21 @@ export default function CreateWorkItemModal({
                       cursor: 'not-allowed',
                       boxSizing: 'border-box',
                     }}
-                    title={isEpic ? "Hạng mục lớn tự động tính điểm từ các công việc con" : "Nhiệm vụ con không tính điểm trực tiếp"}
+                    title="Hạng mục lớn tự động tính điểm từ các công việc con"
                   />
                   <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                    {isEpic ? 'Hạng mục lớn tự động tính điểm từ các công việc con' : 'Nhiệm vụ con không tính điểm trực tiếp'}
+                    Hạng mục lớn tự động tính điểm từ các công việc con
                   </div>
                 </div>
               ) : (
-                <div>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="100"
-                    placeholder="VD: 5.0"
+                <div style={{ marginTop: 2 }}>
+                  <StoryPointsPicker
                     value={storyPoints}
-                    onChange={(e) => {
-                      setStoryPoints(e.target.value);
+                    onChange={(val) => {
+                      setStoryPoints(val);
                       if (errors.storyPoints) setErrors((prev) => ({ ...prev, storyPoints: undefined }));
                     }}
-                    style={{
-                      width: '100%',
-                      padding: '7px 10px',
-                      borderRadius: 8,
-                      border: `1px solid ${errors.storyPoints ? '#EF4444' : '#CBD5E1'}`,
-                      fontSize: 13,
-                      color: '#0F172A',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                    }}
+                    align="left"
                   />
                   {errors.storyPoints && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#EF4444', fontSize: 11, marginTop: 4 }}>
@@ -776,11 +757,11 @@ export default function CreateWorkItemModal({
             {sprints.length > 0 && (
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                  Sprint
+                  Chu kỳ
                 </label>
                 {isSubtask ? (
                   <div
-                    title="Sub-task đi theo Sprint của công việc cha"
+                    title="Công việc con đi theo chu kỳ của công việc cha"
                     style={{
                       padding: '7px 10px', borderRadius: 8, border: '1px solid #CBD5E1',
                       fontSize: 13, color: '#94A3B8', backgroundColor: '#F8FAFC',
@@ -789,22 +770,34 @@ export default function CreateWorkItemModal({
                     Theo công việc cha
                   </div>
                 ) : (
-                  <select
+                  <CustomSelect
                     value={sprintId || ''}
-                    onChange={(e) => setSprintId(e.target.value)}
-                    style={{
-                      width: '100%', padding: '7px 10px', borderRadius: 8,
-                      border: '1px solid #CBD5E1', fontSize: 13, backgroundColor: '#FFFFFF',
-                      color: '#0F172A', cursor: 'pointer',
-                    }}
-                  >
-                    <option value="">Backlog</option>
-                    {sprints
-                      .filter((sp) => sp.state !== 'CLOSED')
-                      .map((sp) => (
-                        <option key={sp.id} value={sp.id}>{sp.name}</option>
-                      ))}
-                  </select>
+                    onChange={(val) => setSprintId(val)}
+                    options={[
+                      { value: '', label: 'Kho việc chờ phân bổ' },
+                      ...sprints
+                        .filter((sp) => sp.state !== 'CLOSED')
+                        .map((sp) => ({
+                          value: sp.id,
+                          label: sp.name,
+                          badge: (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 600,
+                                padding: '1px 6px',
+                                borderRadius: 999,
+                                backgroundColor: sp.state === 'ACTIVE' ? '#DCFCE7' : '#FEF3C7',
+                                color: sp.state === 'ACTIVE' ? '#15803D' : '#B45309',
+                              }}
+                            >
+                              {sp.state === 'ACTIVE' ? 'Đang chạy' : 'Kế hoạch'}
+                            </span>
+                          ),
+                        })),
+                    ]}
+                    placeholder="Kho việc chờ phân bổ"
+                  />
                 )}
               </div>
             )}

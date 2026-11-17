@@ -118,6 +118,24 @@ export default function InteractiveBoard({
       // 2. Nhan su that tu server. Neu khong cap nhat version, lan keo ke tiep se gui
       //    version cu va bi 409.
       const d = res?.data || {};
+
+      // Khong phai Admin du an keo vao cot Hoan thanh: the KHONG doi cot, chi tao yeu cau
+      // "Tam hoan thanh" -> tra the ve cho cu, gan huy hieu cho duyet roi tai lai bang.
+      if (d.completionPending) {
+        onApplyColumns(
+          patchItem(revertMove(result.containers, result.snapshot, keyOf), active.id, {
+            completionPending: true,
+            version: d.version ?? dragged.version,
+          })
+        );
+        toast.success(
+          d.warning || 'Đã gửi yêu cầu xác nhận hoàn thành. Chờ Admin dự án duyệt.',
+          { duration: 5000 }
+        );
+        onReload?.({ silent: true });
+        return;
+      }
+
       onApplyColumns(
         patchItem(result.containers, active.id, {
           rank: d.newRank ?? result.newRank,
@@ -233,17 +251,20 @@ function BoardGrid({ columns, laneKey, forbidden, onSelectItem, renderCard }) {
 
 /** Boc useSortable quanh the trinh bay. */
 function SortableCard({ item, onSelect }) {
+  const isEpic = item.hierarchyLevel === 1 || item.typeCode === 'EPIC' || item.typeName?.toLowerCase()?.includes('hạng mục');
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
+    disabled: isEpic,
   });
   const style = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     transition,
     opacity: isDragging ? 0 : 1,
+    cursor: isEpic ? 'default' : undefined,
   };
   return (
     <div ref={setNodeRef} style={style}>
-      <BoardCard item={item} onSelect={onSelect} dragHandleProps={{ ...attributes, ...listeners }} />
+      <BoardCard item={item} onSelect={onSelect} dragHandleProps={isEpic ? {} : { ...attributes, ...listeners }} />
     </div>
   );
 }
@@ -263,7 +284,7 @@ function handleMoveError(err, item, column, onReload, onResolveSubtasks) {
   }
 
   // Cha con dang mo -> mo modal dong loat thay vi bat nguoi dung tu lam tung cai.
-  if (/sub-?task|công việc con/i.test(msg) && onResolveSubtasks) {
+  if (/sub-?task|công việc con|nhiệm vụ con/i.test(msg) && onResolveSubtasks) {
     toast.error(msg);
     onResolveSubtasks(item, column);
     return;

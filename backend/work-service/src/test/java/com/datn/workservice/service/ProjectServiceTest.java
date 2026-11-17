@@ -8,10 +8,10 @@ import com.datn.workservice.dto.request.UpdateProjectRequest;
 import com.datn.workservice.dto.response.ProjectDetailResponse;
 import com.datn.workservice.dto.response.ProjectResponse;
 import com.datn.workservice.entity.*;
-import com.datn.workservice.enums.DefaultAssigneeType;
-import com.datn.workservice.enums.ProjectType;
-import com.datn.workservice.enums.StatusCategory;
+import com.datn.workservice.enums.*;
 import com.datn.workservice.repository.*;
+
+import com.datn.workservice.security.WorkspaceAccessChecker;
 import com.datn.workservice.service.impl.ProjectServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -37,8 +38,6 @@ class ProjectServiceTest {
 
     @Mock
     private ProjectRepository projectRepository;
-    @Mock
-    private TeamRepository teamRepository;
     @Mock
     private WorkItemTypeRepository workItemTypeRepository;
     @Mock
@@ -70,11 +69,14 @@ class ProjectServiceTest {
     @Mock
     private IdentityClient identityClient;
     @Mock
-    private TeamMemberRepository teamMemberRepository;
-    @Mock
     private ProjectAccessService projectAccessService;
     @Mock
     private ProjectMemberService projectMemberService;
+    @Mock
+    private WorkspaceAccessChecker workspaceAccessChecker;
+
+    @org.mockito.Mock
+    private com.datn.workservice.notification.ProjectNotifier projectNotifier;
 
     @InjectMocks
     private ProjectServiceImpl projectService;
@@ -118,7 +120,7 @@ class ProjectServiceTest {
                 .build();
 
         when(projectRepository.existsByKeyIgnoreCase("CBE")).thenReturn(false);
-        when(projectAccessService.isGlobalAdmin()).thenReturn(true); // không gắn nhóm -> cần Global ADMIN
+        when(projectAccessService.isGlobalAdmin()).thenReturn(true);
         when(projectRepository.save(any(Project.class))).thenReturn(savedProject);
 
         // Mock ecosystem dependencies
@@ -258,69 +260,67 @@ class ProjectServiceTest {
     }
 
     @Test
-    @DisplayName("createProject: Rejects attaching project to a team the creator does not belong to")
-    void testCreateProjectRejectsForeignTeam() {
-        UUID teamId = UUID.randomUUID();
+    @DisplayName("createProject: Rejects when creator is not a member of Workspace")
+    void testCreateProjectRejectsNonWorkspaceMember() {
         CreateProjectRequest request = CreateProjectRequest.builder()
                 .workspaceId(workspaceId)
-                .teamId(teamId)
                 .name("Sneaky Project")
                 .key("SNK")
                 .build();
 
         when(projectRepository.existsByKeyIgnoreCase("SNK")).thenReturn(false);
-        when(teamRepository.findById(teamId)).thenReturn(Optional.of(
-                Team.builder().id(teamId).name("Other Team").ownerId(UUID.randomUUID()).workspaceId(workspaceId).build()));
         when(projectAccessService.isGlobalAdmin()).thenReturn(false);
-        when(teamMemberRepository.findByTeamIdAndUserId(teamId, currentUserId)).thenReturn(Optional.empty());
+        doThrow(new AccessDeniedException("Forbidden")).when(workspaceAccessChecker).requireMember(workspaceId, currentUserId);
 
         assertThatThrownBy(() -> projectService.createProject(request, currentUserId))
-                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+                .isInstanceOf(AccessDeniedException.class);
 
         verify(projectRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("createProject: Team MEMBER (not LEADER) cannot create a project for the team")
-    void testCreateProjectRejectsTeamMemberWhoIsNotLeader() {
-        UUID teamId = UUID.randomUUID();
+    @DisplayName("createProject: Allows workspace member to create project even if not global admin")
+    void testCreateProjectAllowedForWorkspaceMember() {
         CreateProjectRequest request = CreateProjectRequest.builder()
                 .workspaceId(workspaceId)
-                .teamId(teamId)
                 .name("Member Project")
                 .key("MBR")
                 .build();
 
-        when(projectRepository.existsByKeyIgnoreCase("MBR")).thenReturn(false);
-        when(teamRepository.findById(teamId)).thenReturn(Optional.of(
-                Team.builder().id(teamId).name("Team").ownerId(UUID.randomUUID()).workspaceId(workspaceId).build()));
-        when(projectAccessService.isGlobalAdmin()).thenReturn(false);
-        when(teamMemberRepository.findByTeamIdAndUserId(teamId, currentUserId)).thenReturn(Optional.of(
-                com.datn.workservice.entity.TeamMember.builder().teamId(teamId).userId(currentUserId)
-                        .role(com.datn.workservice.enums.TeamRole.MEMBER).build()));
-
-        assertThatThrownBy(() -> projectService.createProject(request, currentUserId))
-                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-
-        verify(projectRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("createProject: Non-admin cannot create a project without a team")
-    void testCreateProjectWithoutTeamRequiresGlobalAdmin() {
-        CreateProjectRequest request = CreateProjectRequest.builder()
+        Project savedProject = Project.builder()
+                .id(projectId)
                 .workspaceId(workspaceId)
-                .name("Personal Project")
-                .key("PRS")
+                .name("Member Project")
+                .key("MBR")
+                .leadUserId(currentUserId)
+                .projectType(ProjectType.SOFTWARE_KANBAN)
+                .defaultAssigneeType(DefaultAssigneeType.UNASSIGNED)
+                .isTemplate(false)
+                .createdBy(currentUserId)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
-        when(projectRepository.existsByKeyIgnoreCase("PRS")).thenReturn(false);
+        when(projectRepository.existsByKeyIgnoreCase("MBR")).thenReturn(false);
         when(projectAccessService.isGlobalAdmin()).thenReturn(false);
+        doNothing().when(workspaceAccessChecker).requireMember(workspaceId, currentUserId);
+        when(projectRepository.save(any(Project.class))).thenReturn(savedProject);
 
-        assertThatThrownBy(() -> projectService.createProject(request, currentUserId))
-                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        when(workItemTypeRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+        Status statusMock = Status.builder().id(UUID.randomUUID()).projectId(projectId).name("To Do").category(StatusCategory.TODO).build();
+        when(statusRepository.findByProjectIdAndNameIgnoreCase(any(UUID.class), anyString())).thenReturn(Optional.of(statusMock));
+        when(workflowRepository.save(any(Workflow.class))).thenReturn(Workflow.builder().id(UUID.randomUUID()).projectId(projectId).name("Workflow").build());
+        when(workflowSchemeRepository.save(any(WorkflowScheme.class))).thenReturn(WorkflowScheme.builder().id(UUID.randomUUID()).projectId(projectId).build());
+        when(boardRepository.save(any(Board.class))).thenReturn(Board.builder().id(UUID.randomUUID()).projectId(projectId).name("Board").build());
+        when(boardColumnRepository.save(any(BoardColumn.class))).thenReturn(BoardColumn.builder().id(UUID.randomUUID()).name("TODO").build());
+        when(projectRoleRepository.save(any(ProjectRole.class))).thenReturn(ProjectRole.builder().id(UUID.randomUUID()).projectId(projectId).name("ADMINISTRATOR").build());
 
-        verify(projectRepository, never()).save(any());
+        ProjectResponse res = projectService.createProject(request, currentUserId);
+
+        assertThat(res).isNotNull();
+        assertThat(res.getKey()).isEqualTo("MBR");
+        verify(workspaceAccessChecker).requireMember(workspaceId, currentUserId);
+        verify(projectRepository).save(any(Project.class));
     }
 
     @Test
@@ -343,7 +343,7 @@ class ProjectServiceTest {
         when(projectRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(mine)));
 
-        var page = projectService.getAllProjects(null, null, null, null,
+        var page = projectService.getAllProjects(null, null, null,
                 org.springframework.data.domain.PageRequest.of(0, 20), currentUserId, false);
 
         assertThat(page.getContent()).hasSize(1);

@@ -4,6 +4,7 @@ import com.datn.common.dto.ApiResponse;
 import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.client.IdentityClient;
+import com.datn.workservice.client.IdentityUsers;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.request.CreateWorkItemCommentRequest;
 import com.datn.workservice.dto.request.UpdateWorkItemCommentRequest;
@@ -34,6 +35,7 @@ public class WorkItemCommentServiceImpl implements WorkItemCommentService {
     private final WorkItemRepository workItemRepository;
     private final IdentityClient identityClient;
     private final ProjectAccessService projectAccessService;
+    private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @Override
     @Transactional(readOnly = true)
@@ -105,12 +107,14 @@ public class WorkItemCommentServiceImpl implements WorkItemCommentService {
             throw new BadRequestException("Không thể bình luận trên công việc đã bị xóa: " + item.getCode());
         }
 
+        UUID parentAuthorId = null;
         if (request.getParentCommentId() != null) {
             WorkItemComment parent = commentRepository.findById(request.getParentCommentId())
                     .orElseThrow(() -> new ResourceNotFoundException("Parent comment not found: " + request.getParentCommentId()));
             if (!parent.getWorkItemId().equals(workItemId)) {
                 throw new BadRequestException("Bình luận cha không thuộc về công việc này");
             }
+            parentAuthorId = parent.getAuthorId();
         }
 
         WorkItemComment comment = WorkItemComment.builder()
@@ -122,6 +126,8 @@ public class WorkItemCommentServiceImpl implements WorkItemCommentService {
 
         WorkItemComment saved = commentRepository.save(comment);
         log.info("User {} added comment {} on WorkItem {}", userId, saved.getId(), item.getCode());
+        // D1 (nhắc tên), D3 (trả lời), D2 (bình luận mới)
+        workItemNotifier.commentAdded(item, saved, parentAuthorId, userId);
 
         UserResponse author = fetchSingleUser(userId);
         String authorName = author != null
@@ -165,9 +171,13 @@ public class WorkItemCommentServiceImpl implements WorkItemCommentService {
             throw new AccessDeniedException("Bạn chỉ có quyền sửa bình luận của chính mình");
         }
 
+        String oldBody = comment.getBody();
         comment.setBody(request.getBody().trim());
         comment.setUpdatedAt(LocalDateTime.now());
         WorkItemComment updated = commentRepository.save(comment);
+        // D1 chỉ cho người MỚI được nhắc tên
+        workItemRepository.findById(workItemId)
+                .ifPresent(item -> workItemNotifier.commentEdited(item, updated, oldBody, userId));
 
         UserResponse author = fetchSingleUser(userId);
         String authorName = author != null
@@ -243,9 +253,8 @@ public class WorkItemCommentServiceImpl implements WorkItemCommentService {
         try {
             ApiResponse<List<UserResponse>> res = identityClient.getUsersByIds(new ArrayList<>(userIds));
             if (res != null && res.getData() != null) {
-                return res.getData().stream()
-                        .filter(u -> u.getId() != null)
-                        .collect(Collectors.toMap(UserResponse::getId, u -> u, (a, b) -> a));
+                // Map theo cả id của identity lẫn Keycloak sub (bảng work-service lưu sub)
+                return IdentityUsers.indexByAnyId(res.getData());
             }
         } catch (Exception e) {
             log.warn("Failed to fetch user batch for comments: {}", e.getMessage());

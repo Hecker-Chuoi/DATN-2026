@@ -36,12 +36,12 @@ export const PRIORITY_TOKENS = {
 
 // Loai cong viec
 export const TYPE_TOKENS = {
-  EPIC: { label: 'Epic', color: '#6554C0', bg: '#F3F0FF', border: '#DDD6FE' },
-  STORY: { label: 'Story', color: '#36B37E', bg: '#ECFDF5', border: '#A7F3D0' },
-  TASK: { label: 'Task', color: '#0052CC', bg: '#EFF6FF', border: '#BFDBFE' },
-  BUG: { label: 'Bug', color: '#E5493A', bg: '#FEF2F2', border: '#FECACA' },
-  SUBTASK: { label: 'Sub-task', color: '#4C9AFF', bg: '#F0F9FF', border: '#BAE6FD' },
-  SUB_TASK: { label: 'Sub-task', color: '#4C9AFF', bg: '#F0F9FF', border: '#BAE6FD' },
+  EPIC: { label: 'Hạng mục lớn', color: '#6554C0', bg: '#F3F0FF', border: '#DDD6FE' },
+  STORY: { label: 'Yêu cầu', color: '#36B37E', bg: '#ECFDF5', border: '#A7F3D0' },
+  TASK: { label: 'Công việc', color: '#0052CC', bg: '#EFF6FF', border: '#BFDBFE' },
+  BUG: { label: 'Sự cố', color: '#E5493A', bg: '#FEF2F2', border: '#FECACA' },
+  SUBTASK: { label: 'Công việc con', color: '#4C9AFF', bg: '#F0F9FF', border: '#BAE6FD' },
+  SUB_TASK: { label: 'Công việc con', color: '#4C9AFF', bg: '#F0F9FF', border: '#BAE6FD' },
 };
 
 export const FONT_STACK =
@@ -52,7 +52,12 @@ export function statusToken(category) {
 }
 
 export function typeToken(typeCode, typeName) {
-  const raw = String(typeCode || typeName || 'TASK').toUpperCase().replace('-', '_');
+  const raw = String(typeCode || typeName || 'TASK').trim().toUpperCase().replace(/[-\s]/g, '_');
+  if (raw === 'EPIC' || raw === 'HẠNG_MỤC_LỚN' || raw === 'HANG_MUC_LON') return TYPE_TOKENS.EPIC;
+  if (raw === 'STORY' || raw === 'USER_STORY' || raw === 'YÊU_CẦU' || raw === 'YEU_CAU') return TYPE_TOKENS.STORY;
+  if (raw === 'TASK' || raw === 'NHIỆM_VỤ' || raw === 'NHIEM_VU' || raw === 'CÔNG_VIỆC' || raw === 'CONG_VIEC') return TYPE_TOKENS.TASK;
+  if (raw === 'BUG' || raw === 'SỰ_CỐ' || raw === 'SU_CO' || raw === 'LỖI' || raw === 'LOI') return TYPE_TOKENS.BUG;
+  if (raw === 'SUBTASK' || raw === 'SUB_TASK' || raw === 'NHIỆM_VỤ_CON' || raw === 'NHIEM_VU_CON' || raw === 'CÔNG_VIỆC_CON' || raw === 'CONG_VIEC_CON') return TYPE_TOKENS.SUBTASK;
   return TYPE_TOKENS[raw] || TYPE_TOKENS[raw.replace('_', '')] || TYPE_TOKENS.TASK;
 }
 

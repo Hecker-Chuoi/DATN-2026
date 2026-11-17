@@ -2,6 +2,7 @@ package com.datn.workservice.service.mapper;
 
 import com.datn.common.dto.ApiResponse;
 import com.datn.workservice.client.IdentityClient;
+import com.datn.workservice.client.IdentityUsers;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.response.BoardCardResponse;
 import com.datn.workservice.entity.Label;
@@ -18,6 +19,8 @@ import com.datn.workservice.repository.LabelRepository;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.SprintRepository;
 import com.datn.workservice.repository.StatusRepository;
+import com.datn.workservice.enums.CompletionRequestStatus;
+import com.datn.workservice.repository.WorkItemCompletionRequestRepository;
 import com.datn.workservice.repository.WorkItemLabelMapRepository;
 import com.datn.workservice.repository.WorkItemLinkRepository;
 import com.datn.workservice.repository.WorkItemRepository;
@@ -60,6 +63,7 @@ public class WorkItemCardMapper {
     private final LabelRepository labelRepository;
     private final SprintRepository sprintRepository;
     private final ProjectRepository projectRepository;
+    private final WorkItemCompletionRequestRepository completionRequestRepository;
     private final IdentityClient identityClient;
 
     /** Tuy chon de bo bot truy van khi man hinh khong can toi. */
@@ -91,13 +95,7 @@ public class WorkItemCardMapper {
 
         List<UUID> itemIds = items.stream().map(WorkItem::getId).toList();
 
-        // 2. Loai cong viec
-        Set<UUID> typeIds = collect(items, WorkItem::getTypeId);
-        Map<UUID, WorkItemType> typeById = typeIds.isEmpty() ? Collections.emptyMap()
-                : workItemTypeRepository.findAllById(typeIds).stream()
-                        .collect(Collectors.toMap(WorkItemType::getId, Function.identity(), (a, b) -> a));
-
-        // 3. Cha truc tiep (de hien parentCode va truy nguoc Epic)
+        // 2. Cha truc tiep (de hien parentCode va truy nguoc Epic)
         Set<UUID> parentIds = collect(items, WorkItem::getParentId);
         Map<UUID, WorkItem> parentById = new HashMap<>();
         if (!parentIds.isEmpty()) {
@@ -114,6 +112,13 @@ public class WorkItemCardMapper {
                         .forEach(p -> parentById.put(p.getId(), p));
             }
         }
+
+        // 3. Loai cong viec (nap ca cua the chinh va cua cha/ong de nhan dien duoc Epic)
+        Set<UUID> typeIds = collect(items, WorkItem::getTypeId);
+        typeIds.addAll(collect(new ArrayList<>(parentById.values()), WorkItem::getTypeId));
+        Map<UUID, WorkItemType> typeById = typeIds.isEmpty() ? Collections.emptyMap()
+                : workItemTypeRepository.findAllById(typeIds).stream()
+                        .collect(Collectors.toMap(WorkItemType::getId, Function.identity(), (a, b) -> a));
 
         // 4. Cong viec con - phuc vu dem subtask va cuon thoi gian
         Map<UUID, List<WorkItem>> childrenByParentId = workItemRepository
@@ -145,6 +150,12 @@ public class WorkItemCardMapper {
                 ? fetchUsers(collect(items, WorkItem::getAssigneeId))
                 : Collections.emptyMap();
 
+        // 10. The dang "Tam hoan thanh" - cho Admin du an xac nhan (BR-W03)
+        Set<UUID> completionPendingItemIds = completionRequestRepository
+                .findByWorkItemIdInAndStatus(itemIds, CompletionRequestStatus.PENDING).stream()
+                .map(r -> r.getWorkItemId())
+                .collect(Collectors.toSet());
+
         return CardMappingContext.builder()
                 .statusById(statusById)
                 .statusByLowerName(statusByLowerName)
@@ -156,6 +167,7 @@ public class WorkItemCardMapper {
                 .projectKeyById(projectKeyById)
                 .userById(userById)
                 .labelsByItemId(labelsByItemId)
+                .completionPendingItemIds(completionPendingItemIds)
                 .build();
     }
 
@@ -229,6 +241,7 @@ public class WorkItemCardMapper {
                 .dueDate(item.getDueDate())
                 .isOverdue(isOverdue(item, status))
                 .labels(ctx.getLabelsByItemId().get(item.getId()))
+                .completionPending(ctx.getCompletionPendingItemIds().contains(item.getId()))
                 .rank(item.getRank())
                 .version(item.getVersion())
                 .build();
@@ -336,9 +349,8 @@ public class WorkItemCardMapper {
         try {
             ApiResponse<List<UserResponse>> res = identityClient.getUsersByIds(new ArrayList<>(userIds));
             if (res != null && res.getData() != null) {
-                return res.getData().stream()
-                        .filter(u -> u.getId() != null)
-                        .collect(Collectors.toMap(UserResponse::getId, Function.identity(), (a, b) -> a));
+                // Map theo cả id của identity lẫn Keycloak sub (bảng work-service lưu sub)
+                return IdentityUsers.indexByAnyId(res.getData());
             }
         } catch (Exception e) {
             log.warn("Khong lay duoc thong tin nguoi dung cho the Board: {}", e.getMessage());

@@ -1,0 +1,38 @@
+# =============================================================================
+# Caddyfile – HƯỚNG 1: cửa vào duy nhất của hệ thống (cổng 80/443)
+# Đặt trên server tại: /opt/datn/platform/Caddyfile
+#
+# Caddy tự động: xin chứng chỉ Let's Encrypt cho từng tên miền, gia hạn trước hạn,
+# chuyển http → https, gắn header X-Forwarded-For/Proto/Host cho upstream.
+# Tên upstream (frontend, api-gateway, keycloak, jenkins) là tên container trong network datn-net;
+# Caddy phân giải lại DNS mỗi kết nối nên container được tạo lại (IP mới) vẫn chạy bình thường.
+# =============================================================================
+{
+	email {$ACME_EMAIL}
+}
+
+# ---------- Ứng dụng web ----------
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# API: chuyển thẳng tới API Gateway (gateway StripPrefix=1 rồi route tiếp tới service)
+	@api path /identity/* /work/* /workspace/*
+	handle @api {
+		reverse_proxy api-gateway:8081
+	}
+
+	# Còn lại: file tĩnh React (SPA)
+	handle {
+		reverse_proxy frontend:80
+	}
+}
+
+# ---------- Keycloak (đăng nhập, Google SSO) ----------
+{$AUTH_DOMAIN} {
+	reverse_proxy keycloak:8080
+}
+
+# ---------- Jenkins ----------
+{$JENKINS_DOMAIN} {
+	reverse_proxy jenkins:8080
+}

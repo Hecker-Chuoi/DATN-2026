@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useOutletContext, NavLink, Outlet } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext, useSearchParams, NavLink, Outlet } from 'react-router-dom';
 import {
   FolderKanban,
   Kanban,
@@ -17,6 +17,7 @@ import {
   SlidersHorizontal,
   Plus,
   Trash2,
+  BookmarkPlus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi, sprintApi } from '../api.js';
@@ -27,7 +28,9 @@ import { wsPath } from '../utils/workspacePath.js';
 import CreateWorkItemModal from '../components/items/CreateWorkItemModal.jsx';
 import WorkItemDetailModal from '../components/items/WorkItemDetailModal.jsx';
 import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
+import SaveAsTemplateModal from '../components/template/SaveAsTemplateModal.jsx';
 import AccessDenied from '../components/common/AccessDenied.jsx';
+import ProjectMuteButton from '../notifications/ProjectMuteButton.jsx';
 
 export default function ProjectDetailPage() {
   const { projectId, workspaceId } = useParams();
@@ -46,19 +49,28 @@ export default function ProjectDetailPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
 
+  // Link từ thông báo: ?item={id}[&comment={id}] mở sẵn chi tiết công việc (và cuộn tới bình luận)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedItemId = searchParams.get('item');
+  const linkedCommentId = searchParams.get('comment');
+  const modalItemId = linkedItemId || selectedItemId;
+  const modalOpen = Boolean(linkedItemId) || isDetailModalOpen;
+
   const outletContext = useOutletContext() || {};
   const currentUser = outletContext.currentUser;
 
   // Project Action Menu & Delete Modal State
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const actionMenuRef = useRef(null);
 
   const { isAdmin, canCreateIssue, canManageSprint, permissions, forbidden, notFound } = useProjectPermission(projectId);
 
   const isSystemAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN');
-  const isProjectLead = !!(currentUser && project?.leadUserId === currentUser.id);
-  const isProjectCreator = !!(currentUser && project?.createdBy === currentUser.id);
+  // leadUserId / createdBy là Keycloak sub; currentUser (từ /users/me) mang users.id riêng kèm keycloakId
+  const isProjectLead = !!(currentUser?.keycloakId && project?.leadUserId === currentUser.keycloakId);
+  const isProjectCreator = !!(currentUser?.keycloakId && project?.createdBy === currentUser.keycloakId);
   const canDelete = isAdmin || isSystemAdmin || isProjectLead || isProjectCreator;
 
   useEffect(() => {
@@ -204,6 +216,22 @@ export default function ProjectDetailPage() {
                 {project.key}
               </span>
             )}
+            {project?.isTemplate && (
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  color: '#B45309',
+                  backgroundColor: '#FFFBEB',
+                  border: '1px solid #FDE68A',
+                  padding: '1px 6px',
+                  borderRadius: 4,
+                }}
+                title="Dự án mẫu: dùng làm bản thiết kế, không thể kích hoạt chu kỳ"
+              >
+                MẪU
+              </span>
+            )}
           </div>
           <button
             onClick={() => setIsStarred(!isStarred)}
@@ -220,6 +248,7 @@ export default function ProjectDetailPage() {
           >
             <Star size={15} fill={isStarred ? '#EAB308' : 'none'} />
           </button>
+          {project && <ProjectMuteButton projectId={projectId} projectName={project.name} />}
           {canDelete && (
             <div style={{ position: 'relative' }} ref={actionMenuRef}>
               <button
@@ -258,6 +287,39 @@ export default function ProjectDetailPage() {
                     padding: '4px',
                   }}
                 >
+                  {(isAdmin || isSystemAdmin) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsActionMenuOpen(false);
+                        setIsSaveTemplateOpen(true);
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: 'none',
+                        backgroundColor: 'transparent',
+                        color: '#0F172A',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        textAlign: 'left',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#F1F5F9';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                    >
+                      <BookmarkPlus size={14} color="#D97706" />
+                      <span>Lưu thành dự án mẫu</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -358,10 +420,11 @@ export default function ProjectDetailPage() {
         {/* Navigation Pills - dieu huong bang nested route de deep-link va nut Back hoat dong */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {[
-            { to: 'board', label: 'Bảng làm việc', icon: Kanban, visible: true },
-            { to: 'backlog', label: 'Danh sách tồn đọng', icon: ListTodo, visible: isScrumProject(project) },
-            { to: 'reports', label: 'Báo cáo', icon: BarChart3, visible: true },
+            { to: 'board', label: 'Bảng tiến độ', icon: Kanban, visible: true },
+            { to: 'backlog', label: 'Kho việc & Kế hoạch', icon: ListTodo, visible: isScrumProject(project) },
             { to: 'members', label: 'Thành viên & Vai trò', icon: Users, visible: true },
+            // "Báo cáo" gop ca Dong gop lan Tien do (2 tab ben trong ProjectReportsPage).
+            { to: 'reports', label: 'Báo cáo', icon: BarChart3, visible: true },
             { to: 'workflow', label: 'Cấu hình Dự án', icon: Settings, visible: true },
             { to: 'github', label: 'Tích hợp GitHub', icon: GitBranch, visible: true },
           ]
@@ -430,11 +493,20 @@ export default function ProjectDetailPage() {
 
       {/* ─── Work Item Detail Modal (2 Columns Jira Spec) ─── */}
       <WorkItemDetailModal
-        itemId={selectedItemId}
-        isOpen={isDetailModalOpen}
+        itemId={modalItemId}
+        isOpen={modalOpen}
+        focusCommentId={linkedItemId ? linkedCommentId : null}
         onClose={() => {
           setIsDetailModalOpen(false);
           setSelectedItemId(null);
+          if (linkedItemId || linkedCommentId) {
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.delete('item');
+              next.delete('comment');
+              return next;
+            }, { replace: true });
+          }
         }}
         onItemUpdated={handleItemUpdated}
         members={members}
@@ -449,6 +521,15 @@ export default function ProjectDetailPage() {
         project={project}
         onDeleted={() => {
           navigate(wsPath(workspaceId, '/projects'));
+        }}
+      />
+
+      <SaveAsTemplateModal
+        isOpen={isSaveTemplateOpen}
+        onClose={() => setIsSaveTemplateOpen(false)}
+        project={project}
+        onSaved={(tpl) => {
+          if (tpl?.id) navigate(wsPath(workspaceId, `/projects/${tpl.id}`));
         }}
       />
     </div>

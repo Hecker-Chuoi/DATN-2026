@@ -19,11 +19,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Workspace - gốc của hệ phân cấp Workspace > Team > Project > Issue.
+ * Workspace - gốc của hệ phân cấp Workspace > Project > Issue.
  * <p>
- * KHÔNG có cột {@code ownerId}: khác với {@code Team} (mang cả {@code owner_id}
- * lẫn role LEADER, khiến TeamController phải có ~6 helper hòa giải hai nguồn sự
- * thật). Ở đây hàng {@link WorkspaceMember} với role OWNER là nguồn sự thật duy
+ * KHÔNG có cột {@code ownerId}: hàng {@link WorkspaceMember} với role OWNER là nguồn sự thật duy
  * nhất; {@code createdBy} chỉ để audit.
  */
 @Entity
@@ -68,7 +66,7 @@ public class Workspace {
 
     /**
      * Soft delete. Workspace là gốc tenant nên xóa cứng sẽ bỏ mồ côi
-     * teams/projects/work_items nằm trong bảng của work-service mà không có
+     * projects/work_items nằm trong bảng của work-service mà không có
      * transaction phân tán nào bảo vệ. Theo tiền lệ {@code Project.deletedAt}.
      */
     @Column(name = "deleted_at")

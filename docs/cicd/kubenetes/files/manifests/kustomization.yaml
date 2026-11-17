@@ -1,0 +1,42 @@
+# =============================================================================
+# Kustomize "base" – trạng thái mong muốn của TOÀN BỘ hệ thống DATN trên k3s
+# Đặt trong repo tại: infrastructure/cicd/k8s/manifests/
+#
+# Image trong các file apps/*.yaml chỉ ghi tên (datn/work-service), KHÔNG ghi tag.
+# Mỗi lần deploy, Jenkins sinh một overlay nhỏ (.k8s-overlay/kustomization.yaml) trỏ về
+# thư mục này + khối `images:` lấy từ /opt/datn/state/deployed.env để gắn registry + tag.
+#
+# Xem thử kết quả (cần kubectl):  kubectl kustomize infrastructure/cicd/k8s/manifests
+#
+# Secret "datn-secrets" và ConfigMap "keycloak-realm" KHÔNG nằm ở đây (chứa bí mật / file lớn):
+# Jenkins tạo chúng bằng `kubectl create ... --dry-run=client -o yaml | kubectl apply -f -`.
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: datn
+
+resources:
+  - namespace.yaml
+  - config.yaml
+  # ---- hạ tầng (StatefulSet + ổ đĩa bền vững) ----
+  - infra/app-db.yaml
+  - infra/keycloak-db.yaml
+  - infra/keycloak.yaml
+  - infra/redis.yaml
+  - infra/kafka.yaml          # chưa có code publish – thiếu RAM thì comment dòng này
+  - infra/minio.yaml
+  # ---- ứng dụng (Deployment, rolling update) ----
+  - apps/identity-service.yaml
+  - apps/workspace-service.yaml
+  - apps/work-service.yaml
+  - apps/notification-service.yaml
+  - apps/api-gateway.yaml
+  - apps/frontend.yaml
+  # ---- cửa vào HTTPS ----
+  - ingress.yaml
+
+# Gắn nhãn chung cho mọi object (không đụng tới selector → không gây lỗi selector bất biến)
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: datn

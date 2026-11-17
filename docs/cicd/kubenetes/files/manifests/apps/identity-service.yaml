@@ -1,0 +1,80 @@
+# identity-service (:8082) – đăng ký/đăng nhập, quản trị user qua Keycloak Admin API
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity-service
+spec:
+  selector:
+    app: identity-service
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity-service
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5          # giữ 5 ReplicaSet cũ cho `kubectl rollout undo`
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                  # bật Pod mới song song...
+      maxUnavailable: 0            # ...chỉ tắt Pod cũ khi Pod mới đã Ready → không downtime
+  selector:
+    matchLabels:
+      app: identity-service
+  template:
+    metadata:
+      labels:
+        app: identity-service
+        tier: app
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: datn/identity-service      # Jenkins/kustomize thay thành localhost:5000/datn/identity-service:<TAG>
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8082
+          envFrom:
+            - configMapRef: { name: datn-config }
+          env:
+            - name: APP_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DOMAIN } }
+            - name: AUTH_DOMAIN
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: AUTH_DOMAIN } }
+            - name: APP_FRONTEND_URL
+              value: "https://$(APP_DOMAIN)"
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUERURI
+              value: "https://$(AUTH_DOMAIN)/realms/datn-realm"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_USER } }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: APP_DB_PASSWORD } }
+            - name: KEYCLOAK_PUBLICURL
+              value: "https://$(AUTH_DOMAIN)"
+            - name: KEYCLOAK_ADMIN_USERNAME
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_ADMIN_USER } }
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_ADMIN_PASSWORD } }
+            - name: KEYCLOAK_CLIENT_CLIENTSECRET
+              valueFrom: { secretKeyRef: { name: datn-secrets, key: KC_CLIENT_SECRET } }
+          # Chưa có actuator → dùng kiểm tra TCP (Spring Boot chỉ mở cổng khi đã khởi động xong)
+          startupProbe:
+            tcpSocket: { port: 8082 }
+            periodSeconds: 5
+            failureThreshold: 48           # cho tối đa 4 phút để khởi động
+          readinessProbe:
+            tcpSocket: { port: 8082 }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 8082 }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits: { memory: 768Mi }

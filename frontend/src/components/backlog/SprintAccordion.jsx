@@ -1,33 +1,82 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, Calendar } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { ChevronDown, ChevronRight, Plus, Calendar, Bookmark, Pencil, Trash2, CheckCircle2, BarChart3 } from 'lucide-react';
 import SprintStateBadge from '../sprints/SprintStateBadge.jsx';
 import BacklogIssueRow from './BacklogIssueRow.jsx';
 import InlineCreateIssueRow from './InlineCreateIssueRow.jsx';
 import { SURFACE } from '../../constants/jiraTokens.js';
 
 /**
- * Mot khoi gap/mo tren man hinh Backlog.
+ * Một khối gập/mở trên màn hình Backlog (Sprint hoặc Backlog chung).
+ * Hỗ trợ hiển thị dạng cây phân cấp:
+ * Hạng mục lớn (Epic Header) -> Các công việc con thụt lề (Indented child rows).
  *
- * Dung chung cho CA hai truong hop: mot Sprint (group.sprintId != null) va khoi
- * Backlog (group.sprintId == null) - hai khoi nay giong het nhau ve bo cuc va deu
- * la vung tha khi keo cong viec, nen tach lam hai component se sinh trung lap.
+ * readOnly: khối chu kỳ / giai đoạn đã hoàn tất (CLOSED) - chỉ xem lại, không tạo việc mới;
+ * hiện ngày hoàn tất, số liệu chốt lúc đóng và nút "Xem báo cáo" (onOpenReport).
  */
 export default function SprintAccordion({
   group,
   canManageSprint,
   types = [],
   busy = false,
+  startBlockedReason,
   onSelectItem,
   onStart,
+  onEdit,
+  onDelete,
   onComplete,
   onQuickCreate,
+  onOpenReport,
+  readOnly = false,
+  defaultOpen = true,
   droppableProps = {},
   isOver = false,
   renderRow,
 }) {
   const isBacklog = group.sprintId == null;
-  const [open, setOpen] = useState(true);
+  const isClosed = group.state === 'CLOSED';
+  const term = group.name?.toLowerCase()?.includes('giai đoạn') ? 'giai đoạn' : 'chu kỳ';
+  const [open, setOpen] = useState(defaultOpen);
   const [creating, setCreating] = useState(false);
+  const [collapsedEpics, setCollapsedEpics] = useState({});
+
+  // Gom nhóm các công việc theo Hạng mục cha (Epic)
+  const groupedSections = useMemo(() => {
+    const rawItems = (group.items || []).filter((i) => i.hierarchyLevel !== 1);
+    if (!rawItems.length) return [];
+
+    const hasAnyEpic = rawItems.some((i) => i.epicId || i.parentId || i.epicCode || i.parentCode);
+    if (!hasAnyEpic) {
+      return [{ key: '__flat__', epic: null, items: rawItems }];
+    }
+
+    const map = new Map();
+    for (const item of rawItems) {
+      const eId = item.epicId || item.parentId || '__no_epic__';
+      if (!map.has(eId)) {
+        map.set(eId, {
+          key: eId,
+          epic:
+            eId === '__no_epic__'
+              ? null
+              : {
+                  id: eId,
+                  code: item.epicCode || item.parentCode,
+                  summary: item.epicSummary || item.parentSummary,
+                  color: item.epicColor || '#7C3AED',
+                },
+          items: [],
+        });
+      }
+      map.get(eId).items.push(item);
+    }
+    return Array.from(map.values());
+  }, [group.items]);
+
+  const toggleEpicCollapse = (epicKey) => {
+    setCollapsedEpics((prev) => ({ ...prev, [epicKey]: !prev[epicKey] }));
+  };
+
+  const hasEpics = groupedSections.some((s) => s.epic != null);
 
   return (
     <div
@@ -73,7 +122,7 @@ export default function SprintAccordion({
         {!isBacklog && <SprintStateBadge state={group.state} />}
 
         <span style={{ fontSize: 12, color: SURFACE.textMuted }}>
-          ({group.itemCount} công việc)
+          ({groupedSections.reduce((acc, s) => acc + s.items.length, 0)} công việc)
         </span>
 
         {!isBacklog && (group.startDate || group.endDate) && (
@@ -83,7 +132,28 @@ export default function SprintAccordion({
           </span>
         )}
 
-        {/* Phan bo diem theo 3 nhom trang thai */}
+        {isClosed && group.completedDate && (
+          <span
+            title="Ngày bấm hoàn tất"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#00875A', fontWeight: 600 }}
+          >
+            <CheckCircle2 size={12} />
+            Hoàn tất {formatDate(group.completedDate)}
+          </span>
+        )}
+
+        {isClosed && group.itemsAtClose != null && (
+          <span
+            title="Số liệu chốt lúc hoàn tất — trùng với Báo cáo tiến độ và Năng suất"
+            style={{ fontSize: 12, color: SURFACE.textMuted }}
+          >
+            · Xong {group.completedItemsAtClose ?? 0}/{group.itemsAtClose} việc
+            {Number(group.storyPointsAtClose) > 0 &&
+              ` · ${num(group.completedStoryPointsAtClose)}/${num(group.storyPointsAtClose)} điểm`}
+          </span>
+        )}
+
+        {/* Phân bổ điểm theo 3 nhóm trạng thái */}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 'auto' }}>
           <PointChip value={group.todoStoryPoints} bg="#DFE1E6" color="#42526E" title="Cần làm" />
           <PointChip value={group.inProgressStoryPoints} bg="#DEEBFF" color="#0052CC" title="Đang làm" />
@@ -92,32 +162,189 @@ export default function SprintAccordion({
 
         {!isBacklog && canManageSprint && group.state === 'FUTURE' && (
           <button
+            onClick={() => onEdit?.(group)}
+            disabled={busy}
+            title="Sửa tên, mục tiêu, ngày dự kiến (ngày bắt đầu quyết định thứ tự bắt đầu)"
+            style={iconBtn(busy)}
+          >
+            <Pencil size={13} />
+          </button>
+        )}
+        {!isBacklog && canManageSprint && group.state === 'FUTURE' && (
+          <button
+            onClick={() => onDelete?.(group)}
+            disabled={busy}
+            title="Xóa (công việc bên trong trở về Kho việc, không bị xóa)"
+            style={{ ...iconBtn(busy), color: '#DC2626' }}
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
+        {!isBacklog && canManageSprint && group.state === 'FUTURE' && (
+          <button
             disabled={busy || !group.canStart}
-            title={group.canStart ? 'Bắt đầu Sprint' : 'Cần có công việc và không có Sprint nào đang chạy'}
+            title={group.canStart ? (group.name?.toLowerCase()?.includes('giai đoạn') ? 'Bắt đầu giai đoạn' : 'Bắt đầu chu kỳ') : startBlockedReason || 'Chưa thể bắt đầu lúc này'}
             onClick={() => onStart?.(group)}
             style={primaryBtn(busy || !group.canStart)}
           >
-            Bắt đầu Sprint
+            {group.name?.toLowerCase()?.includes('giai đoạn') ? 'Bắt đầu giai đoạn' : 'Bắt đầu chu kỳ'}
           </button>
         )}
         {!isBacklog && canManageSprint && group.state === 'ACTIVE' && (
           <button disabled={busy} onClick={() => onComplete?.(group)} style={primaryBtn(busy)}>
-            Hoàn tất Sprint
+            {group.name?.toLowerCase()?.includes('giai đoạn') ? 'Hoàn tất giai đoạn' : 'Hoàn tất chu kỳ'}
+          </button>
+        )}
+        {isClosed && onOpenReport && (
+          <button
+            onClick={() => onOpenReport(group)}
+            title={`Mở báo cáo tiến độ của ${term} này`}
+            style={secondaryBtn}
+          >
+            <BarChart3 size={13} /> Xem báo cáo
           </button>
         )}
       </div>
 
-      {/* ─── Danh sach cong viec ─── */}
+      {/* ─── Danh sách công việc dạng cây ─── */}
       {open && (
         <div>
-          {group.items?.length ? (
-            group.items.map((item) =>
-              renderRow ? (
-                renderRow(item, group)
-              ) : (
-                <BacklogIssueRow key={item.id} item={item} onSelect={onSelectItem} />
-              )
-            )
+          {groupedSections.length ? (
+            groupedSections.map((section) => {
+              // Nhóm phẳng không có Epic
+              if (!section.epic) {
+                return (
+                  <div key={section.key}>
+                    {hasEpics && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '6px 14px',
+                          backgroundColor: '#F8FAFC',
+                          borderTop: `1px solid ${SURFACE.border}`,
+                          borderBottom: `1px solid ${SURFACE.border}`,
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          color: '#64748B',
+                        }}
+                      >
+                        <span>Công việc chưa gán Hạng mục lớn</span>
+                        <span style={{ fontSize: 11, color: '#94A3B8', marginLeft: 'auto' }}>
+                          {section.items.length} việc
+                        </span>
+                      </div>
+                    )}
+                    {section.items.map((item) =>
+                      renderRow ? (
+                        renderRow(item, group, false)
+                      ) : (
+                        <BacklogIssueRow key={item.id} item={item} onSelect={onSelectItem} isChild={false} />
+                      )
+                    )}
+                  </div>
+                );
+              }
+
+              // Nhóm có Hạng mục cha (Epic)
+              const isCollapsed = Boolean(collapsedEpics[section.key]);
+              return (
+                <div key={section.key} style={{ borderBottom: `1px solid ${SURFACE.border}` }}>
+                  {/* Epic Header */}
+                  <div
+                    onClick={() => toggleEpicCollapse(section.key)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '7px 12px 7px 14px',
+                      backgroundColor: '#FAF5FF',
+                      borderTop: `1px solid #F3E8FF`,
+                      borderBottom: `1px solid #F3E8FF`,
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleEpicCollapse(section.key);
+                      }}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        color: '#7C3AED',
+                        display: 'flex',
+                        padding: 0,
+                      }}
+                    >
+                      {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                    </button>
+
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectItem?.(section.epic.id);
+                      }}
+                      title="Bấm để mở chi tiết Hạng mục lớn"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '2px 7px',
+                        borderRadius: 4,
+                        backgroundColor: section.epic.color || '#7C3AED',
+                        color: '#FFFFFF',
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        letterSpacing: 0.3,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Bookmark size={10} /> {section.epic.code || 'HẠNG MỤC'}
+                    </span>
+
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectItem?.(section.epic.id);
+                      }}
+                      title="Bấm để mở chi tiết Hạng mục lớn"
+                      style={{
+                        fontWeight: 700,
+                        fontSize: 12.5,
+                        color: '#581C87',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {section.epic.summary || 'Hạng mục lớn'}
+                    </span>
+
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#9333EA', marginLeft: 'auto' }}>
+                      {section.items.length} việc
+                    </span>
+                  </div>
+
+                  {/* Danh sách công việc con thụt lề */}
+                  {!isCollapsed && (
+                    <div style={{ paddingLeft: 18, borderLeft: '3px solid #DDD6FE', marginLeft: 12 }}>
+                      {section.items.map((item) =>
+                        renderRow ? (
+                          renderRow(item, group, true)
+                        ) : (
+                          <BacklogIssueRow key={item.id} item={item} onSelect={onSelectItem} isChild={true} />
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
           ) : (
             <div
               style={{
@@ -129,13 +356,15 @@ export default function SprintAccordion({
               }}
             >
               {isBacklog
-                ? 'Backlog trống. Hãy tạo công việc mới.'
-                : 'Kéo công việc từ Backlog vào Sprint này.'}
+                ? 'Kho công việc hiện đang trống. Hãy tạo công việc mới.'
+                : isClosed
+                  ? `Không còn công việc nào trong ${term} này (việc chưa xong đã được chuyển đi khi hoàn tất).`
+                  : 'Kéo công việc từ kho việc vào chu kỳ này.'}
             </div>
           )}
 
-          {/* Tao nhanh inline */}
-          {creating ? (
+          {/* Tạo nhanh inline - khối đã hoàn tất chỉ để xem lại */}
+          {readOnly ? null : creating ? (
             <InlineCreateIssueRow
               types={types}
               onCancel={() => setCreating(false)}
@@ -204,6 +433,47 @@ function primaryBtn(disabled) {
     backgroundColor: disabled ? '#E2E8F0' : '#2563EB',
     color: disabled ? '#94A3B8' : '#FFFFFF',
   };
+}
+
+function iconBtn(disabled) {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    border: `1px solid ${SURFACE.border}`,
+    backgroundColor: '#FFFFFF',
+    color: SURFACE.textMuted,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    padding: 0,
+  };
+}
+
+const secondaryBtn = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  padding: '4px 10px',
+  borderRadius: 6,
+  border: `1px solid ${SURFACE.border}`,
+  backgroundColor: '#FFFFFF',
+  color: '#2563EB',
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+function num(v) {
+  const n = Number(v || 0);
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function formatDate(d) {
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return '';
+  return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
 }
 
 function formatRange(start, end) {

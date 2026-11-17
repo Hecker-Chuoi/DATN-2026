@@ -28,8 +28,8 @@ const panelStyle = {
   background: '#FFFFFF',
   border: '1px solid #E2E8F0',
   borderRadius: 10,
-  padding: 20,
-  maxWidth: 560,
+  padding: 24,
+  width: '100%',
 };
 
 /**
@@ -58,7 +58,7 @@ export default function WorkspaceSettingsPage() {
   const handleSave = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
-      setError('Tên workspace không được để trống');
+      setError('Tên không gian làm việc không được để trống');
       return;
     }
     try {
@@ -79,13 +79,13 @@ export default function WorkspaceSettingsPage() {
   };
 
   const handleDelete = async () => {
-    const confirmText = currentWorkspace?.name || 'workspace này';
+    const confirmText = currentWorkspace?.name || 'không gian làm việc này';
     if (!window.confirm(`Chuyển "${confirmText}" vào thùng rác? Toàn bộ nhóm và dự án bên trong sẽ không còn truy cập được.`)) {
       return;
     }
     try {
       await workspaceApi.delete(workspaceId);
-      toast.success('Đã chuyển workspace vào thùng rác');
+      toast.success('Đã chuyển không gian làm việc vào thùng rác');
       await refreshWorkspaces();
       navigate('/workspaces');
     } catch (err) {
@@ -94,16 +94,20 @@ export default function WorkspaceSettingsPage() {
   };
 
   if (roleLoading) {
-    return <div style={{ padding: 24, fontSize: 13, color: '#94A3B8' }}>Đang tải...</div>;
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32, fontSize: 13, color: '#94A3B8' }}>
+        Đang tải...
+      </div>
+    );
   }
 
   if (!canManageWorkspace) {
     return (
-      <div style={{ padding: 24 }}>
-        <div style={{ ...panelStyle, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', padding: '32px 40px', width: '100%' }}>
+        <div style={{ ...panelStyle, maxWidth: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
           <AlertCircle size={18} color="#B45309" />
           <span style={{ fontSize: 13, color: '#475569' }}>
-            Bạn cần vai trò Quản trị trở lên để xem cài đặt workspace.
+            Bạn cần vai trò Quản trị viên trở lên để xem cài đặt không gian làm việc.
           </span>
         </div>
       </div>
@@ -111,127 +115,144 @@ export default function WorkspaceSettingsPage() {
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-        <Settings size={20} color="#2563EB" />
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-          Cài đặt workspace
-        </h1>
-      </div>
-      <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 20px' }}>
-        Thông tin chung của workspace. Đường dẫn (slug) không đổi được sau khi tạo.
-      </p>
+    <div
+      style={{
+        flex: 1,
+        overflowY: 'auto',
+        backgroundColor: '#FFFFFF',
+        minHeight: '100%',
+        width: '100%',
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1100,
+          width: '100%',
+          margin: '0 auto',
+          padding: '32px 40px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <Settings size={20} color="#2563EB" />
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0F172A', margin: 0 }}>
+            Cài đặt không gian làm việc
+          </h1>
+        </div>
+        <p style={{ fontSize: 13, color: '#64748B', margin: '0 0 24px' }}>
+          Thông tin chung của không gian làm việc. Mã định danh URL không đổi được sau khi tạo.
+        </p>
 
-      <form onSubmit={handleSave} style={{ ...panelStyle, marginBottom: 20 }}>
-        {error && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '10px 14px',
-              borderRadius: 6,
-              background: '#FEF2F2',
-              border: '1px solid #FEE2E2',
-              color: '#DC2626',
-              fontSize: 13,
-              marginBottom: 16,
-            }}
-          >
-            <AlertCircle size={16} />
-            <span>{error}</span>
+        <form onSubmit={handleSave} style={{ ...panelStyle, marginBottom: 24 }}>
+          {error && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 14px',
+                borderRadius: 6,
+                background: '#FEF2F2',
+                border: '1px solid #FEE2E2',
+                color: '#DC2626',
+                fontSize: 13,
+                marginBottom: 16,
+              }}
+            >
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>
+              Tên không gian làm việc <span style={{ color: '#EF4444' }}>*</span>
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (error) setError('');
+              }}
+              style={inputStyle}
+            />
           </div>
-        )}
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={labelStyle}>
-            Tên workspace <span style={{ color: '#EF4444' }}>*</span>
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              if (error) setError('');
-            }}
-            style={inputStyle}
-          />
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label style={labelStyle}>Đường dẫn (slug)</label>
-          <input
-            type="text"
-            value={currentWorkspace?.slug || ''}
-            disabled
-            style={{ ...inputStyle, background: '#F8FAFC', color: '#94A3B8' }}
-          />
-        </div>
-
-        <div style={{ marginBottom: 20 }}>
-          <label style={labelStyle}>Mô tả</label>
-          <textarea
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={saving || !name.trim()}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            background: saving || !name.trim() ? '#94A3B8' : '#2563EB',
-            color: '#FFFFFF',
-            border: 'none',
-            padding: '8px 16px',
-            borderRadius: 6,
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: saving || !name.trim() ? 'not-allowed' : 'pointer',
-          }}
-        >
-          <Save size={14} />
-          <span>{saving ? 'Đang lưu...' : 'Lưu thay đổi'}</span>
-        </button>
-      </form>
-
-      {/* Vùng nguy hiểm: chỉ OWNER. Xóa là SOFT delete nên còn phục hồi được. */}
-      {canDeleteWorkspace && (
-        <div style={{ ...panelStyle, border: '1px solid #FEE2E2' }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#DC2626', marginBottom: 6 }}>
-            Vùng nguy hiểm
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>Đường dẫn (slug)</label>
+            <input
+              type="text"
+              value={currentWorkspace?.slug || ''}
+              disabled
+              style={{ ...inputStyle, background: '#F8FAFC', color: '#94A3B8' }}
+            />
           </div>
-          <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 16px' }}>
-            Xóa workspace sẽ chuyển nó vào thùng rác. Toàn bộ nhóm, dự án và công việc bên trong
-            không còn truy cập được. Danh sách thành viên vẫn được giữ để có thể phục hồi.
-          </p>
+
+          <div style={{ marginBottom: 20 }}>
+            <label style={labelStyle}>Mô tả</label>
+            <textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+            />
+          </div>
+
           <button
-            type="button"
-            onClick={handleDelete}
+            type="submit"
+            disabled={saving || !name.trim()}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
-              background: '#FEF2F2',
-              color: '#DC2626',
-              border: '1px solid #FEE2E2',
-              padding: '8px 14px',
+              background: saving || !name.trim() ? '#94A3B8' : '#2563EB',
+              color: '#FFFFFF',
+              border: 'none',
+              padding: '8px 16px',
               borderRadius: 6,
               fontSize: 13,
               fontWeight: 600,
-              cursor: 'pointer',
+              cursor: saving || !name.trim() ? 'not-allowed' : 'pointer',
             }}
           >
-            <Trash2 size={14} />
-            <span>Xóa workspace</span>
+            <Save size={14} />
+            <span>{saving ? 'Đang lưu...' : 'Lưu thay đổi'}</span>
           </button>
-        </div>
-      )}
+        </form>
+
+        {/* Vùng nguy hiểm: chỉ OWNER. Xóa là SOFT delete nên còn phục hồi được. */}
+        {canDeleteWorkspace && (
+          <div style={{ ...panelStyle, border: '1px solid #FEE2E2', backgroundColor: '#FFF5F5' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#DC2626', marginBottom: 6 }}>
+              Vùng nguy hiểm
+            </div>
+            <p style={{ fontSize: 12, color: '#64748B', margin: '0 0 16px' }}>
+              Xóa không gian làm việc sẽ chuyển nó vào thùng rác. Toàn bộ nhóm, dự án và công việc bên trong
+              không còn truy cập được. Danh sách thành viên vẫn được giữ để có thể phục hồi.
+            </p>
+            <button
+              type="button"
+              onClick={handleDelete}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: '#FEF2F2',
+                color: '#DC2626',
+                border: '1px solid #FEE2E2',
+                padding: '8px 14px',
+                borderRadius: 6,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={14} />
+              <span>Xóa không gian làm việc</span>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

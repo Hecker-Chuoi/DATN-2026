@@ -1,4 +1,4 @@
-import { Bookmark, Lock, AlertTriangle, Clock, MoreHorizontal } from 'lucide-react';
+import { Bookmark, Lock, AlertTriangle, Clock, MoreHorizontal, Hourglass } from 'lucide-react';
 import { typeToken, priorityToken, SURFACE } from '../../constants/jiraTokens.js';
 import { getAvatarColor, getInitials } from '../../utils/avatarColor.js';
 
@@ -65,8 +65,16 @@ export default function BoardCard({ item, isOverlay = false, onSelect, dragHandl
       </div>
 
       {/* Nhan Epic cha + cac canh bao */}
-      {(item.parentCode || item.isBlocked || item.isOverdue) && (
+      {(item.parentCode || item.isBlocked || item.isOverdue || item.completionPending) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+          {item.completionPending && (
+            <span
+              title="Tạm hoàn thành – đã báo xong, chờ Admin dự án xác nhận"
+              style={badge('#B45309', '#FFFBEB', '#FCD34D')}
+            >
+              <Hourglass size={10} /> Chờ duyệt HT
+            </span>
+          )}
           {item.parentCode && (
             <span style={badge('#6554C0', '#F3F0FF', '#DDD6FE')}>
               <Bookmark size={10} /> {item.parentCode}
@@ -113,7 +121,7 @@ export default function BoardCard({ item, isOverlay = false, onSelect, dragHandl
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
           {item.storyPoints != null && (
             <span
-              title="Story points"
+              title="Điểm ước lượng"
               style={{
                 minWidth: 20, textAlign: 'center', padding: '1px 6px', borderRadius: 999,
                 backgroundColor: SURFACE.track, color: SURFACE.textMuted, fontSize: 10, fontWeight: 700,

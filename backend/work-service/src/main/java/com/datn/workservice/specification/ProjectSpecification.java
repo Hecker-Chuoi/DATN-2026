@@ -14,13 +14,10 @@ public class ProjectSpecification extends BaseSpecification {
     /**
      * @param workspaceIds phạm vi workspace được phép xem. null = không giới hạn
      *                     (chỉ dùng cho lời gọi nội bộ), danh sách rỗng = không
-     *                     có quyền ở đâu nên trả trang trống. Trước đây tham số
-     *                     này là một UUID optional và không được enforce, nên bỏ
-     *                     trống nó là liệt kê MỌI project trong hệ thống.
+     *                     có quyền ở đâu nên trả trang trống.
      */
     public static Specification<Project> withFilters(
             List<UUID> workspaceIds,
-            UUID teamId,
             String search,
             Boolean isTemplate,
             boolean includeDeleted
@@ -29,10 +26,6 @@ public class ProjectSpecification extends BaseSpecification {
 
         if (workspaceIds != null) {
             spec = spec.and(hasFieldIn("workspaceId", workspaceIds));
-        }
-
-        if (teamId != null) {
-            spec = spec.and(hasFieldEqual("teamId", teamId));
         }
 
         if (isTemplate != null) {

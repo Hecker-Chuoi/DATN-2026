@@ -26,8 +26,14 @@ export function isKanbanProject(project) {
   return t === PROJECT_TYPE.SOFTWARE_KANBAN || t === 'KANBAN';
 }
 
+export function isBusinessProject(project) {
+  const t = project?.projectType;
+  const c = project?.templateCategory;
+  return t === PROJECT_TYPE.BUSINESS || c === 'BUSINESS';
+}
+
 /** Kieu bang uu tien lay tu chinh Board; neu thieu thi suy ra tu loai du an. */
 export function boardTypeOf(project, board) {
   if (board?.type) return board.type;
-  return isKanbanProject(project) ? BOARD_TYPE.KANBAN : BOARD_TYPE.SCRUM;
+  return isKanbanProject(project) || isBusinessProject(project) ? BOARD_TYPE.KANBAN : BOARD_TYPE.SCRUM;
 }

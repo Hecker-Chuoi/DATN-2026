@@ -30,7 +30,7 @@ Hệ thống được chia thành **5 Microservices chuyên biệt** + **1 API G
 │   Service   │   │     Service     │ │   Service   │ │ Notification Service│  │  Assistant  │
 │   (:8082)   │   │     (:8083)     │ │   (:8085)   │ │       (:8084)       │  │   (:8086)   │
 └─────────────┘   └─────────────────┘ └─────────────┘ └─────────────────────┘  └─────────────┘
-  Users, Roles,     Teams, Projects,    Initiatives,    GitHub Sync, Mail,       LLM Agents,
+  Users, Roles,     Projects, Schemes,  Initiatives,    GitHub Sync, Mail,       LLM Agents,
   Workspaces,       Milestones,         Posts, Tags,    Calendar, In-App Push,   Task Auto-Gen,
   Permissions       Tasks, Kanban       Templates       SSE / Realtime Alerts    RAG Knowledge
 ```
@@ -42,8 +42,8 @@ Hệ thống được chia thành **5 Microservices chuyên biệt** + **1 API G
 | STT | Service Name | Port | Công nghệ | Trách nhiệm chính & Bảng CSDL phụ trách |
 | :-: | :--- | :-: | :--- | :--- |
 | **0** | **`api-gateway`** | `8081` | Spring Cloud Gateway, WebFlux | • Single Entry Point, JWT Verification (Keycloak JWKS)<br>• Global CORS, Rate Limiting, Request Logging, Routing |
-| **1** | **`identity-service`** | `8082` | Spring Boot 3, Keycloak, JPA | • Xác thực người dùng (Local, Google/GitHub OAuth2 qua Keycloak)<br>• Quản lý Workspace & phân quyền RBAC đa cấp (Workspace/Team/Project)<br>• **Bảng**: `users`, `workspaces`, `workspace_members`, `roles`, `permissions`, `role_permissions`, `user_roles` |
-| **2** | **`work-service`** | `8083` | Spring Boot 3, JPA, WebSocket | • Core Work Management: Team, Dự án (kèm Dự án Mẫu `is_template = true`), Cột mốc (Milestones)<br>• Agile/Kanban Board, Issues/Tasks lifecycle, Subtasks đa cấp<br>• Task Comments, Attachments, Dependencies, Activity Audit Logs<br>• Lịch sử nhân bản Dự án / Template (`project_clones`)<br>• **Bảng**: `teams`, `team_members`, `projects`, `milestones`, `tasks`, `task_labels`, `task_label_map`, `task_watchers`, `task_comments`, `task_attachments`, `task_dependencies`, `task_activity_logs`, `project_clones` |
+| **1** | **`identity-service`** | `8082` | Spring Boot 3, Keycloak, JPA | • Xác thực người dùng (Local, Google/GitHub OAuth2 qua Keycloak)<br>• Quản lý Workspace & phân quyền RBAC đa cấp (Workspace/Project)<br>• **Bảng**: `users`, `workspaces`, `workspace_members`, `roles`, `permissions`, `role_permissions`, `user_roles` |
+| **2** | **`work-service`** | `8083` | Spring Boot 3, JPA, WebSocket | • Core Work Management: Dự án (kèm Dự án Mẫu `is_template = true`), Cột mốc (Milestones)<br>• Agile/Kanban Board, Issues/Tasks lifecycle, Subtasks đa cấp<br>• Task Comments, Attachments, Dependencies, Activity Audit Logs<br>• Lịch sử nhân bản Dự án / Template (`project_clones`)<br>• **Bảng**: `projects`, `milestones`, `tasks`, `task_labels`, `task_label_map`, `task_watchers`, `task_comments`, `task_attachments`, `task_dependencies`, `task_activity_logs`, `project_clones` |
 | **3** | **`community-service`** | `8085` | Spring Boot 3, JPA, Redis | • Quản lý Sáng kiến cộng đồng (Initiatives, Upvotes/Downvotes)<br>• Blog, Bài viết chia sẻ kinh nghiệm kỹ thuật (Posts, Tags, Post Comments, Post Votes)<br>• **Bảng**: `initiatives`, `initiative_votes`, `posts`, `tags`, `post_tags`, `post_comments`, `post_votes` |
 | **4** | **`integration-notification-service`** | `8084` | Spring Boot 3, WebFlux/SSE, Kafka | • Gửi thông báo đa kênh: In-App (SSE/WebSocket), Email SMTP, Push<br>• Tích hợp bên ngoài: GitHub Webhook sync, Google Calendar sync, Email-to-task<br>• **Bảng**: `notifications`, `notification_settings`, `integrations`, `github_repo_links`, `calendar_syncs`, `email_task_mappings` |
 | **5** | **`ai-service`** | `8086` | Spring AI hoặc Python (FastAPI) | • Trợ lý AI hội thoại ngữ cảnh, tóm tắt tiến độ, dự đoán deadline<br>• Tự động bóc tách và sinh task từ biên bản họp / prompt<br>• **Bảng**: `ai_conversations`, `ai_messages`, `ai_api_keys`, `ai_task_generations` |
@@ -57,7 +57,7 @@ Hệ thống được chia thành **5 Microservices chuyên biệt** + **1 API G
 * **Vai trò**:
   * Đóng vai trò là cầu nối với Keycloak IAM Server để quản lý credentials và phát hành Access/Refresh Token.
   * Lưu trữ hồ sơ người dùng (`users`), quản lý các không gian làm việc (`workspaces`) và thành viên tham gia (`workspace_members`).
-  * Thực thi ma trận phân quyền động RBAC theo phạm vi (`scope_type = workspace / team / project`).
+  * Thực thi ma trận phân quyền động RBAC theo phạm vi (`scope_type = workspace / project`).
 * **Bảng CSDL phụ trách**:
   * `users`
   * `workspaces`, `workspace_members`
@@ -69,12 +69,11 @@ Hệ thống được chia thành **5 Microservices chuyên biệt** + **1 API G
 * **Domain**: Core Work Management Engine (Private / Internal).
 * **Vai trò**:
   * Phục vụ các hoạt động lập kế hoạch và thực thi công việc nội bộ của từng Workspace.
-  * Quản lý Team, Projects, Milestones/Sprints.
+  * Quản lý Projects, Milestones/Sprints.
   * Xử lý vòng đời Task/Issue (Todo, In Progress, In Review, Done) trên bảng Kanban với cơ chế Optimistic Locking (`version`) chống ghi đè dữ liệu.
   * Cung cấp cây Sub-tasks phân cấp, quản lý ràng buộc phụ thuộc (`blocks`, `relates_to`), trao đổi bình luận nội bộ, tệp đính kèm và tự động ghi vết thay đổi (`task_activity_logs`).
   * Bắn sự kiện realtime qua WebSocket STOMP topic `/topic/project/{projectId}` khi thẻ task được kéo thả.
 * **Bảng CSDL phụ trách**:
-  * `teams`, `team_members`
   * `projects`, `milestones`
   * `tasks`, `task_labels`, `task_label_map`, `task_watchers`, `task_comments`, `task_attachments`, `task_dependencies`, `task_activity_logs`
 
@@ -121,7 +120,7 @@ Hệ thống được chia thành **5 Microservices chuyên biệt** + **1 API G
 | Route ID | Path Predicate | Target Service URI | Mô tả |
 | :--- | :--- | :--- | :--- |
 | `identity-service` | `/identity/**` | `http://localhost:8082` | Đăng nhập, đăng ký, profile, quản lý workspace & thành viên |
-| `work-service` | `/work/**` | `http://localhost:8083` | Quản lý team, dự án, milestones, task, kanban board, audit logs |
+| `work-service` | `/work/**` | `http://localhost:8083` | Quản lý dự án, milestones, task, kanban board, audit logs |
 | `community-service` | `/community/**` | `http://localhost:8085` | Sáng kiến, bài viết blog, template mẫu, bình chọn, clone dự án |
 | `notification-service` | `/notifications/**`, `/integrations/**` | `http://localhost:8084` | Lấy thông báo, cấu hình kênh, sync Google Calendar, GitHub Webhooks |
 | `ai-service` | `/ai/**` | `http://localhost:8086` | Chatbot AI trợ lý, sinh task tự động |

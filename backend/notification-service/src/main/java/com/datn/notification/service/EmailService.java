@@ -12,11 +12,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.scheduling.annotation.Async;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class EmailService {
 
     private final JavaMailSender mailSender;
+
+    public EmailService(JavaMailSender mailSender) {
+        this.mailSender = mailSender;
+    }
 
     @Value("${app.mail.from}")
     private String from;

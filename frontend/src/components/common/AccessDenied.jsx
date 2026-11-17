@@ -19,7 +19,7 @@ const PRESETS = {
     bg: '#FEE2E2',
     color: '#DC2626',
     title: 'Bạn không có quyền truy cập dự án này',
-    message: 'Bạn không phải thành viên của dự án. Hãy liên hệ Trưởng dự án (Project Lead) hoặc Administrator để được thêm vào.',
+    message: 'Bạn không phải thành viên của dự án. Hãy liên hệ Trưởng dự án hoặc Quản trị viên để được thêm vào.',
     backTo: '/projects',
     backLabel: 'Quay lại danh sách dự án',
   },
@@ -41,6 +41,22 @@ const PRESETS = {
  */
 export default function AccessDenied({ status = 403, title, message, backTo, backLabel }) {
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (status === 401) {
+      try {
+        sessionStorage.setItem('session_expired_notice', 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      } catch {
+        // ignore
+      }
+      navigate('/login', { replace: true });
+    }
+  }, [status, navigate]);
+
+  if (status === 401) {
+    return null;
+  }
+
   const preset = PRESETS[status] || PRESETS[403];
   const { Icon } = preset;
   const resolvedTitle = title || preset.title;

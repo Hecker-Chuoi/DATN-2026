@@ -23,7 +23,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.username || !form.password || !form.email) {
-      setError('Vui lòng điền các trường bắt buộc (Username, Password, Email).');
+      setError('Vui lòng điền các trường bắt buộc (Tên đăng nhập, Mật khẩu, Email).');
       return;
     }
 
@@ -51,10 +51,10 @@ export default function RegisterPage() {
           <div className="auth-header">
             <div className="auth-brand">
               <ShieldCheck size={26} />
-              <span>DATN SYSTEM</span>
+              <span>HỆ THỐNG QUẢN TRỊ DỰ ÁN</span>
             </div>
             <h2 className="auth-title">Tạo Tài Khoản Mới</h2>
-            <p className="auth-subtitle">Đăng ký người dùng mới trong hệ thống Keycloak IAM</p>
+            <p className="auth-subtitle">Đăng ký tài khoản người dùng mới vào hệ thống</p>
           </div>
 
           {error && (
@@ -88,7 +88,7 @@ export default function RegisterPage() {
           <form className="auth-form" onSubmit={handleSubmit}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="input-group">
-                <label className="input-label">First Name</label>
+                <label className="input-label">Tên</label>
                 <input
                   type="text"
                   name="firstName"
@@ -101,7 +101,7 @@ export default function RegisterPage() {
               </div>
 
               <div className="input-group">
-                <label className="input-label">Last Name</label>
+                <label className="input-label">Họ và tên đệm</label>
                 <input
                   type="text"
                   name="lastName"
@@ -115,7 +115,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="input-group">
-              <label className="input-label">Username *</label>
+              <label className="input-label">Tên đăng nhập *</label>
               <div className="input-field-wrapper">
                 <span className="input-icon"><User size={18} /></span>
                 <input
@@ -124,7 +124,7 @@ export default function RegisterPage() {
                   className="input-control"
                   value={form.username}
                   onChange={handleChange}
-                  placeholder="nhap_username"
+                  placeholder="nhap_ten_dang_nhap"
                   required
                 />
               </div>
@@ -140,14 +140,14 @@ export default function RegisterPage() {
                   className="input-control"
                   value={form.email}
                   onChange={handleChange}
-                  placeholder="user@domain.com"
+                  placeholder="email_cua_ban@congty.com"
                   required
                 />
               </div>
             </div>
 
             <div className="input-group">
-              <label className="input-label">Password *</label>
+              <label className="input-label">Mật khẩu *</label>
               <div className="input-field-wrapper">
                 <span className="input-icon"><Key size={18} /></span>
                 <input
@@ -169,7 +169,7 @@ export default function RegisterPage() {
           </form>
 
           <div className="auth-footer">
-            Already Have An Account ? <Link to="/login">Log in here</Link>
+            Đã có tài khoản? <Link to="/login">Đăng nhập tại đây</Link>
           </div>
         </div>
 
@@ -185,17 +185,17 @@ export default function RegisterPage() {
             />
 
             <div className="float-card-top">
-              <span className="badge-tag">Security</span>
-              <span className="float-val">IAM Realm</span>
+              <span className="badge-tag">Bảo mật</span>
+              <span className="float-val">Xác thực IAM</span>
             </div>
 
             <div className="mockup-dashboard">
               <div className="mockup-header">
                 <div>
-                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Registration</div>
-                  <div className="mockup-title">User Onboarding System</div>
+                  <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase' }}>Đăng ký tài khoản</div>
+                  <div className="mockup-title">Hệ thống tiếp nhận người dùng</div>
                 </div>
-                <div className="badge-tag" style={{ background: '#f0fdf4', color: '#16a34a' }}>OIDC Standard</div>
+                <div className="badge-tag" style={{ background: '#f0fdf4', color: '#16a34a' }}>Bảo mật cao</div>
               </div>
 
               <div className="mockup-chart-placeholder">
@@ -215,8 +215,8 @@ export default function RegisterPage() {
 
               <div className="mockup-rows">
                 <div className="mockup-row-item">
-                  <span style={{ fontWeight: 600 }}>Default Role Assignment</span>
-                  <span style={{ color: '#0070f3', fontWeight: 600 }}>USER</span>
+                  <span style={{ fontWeight: 600 }}>Gán vai trò mặc định</span>
+                  <span style={{ color: '#0070f3', fontWeight: 600 }}>NGƯỜI DÙNG</span>
                 </div>
               </div>
             </div>
@@ -226,8 +226,8 @@ export default function RegisterPage() {
                 <Award size={24} />
               </div>
               <div>
-                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>DATN 2026</div>
-                <div className="float-val" style={{ fontSize: 18 }}>Keycloak Federated</div>
+                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>HỆ THỐNG 2026</div>
+                <div className="float-val" style={{ fontSize: 18 }}>Xác thực liên kết</div>
               </div>
             </div>
           </div>
