@@ -277,6 +277,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                             desc.setResolvedAt(LocalDateTime.now());
                             workItemRepository.save(desc);
                             completionGate.onStatusChanged(desc, defaultDone, true, currentUserId);
+                            publishStatusChanged(desc, oldDescStatus, defaultDone, currentUserId);
                             if (currentUserId != null) {
                                 WorkItemChangelog descChangelog = WorkItemChangelog.builder()
                                         .workItemId(desc.getId())
@@ -389,17 +390,26 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
         }
 
         // 10. Publish Status Change Event (for GitHub 2-Way Sync & Other Integrations)
-        if (applicationEventPublisher != null) {
-            applicationEventPublisher.publishEvent(new WorkItemStatusChangedEvent(
-                    saved.getId(),
-                    saved.getProjectId(),
-                    oldStatus != null ? oldStatus.getCategory() : null,
-                    toStatus.getCategory(),
-                    currentUserId
-            ));
-        }
+        publishStatusChanged(saved, oldStatus, toStatus, currentUserId);
 
         return saved;
+    }
+
+    /**
+     * Phát {@link WorkItemStatusChangedEvent} cho MỌI đường đổi trạng thái (bước chuyển chính, tự hoàn thành
+     * việc con, Task cha tự mở lại / tự bắt đầu) để tích hợp như GitHub đồng bộ được. Listener chạy sau commit.
+     */
+    private void publishStatusChanged(WorkItem item, Status oldStatus, Status newStatus, UUID actorId) {
+        if (applicationEventPublisher == null || item == null || newStatus == null) {
+            return;
+        }
+        applicationEventPublisher.publishEvent(new WorkItemStatusChangedEvent(
+                item.getId(),
+                item.getProjectId(),
+                oldStatus != null ? oldStatus.getCategory() : null,
+                newStatus.getCategory(),
+                actorId
+        ));
     }
 
     // ─── Pipeline Helpers ────────────────────────────────────────────────────────
@@ -662,6 +672,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                         parent.setResolvedAt(null);
                         workItemRepository.save(parent);
                         completionGate.onStatusChanged(parent, targetReopenStatus, false, currentUserId);
+                        publishStatusChanged(parent, parentStatus, targetReopenStatus, currentUserId);
 
                         if (currentUserId != null) {
                             WorkItemChangelog statusChangelog = WorkItemChangelog.builder()
@@ -700,6 +711,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                         parent.setStatusId(targetStartStatus.getId());
                         workItemRepository.save(parent);
                         completionGate.onStatusChanged(parent, targetStartStatus, false, currentUserId);
+                        publishStatusChanged(parent, parentStatus, targetStartStatus, currentUserId);
 
                         if (currentUserId != null) {
                             WorkItemChangelog statusChangelog = WorkItemChangelog.builder()

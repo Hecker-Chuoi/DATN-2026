@@ -34,9 +34,12 @@ public class UserGitHubToken {
     @Column(name = "github_avatar_url", length = 512)
     private String githubAvatarUrl;
 
+    /** Mã hoá AES-GCM khi lưu (GitHubTokenConverter); trong code luôn là token gốc. */
+    @Convert(converter = com.datn.workservice.security.GitHubTokenConverter.class)
     @Column(name = "access_token_encrypted", nullable = false, columnDefinition = "TEXT")
     private String accessTokenEncrypted;
 
+    @Convert(converter = com.datn.workservice.security.GitHubTokenConverter.class)
     @Column(name = "refresh_token_encrypted", columnDefinition = "TEXT")
     private String refreshTokenEncrypted;
 

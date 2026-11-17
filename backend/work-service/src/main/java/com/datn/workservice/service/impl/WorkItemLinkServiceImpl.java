@@ -41,6 +41,7 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
     private final IdentityClient identityClient;
     private final WorkItemCompletionGate completionGate;
     private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
+    private final org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -186,6 +187,13 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
                     sourceItem.setResolvedAt(LocalDateTime.now());
                     workItemRepository.save(sourceItem);
                     completionGate.onStatusChanged(sourceItem, doneStatus, true, userId);
+                    if (applicationEventPublisher != null) {
+                        // Đồng bộ GitHub: việc bị đánh dấu trùng lặp vừa vào nhóm DONE
+                        applicationEventPublisher.publishEvent(new com.datn.workservice.event.WorkItemStatusChangedEvent(
+                                sourceItem.getId(), sourceItem.getProjectId(),
+                                sourceStatus != null ? sourceStatus.getCategory() : null,
+                                doneStatus.getCategory(), userId));
+                    }
                     auditService.recordCustomEvent(
                             sourceItemId,
                             "STATUS",

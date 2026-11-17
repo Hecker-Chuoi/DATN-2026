@@ -396,6 +396,120 @@ class GitHubIntegrationServiceTest {
         verifyNoInteractions(gitHubApiClient);
     }
 
+    private WorkItem stubPrTask(String code, Status status) {
+        WorkItem item = WorkItem.builder()
+                .id(UUID.randomUUID())
+                .projectId(projectId)
+                .code(code)
+                .statusId(status.getId())
+                .build();
+        when(projectGitHubRepoRepository.findAllByRepoFullNameIgnoreCase("datn-team/work-service")).thenReturn(List.of(projectRepo));
+        when(gitHubWebhookSignatureValidator.isValidSignature(anyString(), anyString(), eq("secret-xyz"))).thenReturn(true);
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        lenient().when(workItemRepository.findByProjectIdAndCode(projectId, code)).thenReturn(Optional.of(item));
+        lenient().when(workItemGitHubLinkRepository.findByWorkItemIdAndLinkTypeAndGithubNumber(any(), eq(GitHubLinkType.PULL_REQUEST), anyInt()))
+                .thenReturn(Optional.empty());
+        return item;
+    }
+
+    private static String prPayload(String action, boolean merged, boolean draft, String branch, String mergedBy) {
+        return """
+            {
+              "action": "%s",
+              "repository": { "full_name": "datn-team/work-service" },
+              "sender": { "id": 999 },
+              "pull_request": {
+                "id": 7001, "number": 42, "title": "Thêm đăng nhập OAuth",
+                "html_url": "https://github.com/datn-team/work-service/pull/42",
+                "merged": %s, "draft": %s,
+                "head": { "ref": "%s" },
+                "user": { "login": "dev1" },
+                "merged_by": %s
+              }
+            }
+            """.formatted(action, merged, draft, branch, mergedBy);
+    }
+
+    private void mapGithubUser(long githubId, UUID userId) {
+        when(userGitHubTokenRepository.findFirstByGithubUserId(githubId))
+                .thenReturn(Optional.of(UserGitHubToken.builder().userId(userId).accessTokenEncrypted("x").build()));
+        when(projectMemberService.hasPermission(projectId, userId, PermissionKey.ISSUE_TRANSITION)).thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("pull_request.opened: nhánh feat/datn-15-... gắn PR vào DATN-15 và chuyển Task sang trạng thái Review")
+    void testPullRequestOpened_MovesToReview() {
+        WorkItem item = stubPrTask("DATN-15", todoStatus);
+        UUID actorId = UUID.randomUUID();
+        mapGithubUser(999L, actorId);
+        when(workItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        when(statusRepository.findById(todoStatus.getId())).thenReturn(Optional.of(todoStatus));
+        UUID reviewTransition = UUID.randomUUID();
+        when(workflowEngineService.getAvailableTransitions(item.getId(), actorId)).thenReturn(List.of(
+                AvailableTransitionResponse.builder().transitionId(UUID.randomUUID()).toStatusName("In Progress").toStatusCategory(StatusCategory.IN_PROGRESS).build(),
+                AvailableTransitionResponse.builder().transitionId(reviewTransition).toStatusName("Code Review").toStatusCategory(StatusCategory.IN_PROGRESS).build(),
+                AvailableTransitionResponse.builder().transitionId(UUID.randomUUID()).toStatusName("Done").toStatusCategory(StatusCategory.DONE).build()
+        ));
+        when(workflowEngineService.executeTransition(eq(item.getId()), eq(reviewTransition), any(), eq(actorId))).thenReturn(item);
+
+        gitHubIntegrationService.handleWebhook("pull_request", "sig",
+                prPayload("opened", false, false, "feat/datn-15-oauth", "null"));
+
+        verify(workItemGitHubLinkRepository).save(argThat(l -> l.getLinkType() == GitHubLinkType.PULL_REQUEST
+                && l.getGithubNumber() == 42 && "OPEN".equals(l.getStatus()) && projectId.equals(l.getProjectId())));
+        verify(workflowEngineService).executeTransition(eq(item.getId()), eq(reviewTransition), any(), eq(actorId));
+    }
+
+    @Test
+    @DisplayName("pull_request.closed + merged: hoàn thành Task với tư cách người merge (không phải sender)")
+    void testPullRequestMerged_CompletesAsMerger() {
+        WorkItem item = stubPrTask("DATN-15", todoStatus);
+        UUID mergerUserId = UUID.randomUUID();
+        mapGithubUser(555L, mergerUserId);
+        when(workItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        when(statusRepository.findById(todoStatus.getId())).thenReturn(Optional.of(todoStatus));
+        UUID doneTransition = UUID.randomUUID();
+        when(workflowEngineService.getAvailableTransitions(item.getId(), mergerUserId)).thenReturn(List.of(
+                AvailableTransitionResponse.builder().transitionId(doneTransition).toStatusName("Done").toStatusCategory(StatusCategory.DONE).build()
+        ));
+        when(workflowEngineService.executeTransition(eq(item.getId()), eq(doneTransition), any(), eq(mergerUserId))).thenReturn(item);
+
+        gitHubIntegrationService.handleWebhook("pull_request", "sig",
+                prPayload("closed", true, false, "fix/other", "{ \"id\": 555 }").replace("Thêm đăng nhập OAuth", "DATN-15 sửa lỗi"));
+
+        verify(workItemGitHubLinkRepository).save(argThat(l -> "MERGED".equals(l.getStatus())));
+        verify(workflowEngineService).executeTransition(eq(item.getId()), eq(doneTransition),
+                argThat(r -> "DONE".equals(r.getResolution())), eq(mergerUserId));
+        verify(userGitHubTokenRepository, never()).findFirstByGithubUserId(999L);
+    }
+
+    @Test
+    @DisplayName("pull_request draft: chỉ gắn liên kết, không chuyển trạng thái")
+    void testPullRequestDraft_LinkOnly() {
+        stubPrTask("DATN-15", todoStatus);
+
+        gitHubIntegrationService.handleWebhook("pull_request", "sig",
+                prPayload("opened", false, true, "feat/DATN-15", "null"));
+
+        verify(workItemGitHubLinkRepository).save(argThat(l -> l.getLinkType() == GitHubLinkType.PULL_REQUEST));
+        verifyNoInteractions(workflowEngineService);
+    }
+
+    @Test
+    @DisplayName("pull_request không nhắc mã Task: bỏ qua; mã của dự án khác (XDATN-15) không bị nhận nhầm")
+    void testPullRequestWithoutTaskCode_Ignored() {
+        when(projectGitHubRepoRepository.findAllByRepoFullNameIgnoreCase("datn-team/work-service")).thenReturn(List.of(projectRepo));
+        when(gitHubWebhookSignatureValidator.isValidSignature(anyString(), anyString(), eq("secret-xyz"))).thenReturn(true);
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+
+        gitHubIntegrationService.handleWebhook("pull_request", "sig",
+                prPayload("opened", false, false, "feat/XDATN-15-login", "null"));
+
+        verify(workItemRepository, never()).findByProjectIdAndCode(any(), any());
+        verify(workItemGitHubLinkRepository, never()).save(any());
+        verifyNoInteractions(workflowEngineService);
+    }
+
     @Test
     @DisplayName("syncWorkItemStatusToGitHub: Task chuyển sang DONE -> gọi API đóng Issue trên GitHub")
     void testSyncWorkItemStatusToGitHub_DoneClosesIssue() {

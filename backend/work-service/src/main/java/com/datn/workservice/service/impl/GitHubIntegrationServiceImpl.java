@@ -34,6 +34,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -67,9 +69,18 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
     @Value("${github.webhook-url:}")
     private String webhookUrl;
 
-    /** Kết quả bước 1 của webhook: cần chuyển trạng thái Task qua workflow sau khi lưu liên kết. */
-    private record IssueFollowUp(UUID workItemId, UUID projectId, boolean toDone, Integer issueNumber) {
+    /** Đích chuyển trạng thái Task theo sự kiện GitHub. */
+    private enum MoveTarget { DONE, REOPEN, IN_REVIEW }
+
+    /**
+     * Kết quả bước 1 của webhook: cần chuyển trạng thái Task qua workflow sau khi lưu liên kết.
+     * {@code actorGithubId} là người thao tác trên GitHub (người đóng Issue, người merge PR…).
+     */
+    private record FollowUp(UUID workItemId, UUID projectId, MoveTarget target, String ref, Long actorGithubId) {
     }
+
+    /** Tên trạng thái được coi là "đang review" (dự án có thể tự đặt tên tiếng Anh hoặc tiếng Việt). */
+    private static final List<String> REVIEW_STATUS_KEYWORDS = List.of("review", "duyệt", "kiểm tra", "kiểm thử");
 
     @Override
     public String getOAuthAuthorizeUrl(UUID projectId, UUID currentUserId) {
@@ -99,7 +110,7 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         userToken.setGithubUserId(userProfile.getId());
         userToken.setGithubUsername(userProfile.getLogin());
         userToken.setGithubAvatarUrl(userProfile.getAvatarUrl());
-        userToken.setAccessTokenEncrypted(accessToken); // TODO: mã hóa AES trước khi lưu
+        userToken.setAccessTokenEncrypted(accessToken); // GitHubTokenConverter mã hoá AES-GCM khi lưu
         userToken.setRefreshTokenEncrypted(tokenResponse.getRefreshToken());
         userToken.setExpiresAt(tokenResponse.getExpiresIn() != null
                 ? LocalDateTime.now().plusSeconds(tokenResponse.getExpiresIn()) : null);
@@ -371,13 +382,15 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
             throw new BadRequestException("Chữ ký Webhook GitHub không hợp lệ");
         }
 
-        if (!"issues".equalsIgnoreCase(event)) {
-            log.info("Unhandled GitHub webhook event type: {}", event);
-            return;
-        }
-
         for (ProjectGitHubRepo repo : verified) {
-            handleIssueEvent(repo, root);
+            if ("issues".equalsIgnoreCase(event)) {
+                handleIssueEvent(repo, root);
+            } else if ("pull_request".equalsIgnoreCase(event)) {
+                handlePullRequestEvent(repo, root);
+            } else {
+                log.info("Unhandled GitHub webhook event type: {}", event);
+                return;
+            }
         }
     }
 
@@ -404,7 +417,7 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
             return;
         }
 
-        IssueFollowUp followUp;
+        FollowUp followUp;
         try {
             followUp = transactionTemplate.execute(status -> applyIssueEvent(repo, action, issue, root));
         } catch (DataIntegrityViolationException e) {
@@ -414,14 +427,119 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         }
 
         if (followUp != null) {
-            Long senderGithubId = root.path("sender").path("id").canConvertToLong()
-                    ? root.path("sender").path("id").asLong() : null;
-            moveWorkItemByGitHub(followUp, senderGithubId);
+            moveWorkItemByGitHub(followUp);
         }
     }
 
+    /**
+     * Pull Request nhắc mã Task (tiêu đề, tên nhánh hoặc mô tả, ví dụ {@code feat/DATN-12-auth}):
+     * gắn liên kết PR vào Task; mở PR (không phải draft) thì chuyển Task sang trạng thái review;
+     * merge PR thì hoàn thành Task (qua workflow + cổng "Tạm hoàn thành", với tư cách người merge).
+     */
+    private void handlePullRequestEvent(ProjectGitHubRepo repo, JsonNode root) {
+        String action = root.path("action").asText("");
+        JsonNode pr = root.path("pull_request");
+        if (pr.isMissingNode() || pr.isNull() || !pr.path("number").canConvertToInt()) {
+            return;
+        }
+        Long senderId = longOrNull(root.path("sender").path("id"));
+        Long mergerId = longOrNull(pr.path("merged_by").path("id"));
+        boolean merged = pr.path("merged").asBoolean(false);
+        boolean draft = pr.path("draft").asBoolean(false);
+
+        List<FollowUp> followUps = transactionTemplate.execute(status -> {
+            Project project = projectRepository.findById(repo.getProjectId()).orElse(null);
+            if (project == null) {
+                return List.<FollowUp>of();
+            }
+            String text = String.join("\n",
+                    pr.path("title").asText(""),
+                    pr.path("head").path("ref").asText(""),
+                    pr.path("body").asText(""));
+            List<WorkItem> items = findMentionedWorkItems(project, text);
+            if (items.isEmpty()) {
+                return List.<FollowUp>of();
+            }
+
+            String linkStatus = "closed".equals(action) ? (merged ? "MERGED" : "CLOSED") : "OPEN";
+            int number = pr.path("number").asInt();
+            String ref = "PR #" + number;
+            List<FollowUp> result = new ArrayList<>();
+            for (WorkItem item : items) {
+                upsertPullRequestLink(project.getId(), item.getId(), pr, number, linkStatus);
+
+                switch (action) {
+                    case "opened", "reopened", "ready_for_review" -> {
+                        if (!draft && Boolean.TRUE.equals(repo.getAutoMoveInReviewOnPr())) {
+                            result.add(new FollowUp(item.getId(), project.getId(), MoveTarget.IN_REVIEW, ref, senderId));
+                        }
+                    }
+                    case "closed" -> {
+                        if (merged && Boolean.TRUE.equals(repo.getAutoCloseTaskOnPrMerge())) {
+                            result.add(new FollowUp(item.getId(), project.getId(), MoveTarget.DONE, ref,
+                                    mergerId != null ? mergerId : senderId));
+                        }
+                    }
+                    default -> {
+                        // edited / synchronize…: chỉ cập nhật liên kết
+                    }
+                }
+            }
+            log.info("GitHub {} ({}) liên kết với {} công việc trong dự án '{}'", ref, action, items.size(), project.getName());
+            return result;
+        });
+
+        if (followUps != null) {
+            followUps.forEach(this::moveWorkItemByGitHub);
+        }
+    }
+
+    private void upsertPullRequestLink(UUID projectId, UUID workItemId, JsonNode pr, int number, String status) {
+        WorkItemGitHubLink link = workItemGitHubLinkRepository
+                .findByWorkItemIdAndLinkTypeAndGithubNumber(workItemId, GitHubLinkType.PULL_REQUEST, number)
+                .orElseGet(() -> WorkItemGitHubLink.builder()
+                        .workItemId(workItemId)
+                        .projectId(projectId)
+                        .linkType(GitHubLinkType.PULL_REQUEST)
+                        .githubNumber(number)
+                        .build());
+        link.setGithubId(pr.path("id").asText(null));
+        link.setTitle(pr.path("title").asText(null));
+        link.setUrl(pr.path("html_url").asText(""));
+        link.setStatus(status);
+        link.setAuthorName(pr.path("user").path("login").asText(null));
+        link.setAuthorAvatarUrl(pr.path("user").path("avatar_url").asText(null));
+        workItemGitHubLinkRepository.save(link);
+    }
+
+    /** Tìm các mã Task dạng {@code KEY-123} của dự án xuất hiện trong văn bản (không phân biệt hoa/thường). */
+    private List<WorkItem> findMentionedWorkItems(Project project, String text) {
+        if (project.getKey() == null || project.getKey().isBlank() || text == null || text.isBlank()) {
+            return List.of();
+        }
+        String key = project.getKey().trim().toUpperCase(Locale.ROOT);
+        Pattern pattern = Pattern.compile("(?<![A-Za-z0-9])" + Pattern.quote(key) + "-(\\d+)(?![0-9])",
+                Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(text);
+        Set<String> codes = new LinkedHashSet<>();
+        while (matcher.find() && codes.size() < 20) {
+            codes.add(key + "-" + matcher.group(1));
+        }
+        List<WorkItem> items = new ArrayList<>();
+        for (String code : codes) {
+            workItemRepository.findByProjectIdAndCode(project.getId(), code)
+                    .filter(item -> item.getDeletedAt() == null)
+                    .ifPresent(items::add);
+        }
+        return items;
+    }
+
+    private static Long longOrNull(JsonNode node) {
+        return node != null && !node.isMissingNode() && !node.isNull() && node.canConvertToLong() ? node.asLong() : null;
+    }
+
     /** Chạy trong transaction: cập nhật liên kết / tạo Task. Trả về việc cần chuyển trạng thái (nếu có). */
-    private IssueFollowUp applyIssueEvent(ProjectGitHubRepo repo, String action, GitHubIssueDto issue, JsonNode root) {
+    private FollowUp applyIssueEvent(ProjectGitHubRepo repo, String action, GitHubIssueDto issue, JsonNode root) {
         UUID projectId = repo.getProjectId();
         Project project = projectRepository.findById(projectId).orElse(null);
         if (project == null) {
@@ -453,7 +571,8 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                 if (!Boolean.TRUE.equals(repo.getAutoCloseTaskOnIssueClose())) {
                     return null;
                 }
-                return new IssueFollowUp(link.getWorkItemId(), projectId, closed, issue.getNumber());
+                return new FollowUp(link.getWorkItemId(), projectId, closed ? MoveTarget.DONE : MoveTarget.REOPEN,
+                        "issue #" + issue.getNumber(), longOrNull(root.path("sender").path("id")));
             }
             case "edited" -> {
                 if (linkOpt.isEmpty()) {
@@ -493,16 +612,16 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
     }
 
     /**
-     * Chuyển Task theo Issue đóng/mở lại bằng WorkflowEngine với tư cách người đã thao tác trên GitHub
-     * (tra theo sender.id ↔ tài khoản GitHub đã liên kết). Nhờ đi qua engine, mọi quy tắc vẫn áp dụng:
-     * người không phải Admin dự án chỉ tạo yêu cầu "Tạm hoàn thành", có lịch sử, thông báo, sổ ghi công.
+     * Chuyển Task theo sự kiện GitHub (Issue đóng / mở lại, PR mở / merge) bằng WorkflowEngine với tư cách người đã
+     * thao tác trên GitHub (tra theo github user id ↔ tài khoản GitHub đã liên kết). Nhờ đi qua engine, mọi quy tắc vẫn
+     * áp dụng: người không phải Admin dự án chỉ tạo yêu cầu "Tạm hoàn thành", có lịch sử, thông báo, sổ ghi công.
      * Không xác định được người thao tác (chưa liên kết DATN / không có quyền) thì chỉ cập nhật liên kết.
      */
-    private void moveWorkItemByGitHub(IssueFollowUp followUp, Long senderGithubId) {
-        UUID actorId = resolveActor(senderGithubId, followUp.projectId());
+    private void moveWorkItemByGitHub(FollowUp followUp) {
+        UUID actorId = resolveActor(followUp.actorGithubId(), followUp.projectId());
         if (actorId == null) {
-            log.info("GitHub issue #{}: người thao tác (github id={}) chưa liên kết tài khoản DATN hoặc không có quyền "
-                    + "chuyển trạng thái trong dự án, chỉ cập nhật trạng thái liên kết", followUp.issueNumber(), senderGithubId);
+            log.info("GitHub {}: người thao tác (github id={}) chưa liên kết tài khoản DATN hoặc không có quyền "
+                    + "chuyển trạng thái trong dự án, chỉ cập nhật liên kết", followUp.ref(), followUp.actorGithubId());
             return;
         }
         try {
@@ -510,38 +629,64 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
             if (item == null || item.getDeletedAt() != null) {
                 return;
             }
-            boolean currentlyDone = statusRepository.findById(item.getStatusId())
-                    .map(s -> s.getCategory() == StatusCategory.DONE)
-                    .orElse(false);
-            if (currentlyDone == followUp.toDone()) {
-                return;
-            }
+            Status current = statusRepository.findById(item.getStatusId()).orElse(null);
+            StatusCategory currentCategory = current != null ? current.getCategory() : null;
 
             List<AvailableTransitionResponse> transitions =
                     workflowEngineService.getAvailableTransitions(item.getId(), actorId);
-            Optional<AvailableTransitionResponse> chosen = followUp.toDone()
-                    ? transitions.stream().filter(t -> t.getToStatusCategory() == StatusCategory.DONE).findFirst()
-                    : transitions.stream().filter(t -> t.getToStatusCategory() == StatusCategory.TODO).findFirst()
-                    .or(() -> transitions.stream().filter(t -> t.getToStatusCategory() != StatusCategory.DONE).findFirst());
+            Optional<AvailableTransitionResponse> chosen = switch (followUp.target()) {
+                case DONE -> currentCategory == StatusCategory.DONE ? Optional.empty()
+                        : transitions.stream().filter(t -> t.getToStatusCategory() == StatusCategory.DONE).findFirst();
+                case REOPEN -> currentCategory != StatusCategory.DONE ? Optional.empty()
+                        : transitions.stream().filter(t -> t.getToStatusCategory() == StatusCategory.TODO).findFirst()
+                        .or(() -> transitions.stream().filter(t -> t.getToStatusCategory() != StatusCategory.DONE).findFirst());
+                case IN_REVIEW -> chooseReviewTransition(current, transitions);
+            };
             if (chosen.isEmpty()) {
-                log.warn("WorkItem '{}': quy trình không có bước chuyển phù hợp để {} theo GitHub issue #{}",
-                        item.getCode(), followUp.toDone() ? "hoàn thành" : "mở lại", followUp.issueNumber());
+                log.info("WorkItem '{}': không có bước chuyển phù hợp ({}) theo GitHub {}",
+                        item.getCode(), followUp.target(), followUp.ref());
                 return;
             }
 
             WorkItem result = workflowEngineService.executeTransition(item.getId(), chosen.get().getTransitionId(),
                     ExecuteTransitionRequest.builder()
                             .transitionId(chosen.get().getTransitionId())
-                            .resolution(followUp.toDone() ? WorkItemResolution.DONE.name() : null)
-                            .comment("Tự động theo GitHub issue #" + followUp.issueNumber())
+                            .resolution(followUp.target() == MoveTarget.DONE ? WorkItemResolution.DONE.name() : null)
+                            .comment("Tự động theo GitHub " + followUp.ref())
                             .build(),
                     actorId);
-            log.info("WorkItem '{}' {} theo GitHub issue #{} (người thao tác {})", result.getCode(),
-                    followUp.toDone() ? "chuyển hoàn thành / gửi yêu cầu duyệt" : "mở lại", followUp.issueNumber(), actorId);
+            log.info("WorkItem '{}' → {} theo GitHub {} (người thao tác {})",
+                    result.getCode(), chosen.get().getToStatusName(), followUp.ref(), actorId);
         } catch (RuntimeException e) {
-            log.warn("Không thể chuyển trạng thái WorkItem {} theo GitHub issue #{}: {}",
-                    followUp.workItemId(), followUp.issueNumber(), e.getMessage());
+            log.warn("Không thể chuyển trạng thái WorkItem {} theo GitHub {}: {}",
+                    followUp.workItemId(), followUp.ref(), e.getMessage());
         }
+    }
+
+    /**
+     * PR được mở: ưu tiên bước chuyển tới trạng thái có tên kiểu "Review"/"Chờ duyệt"; quy trình không có trạng thái
+     * review thì Task đang ở To Do được chuyển sang nhóm In Progress. Không kéo Task đã Done hoặc đang review lùi lại.
+     */
+    private Optional<AvailableTransitionResponse> chooseReviewTransition(Status current,
+                                                                         List<AvailableTransitionResponse> transitions) {
+        if (current == null || current.getCategory() == StatusCategory.DONE || isReviewStatusName(current.getName())) {
+            return Optional.empty();
+        }
+        Optional<AvailableTransitionResponse> review = transitions.stream()
+                .filter(t -> t.getToStatusCategory() != StatusCategory.DONE && isReviewStatusName(t.getToStatusName()))
+                .findFirst();
+        if (review.isPresent() || current.getCategory() != StatusCategory.TODO) {
+            return review;
+        }
+        return transitions.stream().filter(t -> t.getToStatusCategory() == StatusCategory.IN_PROGRESS).findFirst();
+    }
+
+    private static boolean isReviewStatusName(String name) {
+        if (name == null) {
+            return false;
+        }
+        String lower = name.toLowerCase(Locale.ROOT);
+        return REVIEW_STATUS_KEYWORDS.stream().anyMatch(lower::contains);
     }
 
     private UUID resolveActor(Long senderGithubId, UUID projectId) {
@@ -736,6 +881,10 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
     public String getValidAccessToken(UserGitHubToken userToken) {
         if (userToken == null) {
             throw new BadRequestException("Chưa kết nối tài khoản GitHub");
+        }
+        if (userToken.getAccessTokenEncrypted() == null) {
+            // Không giải mã được (khoá mã hoá đã đổi): buộc kết nối lại
+            throw new BadRequestException("Không đọc được token GitHub đã lưu, vui lòng kết nối lại tài khoản GitHub");
         }
 
         // Tự động làm mới token nếu có refresh_token và sắp hết hạn trong vòng 5 phút

@@ -84,6 +84,8 @@ github:
   client-secret: ${GITHUB_CLIENT_SECRET:}
   redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:5173/integrations/github/callback}
   api-url: https://api.github.com
+  # Khoá mã hoá token GitHub lưu trong DB (để trống thì dẫn xuất từ client-secret)
+  token-encryption-key: ${GITHUB_TOKEN_ENCRYPTION_KEY:}
   # Khoá ký OAuth state (để trống thì dùng client-secret)
   state-secret: ${GITHUB_STATE_SECRET:}
   # URL công khai đầy đủ GitHub gọi webhook, vd qua gateway + ngrok:
