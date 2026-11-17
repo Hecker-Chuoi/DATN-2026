@@ -32,7 +32,7 @@ flowchart TD
 
 | Tầng | Bảng dữ liệu | Service quản lý | Loại User ID | Các vai trò chuẩn |
 |------|--------------|-----------------|--------------|-------------------|
-| **Workspace** | `workspace_members` | `workspace-service` | `users.id` (D) | `OWNER` > `ADMIN` > `MEMBER` > `GUEST` |
+| **Workspace** | `workspace_members` | `workspace-service` | Keycloak `sub` (K) | `OWNER` > `ADMIN` > `MEMBER` > `GUEST` |
 | **Project** | `role_assignments` | `work-service` | Keycloak `sub` (K) | `ADMINISTRATOR` > `MEMBER` > `VIEWER` |
 
 > ℹ️ **Loại bỏ hoàn toàn tầng Team:**  
@@ -51,7 +51,7 @@ Workspace đóng vai trò là **gốc Tenant (Organization)**: ranh giới cô l
 | `name` | Bắt buộc, tên tổ chức / không gian làm việc |
 | `slug` | Duy nhất toàn hệ thống; nếu để trống hệ thống tự động sinh từ tên (chuyển chữ thường, bỏ dấu tiếng Việt, thêm hậu tố số nếu trùng) |
 | `description`, `avatarUrl` | Tùy chọn mô tả và ảnh đại diện |
-| `createdBy` | Lưu trữ `users.id` của người khởi tạo phục vụ audit log |
+| `createdBy` | Lưu trữ Keycloak `sub` của người khởi tạo phục vụ audit log |
 | `deletedAt` | Hỗ trợ xóa mềm (Soft Delete) |
 
 ### 2.2. Vai trò trong Workspace
@@ -92,7 +92,8 @@ sequenceDiagram
     participant NS as notification-service
     actor B as Người được mời
     A->>WS: POST /workspaces/{id}/members {identifier, role}
-    WS->>ID: Tra cứu users.id theo email / username
+    WS->>ID: Tra cứu người dùng theo email / username
+    ID-->>WS: Thông tin người dùng (lấy keycloakId = sub để lưu)
     WS->>WS: Kiểm tra: Đã là thành viên? Đã có lời mời PENDING?
     WS->>WS: Tạo bản ghi workspace_invitations (status = PENDING)
     WS->>NS: Gửi email lời mời kèm liên kết xác nhận
@@ -165,23 +166,18 @@ Vì `work-service` không lưu trữ bảng `workspace_members`, các thao tác 
 sequenceDiagram
     participant WK as work-service
     participant R as Redis Cache (:6380)
-    participant ID as identity-service
     participant WS as workspace-service
-    WK->>R: Tra cứu canonicalUserId(sub)
+    Note over WK: userId = sub lấy từ JWT (SecurityUtils.getCurrentUserId())
+    WK->>R: Tra cứu vai trò Workspace: wsRole(workspaceId, sub)
     alt Chưa có trong Cache
-        WK->>ID: GET /internal/users/{sub}
-        ID-->>WK: users.id
-        WK->>R: Lưu Cache (TTL 1 giờ)
-    end
-    WK->>R: Tra cứu vai trò Workspace: wsRole(workspaceId, users.id)
-    alt Chưa có trong Cache
-        WK->>WS: GET /internal/workspaces/{wsId}/members/{userId}/role
+        WK->>WS: GET /internal/workspaces/{wsId}/members/{sub}/role
         WS-->>WK: WorkspaceRole (ví dụ: "MEMBER")
         WK->>R: Lưu Cache (TTL 10 phút)
     end
     WK->>WK: So sánh bậc vai trò với yêu cầu tối thiểu
 ```
 
+- **Không cần quy đổi ID:** `workspace_members` và `role_assignments` cùng lưu Keycloak `sub` (workspace-service chuyển sang từ Flyway V6), nên work-service hỏi thẳng bằng `sub` lấy từ JWT, không phải gọi identity-service.
 - **Nguyên tắc an toàn (Fail-closed):** Nếu `workspace-service` gặp sự cố hoặc không phản hồi, `work-service` mặc định từ chối truy cập (HTTP 403 Forbidden).
 - Khi vai trò của thành viên trong Workspace thay đổi hoặc bị thu hồi, quyền trong cache sẽ tự động hết hạn sau tối đa 10 phút.
 

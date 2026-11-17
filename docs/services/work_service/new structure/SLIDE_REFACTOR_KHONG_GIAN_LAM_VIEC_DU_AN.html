@@ -213,6 +213,12 @@
       font-weight: bold;
     }
     ul.bullet-danger li::before { color: var(--rose); }
+    ul.bullet-lg { gap: 14px; margin-top: 8px; }
+    ul.bullet-lg li { font-size: 16px; line-height: 1.55; }
+
+    /* Slide ít nội dung: căn giữa phần thân theo chiều dọc */
+    .slide-body-center { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    .card-roomy { padding: 26px 28px; gap: 10px; }
     ul.bullet-success li::before { color: var(--emerald); }
 
     /* ─── CODE PILLS & TABLE ─── */
@@ -374,53 +380,44 @@
         <div class="badge badge-rose">NGUYÊN NHÂN GÂY KÉM HIỆU QUẢ</div>
       </div>
       <h2>Tại Sao Mô Hình <span style="color: var(--rose);">Team</span> Hiện Tại Gây Tắc Nghẽn?</h2>
-      <p style="margin-bottom: 20px;">Trải nghiệm thực tế và rà soát toàn bộ mã nguồn cho thấy 4 nút thắt chí mạng:</p>
-      
-      <div class="grid-2" style="flex: 1;">
-        <div class="card card-danger">
-          <div class="card-header-icon">
-            <div class="icon-box icon-rose">🛑</div>
-            <h3>1. Rào Cản Trải Nghiệm (UX Friction)</h3>
-          </div>
-          <ul class="bullet-list bullet-danger">
-            <li><strong>Bắt buộc tạo Team trước:</strong> Người dùng vào Workspace muốn tạo ngay một dự án nhỏ thì bị chặn lại.</li>
-            <li><strong>Chỉ Trưởng nhóm mới được tạo dự án:</strong> Điều kiện <code class="code-pill">leaderTeams.length > 0</code> khiến thành viên thông thường không thể tự chủ không gian làm việc.</li>
-            <li><strong>Sidebar cồng kềnh:</strong> Cây Accordion lồng 3 cấp (Workspace → Team → Project) gây phân mảnh thị giác.</li>
-          </ul>
-        </div>
+      <p>Trải nghiệm thực tế cho thấy 3 nút thắt chính:</p>
 
-        <div class="card card-danger">
-          <div class="card-header-icon">
-            <div class="icon-box icon-rose">🔀</div>
-            <h3>2. Bẫy Đồng Bộ Quyền (Sync Hell)</h3>
+      <div class="slide-body-center">
+        <div class="grid-3">
+          <div class="card card-danger card-roomy">
+            <div class="card-header-icon">
+              <div class="icon-box icon-rose">🛑</div>
+              <h3>1. Rào Cản Trải Nghiệm</h3>
+            </div>
+            <ul class="bullet-list bullet-danger bullet-lg">
+              <li>Phải tạo Team trước mới tạo được dự án.</li>
+              <li>Chỉ Trưởng nhóm mới được tạo dự án.</li>
+              <li>Sidebar lồng 3 cấp, khó theo dõi.</li>
+            </ul>
           </div>
-          <ul class="bullet-list bullet-danger">
-            <li><strong>3 bộ Role chạy song song:</strong> <code class="code-pill">WorkspaceRole</code> + <code class="code-pill">TeamRole</code> + <code class="code-pill">ProjectRole</code> chồng chéo trách nhiệm.</li>
-            <li><strong>Vòng lặp đồng bộ 2 chiều:</strong> Mỗi khi thêm/xóa/sửa role team, backend phải gọi <code class="code-pill">syncMemberToTeamProjects()</code> trên toàn bộ dự án con.</li>
-            <li><strong>Lỗi "Bóng ma Leader":</strong> Khi user rời Workspace nhưng vẫn còn lưu <code class="code-pill">teams.owner_id</code>, backend phải viết 100 dòng code chắp vá phòng thủ.</li>
-          </ul>
-        </div>
 
-        <div class="card card-alt">
-          <div class="card-header-icon">
-            <div class="icon-box icon-amber">📬</div>
-            <h3>3. Dư Thừa Tầng Lời Mời (Invitations)</h3>
+          <div class="card card-danger card-roomy">
+            <div class="card-header-icon">
+              <div class="icon-box icon-rose">🔀</div>
+              <h3>2. Bẫy Đồng Bộ Quyền</h3>
+            </div>
+            <ul class="bullet-list bullet-danger bullet-lg">
+              <li>3 tầng vai trò chồng chéo: Workspace, Team, Dự án.</li>
+              <li>Đổi vai trò trong Team phải cập nhật lại mọi dự án con.</li>
+              <li>Thành viên đã rời Workspace vẫn còn là Trưởng nhóm.</li>
+            </ul>
           </div>
-          <ul class="bullet-list">
-            <li>Người dùng nhận đến <strong>3 loại lời mời</strong>: Mời vào Workspace, Mời vào Team, Mời vào Dự án.</li>
-            <li>Bảng <code class="code-pill">invitations</code> phải xử lý 2 type với cấu trúc dữ liệu khác nhau (<code class="code-pill">team_role</code> vs <code class="code-pill">project_role_id</code>).</li>
-          </ul>
-        </div>
 
-        <div class="card card-alt">
-          <div class="card-header-icon">
-            <div class="icon-box icon-blue">🌐</div>
-            <h3>4. Lệch Chuẩn Sản Phẩm Thực Tế</h3>
+          <div class="card card-alt card-roomy">
+            <div class="card-header-icon">
+              <div class="icon-box icon-amber">📬</div>
+              <h3>3. Dư Thừa Tầng Lời Mời</h3>
+            </div>
+            <ul class="bullet-list bullet-lg">
+              <li>3 loại lời mời: Workspace, Team, Dự án.</li>
+              <li>Người nhận dễ nhầm mình được mời vào đâu.</li>
+            </ul>
           </div>
-          <ul class="bullet-list">
-            <li><strong>Linear.app:</strong> Chỉ có Workspace chứa Projects. Team chỉ là tag phân loại, không khóa quyền dự án.</li>
-            <li><strong>Jira Cloud:</strong> Quản lý trực tiếp theo Organization/Site → Projects. Phân quyền tập trung hoàn toàn tại Project Role.</li>
-          </ul>
         </div>
       </div>
     </section>
@@ -488,58 +485,33 @@
     <section class="slide">
       <div class="slide-header">
         <div class="eyebrow">03. PHÂN TÍCH HIỆU QUẢ</div>
-        <div class="badge badge-emerald">6 LỢI ÍCH CỐT LÕI (PROS)</div>
+        <div class="badge badge-emerald">LỢI ÍCH CỐT LÕI</div>
       </div>
       <h2>Lợi Ích Khi Loại Bỏ Team Khỏi Hệ Thống</h2>
-      <p style="margin-bottom: 18px;">Giải phóng toàn bộ gánh nặng kiến trúc, nâng tầm trải nghiệm ứng dụng:</p>
 
-      <div class="grid-3" style="flex: 1;">
-        <div class="card card-primary">
-          <div class="card-header-icon">
-            <div class="icon-box icon-blue">⚡</div>
-            <h3>1. Trải Nghiệm Tức Thì</h3>
+      <div class="slide-body-center">
+        <div class="grid-2">
+          <div class="card card-primary card-roomy">
+            <div class="card-header-icon">
+              <div class="icon-box icon-indigo">🛡️</div>
+              <h3>1. Phân Quyền Trong Sáng</h3>
+            </div>
+            <ul class="bullet-list bullet-lg">
+              <li>Chỉ còn 2 tầng: Quản trị Workspace và Quản trị Dự án.</li>
+              <li>Không còn vai trò Team chen giữa, không phải đồng bộ quyền.</li>
+            </ul>
           </div>
-          <p style="font-size: 13px;">Thành viên Workspace tạo dự án mới ngay lập tức. Không còn thông báo chặn ngớ ngẩn *"Bạn phải là trưởng nhóm"*. Onboarding siêu nhanh.</p>
-        </div>
 
-        <div class="card card-primary">
-          <div class="card-header-icon">
-            <div class="icon-box icon-indigo">🛡️</div>
-            <h3>2. Phân Quyền Trong Sáng</h3>
+          <div class="card card-primary card-roomy">
+            <div class="card-header-icon">
+              <div class="icon-box icon-blue">💌</div>
+              <h3>2. Tối Giản Luồng Mời</h3>
+            </div>
+            <ul class="bullet-list bullet-lg">
+              <li>Chỉ còn 2 loại lời mời: vào Workspace và vào Dự án.</li>
+              <li>Người nhận biết ngay mình được mời vào đâu.</li>
+            </ul>
           </div>
-          <p style="font-size: 13px;">Thu về đúng 2 tầng chuẩn mực: Quản trị Workspace và Quản trị Dự án theo Jira. Triệt tiêu toàn bộ <code class="code-pill">TeamRole</code> và <code class="code-pill">@RequireTeamRole</code>.</p>
-        </div>
-
-        <div class="card card-primary">
-          <div class="card-header-icon">
-            <div class="icon-box icon-emerald">💎</div>
-            <h3>3. Toàn Vẹn Dữ Liệu Tuyệt Đối</h3>
-          </div>
-          <p style="font-size: 13px;">Xóa sạch code đồng bộ <code class="code-pill">syncTeamMembersToProject</code>. Không còn tình trạng dữ liệu out-of-sync hay bóng ma leader khi rời workspace.</p>
-        </div>
-
-        <div class="card card-primary">
-          <div class="card-header-icon">
-            <div class="icon-box icon-teal">🚀</div>
-            <h3>4. Tăng Tốc Hiệu Năng</h3>
-          </div>
-          <p style="font-size: 13px;">Giảm 3 - 5 API calls mỗi phiên tải trang. Query dự án lọc trực tiếp theo <code class="code-pill">workspace_id</code> có index scan cực nhanh, bỏ mọi join bảng Team.</p>
-        </div>
-
-        <div class="card card-primary">
-          <div class="card-header-icon">
-            <div class="icon-box icon-amber">🧹</div>
-            <h3>5. Giảm 4.000 Dòng Code</h3>
-          </div>
-          <p style="font-size: 13px;">Xóa bỏ <code class="code-pill">TeamController</code> (705 lines), <code class="code-pill">TeamDetailPage</code> (1.778 lines), <code class="code-pill">TeamSecurity</code> và hàng loạt DTOs, giảm gánh nặng bảo trì.</p>
-        </div>
-
-        <div class="card card-primary">
-          <div class="card-header-icon">
-            <div class="icon-box icon-blue">💌</div>
-            <h3>6. Tối Giản Luồng Mời</h3>
-          </div>
-          <p style="font-size: 13px;">Chỉ còn 2 loại lời mời rõ ràng: Mời vào Workspace (tổ chức) và Mời vào Dự án (thực thi). Trải nghiệm nhận thư mời mượt mà, không nhầm lẫn.</p>
         </div>
       </div>
     </section>
@@ -660,177 +632,10 @@
       </div>
     </section>
 
-    <!-- ═══════════════ SLIDE 7: HẠNG MỤC BACKEND & DB ═══════════════ -->
-    <section class="slide">
-      <div class="slide-header">
-        <div class="eyebrow">06. CHECKLIST REFACTOR BACKEND & DB</div>
-        <div class="badge badge-rose">CHI TIẾT DANH MỤC THAY ĐỔI</div>
-      </div>
-      <h2>Các Hạng Mục Cần Sửa: Backend Java & Database</h2>
-      <p style="margin-bottom: 14px;">Chi tiết các thành phần cần xóa bỏ và chỉnh sửa trong 3 dịch vụ:</p>
-
-      <div class="grid-3" style="flex: 1;">
-        <div class="card card-danger">
-          <div class="card-header-icon">
-            <div class="icon-box icon-rose">🗑️</div>
-            <h3>Xóa Bỏ (Work Service)</h3>
-          </div>
-          <ul class="bullet-list bullet-danger" style="font-size: 12px;">
-            <li><code class="code-pill">TeamController.java</code> (705 dòng)</li>
-            <li><code class="code-pill">Team.java</code>, <code class="code-pill">TeamMember.java</code></li>
-            <li><code class="code-pill">TeamRole.java</code> (LEADER, MEMBER, VIEWER)</li>
-            <li><code class="code-pill">TeamRepository.java</code>, <code class="code-pill">TeamMemberRepository</code></li>
-            <li><code class="code-pill">TeamSecurity.java</code>, <code class="code-pill">TeamRoleGuard.java</code></li>
-            <li><code class="code-pill">@RequireTeamRole.java</code></li>
-            <li>Toàn bộ 8 Request/Response DTO của Team</li>
-            <li>3 file Unit Test: <code class="code-pill">TeamControllerTest</code>...</li>
-          </ul>
-        </div>
-
-        <div class="card card-primary">
-          <div class="card-header-icon">
-            <div class="icon-box icon-blue">✏️</div>
-            <h3>Chỉnh Sửa (Work Service)</h3>
-          </div>
-          <ul class="bullet-list" style="font-size: 12px;">
-            <li><strong>Project:</strong> Xóa cột & field <code class="code-pill">teamId</code>.</li>
-            <li><strong>ProjectServiceImpl:</strong> Bỏ validate team; cho phép Workspace MEMBER tạo dự án; xóa <code class="code-pill">syncTeamMembersToProject</code>.</li>
-            <li><strong>Invitation:</strong> Bỏ <code class="code-pill">type = TEAM</code> và <code class="code-pill">teamRole</code>, chỉ còn <code class="code-pill">type = PROJECT</code>.</li>
-            <li><strong>Template:</strong> Tạo dự án từ template không kiểm tra team.</li>
-          </ul>
-        </div>
-
-        <div class="card card-alt">
-          <div class="card-header-icon">
-            <div class="icon-box icon-teal">🔄</div>
-            <h3>Database & Các Service Khác</h3>
-          </div>
-          <ul class="bullet-list" style="font-size: 12px;">
-            <li><strong>Flyway V8 (Work):</strong> Di trú role sang <code class="code-pill">role_assignments</code>, xóa cột <code class="code-pill">team_id</code>, drop bảng <code class="code-pill">teams</code>, <code class="code-pill">team_members</code>.</li>
-            <li><strong>workspace-service:</strong> Xóa field <code class="code-pill">teamCount</code>; SchemaIntegrityChecker bỏ check teams.</li>
-            <li><strong>identity-service:</strong> Bỏ query <code class="code-pill">DELETE FROM team_members</code> trong WorkDataCleanupService.</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- ═══════════════ SLIDE 8: HẠNG MỤC FRONTEND ═══════════════ -->
-    <section class="slide">
-      <div class="slide-header">
-        <div class="eyebrow">07. CHECKLIST REFACTOR FRONTEND</div>
-        <div class="badge badge-indigo">REACT 19 + VITE 8</div>
-      </div>
-      <h2>Các Hạng Mục Cần Sửa: Frontend (Giao Diện & State)</h2>
-      <p style="margin-bottom: 16px;">Đơn giản hóa giao diện, tăng tốc điều hướng và dọn dẹp các trang dư thừa:</p>
-
-      <div class="grid-3" style="flex: 1;">
-        <div class="card card-danger">
-          <div class="card-header-icon">
-            <div class="icon-box icon-rose">🗑️</div>
-            <h3>File & Trang Bị Xóa</h3>
-          </div>
-          <ul class="bullet-list bullet-danger" style="font-size: 12px;">
-            <li><strong>TeamDetailPage.jsx</strong> (1.778 dòng) — Xóa hoàn toàn.</li>
-            <li><strong>CreateTeamModal.jsx</strong> (260 dòng) — Xóa hoàn toàn.</li>
-            <li><strong>Route trong App.jsx:</strong> Xóa <code class="code-pill">/teams/:teamId</code>.</li>
-            <li><strong>api.js:</strong> Xóa toàn bộ cụm <code class="code-pill">teamApi = { ... }</code>.</li>
-          </ul>
-        </div>
-
-        <div class="card card-primary">
-          <div class="card-header-icon">
-            <div class="icon-box icon-blue">✨</div>
-            <h3>Sidebar & Layout</h3>
-          </div>
-          <ul class="bullet-list" style="font-size: 12px;">
-            <li><strong>Sidebar.jsx:</strong> Xóa bỏ Section 3 Accordion Team lồng nhau. Thay bằng danh sách <strong>"Dự án của bạn"</strong> dạng cây phẳng trực quan.</li>
-            <li><strong>WorkspaceLayout.jsx:</strong> Bỏ <code class="code-pill">teams</code>, <code class="code-pill">leaderTeams</code>, <code class="code-pill">fetchTeams()</code>. Quyền <code class="code-pill">canCreateProject</code> chỉ phụ thuộc vào <code class="code-pill">useWorkspaceRole()</code>.</li>
-          </ul>
-        </div>
-
-        <div class="card card-alt">
-          <div class="card-header-icon">
-            <div class="icon-box icon-emerald">🛠️</div>
-            <h3>Modals & Pages Khác</h3>
-          </div>
-          <ul class="bullet-list" style="font-size: 12px;">
-            <li><strong>CreateProjectModal.jsx:</strong> Xóa bỏ selector chọn Team và validate bắt buộc team. Người dùng chỉ cần nhập Tên dự án + Key!</li>
-            <li><strong>ProjectListPage.jsx:</strong> Xóa param filter <code class="code-pill">teamId</code>, xóa cảnh báo chặn tạo dự án.</li>
-            <li><strong>AdminProjectManagement.jsx:</strong> Xóa dropdown lọc theo nhóm và cột tên nhóm.</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- ═══════════════ SLIDE 9: LỘ TRÌNH 4 BƯỚC ═══════════════ -->
-    <section class="slide">
-      <div class="slide-header">
-        <div class="eyebrow">08. KẾ HOẠCH HÀNH ĐỘNG</div>
-        <div class="badge badge-emerald">LỘ TRÌNH 4 GIAI ĐOẠN TRIỂN KHAI</div>
-      </div>
-      <h2>Lộ Trình Thực Hiện Từng Bước An Toàn Tuyệt Đối</h2>
-      <p style="margin-bottom: 20px;">Trình tự thực thi chuẩn nhằm tránh đứt gãy hệ thống và không làm mất dữ liệu cũ:</p>
-
-      <div class="grid-4" style="flex: 1;">
-        <div class="card card-alt">
-          <div class="badge badge-blue" style="width: fit-content; margin-bottom: 6px;">BƯỚC 1</div>
-          <div class="card-header-icon">
-            <div class="icon-box icon-blue">💾</div>
-            <h3>Database Migration</h3>
-          </div>
-          <p style="font-size: 12px; color: var(--text-muted);">
-            • Backup PostgreSQL DB.<br>
-            • Viết Flyway <code class="code-pill">V8</code> di trú thành viên team sang <code class="code-pill">role_assignments</code>.<br>
-            • Xóa cột <code class="code-pill">team_id</code>, drop bảng teams.
-          </p>
-        </div>
-
-        <div class="card card-alt">
-          <div class="badge badge-indigo" style="width: fit-content; margin-bottom: 6px;">BƯỚC 2</div>
-          <div class="card-header-icon">
-            <div class="icon-box icon-indigo">⚙️</div>
-            <h3>Backend Refactor</h3>
-          </div>
-          <p style="font-size: 12px; color: var(--text-muted);">
-            • Xóa các class Team trong <code class="code-pill">work-service</code>.<br>
-            • Cập nhật <code class="code-pill">ProjectServiceImpl</code>, <code class="code-pill">InvitationServiceImpl</code>.<br>
-            • Cập nhật và chạy pass 100% Unit Tests.
-          </p>
-        </div>
-
-        <div class="card card-alt">
-          <div class="badge badge-teal" style="width: fit-content; margin-bottom: 6px;">BƯỚC 3</div>
-          <div class="card-header-icon">
-            <div class="icon-box icon-teal">🎨</div>
-            <h3>Frontend Refactor</h3>
-          </div>
-          <p style="font-size: 12px; color: var(--text-muted);">
-            • Xóa <code class="code-pill">TeamDetailPage</code>, <code class="code-pill">CreateTeamModal</code>.<br>
-            • Tinh gọn <code class="code-pill">Sidebar</code>, <code class="code-pill">CreateProjectModal</code>.<br>
-            • Cập nhật <code class="code-pill">api.js</code> và <code class="code-pill">WorkspaceLayout</code>.
-          </p>
-        </div>
-
-        <div class="card card-alt">
-          <div class="badge badge-emerald" style="width: fit-content; margin-bottom: 6px;">BƯỚC 4</div>
-          <div class="card-header-icon">
-            <div class="icon-box icon-emerald">🧪</div>
-            <h3>Kiểm Thử E2E</h3>
-          </div>
-          <p style="font-size: 12px; color: var(--text-muted);">
-            • Test tạo dự án Scrum/Kanban mới.<br>
-            • Test phân quyền Jira và mời thành viên.<br>
-            • Test nhân bản Template.<br>
-            • Kiểm tra Admin Portal.
-          </p>
-        </div>
-      </div>
-    </section>
-
     <!-- ═══════════════ SLIDE 10: TỔNG KẾT ═══════════════ -->
     <section class="slide">
       <div class="slide-header">
-        <div class="eyebrow">09. TỔNG KẾT & KẾT LUẬN</div>
+        <div class="eyebrow">06. TỔNG KẾT & KẾT LUẬN</div>
         <div class="badge badge-blue">KIẾN TRÚC MỚI VỮNG CHẮC</div>
       </div>
       <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 20px;">
@@ -872,7 +677,7 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
     Trước
   </button>
-  <div class="hud-counter" id="slideCounter">1 / 10</div>
+  <div class="hud-counter" id="slideCounter">1 / 7</div>
   <button id="btnNext" title="Phím mũi tên phải [→] hoặc Space">
     Tiếp
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>

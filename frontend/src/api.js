@@ -418,7 +418,7 @@ export const workItemApi = {
   listByProject: (projectId, params) =>
     apiClient.get(`${WORK_BASE}/projects/${projectId}/items`, { params }),
   getById: (id) => apiClient.get(`${WORK_BASE}/items/${id}`),
-  getByCode: (code) => apiClient.get(`${WORK_BASE}/items/code/${code}`),
+  getByCode: (code, config = {}) => apiClient.get(`${WORK_BASE}/items/code/${encodeURIComponent(code)}`, config),
   create: (projectIdOrData, maybeData) => {
     if (maybeData) {
       return apiClient.post(`${WORK_BASE}/projects/${projectIdOrData}/items`, maybeData);
@@ -427,6 +427,17 @@ export const workItemApi = {
     return apiClient.post(`${WORK_BASE}/projects/${projectId}/items`, projectIdOrData);
   },
   update: (id, data) => apiClient.put(`${WORK_BASE}/items/${id}`, data),
+  // Giao / hủy giao việc (assigneeId = null là hủy giao) — luôn được ghi vào Lịch sử
+  changeAssignee: (id, assigneeId) =>
+    apiClient.put(`${WORK_BASE}/items/${id}/assignee`, { assigneeId: assigneeId || null }),
+  // "Tạm hoàn thành" → Admin dự án xác nhận / từ chối
+  listCompletionRequests: (projectId) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/completion-requests`),
+  getCompletionHistory: (id) => apiClient.get(`${WORK_BASE}/items/${id}/completion-requests`),
+  approveCompletion: (id) => apiClient.post(`${WORK_BASE}/items/${id}/completion/approve`),
+  rejectCompletion: (id, reason) =>
+    apiClient.post(`${WORK_BASE}/items/${id}/completion/reject`, { reason: reason || null }),
+  cancelCompletion: (id) => apiClient.delete(`${WORK_BASE}/items/${id}/completion`),
   updateRank: (id, data) =>
     apiClient.patch(
       `${WORK_BASE}/items/${id}/rank`,
@@ -687,6 +698,36 @@ export const aiApi = {
   deleteMemory: (id) => apiClient.delete(`${AI_BASE}/memories/${id}`),
   getSettings: () => apiClient.get(`${AI_BASE}/settings`),
   updateSettings: (data) => apiClient.put(`${AI_BASE}/settings`, data),
+};
+
+// ─── 8. Notification API (notification-service qua gateway) ───────────────────
+// Thiết kế: docs/services/notification/2_KIEN_TRUC_VA_THIET_KE.md §6
+const NOTIF_BASE = '/notification/api/v1/notifications';
+
+export const notificationApi = {
+  /** params: { filter: 'all'|'unread'|'action', category, projectId, cursor, size } */
+  list: (params, config = {}) => apiClient.get(NOTIF_BASE, { params, ...config }),
+  counts: (config = {}) => apiClient.get(`${NOTIF_BASE}/unread-count`, { skipErrorToast: true, ...config }),
+  setRead: (id, read = true) => apiClient.patch(`${NOTIF_BASE}/${id}`, { read }),
+  readAll: (params) => apiClient.post(`${NOTIF_BASE}/read-all`, null, { params }),
+  remove: (id) => apiClient.delete(`${NOTIF_BASE}/${id}`),
+  restore: (id) => apiClient.post(`${NOTIF_BASE}/${id}/restore`),
+  removeAllRead: () => apiClient.delete(NOTIF_BASE, { params: { filter: 'read' } }),
+
+  // ─── Cài đặt bật / tắt (theo nhóm × kênh) và tắt tiếng dự án ───
+  preferences: (config = {}) => apiClient.get(`${NOTIF_BASE}/preferences`, config),
+  /** categories: [{ category, inApp?, email? }] — trường bỏ trống giữ nguyên */
+  savePreferences: (categories) => apiClient.put(`${NOTIF_BASE}/preferences`, { categories }),
+  /** until: ISO string hoặc null (tắt đến khi bật lại) */
+  muteProject: (projectId, projectName, until = null) =>
+    apiClient.put(`${NOTIF_BASE}/preferences/projects/${projectId}/mute`, { projectName, until }),
+  unmuteProject: (projectId) => apiClient.delete(`${NOTIF_BASE}/preferences/projects/${projectId}/mute`),
+};
+
+/** Chạy ngay job thông báo (chỉ Global ADMIN, dùng khi demo). */
+export const notificationJobApi = {
+  run: (job = 'all', projectId) =>
+    apiClient.post(`${WORK_BASE}/admin/notification-jobs/${job}/run`, null, { params: projectId ? { projectId } : {} }),
 };
 
 export default apiClient;

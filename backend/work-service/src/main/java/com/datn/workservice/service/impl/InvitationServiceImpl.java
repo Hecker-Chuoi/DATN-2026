@@ -18,7 +18,6 @@ import com.datn.workservice.repository.InvitationRepository;
 import com.datn.workservice.repository.ProjectRepository;
 import com.datn.workservice.repository.ProjectRoleRepository;
 import com.datn.workservice.repository.RoleAssignmentRepository;
-import com.datn.workservice.service.InvitationMailer;
 import com.datn.workservice.service.InvitationService;
 import com.datn.workservice.service.ProjectMemberService;
 import lombok.RequiredArgsConstructor;
@@ -42,13 +41,13 @@ public class InvitationServiceImpl implements InvitationService {
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final ProjectMemberService projectMemberService;
     private final IdentityClient identityClient;
-    private final InvitationMailer mailer;
+    private final com.datn.workservice.notification.ProjectNotifier projectNotifier;
     private final WorkspaceClient workspaceClient;
 
     @Override
     @Transactional
     public InvitationResponse inviteToProject(UUID projectId, UUID inviteeUserId, UUID roleId, UUID invitedBy) {
-        projectRepository.findById(projectId)
+        Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án: " + projectId));
         ProjectRole role = projectRoleRepository.findById(roleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò: " + roleId));
@@ -69,7 +68,8 @@ public class InvitationServiceImpl implements InvitationService {
                 .build());
         log.info("Project invitation created: project={}, invitee={}, by={}", projectId, invitee, invitedBy);
         InvitationResponse res = toResponse(saved);
-        mailer.send(res);
+        // G1: thông báo trong ứng dụng + email lời mời (notification-service gửi, template invite-member)
+        projectNotifier.invitationCreated(project, saved, role.getName(), invitedBy);
         return res;
     }
 
@@ -120,7 +120,11 @@ public class InvitationServiceImpl implements InvitationService {
         inv.setStatus(InvitationStatus.ACCEPTED);
         inv.setRespondedAt(LocalDateTime.now());
         log.info("Invitation {} accepted by {}", invitationId, userId);
-        return toResponse(invitationRepository.save(inv));
+        Invitation saved = invitationRepository.save(inv);
+        // G4 (+ đóng G1 của người được mời)
+        projectRepository.findById(inv.getTargetId())
+                .ifPresent(p -> projectNotifier.invitationAnswered(p, saved, true, role.getName(), userId));
+        return toResponse(saved);
     }
 
     @Override
@@ -129,7 +133,12 @@ public class InvitationServiceImpl implements InvitationService {
         Invitation inv = requirePendingForInvitee(invitationId, userId);
         inv.setStatus(InvitationStatus.DECLINED);
         inv.setRespondedAt(LocalDateTime.now());
-        return toResponse(invitationRepository.save(inv));
+        Invitation saved = invitationRepository.save(inv);
+        String roleName = inv.getProjectRoleId() == null ? null
+                : projectRoleRepository.findById(inv.getProjectRoleId()).map(ProjectRole::getName).orElse(null);
+        projectRepository.findById(inv.getTargetId())
+                .ifPresent(p -> projectNotifier.invitationAnswered(p, saved, false, roleName, userId));
+        return toResponse(saved);
     }
 
     @Override
@@ -145,7 +154,11 @@ public class InvitationServiceImpl implements InvitationService {
         }
         inv.setStatus(InvitationStatus.CANCELLED);
         inv.setRespondedAt(LocalDateTime.now());
-        return toResponse(invitationRepository.save(inv));
+        Invitation saved = invitationRepository.save(inv);
+        // Đóng G1 của người được mời (sự kiện nội bộ, không tạo thông báo mới)
+        projectRepository.findById(inv.getTargetId())
+                .ifPresent(p -> projectNotifier.invitationCancelled(p, saved, userId));
+        return toResponse(saved);
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────

@@ -27,6 +27,12 @@ public interface WorkItemService {
 
     WorkItemDetailResponse updateWorkItem(UUID itemId, UpdateWorkItemRequest request, UUID userId);
 
+    /**
+     * Giao việc cho {@code assigneeId} hoặc hủy giao khi {@code assigneeId == null}.
+     * Người được giao phải là thành viên dự án; thay đổi được ghi vào lịch sử (ASSIGNEE).
+     */
+    WorkItemDetailResponse changeAssignee(UUID itemId, UUID assigneeId, UUID userId);
+
     void updateRank(UUID itemId, String newRank, UUID userId);
 
     void deleteWorkItem(UUID itemId, UUID userId);

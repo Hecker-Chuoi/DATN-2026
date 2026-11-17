@@ -47,10 +47,18 @@ public class ContributionReportServiceImpl implements ContributionReportService 
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final ProjectMemberService projectMemberService;
     private final IdentityClient identityClient;
+    private final com.datn.workservice.notification.ProjectNotifier projectNotifier;
 
     @Override
     @Transactional
     public void handleWorkItemStatusTransition(WorkItem item, Status oldStatus, Status newStatus, UUID actorId) {
+        handleWorkItemStatusTransition(item, oldStatus, newStatus, actorId, LocalDate.now());
+    }
+
+    @Override
+    @Transactional
+    public void handleWorkItemStatusTransition(WorkItem item, Status oldStatus, Status newStatus, UUID actorId,
+                                               LocalDate completedOn) {
         if (item == null || oldStatus == null || newStatus == null) return;
 
         boolean wasDone = oldStatus.getCategory() == StatusCategory.DONE;
@@ -78,7 +86,8 @@ public class ContributionReportServiceImpl implements ContributionReportService 
                     .filter(e -> "REOPENED".equals(e.getEntryType()))
                     .toList();
 
-            LocalDate today = LocalDate.now();
+            // Ngày báo hoàn thành (khi đi qua bước "Tạm hoàn thành" là ngày gửi yêu cầu, không phải ngày Admin duyệt)
+            LocalDate today = completedOn != null ? completedOn : LocalDate.now();
             boolean isLate = item.getDueDate() != null && today.isAfter(item.getDueDate());
 
             if (isLate) {
@@ -633,6 +642,9 @@ public class ContributionReportServiceImpl implements ContributionReportService 
                 .build();
 
         ContributionLedgerEntry saved = ledgerRepository.save(entry);
+        // I1
+        projectRepository.findById(projectId).ifPresent(p -> projectNotifier.contributionAdjusted(
+                p, request.getUserId(), request.getPoints(), request.getReason(), leaderUserId));
 
         UserResponse user = fetchUser(request.getUserId());
         UserResponse leader = fetchUser(leaderUserId);
@@ -687,6 +699,11 @@ public class ContributionReportServiceImpl implements ContributionReportService 
 
         snapshotRepository.saveAll(snapshots);
         log.info("Đã đóng băng thành công snapshot đóng góp cho Sprint '{}' ({} thành viên)", sprint.getName(), snapshots.size());
+
+        // I2: mỗi thành viên thấy điểm được ghi nhận của mình
+        Map<UUID, BigDecimal> pointsByUser = new LinkedHashMap<>();
+        snapshots.forEach(s -> { if (s.getUserId() != null) pointsByUser.put(s.getUserId(), s.getTotalPoints()); });
+        projectRepository.findById(projectId).ifPresent(p -> projectNotifier.contributionFrozen(p, sprint, pointsByUser));
     }
 
     @Override

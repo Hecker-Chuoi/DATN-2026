@@ -122,4 +122,12 @@ public class WorkItem {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    /**
+     * KHÔNG lưu DB. true khi lần chuyển trạng thái vừa rồi chỉ tạo yêu cầu "Tạm hoàn thành"
+     * (chờ Admin dự án xác nhận) thay vì đổi trạng thái thật — xem WorkItemCompletionGate.
+     */
+    @Transient
+    @Builder.Default
+    private boolean completionApprovalRequested = false;
 }

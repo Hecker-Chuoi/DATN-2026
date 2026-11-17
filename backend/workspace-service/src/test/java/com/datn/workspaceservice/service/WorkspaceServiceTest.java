@@ -43,6 +43,8 @@ class WorkspaceServiceTest {
     private WorkspaceRepository workspaceRepository;
     @Mock
     private WorkspaceMemberRepository memberRepository;
+    @Mock
+    private com.datn.workspaceservice.client.IdentityClient identityClient;
 
     @InjectMocks
     private WorkspaceServiceImpl service;
@@ -230,5 +232,44 @@ class WorkspaceServiceTest {
                 Workspace.builder().id(activeWs).build()));
 
         assertThat(service.getWorkspaceIdsOfUser(userId)).containsExactly(activeWs);
+    }
+
+    @Test
+    @DisplayName("Workspace mặc định: identity gửi users.id thì vẫn lưu OWNER theo Keycloak sub")
+    void createDefaultWorkspace_storesKeycloakSub() {
+        UUID identityRowId = UUID.randomUUID();
+        UUID sub = UUID.randomUUID();
+        when(identityClient.getUserById(identityRowId)).thenReturn(com.datn.common.dto.ApiResponse.success(
+                com.datn.workspaceservice.client.dto.UserResponse.builder()
+                        .id(identityRowId).keycloakId(sub.toString()).username("an").firstName("An").lastName("Nguyễn").build()));
+        when(memberRepository.findByUserId(sub)).thenReturn(java.util.List.of());
+
+        service.createDefaultWorkspace(identityRowId);
+
+        org.mockito.ArgumentCaptor<WorkspaceMember> member = org.mockito.ArgumentCaptor.forClass(WorkspaceMember.class);
+        org.mockito.Mockito.verify(memberRepository).save(member.capture());
+        assertThat(member.getValue().getUserId()).isEqualTo(sub);
+        assertThat(member.getValue().getRole()).isEqualTo(WorkspaceRole.OWNER);
+        org.mockito.ArgumentCaptor<Workspace> ws = org.mockito.ArgumentCaptor.forClass(Workspace.class);
+        org.mockito.Mockito.verify(workspaceRepository).save(ws.capture());
+        assertThat(ws.getValue().getCreatedBy()).isEqualTo(sub);
+        assertThat(ws.getValue().getName()).isEqualTo("Không gian của An Nguyễn");
+    }
+
+    @Test
+    @DisplayName("Workspace mặc định: đã có workspace (tra theo sub) thì không tạo thêm")
+    void createDefaultWorkspace_existingMembershipBySub_isReused() {
+        UUID identityRowId = UUID.randomUUID();
+        UUID sub = UUID.randomUUID();
+        when(identityClient.getUserById(identityRowId)).thenReturn(com.datn.common.dto.ApiResponse.success(
+                com.datn.workspaceservice.client.dto.UserResponse.builder().id(identityRowId).keycloakId(sub.toString()).build()));
+        when(memberRepository.findByUserId(sub)).thenReturn(java.util.List.of(WorkspaceMember.builder()
+                .workspaceId(workspaceId).userId(sub).role(WorkspaceRole.OWNER).build()));
+        when(workspaceRepository.findByIdAndDeletedAtIsNull(workspaceId))
+                .thenReturn(java.util.Optional.of(Workspace.builder().id(workspaceId).name("Có sẵn").slug("co-san").createdBy(sub).build()));
+
+        service.createDefaultWorkspace(identityRowId);
+
+        org.mockito.Mockito.verify(workspaceRepository, org.mockito.Mockito.never()).save(any(Workspace.class));
     }
 }

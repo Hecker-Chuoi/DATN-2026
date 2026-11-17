@@ -34,8 +34,21 @@ public class KafkaProducerConfig {
         configProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         configProps.put(ProducerConfig.ACKS_CONFIG, "all");
         configProps.put(ProducerConfig.RETRIES_CONFIG, 3);
+        // OutboxRelay chạy mỗi giây: Kafka sập thì phải trả lỗi nhanh (mặc định chặn tới 60 giây)
+        configProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5_000);
+        configProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 5_000);
+        configProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 9_000);
         configProps.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, true);
         return new DefaultKafkaProducerFactory<>(configProps);
+    }
+
+    /** Sự kiện thông báo, notification-service tiêu thụ. Key = projectId. */
+    @Bean
+    public NewTopic notificationEventsTopic() {
+        return TopicBuilder.name(com.datn.common.notification.NotificationEvent.TOPIC)
+                .partitions(3)
+                .replicas(1)
+                .build();
     }
 
     @Bean

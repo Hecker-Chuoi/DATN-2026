@@ -95,6 +95,9 @@ public class WorkItemResponse {
     // Labels
     private List<String> labels;
 
+    /** Đang "Tạm hoàn thành" — chờ Admin dự án xác nhận (BR-W03). */
+    private Boolean completionPending;
+
     // Timestamps & Concurrency
     private Integer version;
     private LocalDateTime createdAt;

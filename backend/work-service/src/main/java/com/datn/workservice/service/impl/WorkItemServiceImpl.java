@@ -55,6 +55,10 @@ public class WorkItemServiceImpl implements WorkItemService {
     private final com.datn.workservice.service.WorkItemAuditService workItemAuditService;
     private final com.datn.workservice.service.ProjectAccessService projectAccessService;
     private final com.datn.workservice.service.ContributionReportService contributionReportService;
+    private final com.datn.workservice.service.ProjectMemberService projectMemberService;
+    private final com.datn.workservice.service.WorkItemCompletionGate completionGate;
+    private final com.datn.workservice.service.WorkItemCompletionService completionService;
+    private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @Override
     @Transactional
@@ -132,6 +136,9 @@ public class WorkItemServiceImpl implements WorkItemService {
                 "Đã tạo công việc " + saved.getCode() + ": " + saved.getSummary(),
                 userId
         );
+
+        // A1: được giao ngay khi tạo
+        workItemNotifier.created(saved, userId);
 
         return getWorkItemDetail(saved.getId());
     }
@@ -354,6 +361,8 @@ public class WorkItemServiceImpl implements WorkItemService {
 
         // Record diff in audit trail
         workItemAuditService.recordDiff(oldState, saved, userId);
+        // A1/A2, A4, A5, A10
+        workItemNotifier.updated(oldState, saved, userId);
 
         // Update labels if specified
         if (request.getLabelIds() != null) {
@@ -370,6 +379,36 @@ public class WorkItemServiceImpl implements WorkItemService {
         }
 
         return getWorkItemDetail(saved.getId());
+    }
+
+    @Override
+    @Transactional
+    public WorkItemDetailResponse changeAssignee(UUID itemId, UUID assigneeId, UUID userId) {
+        WorkItem item = workItemRepository.findById(itemId)
+                .orElseThrow(() -> new ResourceNotFoundException("WorkItem not found with ID: " + itemId));
+        if (item.getDeletedAt() != null) {
+            throw new BadRequestException("Công việc đã bị xóa");
+        }
+
+        UUID newAssignee = assigneeId == null ? null : projectMemberService.canonicalUserId(assigneeId);
+        if (newAssignee != null && !projectMemberService.hasPermission(
+                item.getProjectId(), newAssignee, com.datn.workservice.enums.PermissionKey.PROJECT_VIEW)) {
+            throw new BadRequestException("Người được giao phải là thành viên của dự án");
+        }
+
+        UUID oldAssignee = item.getAssigneeId();
+        if (Objects.equals(oldAssignee, newAssignee)) {
+            return getWorkItemDetail(itemId);
+        }
+
+        item.setAssigneeId(newAssignee);
+        workItemRepository.save(item);
+        // BR-W02: giao / hủy giao đều phải để lại dấu vết
+        workItemAuditService.recordAssigneeChange(itemId, oldAssignee, newAssignee, userId);
+        workItemNotifier.assigneeChanged(item, oldAssignee, newAssignee, userId);
+        log.info("WorkItem '{}': người thực hiện {} -> {} (bởi {})", item.getCode(), oldAssignee, newAssignee, userId);
+
+        return getWorkItemDetail(itemId);
     }
 
     @Override
@@ -395,6 +434,8 @@ public class WorkItemServiceImpl implements WorkItemService {
         // Soft delete
         item.setDeletedAt(LocalDateTime.now());
         workItemRepository.save(item);
+        // A6, và B2 cho các việc nó đang chặn
+        workItemNotifier.deleted(item, userId);
 
         try {
             contributionReportService.handleWorkItemDeleted(item, userId);
@@ -586,6 +627,7 @@ public class WorkItemServiceImpl implements WorkItemService {
                 .isBlocked(isBlocked)
                 .hasDependencyConflict(hasDependencyConflict)
                 .labels(labelNames)
+                .completionPending(completionGate.findPending(item.getId()).isPresent())
                 .version(item.getVersion())
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())
@@ -680,9 +722,16 @@ public class WorkItemServiceImpl implements WorkItemService {
                     .toList()
                 : Collections.emptyList();
 
+        // BR-W03: người không phải Admin dự án chuyển vào nhóm DONE chỉ gửi yêu cầu "Tạm hoàn thành"
+        boolean currentlyDone = summary.getStatusCategory() == StatusCategory.DONE;
+        boolean canConfirm = com.datn.workservice.security.SecurityUtils.getCurrentUserIdOptional()
+                .map(uid -> completionGate.canConfirmCompletion(item.getProjectId(), uid))
+                .orElse(false);
+
         List<AvailableTransitionResponse> availableTransitions = transitions.stream()
                 .map(t -> {
                     Status toStatus = statusRepository.findById(t.getToStatusId()).orElse(null);
+                    boolean toDone = toStatus != null && toStatus.getCategory() == StatusCategory.DONE;
                     return AvailableTransitionResponse.builder()
                             .transitionId(t.getId())
                             .name(t.getName())
@@ -690,9 +739,13 @@ public class WorkItemServiceImpl implements WorkItemService {
                             .toStatusName(toStatus != null ? toStatus.getName() : null)
                             .toStatusCategory(toStatus != null ? toStatus.getCategory() : null)
                             .toStatusColorHex(toStatus != null ? toStatus.getColorHex() : null)
+                            .requiresApproval(toDone && !currentlyDone && !canConfirm)
                             .build();
                 })
                 .collect(Collectors.toList());
+
+        com.datn.workservice.dto.response.CompletionRequestResponse pendingCompletion =
+                completionService.getPending(item.getId()).orElse(null);
 
         return WorkItemDetailResponse.builder()
                 .id(summary.getId())
@@ -738,6 +791,9 @@ public class WorkItemServiceImpl implements WorkItemService {
                 .fixVersionName(summary.getFixVersionName())
                 .customFields(item.getCustomFields())
                 .availableTransitions(availableTransitions)
+                .completionPending(pendingCompletion != null)
+                .completionRequest(pendingCompletion)
+                .canConfirmCompletion(canConfirm)
                 .startDate(summary.getStartDate())
                 .dueDate(summary.getDueDate())
                 .resolvedAt(summary.getResolvedAt())

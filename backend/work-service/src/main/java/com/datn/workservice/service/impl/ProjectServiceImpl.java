@@ -61,6 +61,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final ProjectAccessService projectAccessService;
     private final ProjectMemberService projectMemberService;
     private final com.datn.workservice.security.WorkspaceAccessChecker workspaceAccessChecker;
+    private final com.datn.workservice.notification.ProjectNotifier projectNotifier;
 
     @Override
     @Transactional
@@ -168,6 +169,9 @@ public class ProjectServiceImpl implements ProjectService {
     public ProjectResponse updateProject(UUID projectId, UpdateProjectRequest request, UUID currentUserId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với ID: " + projectId));
+        UUID oldLead = project.getLeadUserId();
+        java.time.LocalDate oldStart = project.getStartDate();
+        java.time.LocalDate oldEnd = project.getEndDate();
 
         if (request.getName() != null && !request.getName().isBlank()) {
             project.setName(request.getName().trim());
@@ -200,6 +204,8 @@ public class ProjectServiceImpl implements ProjectService {
 
         Project updatedProject = projectRepository.save(project);
         log.info("Project updated: ID={}, Key={}", updatedProject.getId(), updatedProject.getKey());
+        projectNotifier.leadChanged(updatedProject, oldLead, updatedProject.getLeadUserId(), currentUserId); // G7
+        projectNotifier.scheduleChanged(updatedProject, oldStart, oldEnd, currentUserId);                  // H3
 
         return mapToProjectResponse(updatedProject);
     }
@@ -240,6 +246,7 @@ public class ProjectServiceImpl implements ProjectService {
         project.setDeletedAt(LocalDateTime.now());
         projectRepository.save(project);
         log.info("Project soft-deleted: id={}, by={}", projectId, currentUserId);
+        projectNotifier.projectArchived(project, currentUserId); // H1
     }
 
     @Override
@@ -250,6 +257,7 @@ public class ProjectServiceImpl implements ProjectService {
         project.setDeletedAt(null);
         Project saved = projectRepository.save(project);
         log.info("Project restored: id={}, by={}", projectId, currentUserId);
+        projectNotifier.projectRestored(saved, currentUserId); // H2
         return mapToProjectResponse(saved);
     }
 

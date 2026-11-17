@@ -117,7 +117,7 @@ sequenceDiagram
 | Tiêu chuẩn so sánh | ⚡ Mô hình 1: Theo chu kỳ, giai đoạn | 📊 Mô hình 2: Bảng công việc liên tục |
 | :--- | :--- | :--- |
 | **Bản chất triết lý** | Hướng mục tiêu thời gian (Time-boxed / Stage-Gate) | Hướng luồng công việc liên tục (Continuous Flow / Pull) |
-| **Thanh Menu (Sidebar & Header)** | Hiện đầy đủ: `[Bảng tiến độ]`, **`[Kho việc & Kế hoạch]`**, `[Báo cáo]`, `[Thành viên]` | **Ẩn tab `Kho việc & Kế hoạch`**; chỉ hiện Bảng, Báo cáo và Thành viên |
+| **Thanh Menu (Sidebar & Header)** | Hiện đầy đủ: `[Bảng tiến độ]`, **`[Kho việc & Kế hoạch]`**, `[Thành viên]`, `[Báo cáo]`, `[Cấu hình dự án]` | **Ẩn tab `Kho việc & Kế hoạch`**; chỉ hiện Bảng, Thành viên, Báo cáo và Cấu hình dự án |
 | **Nút kích hoạt trên UI** | Có nút **`[Bắt đầu giai đoạn / chu kỳ]`** và **`[Hoàn tất giai đoạn / chu kỳ]`** | **Không có nút bắt đầu/hoàn tất**. Vào là làm việc ngay |
 | **Phạm vi hiển thị thẻ trên Bảng** | **Chỉ hiện thẻ của Giai đoạn đang ACTIVE**. Nếu chưa bấm Bắt đầu, bảng ở trạng thái chờ | **Hiện tất cả thẻ** đang mở của dự án từ trước tới nay |
 | **Cảnh báo hạn chót** | Có thanh đếm ngược ngày kết thúc của chặng (`Còn X ngày` / `Quá hạn Y ngày`) | Theo dõi hạn chót (`dueDate`) trực tiếp trên từng thẻ việc riêng lẻ |

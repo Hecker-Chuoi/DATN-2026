@@ -226,14 +226,14 @@ Nói thêm nếu còn thời gian: Trưởng dự án xem cả nhóm, thành vi�
 1. **Trễ hạn:** mở **MOC-5** (giao Bình, 5 điểm) → đặt **Hạn chót = hôm kia** → chọn **Hoàn tất trực tiếp (➔ Hoàn thành)**.
 2. **Đúng hạn:** mở **MOC-24** (giao An, 3 điểm, còn hạn) → lần lượt **Bắt đầu triển khai** → **Gửi nghiệm thu** → **Nghiệm thu đạt chuẩn**.
 3. *(Tùy chọn, 20 giây: việc cha 0 điểm)* Mở **MOC-2** (giao Bình) → **Hoàn tất trực tiếp** → vì MOC-3, MOC-4 chưa xong nên hệ thống hỏi → **Hoàn thành tất cả công việc con**. Mở lại MOC-7: hết nhãn "đang bị cản trở".
-4. Tab **Đóng góp**: Bình **4.0** (MOC-5 *"Trễ 2 ngày (-20%)"*, MOC-2 được 0 điểm), An **3.0** (*"Đúng hạn"*). Nếu làm bước 3: có cảnh báo *việc hoàn thành chưa gán người* (MOC-3, MOC-4).
+4. Tab **Báo cáo → Quản lý đóng góp**: Bình **4.0** (MOC-5 *"Trễ 2 ngày (-20%)"*, MOC-2 được 0 điểm), An **3.0** (*"Đúng hạn"*). Nếu làm bước 3: có cảnh báo *việc hoàn thành chưa gán người* (MOC-3, MOC-4).
 5. **Chuyển việc cho người khác + mở lại** (MOC-24):
-   1. Đổi người thực hiện MOC-24 từ An sang **Bình** → tab Đóng góp **không đổi**: 3 điểm vẫn của An.
+   1. Đổi người thực hiện MOC-24 từ An sang **Bình** → tab Quản lý đóng góp **không đổi**: 3 điểm vẫn của An.
    2. Chọn **Mở lại công việc** → bấm **Sổ ghi công**: dòng **−3 "Bị mở lại"** trừ vào **An**.
    3. Chọn **Gửi nghiệm thu** → **Nghiệm thu đạt chuẩn** → dòng **+3 "Hoàn thành lại (Đúng hạn)"** ghi cho **Bình**.
 6. Chuyển sub-tab **Biểu đồ trực quan**; bấm vào tên Bình để mở **chi tiết thành viên** (điểm theo tuần, danh sách việc).
 7. Bấm **Xuất file Excel** (Excel đọc đúng tiếng Việt).
-8. Cửa sổ **Bình** → tab Đóng góp: chỉ thấy số liệu của chính mình.
+8. Cửa sổ **Bình** → Báo cáo → Quản lý đóng góp: chỉ thấy số liệu của chính mình.
 
 **Kết quả: sổ ghi công cuối phần**
 
@@ -259,7 +259,7 @@ Tổng: **Bình 7.0, An 0**. Điểm minh bạch, truy vết được từng dò
 - **CFD (Cumulative Flow)**: số việc theo từng nhóm trạng thái qua thời gian, thấy được chỗ ùn ứ.
 - Đóng giai đoạn thì **chốt số liệu**, báo cáo cũ không bị đổi khi dữ liệu sau này thay đổi.
 
-**Demo:** Tab **Báo cáo** → chọn Giai đoạn 1 → lần lượt Burndown, CFD, Velocity.
+**Demo:** Tab **Báo cáo → Quản lý tiến độ** → chọn Giai đoạn 1 → lần lượt Tiến độ chu kỳ (Burndown), Phân bổ luồng trạng thái (CFD), Năng suất làm việc (Velocity).
 *Dữ liệu một ngày quá mỏng, và Velocity cần giai đoạn đã đóng → chuyển sang dự án Phương án B (đã chạy vài ngày, có giai đoạn đã đóng).*
 
 ---

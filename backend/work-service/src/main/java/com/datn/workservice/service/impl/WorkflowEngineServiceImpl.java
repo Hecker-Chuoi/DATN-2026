@@ -14,8 +14,12 @@ import com.datn.workservice.enums.SprintState;
 import com.datn.workservice.enums.StatusCategory;
 import com.datn.workservice.enums.WorkItemResolution;
 import com.datn.workservice.repository.*;
+import com.datn.workservice.enums.CompletionRequestStatus;
+import com.datn.workservice.security.SecurityUtils;
 import com.datn.workservice.service.ContributionReportService;
 import com.datn.workservice.service.ProjectMemberService;
+import com.datn.workservice.service.WorkItemAuditService;
+import com.datn.workservice.service.WorkItemCompletionGate;
 import com.datn.workservice.service.WorkflowEngineService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +29,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -45,7 +50,10 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
     private final ProjectMemberService projectMemberService;
     private final ContributionReportService contributionReportService;
     private final SprintRepository sprintRepository;
+    private final WorkItemCompletionGate completionGate;
+    private final WorkItemAuditService workItemAuditService;
     private final ObjectMapper objectMapper;
+    private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @Override
     @Transactional(readOnly = true)
@@ -88,6 +96,12 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
         Workflow workflow = resolveWorkflow(workItem.getProjectId(), workItem.getTypeId());
         List<WorkflowTransition> transitions = workflowTransitionRepository.findByWorkflowId(workflow.getId());
 
+        Status curStatus = statusRepository.findById(workItem.getStatusId()).orElse(null);
+        boolean currentlyDone = curStatus != null && curStatus.getCategory() == StatusCategory.DONE;
+        // BR-W03: người không có quyền xác nhận chỉ "gửi yêu cầu" khi chuyển vào nhóm DONE
+        boolean canConfirm = currentUserId == null
+                || completionGate.canConfirmCompletion(workItem.getProjectId(), currentUserId);
+
         List<AvailableTransitionResponse> result = new ArrayList<>();
         for (WorkflowTransition t : transitions) {
             // Check if transition origin matches current status
@@ -102,20 +116,16 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
 
             // Target Status info
             Status toStatus = statusRepository.findById(t.getToStatusId()).orElse(null);
-
-
-            // Chặn Reopen công việc thuộc Sprint đã đóng (CLOSED)
-            if (workItem.getSprintId() != null) {
-                Status curStatus = statusRepository.findById(workItem.getStatusId()).orElse(null);
-                if (curStatus != null && curStatus.getCategory() == StatusCategory.DONE && toStatus.getCategory() != StatusCategory.DONE) {
-                    Sprint sprint = sprintRepository.findById(workItem.getSprintId()).orElse(null);
-                    if (sprint != null && sprint.getState() == SprintState.CLOSED) {
-                        continue;
-                    }
-                }
-            }
             if (toStatus == null) {
                 continue;
+            }
+
+            // Chặn Reopen công việc thuộc Sprint đã đóng (CLOSED)
+            if (workItem.getSprintId() != null && currentlyDone && toStatus.getCategory() != StatusCategory.DONE) {
+                Sprint sprint = sprintRepository.findById(workItem.getSprintId()).orElse(null);
+                if (sprint != null && sprint.getState() == SprintState.CLOSED) {
+                    continue;
+                }
             }
 
             // Check if transition requires screen (e.g. going to DONE or having required fields)
@@ -131,6 +141,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                     .toStatusColorHex(toStatus.getColorHex())
                     .hasScreen(hasScreen)
                     .requiredFields(requiredFields)
+                    .requiresApproval(!canConfirm && !currentlyDone && toStatus.getCategory() == StatusCategory.DONE)
                     .build());
         }
 
@@ -140,6 +151,45 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
     @Override
     @Transactional
     public WorkItem executeTransition(UUID workItemId, UUID transitionId, ExecuteTransitionRequest request, UUID currentUserId) {
+        return doExecuteTransition(workItemId, transitionId, request, currentUserId, false);
+    }
+
+    @Override
+    @Transactional
+    public WorkItem executeApprovedCompletion(UUID workItemId, WorkItemCompletionRequest completionRequest, UUID adminId) {
+        WorkItem workItem = workItemRepository.findById(workItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("WorkItem not found with id: " + workItemId));
+        Workflow workflow = resolveWorkflow(workItem.getProjectId(), workItem.getTypeId());
+        List<WorkflowTransition> fromCurrent = workflowTransitionRepository.findByWorkflowId(workflow.getId()).stream()
+                .filter(t -> t.getFromStatusId() == null || t.getFromStatusId().equals(workItem.getStatusId()))
+                .toList();
+
+        // 1. Bước chuyển người yêu cầu đã chọn → 2. bước chuyển tới đúng trạng thái đích → 3. bất kỳ bước nào vào nhóm DONE
+        WorkflowTransition chosen = fromCurrent.stream()
+                .filter(t -> t.getId().equals(completionRequest.getTransitionId()))
+                .findFirst()
+                .or(() -> fromCurrent.stream()
+                        .filter(t -> t.getToStatusId().equals(completionRequest.getTargetStatusId()))
+                        .findFirst())
+                .or(() -> fromCurrent.stream()
+                        .filter(t -> statusRepository.findById(t.getToStatusId())
+                                .map(s -> s.getCategory() == StatusCategory.DONE)
+                                .orElse(false))
+                        .findFirst())
+                .orElseThrow(() -> new BadRequestException(
+                        "Quy trình hiện tại không có bước chuyển tới trạng thái Hoàn thành từ trạng thái của công việc. "
+                                + "Hãy từ chối yêu cầu hoặc điều chỉnh quy trình."));
+
+        ExecuteTransitionRequest execReq = ExecuteTransitionRequest.builder()
+                .transitionId(chosen.getId())
+                .resolution(completionRequest.getResolution())
+                .resolveAllSubtasks(completionRequest.getResolveAllSubtasks())
+                .build();
+        return doExecuteTransition(workItemId, chosen.getId(), execReq, adminId, true);
+    }
+
+    private WorkItem doExecuteTransition(UUID workItemId, UUID transitionId, ExecuteTransitionRequest request,
+                                         UUID currentUserId, boolean skipConditions) {
         WorkItem workItem = workItemRepository.findById(workItemId)
                 .orElseThrow(() -> new ResourceNotFoundException("WorkItem not found with id: " + workItemId));
 
@@ -157,14 +207,24 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
             throw new BadRequestException("Trạng thái hiện tại của công việc không phù hợp với bước chuyển này");
         }
 
-        // 3. Evaluate Conditions
-        if (!evaluateConditions(transition.getConditionsConfig(), workItem, currentUserId)) {
+        // 3. Evaluate Conditions (bỏ qua khi Admin xác nhận yêu cầu đã được kiểm tra với người yêu cầu)
+        if (!skipConditions && !evaluateConditions(transition.getConditionsConfig(), workItem, currentUserId)) {
             throw new AccessDeniedException("Bạn không đủ điều kiện (Condition) để thực hiện bước chuyển này");
         }
 
         // 4. Run Validators
         Status toStatus = statusRepository.findById(transition.getToStatusId())
                 .orElseThrow(() -> new ResourceNotFoundException("Target Status not found: " + transition.getToStatusId()));
+
+        Status currentWorkItemStatus = statusRepository.findById(workItem.getStatusId()).orElse(null);
+        boolean enteringDone = toStatus.getCategory() == StatusCategory.DONE
+                && (currentWorkItemStatus == null || currentWorkItemStatus.getCategory() != StatusCategory.DONE);
+        boolean resolveAllSubtasks = request != null && Boolean.TRUE.equals(request.getResolveAllSubtasks());
+
+        // BR-W03: Chỉ Admin dự án mới được XÁC NHẬN Hoàn thành. Người khác chuyển vào nhóm DONE
+        // chỉ tạo yêu cầu "Tạm hoàn thành" (vẫn phải qua đủ các guard bên dưới để báo lỗi sớm).
+        boolean needsApproval = enteringDone && currentUserId != null
+                && !completionGate.canConfirmCompletion(workItem.getProjectId(), currentUserId);
 
         // 4a. Blocked Transition Guard (BLOCKS link restriction)
         if (toStatus.getCategory() == StatusCategory.IN_PROGRESS || toStatus.getCategory() == StatusCategory.DONE) {
@@ -198,7 +258,11 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                         })
                         .toList();
                 if (!incompleteDescendants.isEmpty()) {
-                    if (request != null && Boolean.TRUE.equals(request.getResolveAllSubtasks())) {
+                    if (resolveAllSubtasks && needsApproval) {
+                        // Chưa hoàn thành dây chuyền ngay: lựa chọn được lưu vào yêu cầu, áp dụng khi Admin xác nhận
+                        log.info("WorkItem '{}': hoãn hoàn thành {} việc con tới khi Admin xác nhận",
+                                workItem.getCode(), incompleteDescendants.size());
+                    } else if (resolveAllSubtasks) {
                         List<Status> projectDoneStatuses = statusRepository.findByProjectId(workItem.getProjectId()).stream()
                                 .filter(s -> s.getCategory() == StatusCategory.DONE)
                                 .toList();
@@ -209,6 +273,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                             desc.setResolution(WorkItemResolution.DONE);
                             desc.setResolvedAt(LocalDateTime.now());
                             workItemRepository.save(desc);
+                            completionGate.onStatusChanged(desc, defaultDone, true, currentUserId);
                             if (currentUserId != null) {
                                 WorkItemChangelog descChangelog = WorkItemChangelog.builder()
                                         .workItemId(desc.getId())
@@ -222,6 +287,8 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                             }
                         }
                         log.info("Auto-resolved {} descendant work items for parent WorkItem '{}'", incompleteDescendants.size(), workItem.getCode());
+                        // A8: mỗi người thực hiện việc con nhận một thông báo
+                        workItemNotifier.subtasksAutoResolved(workItem, incompleteDescendants, currentUserId);
                     } else {
                         throw new BadRequestException("Không thể hoàn thành công việc này vì còn " + incompleteDescendants.size() + " nhiệm vụ con (Sub-task) chưa hoàn thành");
                     }
@@ -232,7 +299,6 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
         executeValidators(transition.getValidatorsConfig(), workItem, request, toStatus);
 
         // 4c. Reopen Guard: Không cho phép mở lại (Reopen) công việc thuộc Chu kỳ (Sprint) đã kết thúc
-        Status currentWorkItemStatus = statusRepository.findById(workItem.getStatusId()).orElse(null);
         if (currentWorkItemStatus != null && currentWorkItemStatus.getCategory() == StatusCategory.DONE && toStatus.getCategory() != StatusCategory.DONE) {
             if (workItem.getSprintId() != null) {
                 Sprint sprint = sprintRepository.findById(workItem.getSprintId()).orElse(null);
@@ -243,8 +309,25 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
             }
         }
 
+        // 4d. "Tạm hoàn thành": ghi yêu cầu chờ Admin xác nhận, KHÔNG đổi trạng thái, KHÔNG ghi công
+        if (needsApproval) {
+            String comment = request != null && request.getComment() != null && !request.getComment().isBlank()
+                    ? request.getComment().trim() : null;
+            completionGate.submit(workItem, transition.getId(), currentWorkItemStatus, toStatus,
+                    normalizeResolution(request), resolveAllSubtasks, comment, currentUserId);
+            if (comment != null) {
+                workItemCommentRepository.save(WorkItemComment.builder()
+                        .workItemId(workItem.getId())
+                        .authorId(currentUserId)
+                        .body(comment)
+                        .build());
+            }
+            workItem.setCompletionApprovalRequested(true);
+            return workItem;
+        }
+
         // 5. Update Status & Resolution
-        Status oldStatus = statusRepository.findById(workItem.getStatusId()).orElse(null);
+        Status oldStatus = currentWorkItemStatus;
         workItem.setStatusId(toStatus.getId());
 
         // Handle Resolution
@@ -260,7 +343,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
 
         // Handle optional fields
         if (request != null && request.getFields() != null) {
-            applyFieldsUpdate(workItem, request.getFields());
+            applyFieldsUpdate(workItem, request.getFields(), currentUserId);
         }
 
         // 6. Run Post-Functions
@@ -275,12 +358,29 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                 transition.getName(),
                 currentUserId);
 
+        // 7b. Đóng yêu cầu "Tạm hoàn thành" đang chờ (nếu có): vào DONE = Admin đã xác nhận, đổi sang trạng thái khác = tự hủy
+        boolean statusChanged = oldStatus == null || !oldStatus.getId().equals(toStatus.getId());
+        Optional<WorkItemCompletionRequest> closedRequest = statusChanged
+                ? completionGate.onStatusChanged(saved, toStatus, enteringDone, currentUserId)
+                : Optional.empty();
+
+        // A3 (+ B2 khi vào DONE). Người gửi yêu cầu vừa được đóng đã nhận C2/C5 nên không nhận thêm A3.
+        if (statusChanged) {
+            workItemNotifier.statusChanged(saved, oldStatus, toStatus, currentUserId,
+                    closedRequest.map(com.datn.workservice.notification.WorkItemNotifier::requesterOf).orElse(Set.of()));
+        }
+
         // 8. Cascade Ancestor Status Transitions (Auto-reopen on active child & Auto-start on IN_PROGRESS)
         cascadeAncestorStatusTransitions(workItem, toStatus, currentUserId);
 
         // 9. Contribution Ledger Recording (Append-only)
         try {
-            contributionReportService.handleWorkItemStatusTransition(saved, oldStatus, toStatus, currentUserId);
+            // Phạt trễ hạn tính theo ngày thành viên báo hoàn thành, không theo ngày Admin duyệt
+            LocalDate completedOn = closedRequest
+                    .filter(r -> r.getStatus() == CompletionRequestStatus.APPROVED && r.getRequestedAt() != null)
+                    .map(r -> r.getRequestedAt().toLocalDate())
+                    .orElse(LocalDate.now());
+            contributionReportService.handleWorkItemStatusTransition(saved, oldStatus, toStatus, currentUserId, completedOn);
         } catch (Exception e) {
             log.warn("Không thể ghi nhận Sổ ghi công cho WorkItem '{}': {}", saved.getCode(), e.getMessage());
         }
@@ -466,10 +566,32 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
         return required;
     }
 
-    private void applyFieldsUpdate(WorkItem workItem, Map<String, Object> fields) {
+    private String normalizeResolution(ExecuteTransitionRequest request) {
+        if (request == null || request.getResolution() == null || request.getResolution().isBlank()) {
+            return null;
+        }
+        try {
+            return WorkItemResolution.valueOf(request.getResolution().trim().toUpperCase()).name();
+        } catch (IllegalArgumentException e) {
+            return WorkItemResolution.DONE.name();
+        }
+    }
+
+    private void applyFieldsUpdate(WorkItem workItem, Map<String, Object> fields, UUID currentUserId) {
         if (fields.containsKey("assigneeId")) {
             Object val = fields.get("assigneeId");
-            workItem.setAssigneeId(val != null ? UUID.fromString(val.toString()) : null);
+            UUID newAssignee = val != null && !val.toString().isBlank() ? UUID.fromString(val.toString()) : null;
+            UUID oldAssignee = workItem.getAssigneeId();
+            if (!Objects.equals(oldAssignee, newAssignee)) {
+                // Đổi người thực hiện qua màn chuyển trạng thái cũng phải có ISSUE_ASSIGN và được ghi lịch sử (BR-W01, BR-W02)
+                if (currentUserId != null && !SecurityUtils.isGlobalAdmin()
+                        && !projectMemberService.hasPermission(workItem.getProjectId(), currentUserId, PermissionKey.ISSUE_ASSIGN)) {
+                    throw new AccessDeniedException("Bạn không có quyền giao việc (ISSUE_ASSIGN)");
+                }
+                workItem.setAssigneeId(newAssignee);
+                workItemAuditService.recordAssigneeChange(workItem.getId(), oldAssignee, newAssignee, currentUserId);
+                workItemNotifier.assigneeChanged(workItem, oldAssignee, newAssignee, currentUserId);
+            }
         }
         if (fields.containsKey("fixVersionId")) {
             Object val = fields.get("fixVersionId");
@@ -525,6 +647,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                         parent.setResolution(null);
                         parent.setResolvedAt(null);
                         workItemRepository.save(parent);
+                        completionGate.onStatusChanged(parent, targetReopenStatus, false, currentUserId);
 
                         if (currentUserId != null) {
                             WorkItemChangelog statusChangelog = WorkItemChangelog.builder()
@@ -551,6 +674,8 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                         }
                         log.info("Cascading reopen: Ancestor WorkItem '{}' automatically reopened from '{}' to '{}' because descendant '{}' is in non-DONE status '{}'",
                                 parent.getCode(), oldStatusName, targetReopenStatus.getName(), triggerItem.getCode(), toStatus.getName());
+                        // A7
+                        workItemNotifier.parentReopened(parent, triggerItem, targetReopenStatus, toStatus, currentUserId);
                     }
                 }
                 // Rule 2: Descendant moved to IN_PROGRESS, but ancestor is still in TODO
@@ -560,6 +685,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                         String oldStatusName = parentStatus.getName();
                         parent.setStatusId(targetStartStatus.getId());
                         workItemRepository.save(parent);
+                        completionGate.onStatusChanged(parent, targetStartStatus, false, currentUserId);
 
                         if (currentUserId != null) {
                             WorkItemChangelog statusChangelog = WorkItemChangelog.builder()

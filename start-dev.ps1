@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # Script khởi chạy toàn bộ Backend Services (và tùy chọn Frontend) cho DATN-2026
 # Sử dụng:
 #   .\start-dev.ps1                 # Chạy cả 5 backend services (bật 5 cửa sổ riêng)
@@ -16,10 +16,42 @@ $frontendDir = Join-Path $rootDir "frontend"
 $services = @(
     @{ Name = "API Gateway"; Port = 8081; Module = "api-gateway" },
     @{ Name = "Identity Service"; Port = 8082; Module = "identity-service" },
-    @{ Name = "Work Service"; Port = 8083; Module = "work-service" },
     @{ Name = "Workspace Service"; Port = 8087; Module = "workspace-service" },
+    @{ Name = "Work Service"; Port = 8083; Module = "work-service" },
     @{ Name = "Notification Service"; Port = 9994; Module = "notification-service" }
 )
+
+function Wait-PortOpen([string]$server, [int]$port, [int]$maxWaitSeconds = 25) {
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($sw.Elapsed.TotalSeconds -lt $maxWaitSeconds) {
+        try {
+            $tcp = New-Object System.Net.Sockets.TcpClient
+            $iar = $tcp.BeginConnect($server, $port, $null, $null)
+            $wait = $iar.AsyncWaitHandle.WaitOne(300, $false)
+            if ($wait -and $tcp.Connected) {
+                $tcp.EndConnect($iar)
+                $tcp.Close()
+                return $true
+            }
+            $tcp.Close()
+        } catch { }
+        Start-Sleep -Milliseconds 800
+    }
+    return $false
+}
+
+# `spring-boot:run -pl <module>` (không -am) lấy module common từ ~/.m2, nên phải cài bản mới nhất trước,
+# nếu không service sẽ lỗi NoClassDefFoundError khi common có class mới (vd. com.datn.common.notification).
+Write-Host "`nĐang cài module common (mvn install -pl common)..." -ForegroundColor Cyan
+Push-Location $backendDir
+& .\mvnw.cmd -q install -pl common -DskipTests
+$commonExit = $LASTEXITCODE
+Pop-Location
+if ($commonExit -ne 0) {
+    Write-Host "  [LỖI] Không cài được module common. Hãy tắt các service đang chạy (.\stop-dev.ps1) rồi thử lại." -ForegroundColor Red
+    exit 1
+}
+Write-Host "  [OK] Đã cài module common" -ForegroundColor Green
 
 Write-Host "`n=======================================================" -ForegroundColor Cyan
 Write-Host "  Đang mở các cửa sổ Terminal riêng cho từng Service..." -ForegroundColor Cyan
@@ -32,7 +64,19 @@ foreach ($s in $services) {
     
     Start-Process conhost.exe -WindowStyle Normal -WorkingDirectory $backendDir -ArgumentList "powershell.exe", "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $cmd
     Write-Host "  [OK] Đã mở Terminal: $($s.Name) (Cổng $($s.Port))" -ForegroundColor Green
-    Start-Sleep -Milliseconds 600
+    
+    # Đảm bảo thứ tự khởi động: Workspace Service phải hoàn tất migrate DB trước khi bật Work Service
+    if ($s.Module -eq "workspace-service") {
+        Write-Host "     -> Đang đợi Workspace Service khởi tạo bảng (cổng 8087)..." -ForegroundColor Cyan -NoNewline
+        $ready = Wait-PortOpen "127.0.0.1" 8087 25
+        if ($ready) {
+            Write-Host " [SẴN SÀNG - Tiếp tục bật Work Service]" -ForegroundColor Green
+        } else {
+            Write-Host " [HẾT GIỜ ĐỢI - Tiếp tục bật Work Service]" -ForegroundColor Yellow
+        }
+    } else {
+        Start-Sleep -Milliseconds 600
+    }
 }
 
 if ($WithFrontend) {

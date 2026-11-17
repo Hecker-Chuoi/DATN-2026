@@ -840,3 +840,9 @@ body {
   transform-origin: top left;
 }
 
+/* Biểu tượng đang tải (Loader2 dùng animation: spin) */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

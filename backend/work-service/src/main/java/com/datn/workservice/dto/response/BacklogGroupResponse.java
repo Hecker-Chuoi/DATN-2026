@@ -25,6 +25,8 @@ public class BacklogGroupResponse {
     private SprintState state;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
+    /** Ngay dong thuc te; chi co o Sprint CLOSED. */
+    private LocalDateTime completedDate;
 
     private List<BoardCardResponse> items;
 
@@ -39,4 +41,10 @@ public class BacklogGroupResponse {
 
     private Boolean canStart;
     private Boolean canComplete;
+
+    // So lieu chot luc dong (tu SprintReportSnapshot, trung voi Velocity/Bao cao); chi co o Sprint CLOSED.
+    private Integer itemsAtClose;
+    private Integer completedItemsAtClose;
+    private BigDecimal storyPointsAtClose;
+    private BigDecimal completedStoryPointsAtClose;
 }

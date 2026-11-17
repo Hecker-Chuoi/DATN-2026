@@ -60,9 +60,16 @@ class WorkflowEngineServiceTest {
     private ContributionReportService contributionReportService;
     @Mock
     private SprintRepository sprintRepository;
+    @Mock
+    private WorkItemCompletionGate completionGate;
+    @Mock
+    private WorkItemAuditService workItemAuditService;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
+
+    @Mock
+    private com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @InjectMocks
     private WorkflowEngineServiceImpl workflowEngineService;
@@ -133,6 +140,9 @@ class WorkflowEngineServiceTest {
                 .assigneeId(currentUserId)
                 .reporterId(currentUserId)
                 .build();
+
+        // Mặc định các test cũ chạy với quyền Admin dự án (được xác nhận Hoàn thành trực tiếp)
+        lenient().when(completionGate.canConfirmCompletion(any(), any())).thenReturn(true);
     }
 
     @Test
@@ -187,6 +197,7 @@ class WorkflowEngineServiceTest {
 
         when(workflowTransitionRepository.findByWorkflowId(workflowId)).thenReturn(List.of(t1, t2));
         when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
+        when(statusRepository.findById(todoStatusId)).thenReturn(Optional.of(todoStatus)); // trạng thái hiện tại
 
         List<AvailableTransitionResponse> available = workflowEngineService.getAvailableTransitions(workItemId, currentUserId);
         assertThat(available).hasSize(1);
@@ -286,6 +297,7 @@ class WorkflowEngineServiceTest {
 
         when(workflowTransitionRepository.findById(transitionId)).thenReturn(Optional.of(transition));
         when(statusRepository.findById(doneStatusId)).thenReturn(Optional.of(doneStatus));
+        when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus)); // trạng thái hiện tại
 
         // Subtask that is still in TODO
         WorkItem subtask = WorkItem.builder()
@@ -726,5 +738,229 @@ class WorkflowEngineServiceTest {
         assertThatThrownBy(() -> workflowEngineService.executeTransition(workItemId, reopenTransitionId, request, currentUserId))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Không thể mở lại (Reopen) công việc thuộc Chu kỳ (Sprint) đã kết thúc");
+    }
+
+    // ─── "Tạm hoàn thành": chỉ Admin dự án mới xác nhận Hoàn thành (BR-W03..BR-W08) ───
+
+    private WorkflowTransition stubDoneTransitionFromInProgress() {
+        workItem.setStatusId(inProgressStatusId);
+        when(workItemRepository.findById(workItemId)).thenReturn(Optional.of(workItem));
+        when(workflowSchemeRepository.findByProjectId(projectId)).thenReturn(List.of());
+        when(workflowRepository.findByProjectIdAndIsDefaultTrue(projectId)).thenReturn(Optional.of(workflow));
+
+        WorkflowTransition transition = WorkflowTransition.builder()
+                .id(UUID.randomUUID())
+                .workflowId(workflowId)
+                .fromStatusId(inProgressStatusId)
+                .toStatusId(doneStatusId)
+                .name("Hoàn thành")
+                .build();
+        lenient().when(workflowTransitionRepository.findById(transition.getId())).thenReturn(Optional.of(transition));
+        when(statusRepository.findById(doneStatusId)).thenReturn(Optional.of(doneStatus));
+        when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
+        return transition;
+    }
+
+    @Test
+    @DisplayName("Tạm hoàn thành: thành viên chuyển sang DONE chỉ tạo yêu cầu, trạng thái và Sổ ghi công giữ nguyên")
+    void executeTransition_memberMovingToDone_createsPendingRequestInsteadOfCompleting() {
+        WorkflowTransition transition = stubDoneTransitionFromInProgress();
+        when(completionGate.canConfirmCompletion(projectId, currentUserId)).thenReturn(false);
+
+        ExecuteTransitionRequest request = ExecuteTransitionRequest.builder()
+                .transitionId(transition.getId())
+                .comment("Em làm xong rồi ạ")
+                .build();
+
+        WorkItem result = workflowEngineService.executeTransition(workItemId, transition.getId(), request, currentUserId);
+
+        assertThat(result.isCompletionApprovalRequested()).isTrue();
+        assertThat(result.getStatusId()).isEqualTo(inProgressStatusId);
+        assertThat(result.getResolution()).isNull();
+        assertThat(result.getResolvedAt()).isNull();
+
+        verify(completionGate).submit(eq(workItem), eq(transition.getId()), eq(inProgressStatus), eq(doneStatus),
+                isNull(), eq(false), eq("Em làm xong rồi ạ"), eq(currentUserId));
+        verify(workItemCommentRepository).save(any(WorkItemComment.class));
+        verify(workItemRepository, never()).save(any(WorkItem.class));
+        verify(workItemChangelogRepository, never()).save(any(WorkItemChangelog.class));
+        verifyNoInteractions(contributionReportService);
+    }
+
+    @Test
+    @DisplayName("Tạm hoàn thành: lựa chọn hoàn thành cả việc con được hoãn tới khi Admin xác nhận")
+    void executeTransition_memberResolveAllSubtasks_defersCascade() {
+        WorkflowTransition transition = stubDoneTransitionFromInProgress();
+        when(completionGate.canConfirmCompletion(projectId, currentUserId)).thenReturn(false);
+
+        WorkItem subtask = WorkItem.builder().id(UUID.randomUUID()).parentId(workItemId).statusId(todoStatusId).build();
+        when(workItemRepository.findByParentId(workItemId)).thenReturn(List.of(subtask));
+        when(statusRepository.findById(todoStatusId)).thenReturn(Optional.of(todoStatus));
+
+        ExecuteTransitionRequest request = ExecuteTransitionRequest.builder()
+                .transitionId(transition.getId())
+                .resolveAllSubtasks(true)
+                .build();
+
+        WorkItem result = workflowEngineService.executeTransition(workItemId, transition.getId(), request, currentUserId);
+
+        assertThat(result.isCompletionApprovalRequested()).isTrue();
+        assertThat(subtask.getStatusId()).isEqualTo(todoStatusId);
+        verify(completionGate).submit(eq(workItem), eq(transition.getId()), any(), eq(doneStatus),
+                isNull(), eq(true), isNull(), eq(currentUserId));
+        verify(workItemRepository, never()).save(any(WorkItem.class));
+    }
+
+    @Test
+    @DisplayName("Tạm hoàn thành: guard việc tiền đề vẫn chặn ngay khi gửi yêu cầu")
+    void executeTransition_memberRequest_stillBlockedByIncompleteSubtasks() {
+        WorkflowTransition transition = stubDoneTransitionFromInProgress();
+        when(completionGate.canConfirmCompletion(projectId, currentUserId)).thenReturn(false);
+
+        WorkItem subtask = WorkItem.builder().id(UUID.randomUUID()).parentId(workItemId).statusId(todoStatusId).build();
+        when(workItemRepository.findByParentId(workItemId)).thenReturn(List.of(subtask));
+        when(statusRepository.findById(todoStatusId)).thenReturn(Optional.of(todoStatus));
+
+        ExecuteTransitionRequest request = ExecuteTransitionRequest.builder().transitionId(transition.getId()).build();
+
+        assertThatThrownBy(() -> workflowEngineService.executeTransition(workItemId, transition.getId(), request, currentUserId))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("nhiệm vụ con (Sub-task) chưa hoàn thành");
+        verify(completionGate, never()).submit(any(), any(), any(), any(), any(), anyBoolean(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Admin dự án chuyển sang DONE: hoàn thành ngay, đóng yêu cầu đang chờ và ghi công theo ngày báo hoàn thành")
+    void executeTransition_adminMovingToDone_completesAndClosesPendingRequest() {
+        WorkflowTransition transition = stubDoneTransitionFromInProgress();
+        when(workItemRepository.save(any(WorkItem.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        LocalDateTime requestedAt = LocalDateTime.now().minusDays(3);
+        WorkItemCompletionRequest pending = WorkItemCompletionRequest.builder()
+                .id(UUID.randomUUID())
+                .workItemId(workItemId)
+                .status(com.datn.workservice.enums.CompletionRequestStatus.APPROVED)
+                .requestedAt(requestedAt)
+                .build();
+        when(completionGate.onStatusChanged(any(WorkItem.class), eq(doneStatus), eq(true), eq(currentUserId)))
+                .thenReturn(Optional.of(pending));
+
+        ExecuteTransitionRequest request = ExecuteTransitionRequest.builder().transitionId(transition.getId()).build();
+        WorkItem result = workflowEngineService.executeTransition(workItemId, transition.getId(), request, currentUserId);
+
+        assertThat(result.isCompletionApprovalRequested()).isFalse();
+        assertThat(result.getStatusId()).isEqualTo(doneStatusId);
+        assertThat(result.getResolution()).isEqualTo(WorkItemResolution.DONE);
+        verify(completionGate, never()).submit(any(), any(), any(), any(), any(), anyBoolean(), any(), any());
+        verify(contributionReportService).handleWorkItemStatusTransition(
+                any(WorkItem.class), eq(inProgressStatus), eq(doneStatus), eq(currentUserId), eq(requestedAt.toLocalDate()));
+    }
+
+    @Test
+    @DisplayName("Danh sách bước chuyển: đánh dấu requiresApproval cho bước vào DONE khi người dùng không phải Admin")
+    void getAvailableTransitions_flagsDoneTransitionForNonAdmin() {
+        stubDoneTransitionFromInProgress();
+        when(completionGate.canConfirmCompletion(projectId, otherUserId)).thenReturn(false);
+
+        WorkflowTransition backToTodo = WorkflowTransition.builder()
+                .id(UUID.randomUUID())
+                .workflowId(workflowId)
+                .fromStatusId(inProgressStatusId)
+                .toStatusId(todoStatusId)
+                .name("Dừng lại")
+                .build();
+        WorkflowTransition toDone = WorkflowTransition.builder()
+                .id(UUID.randomUUID())
+                .workflowId(workflowId)
+                .fromStatusId(inProgressStatusId)
+                .toStatusId(doneStatusId)
+                .name("Hoàn thành")
+                .build();
+        when(workflowTransitionRepository.findByWorkflowId(workflowId)).thenReturn(List.of(backToTodo, toDone));
+        when(statusRepository.findById(todoStatusId)).thenReturn(Optional.of(todoStatus));
+
+        List<AvailableTransitionResponse> available = workflowEngineService.getAvailableTransitions(workItemId, otherUserId);
+
+        assertThat(available).hasSize(2);
+        assertThat(available).filteredOn(t -> t.getToStatusId().equals(doneStatusId))
+                .singleElement().extracting(AvailableTransitionResponse::getRequiresApproval).isEqualTo(true);
+        assertThat(available).filteredOn(t -> t.getToStatusId().equals(todoStatusId))
+                .singleElement().extracting(AvailableTransitionResponse::getRequiresApproval).isEqualTo(false);
+    }
+
+    @Test
+    @DisplayName("Admin xác nhận: chạy lại bước chuyển đã lưu, không đánh giá lại Condition ASSIGNEE_ONLY với Admin")
+    void executeApprovedCompletion_runsStoredTransitionWithoutReEvaluatingConditions() {
+        workItem.setStatusId(inProgressStatusId);
+        when(workItemRepository.findById(workItemId)).thenReturn(Optional.of(workItem));
+        when(workflowSchemeRepository.findByProjectId(projectId)).thenReturn(List.of());
+        when(workflowRepository.findByProjectIdAndIsDefaultTrue(projectId)).thenReturn(Optional.of(workflow));
+
+        WorkflowTransition assigneeOnlyDone = WorkflowTransition.builder()
+                .id(UUID.randomUUID())
+                .workflowId(workflowId)
+                .fromStatusId(inProgressStatusId)
+                .toStatusId(doneStatusId)
+                .name("Hoàn thành (chỉ người được giao)")
+                .conditionsConfig(List.of(Map.of("type", "ASSIGNEE_ONLY")))
+                .build();
+        when(workflowTransitionRepository.findByWorkflowId(workflowId)).thenReturn(List.of(assigneeOnlyDone));
+        when(workflowTransitionRepository.findById(assigneeOnlyDone.getId())).thenReturn(Optional.of(assigneeOnlyDone));
+        when(statusRepository.findById(doneStatusId)).thenReturn(Optional.of(doneStatus));
+        when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
+        when(workItemRepository.save(any(WorkItem.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        WorkItemCompletionRequest pending = WorkItemCompletionRequest.builder()
+                .id(UUID.randomUUID())
+                .workItemId(workItemId)
+                .transitionId(assigneeOnlyDone.getId())
+                .targetStatusId(doneStatusId)
+                .resolution("FIXED")
+                .resolveAllSubtasks(false)
+                .requestedBy(currentUserId)
+                .requestedAt(LocalDateTime.now())
+                .build();
+
+        // otherUserId là Admin, KHÔNG phải người được giao
+        WorkItem result = workflowEngineService.executeApprovedCompletion(workItemId, pending, otherUserId);
+
+        assertThat(result.getStatusId()).isEqualTo(doneStatusId);
+        assertThat(result.getResolution()).isEqualTo(WorkItemResolution.FIXED);
+        verify(completionGate).onStatusChanged(any(WorkItem.class), eq(doneStatus), eq(true), eq(otherUserId));
+    }
+
+    @Test
+    @DisplayName("Đổi người thực hiện qua màn chuyển trạng thái: cần ISSUE_ASSIGN và được ghi lịch sử")
+    void executeTransition_assigneeChangeViaFields_requiresPermissionAndIsAudited() {
+        workItem.setStatusId(todoStatusId);
+        when(workItemRepository.findById(workItemId)).thenReturn(Optional.of(workItem));
+        when(workflowSchemeRepository.findByProjectId(projectId)).thenReturn(List.of());
+        when(workflowRepository.findByProjectIdAndIsDefaultTrue(projectId)).thenReturn(Optional.of(workflow));
+
+        WorkflowTransition start = WorkflowTransition.builder()
+                .id(UUID.randomUUID())
+                .workflowId(workflowId)
+                .fromStatusId(todoStatusId)
+                .toStatusId(inProgressStatusId)
+                .name("Bắt đầu")
+                .build();
+        when(workflowTransitionRepository.findById(start.getId())).thenReturn(Optional.of(start));
+        when(statusRepository.findById(inProgressStatusId)).thenReturn(Optional.of(inProgressStatus));
+        when(statusRepository.findById(todoStatusId)).thenReturn(Optional.of(todoStatus));
+        when(workItemLinkRepository.findByTargetItemIdAndLinkType(workItemId, LinkType.BLOCKS)).thenReturn(List.of());
+        when(projectMemberService.hasPermission(projectId, currentUserId, PermissionKey.ISSUE_ASSIGN)).thenReturn(true);
+        when(workItemRepository.save(any(WorkItem.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Map<String, Object> fields = new HashMap<>();
+        fields.put("assigneeId", null); // Hủy giao
+        ExecuteTransitionRequest request = ExecuteTransitionRequest.builder()
+                .transitionId(start.getId())
+                .fields(fields)
+                .build();
+
+        WorkItem result = workflowEngineService.executeTransition(workItemId, start.getId(), request, currentUserId);
+
+        assertThat(result.getAssigneeId()).isNull();
+        verify(workItemAuditService).recordAssigneeChange(workItemId, currentUserId, null, currentUserId);
     }
 }

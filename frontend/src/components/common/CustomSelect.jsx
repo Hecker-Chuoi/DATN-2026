@@ -1,5 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check, Search, X } from 'lucide-react';
+
+const MENU_GAP = 4;
+// Cao hơn overlay của các modal (9999-10001) vì menu giờ được portal ra <body>,
+// không còn nằm trong stacking context của modal; thấp hơn tooltip (99999).
+const MENU_Z_INDEX = 10050;
 
 /**
  * CustomSelect - Dropdown tùy chỉnh hiện đại thay thế thẻ <select> nguyên bản
@@ -29,15 +35,16 @@ export default function CustomSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
+  const menuRef = useRef(null);
 
   const selectedOption = options.find((opt) => String(opt.value) === String(value));
 
-  // Tự động đóng menu khi click ra ngoài
+  // Tự động đóng menu khi click ra ngoài (menu nằm trong portal nên phải xét cả menuRef)
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
-        setIsOpen(false);
-      }
+      if (containerRef.current?.contains(e.target)) return;
+      if (menuRef.current?.contains(e.target)) return;
+      setIsOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -52,6 +59,44 @@ export default function CustomSelect({
     const subMatch = opt.sublabel?.toLowerCase().includes(term);
     return labelMatch || subMatch;
   });
+
+  /*
+   * Menu được render qua portal với position: fixed để không bị cắt bởi
+   * container cha có overflow: hidden/auto (bảng thành viên, thân modal...).
+   * Vị trí tính theo nút bấm; thiếu chỗ phía dưới thì lật lên trên.
+   * Ghi thẳng vào style của DOM (không qua state) để cuộn trang không gây re-render.
+   */
+  const updatePosition = useCallback(() => {
+    const trigger = containerRef.current;
+    const menu = menuRef.current;
+    if (!trigger || !menu) return;
+    const rect = trigger.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom - MENU_GAP;
+    const spaceAbove = rect.top - MENU_GAP;
+    const openUp = menu.offsetHeight > spaceBelow && spaceAbove > spaceBelow;
+    menu.style.left = `${rect.left}px`;
+    menu.style.width = `${rect.width}px`;
+    menu.style.top = openUp ? 'auto' : `${rect.bottom + MENU_GAP}px`;
+    menu.style.bottom = openUp ? `${window.innerHeight - rect.top + MENU_GAP}px` : 'auto';
+    menu.style.visibility = 'visible';
+  }, []);
+
+  // Đo trước khi trình duyệt vẽ để menu không bị nháy ở vị trí sai;
+  // đo lại khi số option đổi (gõ tìm kiếm) vì chiều cao menu thay đổi.
+  useLayoutEffect(() => {
+    if (isOpen) updatePosition();
+  }, [isOpen, filteredOptions.length, updatePosition]);
+
+  // Bám theo nút bấm khi cuộn (bất kỳ container nào) hoặc đổi kích thước cửa sổ.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen, updatePosition]);
 
   return (
     <div
@@ -119,21 +164,22 @@ export default function CustomSelect({
         />
       </button>
 
-      {/* Dropdown Menu */}
-      {isOpen && (
+      {/* Dropdown Menu (portal ra <body>) */}
+      {isOpen && createPortal(
         <div
+          ref={menuRef}
           style={{
-            position: 'absolute',
-            top: 'calc(100% + 4px)',
-            left: 0,
-            right: 0,
+            position: 'fixed',
+            // top/left/width/visibility do updatePosition() đặt sau khi đo;
+            // trước đó menu nằm trong DOM để đo chiều cao nhưng ẩn đi.
+            visibility: 'hidden',
             backgroundColor: '#FFFFFF',
             borderRadius: 8,
             border: '1px solid #E2E8F0',
             boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
-            zIndex: 1050,
+            zIndex: MENU_Z_INDEX,
             overflow: 'hidden',
-            minWidth: '100%',
+            boxSizing: 'border-box',
             ...menuStyle,
           }}
         >
@@ -245,7 +291,8 @@ export default function CustomSelect({
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

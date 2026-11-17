@@ -20,6 +20,15 @@ public interface ContributionReportService {
     void handleWorkItemStatusTransition(WorkItem item, Status oldStatus, Status newStatus, UUID actorId);
 
     /**
+     * Như trên nhưng tính phạt trễ hạn theo {@code completedOn} — ngày thành viên báo hoàn thành
+     * (gửi yêu cầu "Tạm hoàn thành"), để Admin xác nhận muộn không làm người làm bị trừ điểm.
+     */
+    default void handleWorkItemStatusTransition(WorkItem item, Status oldStatus, Status newStatus, UUID actorId,
+                                                java.time.LocalDate completedOn) {
+        handleWorkItemStatusTransition(item, oldStatus, newStatus, actorId);
+    }
+
+    /**
      * Bắt sự kiện xóa WorkItem để ghi dòng hủy điểm nếu task đó đã từng tính điểm
      */
     void handleWorkItemDeleted(WorkItem item, UUID actorId);

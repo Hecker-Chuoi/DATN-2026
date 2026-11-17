@@ -75,6 +75,9 @@ class ProjectServiceTest {
     @Mock
     private WorkspaceAccessChecker workspaceAccessChecker;
 
+    @org.mockito.Mock
+    private com.datn.workservice.notification.ProjectNotifier projectNotifier;
+
     @InjectMocks
     private ProjectServiceImpl projectService;
 

@@ -6,6 +6,7 @@ import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ForbiddenException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workspaceservice.client.IdentityClient;
+import com.datn.workspaceservice.client.IdentityUsers;
 import com.datn.workspaceservice.client.dto.UserResponse;
 import com.datn.workspaceservice.dto.request.AddWorkspaceMemberRequest;
 import com.datn.workspaceservice.dto.response.WorkspaceInvitationResponse;
@@ -18,7 +19,6 @@ import com.datn.workspaceservice.enums.WorkspaceRole;
 import com.datn.workspaceservice.repository.WorkspaceInvitationRepository;
 import com.datn.workspaceservice.repository.WorkspaceMemberRepository;
 import com.datn.workspaceservice.repository.WorkspaceRepository;
-import com.datn.workspaceservice.service.InvitationMailer;
 import com.datn.workspaceservice.service.WorkspaceMemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,8 +36,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -48,8 +46,8 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceInvitationRepository invitationRepository;
     private final IdentityClient identityClient;
-    private final InvitationMailer mailer;
     private final JdbcTemplate jdbcTemplate;
+    private final com.datn.workspaceservice.notification.WorkspaceNotificationPublisher notifications;
 
     @Override
     @Transactional(readOnly = true)
@@ -148,7 +146,8 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         log.info("Workspace invitation created: workspace={}, invitee={}, by={}, role={}",
                 workspaceId, targetUserId, currentUserId, request.getRole());
         WorkspaceInvitationResponse res = toInvitationResponse(saved);
-        mailer.send(res);
+        // G8: thông báo trong ứng dụng + email lời mời (notification-service gửi, template invite-member)
+        notifications.invitationReceived(saved, currentUserId);
         return res;
     }
 
@@ -184,7 +183,9 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         inv.setStatus(InvitationStatus.ACCEPTED);
         inv.setRespondedAt(LocalDateTime.now());
         log.info("Workspace invitation {} accepted by {}", invitationId, userId);
-        return toInvitationResponse(invitationRepository.save(inv));
+        WorkspaceInvitation saved = invitationRepository.save(inv);
+        notifications.invitationAnswered(saved, true, userId); // G11 (+ đóng G8)
+        return toInvitationResponse(saved);
     }
 
     @Override
@@ -193,7 +194,9 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         WorkspaceInvitation inv = requirePendingForInvitee(invitationId, userId);
         inv.setStatus(InvitationStatus.DECLINED);
         inv.setRespondedAt(LocalDateTime.now());
-        return toInvitationResponse(invitationRepository.save(inv));
+        WorkspaceInvitation saved = invitationRepository.save(inv);
+        notifications.invitationAnswered(saved, false, userId); // G11 (+ đóng G8)
+        return toInvitationResponse(saved);
     }
 
     @Override
@@ -207,7 +210,9 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         }
         inv.setStatus(InvitationStatus.CANCELLED);
         inv.setRespondedAt(LocalDateTime.now());
-        return toInvitationResponse(invitationRepository.save(inv));
+        WorkspaceInvitation saved = invitationRepository.save(inv);
+        notifications.invitationCancelled(saved, userId); // chỉ đóng G8
+        return toInvitationResponse(saved);
     }
 
     @Override
@@ -238,8 +243,10 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
             assertNotLastOwner(workspaceId, target);
         }
 
+        WorkspaceRole oldRole = target.getRole();
         target.setRole(newRole);
         WorkspaceMember saved = memberRepository.save(target);
+        notifications.roleChanged(workspaceId, targetUserId, oldRole, newRole, currentUserId); // G10
 
         log.info("Đã đổi vai trò user {} trong workspace {} thành {}", targetUserId, workspaceId, newRole);
         return toResponse(saved, hydrateUsers(List.of(saved)).get(targetUserId));
@@ -267,6 +274,7 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
         memberRepository.delete(target);
         cleanupProjectMemberships(workspaceId, targetUserId);
         log.info("Đã xóa user {} khỏi workspace {}", targetUserId, workspaceId);
+        notifications.memberRemoved(workspaceId, targetUserId, currentUserId); // G9
     }
 
     @Override
@@ -404,11 +412,17 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
             log.warn("Không tra được user theo identifier [{}]: {}", identifier, e.getMessage());
             throw new ResourceNotFoundException("Không tìm thấy người dùng: " + identifier);
         }
-        if (response == null || response.getData() == null || response.getData().getId() == null) {
+        if (response == null || response.getData() == null) {
             throw new ResourceNotFoundException("Không tìm thấy người dùng: " + identifier);
         }
-        // Luôn lưu users.id, không bao giờ lưu keycloakId - xem CurrentUserResolver.
-        return response.getData().getId();
+        // Quy ước toàn hệ thống: lưu Keycloak sub (xem CurrentUserResolver), không lưu users.id của identity.
+        String keycloakId = response.getData().getKeycloakId();
+        try {
+            return UUID.fromString(keycloakId);
+        } catch (Exception e) {
+            log.warn("Người dùng [{}] chưa liên kết tài khoản Keycloak hợp lệ: {}", identifier, keycloakId);
+            throw new ResourceNotFoundException("Không tìm thấy người dùng: " + identifier);
+        }
     }
 
     /**
@@ -434,11 +448,8 @@ public class WorkspaceMemberServiceImpl implements WorkspaceMemberService {
             if (response == null || response.getData() == null) {
                 return Collections.emptyMap();
             }
-            return response.getData().stream()
-                    .filter(u -> u.getId() != null)
-                    // Chỉ khóa theo users.id. KHÔNG khóa kép theo cả keycloakId như
-                    // ProjectMemberServiceImpl phải làm - ở đây id đã được chuẩn hóa.
-                    .collect(Collectors.toMap(UserResponse::getId, Function.identity(), (a, b) -> a));
+            // Bảng lưu Keycloak sub, còn identity trả users.id kèm keycloakId: tra được theo cả hai
+            return IdentityUsers.indexByAnyId(response.getData());
         } catch (Exception e) {
             log.debug("Không hydrate được thông tin user từ identity-service: {}", e.getMessage());
             return Collections.emptyMap();

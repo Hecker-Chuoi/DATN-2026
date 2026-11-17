@@ -92,6 +92,9 @@ public class BoardCardResponse {
 
     private List<String> labels;
 
+    /** Đang "Tạm hoàn thành" — chờ Admin dự án xác nhận (BR-W03). */
+    private Boolean completionPending;
+
     /** LexoRank - quyet dinh thu tu trong cot / trong Sprint. */
     private String rank;
 
