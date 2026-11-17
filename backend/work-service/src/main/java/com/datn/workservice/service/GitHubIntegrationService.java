@@ -13,9 +13,10 @@ public interface GitHubIntegrationService {
     String getOAuthAuthorizeUrl(UUID projectId, UUID currentUserId);
 
     /**
-     * Xử lý callback OAuth từ GitHub sau khi người dùng chấp thuận cấp quyền
+     * Xử lý callback OAuth từ GitHub sau khi người dùng chấp thuận cấp quyền.
+     * {@code state} phải là giá trị do {@link #getOAuthAuthorizeUrl} phát cho đúng người dùng và dự án.
      */
-    ProjectGitHubStatusResponse handleOAuthCallback(UUID projectId, String code, UUID currentUserId);
+    ProjectGitHubStatusResponse handleOAuthCallback(UUID projectId, String code, String state, UUID currentUserId);
 
     /**
      * Lấy danh sách Repository của tài khoản GitHub đã kết nối
@@ -55,7 +56,8 @@ public interface GitHubIntegrationService {
     /**
      * Đồng bộ thay đổi trạng thái WorkItem sang GitHub Issue (Reverse Sync)
      */
-    void syncWorkItemStatusToGitHub(UUID workItemId, com.datn.workservice.enums.StatusCategory oldCategory, com.datn.workservice.enums.StatusCategory newCategory);
+    void syncWorkItemStatusToGitHub(UUID workItemId, com.datn.workservice.enums.StatusCategory oldCategory,
+                                    com.datn.workservice.enums.StatusCategory newCategory, UUID changedByUserId);
 
     /**
      * Hủy liên kết tài khoản GitHub của người dùng (xóa token)

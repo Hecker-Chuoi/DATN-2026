@@ -37,5 +37,7 @@ public class ProjectGitHubStatusResponse {
 
     private Boolean autoCloseGithubIssueOnDone;
 
+    private Boolean autoCloseTaskOnIssueClose;
+
     private LocalDateTime lastSyncedAt;
 }

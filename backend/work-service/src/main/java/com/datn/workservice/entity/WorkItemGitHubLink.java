@@ -25,6 +25,10 @@ public class WorkItemGitHubLink {
     @Column(name = "work_item_id", nullable = false)
     private UUID workItemId;
 
+    /** Dư thừa có chủ đích để có chỉ mục duy nhất (project_id, github_number) cho liên kết ISSUE. */
+    @Column(name = "project_id")
+    private UUID projectId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "link_type", nullable = false, length = 50)
     private GitHubLinkType linkType;

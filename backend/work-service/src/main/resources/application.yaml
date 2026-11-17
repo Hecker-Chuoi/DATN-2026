@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: work-service
+  # Bí mật cục bộ (KHÔNG commit, đã nằm trong .gitignore). Thiếu file thì bỏ qua, dùng biến môi trường.
+  config:
+    import: optional:classpath:github-secrets.yml
 
   # ─── PostgreSQL (datn_main_db) ───────────────────────────
   datasource:
@@ -75,12 +78,17 @@ app:
       url: ${APP_SERVICES_NOTIFICATION_URL:http://localhost:9994}
 
 # ─── GitHub OAuth & Integration Configuration ───
+# Bí mật KHÔNG ghi vào file: đặt biến môi trường GITHUB_CLIENT_SECRET (IntelliJ Run Config / compose / .env).
 github:
   client-id: ${GITHUB_CLIENT_ID:Ov23ctW7dA1RgqhNY4Fo}
-  client-secret: ${GITHUB_CLIENT_SECRET:d55e5cba3c223ab07f8f7fdb85cb18f2be127eb0}
+  client-secret: ${GITHUB_CLIENT_SECRET:}
   redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:5173/integrations/github/callback}
   api-url: https://api.github.com
-  webhook-secret: ${GITHUB_WEBHOOK_SECRET:datn-github-webhook-secret-2026}
+  # Khoá ký OAuth state (để trống thì dùng client-secret)
+  state-secret: ${GITHUB_STATE_SECRET:}
+  # URL công khai đầy đủ GitHub gọi webhook, vd qua gateway + ngrok:
+  # https://xxxx.ngrok-free.app/work/api/v1/work/integrations/github/webhook  (để trống = không tự đăng ký webhook)
+  webhook-url: ${GITHUB_WEBHOOK_URL:}
 
 logging:
   level:

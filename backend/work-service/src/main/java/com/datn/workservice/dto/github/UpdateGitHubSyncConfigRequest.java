@@ -15,4 +15,6 @@ public class UpdateGitHubSyncConfigRequest {
     private Boolean autoCloseTaskOnPrMerge;
 
     private Boolean autoCloseGithubIssueOnDone;
+
+    private Boolean autoCloseTaskOnIssueClose;
 }

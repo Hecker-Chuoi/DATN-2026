@@ -35,6 +35,7 @@ export default function ProjectGitHubPage() {
     autoMoveInReviewOnPr: true,
     autoCloseTaskOnPrMerge: true,
     autoCloseGithubIssueOnDone: true,
+    autoCloseTaskOnIssueClose: true,
   });
 
   const reloadStatus = (isBackground = false) => {
@@ -48,6 +49,7 @@ export default function ProjectGitHubPage() {
             autoMoveInReviewOnPr: res.data.autoMoveInReviewOnPr ?? true,
             autoCloseTaskOnPrMerge: res.data.autoCloseTaskOnPrMerge ?? true,
             autoCloseGithubIssueOnDone: res.data.autoCloseGithubIssueOnDone ?? true,
+            autoCloseTaskOnIssueClose: res.data.autoCloseTaskOnIssueClose ?? true,
           });
         }
       })
@@ -71,6 +73,7 @@ export default function ProjectGitHubPage() {
               autoMoveInReviewOnPr: res.data.autoMoveInReviewOnPr ?? true,
               autoCloseTaskOnPrMerge: res.data.autoCloseTaskOnPrMerge ?? true,
               autoCloseGithubIssueOnDone: res.data.autoCloseGithubIssueOnDone ?? true,
+              autoCloseTaskOnIssueClose: res.data.autoCloseTaskOnIssueClose ?? true,
             });
           }
         })
@@ -101,7 +104,7 @@ export default function ProjectGitHubPage() {
 
         try {
           setIsAuthenticating(true);
-          const res = await githubIntegrationApi.handleCallback(projectId, code, { skipErrorToast: true });
+          const res = await githubIntegrationApi.handleCallback(projectId, code, event.data.state, { skipErrorToast: true });
           toast.success('Xác thực tài khoản GitHub thành công!');
           if (res?.data) {
             setStatus(res.data);
@@ -876,6 +879,23 @@ export default function ProjectGitHubPage() {
                     </span>
                     <span style={{ fontSize: 12, color: '#64748B' }}>
                       Giúp đồng bộ 2 chiều: đội ngũ quản lý kéo thẻ xong thì lập trình viên trên GitHub cũng thấy Issue được đóng.
+                    </span>
+                  </div>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={config.autoCloseTaskOnIssueClose}
+                    onChange={(e) => setConfig({ ...config, autoCloseTaskOnIssueClose: e.target.checked })}
+                    style={{ marginTop: 3, width: 16, height: 16, accentColor: '#2563EB', cursor: 'pointer' }}
+                  />
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', display: 'block' }}>
+                      Tự động hoàn thành Task khi Issue trên GitHub được đóng (mở lại Task khi Issue mở lại)
+                    </span>
+                    <span style={{ fontSize: 12, color: '#64748B' }}>
+                      Chỉ áp dụng khi người đóng Issue đã liên kết tài khoản GitHub với hệ thống. Thành viên không phải Admin dự án sẽ tạo yêu cầu "Tạm hoàn thành" chờ duyệt.
                     </span>
                   </div>
                 </label>

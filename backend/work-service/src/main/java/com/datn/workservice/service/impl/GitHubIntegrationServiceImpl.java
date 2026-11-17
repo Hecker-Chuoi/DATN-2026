@@ -4,28 +4,36 @@ import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.client.GitHubApiClient;
 import com.datn.workservice.dto.github.*;
+import com.datn.workservice.dto.request.ExecuteTransitionRequest;
+import com.datn.workservice.dto.response.AvailableTransitionResponse;
 import com.datn.workservice.entity.*;
 import com.datn.workservice.enums.GitHubLinkType;
+import com.datn.workservice.enums.PermissionKey;
 import com.datn.workservice.enums.StatusCategory;
 import com.datn.workservice.enums.WorkItemPriority;
 import com.datn.workservice.enums.WorkItemResolution;
 import com.datn.workservice.repository.*;
+import com.datn.workservice.security.GitHubOAuthStateService;
 import com.datn.workservice.security.GitHubWebhookSignatureValidator;
 import com.datn.workservice.service.AtomicKeySequenceGenerator;
 import com.datn.workservice.service.GitHubIntegrationService;
 import com.datn.workservice.service.LexoRankService;
+import com.datn.workservice.service.ProjectMemberService;
+import com.datn.workservice.service.WorkflowEngineService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -43,40 +51,42 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
     private final AtomicKeySequenceGenerator atomicKeySequenceGenerator;
     private final LexoRankService lexoRankService;
     private final GitHubWebhookSignatureValidator gitHubWebhookSignatureValidator;
+    private final GitHubOAuthStateService gitHubOAuthStateService;
+    private final ProjectMemberService projectMemberService;
+    private final WorkflowEngineService workflowEngineService;
+    private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${github.webhook-secret:datn-github-webhook-secret-2026}")
-    private String webhookSecret;
+    private final SecureRandom secureRandom = new SecureRandom();
 
-    @Value("${github.webhook-base-url:}")
-    private String webhookBaseUrl;
+    /**
+     * URL công khai ĐẦY ĐỦ mà GitHub gọi tới, ví dụ qua gateway + ngrok:
+     * {@code https://xxxx.ngrok-free.app/work/api/v1/work/integrations/github/webhook}.
+     * Để trống thì không tự đăng ký webhook (chỉ đồng bộ tay).
+     */
+    @Value("${github.webhook-url:}")
+    private String webhookUrl;
+
+    /** Kết quả bước 1 của webhook: cần chuyển trạng thái Task qua workflow sau khi lưu liên kết. */
+    private record IssueFollowUp(UUID workItemId, UUID projectId, boolean toDone, Integer issueNumber) {
+    }
 
     @Override
     public String getOAuthAuthorizeUrl(UUID projectId, UUID currentUserId) {
-        // State format: projectId:userId để callback nhận diện đúng ngữ cảnh
-        String state = projectId + ":" + currentUserId;
-        return gitHubApiClient.buildAuthorizeUrl(state);
+        return gitHubApiClient.buildAuthorizeUrl(gitHubOAuthStateService.issue(projectId, currentUserId));
     }
 
     @Override
     @Transactional
-    public ProjectGitHubStatusResponse handleOAuthCallback(UUID projectId, String code, UUID currentUserId) {
+    public ProjectGitHubStatusResponse handleOAuthCallback(UUID projectId, String code, String state, UUID currentUserId) {
         if (code == null || code.isBlank()) {
             throw new BadRequestException("Mã xác thực Authorization Code từ GitHub không hợp lệ");
         }
+        // Chống OAuth CSRF: state phải do server phát cho đúng người dùng + dự án này
+        gitHubOAuthStateService.verify(state, projectId, currentUserId);
 
-        // 1. Đổi code lấy Access Token (có cơ chế idempotent nếu code bị submit trùng lặp)
-        GitHubOAuthTokenResponse tokenResponse;
-        try {
-            tokenResponse = gitHubApiClient.exchangeCodeForToken(code);
-        } catch (BadRequestException e) {
-            Optional<UserGitHubToken> existingToken = userGitHubTokenRepository.findByUserId(currentUserId);
-            if (existingToken.isPresent()) {
-                log.warn("OAuth exchange failed, but user {} already has an active token. Returning current status.", currentUserId);
-                return getProjectGitHubStatus(projectId, currentUserId);
-            }
-            throw e;
-        }
+        // 1. Đổi code lấy Access Token
+        GitHubOAuthTokenResponse tokenResponse = gitHubApiClient.exchangeCodeForToken(code);
         String accessToken = tokenResponse.getAccessToken();
 
         // 2. Lấy thông tin user GitHub
@@ -89,16 +99,12 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         userToken.setGithubUserId(userProfile.getId());
         userToken.setGithubUsername(userProfile.getLogin());
         userToken.setGithubAvatarUrl(userProfile.getAvatarUrl());
-        userToken.setAccessTokenEncrypted(accessToken); // Trong thực tế có thể mã hóa qua AES
-        if (tokenResponse.getRefreshToken() != null) {
-            userToken.setRefreshTokenEncrypted(tokenResponse.getRefreshToken());
-        }
-        if (tokenResponse.getExpiresIn() != null) {
-            userToken.setExpiresAt(LocalDateTime.now().plusSeconds(tokenResponse.getExpiresIn()));
-        }
-        if (tokenResponse.getRefreshTokenExpiresIn() != null) {
-            userToken.setRefreshTokenExpiresAt(LocalDateTime.now().plusSeconds(tokenResponse.getRefreshTokenExpiresIn()));
-        }
+        userToken.setAccessTokenEncrypted(accessToken); // TODO: mã hóa AES trước khi lưu
+        userToken.setRefreshTokenEncrypted(tokenResponse.getRefreshToken());
+        userToken.setExpiresAt(tokenResponse.getExpiresIn() != null
+                ? LocalDateTime.now().plusSeconds(tokenResponse.getExpiresIn()) : null);
+        userToken.setRefreshTokenExpiresAt(tokenResponse.getRefreshTokenExpiresIn() != null
+                ? LocalDateTime.now().plusSeconds(tokenResponse.getRefreshTokenExpiresIn()) : null);
         userGitHubTokenRepository.save(userToken);
 
         log.info("Linked GitHub account @{} for user {}", userProfile.getLogin(), currentUserId);
@@ -112,8 +118,7 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         UserGitHubToken userToken = userGitHubTokenRepository.findByUserId(currentUserId)
                 .orElseThrow(() -> new BadRequestException("Bạn chưa kết nối tài khoản GitHub"));
 
-        String validAccessToken = getValidAccessToken(userToken);
-        return gitHubApiClient.getUserRepositories(validAccessToken);
+        return gitHubApiClient.getUserRepositories(getValidAccessToken(userToken));
     }
 
     @Override
@@ -125,39 +130,48 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         UserGitHubToken userToken = userGitHubTokenRepository.findByUserId(currentUserId)
                 .orElseThrow(() -> new BadRequestException("Vui lòng kết nối tài khoản GitHub trước khi liên kết kho"));
 
-        String fullName = request.getRepoFullName();
-        String[] parts = fullName.split("/");
-        if (parts.length != 2) {
+        String[] parts = request.getRepoFullName() != null ? request.getRepoFullName().trim().split("/") : new String[0];
+        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
             throw new BadRequestException("Tên repository không hợp lệ. Định dạng chuẩn phải là: owner/repo");
         }
-        String owner = parts[0].trim();
-        String repo = parts[1].trim();
+        String accessToken = getValidAccessToken(userToken);
 
-        // Đăng ký Webhook tự động nếu có cấu hình public webhook url
-        Long webhookId = null;
-        if (webhookBaseUrl != null && !webhookBaseUrl.isBlank()) {
-            String webhookPayloadUrl = webhookBaseUrl + "/api/v1/work/integrations/github/webhook";
-            webhookId = gitHubApiClient.createWebhook(
-                    getValidAccessToken(userToken), owner, repo, webhookPayloadUrl, webhookSecret
-            );
-        }
+        // Kiểm tra người dùng thực sự truy cập được repo, lấy tên/URL chuẩn từ GitHub thay vì tin client
+        GitHubRepoDto ghRepo = gitHubApiClient.getRepository(accessToken, parts[0].trim(), parts[1].trim());
+        String fullName = ghRepo.getFullName() != null ? ghRepo.getFullName() : parts[0].trim() + "/" + parts[1].trim();
+        String owner = fullName.substring(0, fullName.indexOf('/'));
+        String repoName = fullName.substring(fullName.indexOf('/') + 1);
 
         ProjectGitHubRepo projectRepo = projectGitHubRepoRepository.findByProjectId(projectId)
                 .orElse(ProjectGitHubRepo.builder().projectId(projectId).build());
 
+        // Đổi repo / kết nối lại: gỡ webhook cũ để không còn webhook "mồ côi" bắn về
+        if (projectRepo.getWebhookId() != null) {
+            deleteWebhookQuietly(projectRepo, currentUserId);
+        }
+
+        // Secret ngẫu nhiên riêng cho từng repo (không dùng secret chung)
+        String webhookSecret = newWebhookSecret();
+        Long webhookId = null;
+        if (webhookUrl != null && !webhookUrl.isBlank()) {
+            webhookId = gitHubApiClient.createWebhook(accessToken, owner, repoName, webhookUrl, webhookSecret);
+        }
+
         projectRepo.setRepoOwner(owner);
-        projectRepo.setRepoName(repo);
+        projectRepo.setRepoName(repoName);
         projectRepo.setRepoFullName(fullName);
-        projectRepo.setRepoUrl(request.getRepoUrl());
-        projectRepo.setDefaultBranch(request.getDefaultBranch() != null ? request.getDefaultBranch() : "main");
+        projectRepo.setRepoUrl(ghRepo.getHtmlUrl() != null ? ghRepo.getHtmlUrl() : request.getRepoUrl());
+        projectRepo.setDefaultBranch(ghRepo.getDefaultBranch() != null ? ghRepo.getDefaultBranch()
+                : (request.getDefaultBranch() != null ? request.getDefaultBranch() : "main"));
         projectRepo.setWebhookId(webhookId);
         projectRepo.setWebhookSecret(webhookSecret);
+        projectRepo.setConnectedByUserId(currentUserId);
         if (request.getSyncIssues() != null) {
             projectRepo.setSyncIssuesEnabled(request.getSyncIssues());
         }
 
         projectGitHubRepoRepository.save(projectRepo);
-        log.info("Successfully connected repo {} to project {}", fullName, project.getName());
+        log.info("Connected repo {} to project {} (webhook={})", fullName, project.getName(), webhookId);
 
         return getProjectGitHubStatus(projectId, currentUserId);
     }
@@ -171,20 +185,7 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         }
 
         ProjectGitHubRepo repo = repoOpt.get();
-        // Cố gắng xóa Webhook trên GitHub
-        Optional<UserGitHubToken> userTokenOpt = userGitHubTokenRepository.findByUserId(currentUserId);
-        if (userTokenOpt.isPresent() && repo.getWebhookId() != null) {
-            try {
-                gitHubApiClient.deleteWebhook(
-                        getValidAccessToken(userTokenOpt.get()),
-                        repo.getRepoOwner(),
-                        repo.getRepoName(),
-                        repo.getWebhookId()
-                );
-            } catch (Exception e) {
-                log.warn("Could not delete webhook on GitHub: {}", e.getMessage());
-            }
-        }
+        deleteWebhookQuietly(repo, currentUserId);
 
         projectGitHubRepoRepository.delete(repo);
         log.info("Disconnected repo {} from project {}", repo.getRepoFullName(), projectId);
@@ -214,11 +215,12 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                     .repoFullName(repo.getRepoFullName())
                     .repoUrl(repo.getRepoUrl())
                     .defaultBranch(repo.getDefaultBranch())
-                    .webhookActive(repo.getWebhookId() != null)
+                    .webhookActive(repo.getWebhookId() != null && repo.getWebhookSecret() != null)
                     .syncIssuesEnabled(repo.getSyncIssuesEnabled())
                     .autoMoveInReviewOnPr(repo.getAutoMoveInReviewOnPr())
                     .autoCloseTaskOnPrMerge(repo.getAutoCloseTaskOnPrMerge())
                     .autoCloseGithubIssueOnDone(repo.getAutoCloseGithubIssueOnDone())
+                    .autoCloseTaskOnIssueClose(repo.getAutoCloseTaskOnIssueClose())
                     .lastSyncedAt(repo.getLastSyncedAt());
         } else {
             builder.projectLinked(false);
@@ -245,6 +247,9 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         if (request.getAutoCloseGithubIssueOnDone() != null) {
             repo.setAutoCloseGithubIssueOnDone(request.getAutoCloseGithubIssueOnDone());
         }
+        if (request.getAutoCloseTaskOnIssueClose() != null) {
+            repo.setAutoCloseTaskOnIssueClose(request.getAutoCloseTaskOnIssueClose());
+        }
 
         projectGitHubRepoRepository.save(repo);
         return getProjectGitHubStatus(projectId, currentUserId);
@@ -259,10 +264,10 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         ProjectGitHubRepo repo = projectGitHubRepoRepository.findByProjectId(projectId)
                 .orElseThrow(() -> new BadRequestException("Dự án chưa liên kết với GitHub Repository nào"));
 
-        UserGitHubToken userToken = userGitHubTokenRepository.findByUserId(currentUserId)
-                .or(() -> userGitHubTokenRepository.findByUserId(project.getLeadUserId()))
-                .or(userGitHubTokenRepository::findTopByOrderByCreatedAtDesc)
-                .orElseThrow(() -> new BadRequestException("Không tìm thấy Access Token GitHub để thực hiện đồng bộ"));
+        // Chỉ dùng token của người trong dự án: người đang thao tác -> người đã kết nối repo -> Lead
+        UserGitHubToken userToken = findFirstToken(currentUserId, repo.getConnectedByUserId(), project.getLeadUserId())
+                .orElseThrow(() -> new BadRequestException(
+                        "Bạn cần kết nối tài khoản GitHub (có quyền truy cập repository) để đồng bộ Issues"));
 
         List<GitHubIssueDto> issues = gitHubApiClient.getRepositoryIssues(
                 getValidAccessToken(userToken),
@@ -284,7 +289,7 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                     .findByProjectIdAndLinkTypeAndGithubNumber(projectId, GitHubLinkType.ISSUE, issue.getNumber());
 
             String issueState = (issue.getState() != null) ? issue.getState().toUpperCase() : "OPEN";
-            boolean isClosed = "CLOSED".equalsIgnoreCase(issueState);
+            boolean isClosed = "CLOSED".equals(issueState);
 
             if (existingLink.isPresent()) {
                 WorkItemGitHubLink link = existingLink.get();
@@ -296,46 +301,12 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                 workItemGitHubLinkRepository.save(link);
                 updatedCount++;
             } else {
-                String code = atomicKeySequenceGenerator.generateNextCode(project.getKey());
-                String rank = calculateInitialRankForNewItem(projectId);
-                UUID statusId = (isClosed && doneStatusId != null) ? doneStatusId : initialStatusId;
-
-                WorkItem workItem = WorkItem.builder()
-                        .projectId(projectId)
-                        .typeId(defaultTypeId)
-                        .statusId(statusId)
-                        .code(code)
-                        .summary(issue.getTitle())
-                        .description(issue.getBody() != null ? issue.getBody() : "")
-                        .priority(WorkItemPriority.MEDIUM)
-                        .reporterId(currentUserId != null ? currentUserId : project.getLeadUserId())
-                        .rank(rank)
-                        .originalEstimateSeconds(0L)
-                        .remainingEstimateSeconds(0L)
-                        .timeSpentSeconds(0L)
-                        .version(0)
-                        .build();
-
-                if (isClosed) {
-                    workItem.setResolution(WorkItemResolution.DONE);
-                    workItem.setResolvedAt(LocalDateTime.now());
-                }
-
-                WorkItem savedItem = workItemRepository.save(workItem);
-
-                WorkItemGitHubLink newLink = WorkItemGitHubLink.builder()
-                        .workItemId(savedItem.getId())
-                        .linkType(GitHubLinkType.ISSUE)
-                        .githubId(issue.getId() != null ? String.valueOf(issue.getId()) : null)
-                        .githubNumber(issue.getNumber())
-                        .title(issue.getTitle())
-                        .url(issue.getHtmlUrl() != null ? issue.getHtmlUrl() : "")
-                        .status(issueState)
-                        .authorName(issue.getUser() != null ? issue.getUser().getLogin() : null)
-                        .authorAvatarUrl(issue.getUser() != null ? issue.getUser().getAvatarUrl() : null)
-                        .build();
-
-                workItemGitHubLinkRepository.save(newLink);
+                // Endpoint yêu cầu PROJECT_ADMIN nên người nhập là Admin dự án: Issue đã đóng được tạo thẳng ở
+                // nhóm DONE là hợp lệ với quy tắc "Tạm hoàn thành" (task mới, chưa có yêu cầu chờ duyệt).
+                boolean importAsDone = isClosed && doneStatusId != null;
+                WorkItem savedItem = createWorkItemFromIssue(project, issue,
+                        importAsDone ? doneStatusId : initialStatusId, currentUserId, importAsDone);
+                workItemGitHubLinkRepository.save(buildIssueLink(projectId, savedItem.getId(), issue, issueState));
                 importedCount++;
             }
         }
@@ -354,8 +325,12 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                 .build();
     }
 
+    /**
+     * Không đặt @Transactional ở đây: bước lưu liên kết chạy trong transaction riêng (TransactionTemplate),
+     * sau đó việc chuyển trạng thái đi qua WorkflowEngine trong transaction của chính nó. Nhờ vậy lỗi ở
+     * workflow (thiếu bước chuyển, validator chặn…) chỉ được ghi log, không làm rollback liên kết đã lưu.
+     */
     @Override
-    @Transactional
     public void handleWebhook(String event, String signature, String rawPayload) {
         log.info("Handling GitHub webhook event: {}", event);
 
@@ -367,7 +342,7 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
             throw new BadRequestException("Payload JSON của Webhook không hợp lệ");
         }
 
-        // Xử lý sự kiện ping
+        // ping không thay đổi dữ liệu nên không cần xác thực
         if ("ping".equalsIgnoreCase(event)) {
             log.info("GitHub webhook ping received: hook_id={}, zen={}",
                     root.path("hook_id").asText(), root.path("zen").asText());
@@ -380,26 +355,29 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
             return;
         }
 
-        Optional<ProjectGitHubRepo> repoOpt = projectGitHubRepoRepository.findByRepoFullName(repoFullName);
-        if (repoOpt.isEmpty()) {
+        List<ProjectGitHubRepo> candidates = projectGitHubRepoRepository.findAllByRepoFullNameIgnoreCase(repoFullName);
+        if (candidates.isEmpty()) {
             log.info("No project linked to GitHub repository '{}', ignoring webhook", repoFullName);
             return;
         }
 
-        ProjectGitHubRepo repo = repoOpt.get();
-
-        // Xác thực HMAC SHA-256 Signature
-        String secret = repo.getWebhookSecret() != null ? repo.getWebhookSecret() : webhookSecret;
-        if (!gitHubWebhookSignatureValidator.isValidSignature(rawPayload, signature, secret)) {
+        // Mỗi dự án có webhook + secret riêng: chỉ xử lý cho (các) dự án có secret khớp chữ ký
+        List<ProjectGitHubRepo> verified = candidates.stream()
+                .filter(r -> r.getWebhookSecret() != null && !r.getWebhookSecret().isBlank())
+                .filter(r -> gitHubWebhookSignatureValidator.isValidSignature(rawPayload, signature, r.getWebhookSecret()))
+                .toList();
+        if (verified.isEmpty()) {
             log.warn("Invalid HMAC signature for GitHub webhook on repository '{}'", repoFullName);
             throw new BadRequestException("Chữ ký Webhook GitHub không hợp lệ");
         }
 
-        // Xử lý sự kiện issues
-        if ("issues".equalsIgnoreCase(event)) {
-            handleIssueEvent(repo, root);
-        } else {
+        if (!"issues".equalsIgnoreCase(event)) {
             log.info("Unhandled GitHub webhook event type: {}", event);
+            return;
+        }
+
+        for (ProjectGitHubRepo repo : verified) {
+            handleIssueEvent(repo, root);
         }
     }
 
@@ -409,7 +387,7 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
             return;
         }
 
-        String action = root.path("action").asText();
+        String action = root.path("action").asText("");
         JsonNode issueNode = root.path("issue");
         if (issueNode.isMissingNode() || issueNode.isNull()) {
             return;
@@ -422,16 +400,32 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
             log.error("Failed to map issue node to GitHubIssueDto: {}", e.getMessage());
             return;
         }
-
-        if (issue.isPullRequest()) {
-            // Bỏ qua pull requests trong luồng issues
+        if (issue.isPullRequest() || issue.getNumber() == null) {
             return;
         }
 
+        IssueFollowUp followUp;
+        try {
+            followUp = transactionTemplate.execute(status -> applyIssueEvent(repo, action, issue, root));
+        } catch (DataIntegrityViolationException e) {
+            // Chỉ mục duy nhất (project_id, github_number): webhook gửi lại hoặc chạy song song với đồng bộ tay
+            log.info("GitHub issue #{} đã được liên kết trong dự án {}, bỏ qua bản trùng", issue.getNumber(), repo.getProjectId());
+            return;
+        }
+
+        if (followUp != null) {
+            Long senderGithubId = root.path("sender").path("id").canConvertToLong()
+                    ? root.path("sender").path("id").asLong() : null;
+            moveWorkItemByGitHub(followUp, senderGithubId);
+        }
+    }
+
+    /** Chạy trong transaction: cập nhật liên kết / tạo Task. Trả về việc cần chuyển trạng thái (nếu có). */
+    private IssueFollowUp applyIssueEvent(ProjectGitHubRepo repo, String action, GitHubIssueDto issue, JsonNode root) {
         UUID projectId = repo.getProjectId();
         Project project = projectRepository.findById(projectId).orElse(null);
         if (project == null) {
-            return;
+            return null;
         }
 
         Optional<WorkItemGitHubLink> linkOpt = workItemGitHubLinkRepository
@@ -440,115 +434,139 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         switch (action.toLowerCase()) {
             case "opened" -> {
                 if (linkOpt.isEmpty()) {
-                    UUID defaultTypeId = resolveDefaultWorkItemTypeId(projectId);
-                    UUID initialStatusId = resolveInitialStatus(projectId);
-                    String code = atomicKeySequenceGenerator.generateNextCode(project.getKey());
-                    String rank = calculateInitialRankForNewItem(projectId);
-
-                    WorkItem workItem = WorkItem.builder()
-                            .projectId(projectId)
-                            .typeId(defaultTypeId)
-                            .statusId(initialStatusId)
-                            .code(code)
-                            .summary(issue.getTitle())
-                            .description(issue.getBody() != null ? issue.getBody() : "")
-                            .priority(WorkItemPriority.MEDIUM)
-                            .reporterId(project.getLeadUserId())
-                            .rank(rank)
-                            .originalEstimateSeconds(0L)
-                            .remainingEstimateSeconds(0L)
-                            .timeSpentSeconds(0L)
-                            .version(0)
-                            .build();
-
-                    WorkItem saved = workItemRepository.save(workItem);
-
-                    WorkItemGitHubLink link = WorkItemGitHubLink.builder()
-                            .workItemId(saved.getId())
-                            .linkType(GitHubLinkType.ISSUE)
-                            .githubId(issue.getId() != null ? String.valueOf(issue.getId()) : null)
-                            .githubNumber(issue.getNumber())
-                            .title(issue.getTitle())
-                            .url(issue.getHtmlUrl() != null ? issue.getHtmlUrl() : "")
-                            .status("OPEN")
-                            .authorName(issue.getUser() != null ? issue.getUser().getLogin() : null)
-                            .authorAvatarUrl(issue.getUser() != null ? issue.getUser().getAvatarUrl() : null)
-                            .build();
-
-                    workItemGitHubLinkRepository.save(link);
+                    WorkItem saved = createWorkItemFromIssue(project, issue, resolveInitialStatus(projectId), null, false);
+                    workItemGitHubLinkRepository.saveAndFlush(buildIssueLink(projectId, saved.getId(), issue, "OPEN"));
                     log.info("Auto-created WorkItem '{}' from GitHub issue #{} in project '{}'",
-                            code, issue.getNumber(), project.getName());
+                            saved.getCode(), issue.getNumber(), project.getName());
                 }
+                return null;
             }
-            case "closed" -> {
-                if (linkOpt.isPresent()) {
-                    WorkItemGitHubLink link = linkOpt.get();
-                    link.setStatus("CLOSED");
-                    workItemGitHubLinkRepository.save(link);
-
-                    if (Boolean.TRUE.equals(repo.getAutoCloseGithubIssueOnDone())) {
-                        WorkItem item = workItemRepository.findById(link.getWorkItemId()).orElse(null);
-                        if (item != null) {
-                            UUID doneStatusId = resolveDoneStatus(projectId);
-                            if (doneStatusId != null && !doneStatusId.equals(item.getStatusId())) {
-                                item.setStatusId(doneStatusId);
-                                item.setResolution(WorkItemResolution.DONE);
-                                item.setResolvedAt(LocalDateTime.now());
-                                workItemRepository.save(item);
-                                log.info("Auto-moved WorkItem '{}' to DONE because GitHub issue #{} was closed",
-                                        item.getCode(), issue.getNumber());
-                            }
-                        }
-                    }
+            case "closed", "reopened" -> {
+                if (linkOpt.isEmpty()) {
+                    return null;
                 }
-            }
-            case "reopened" -> {
-                if (linkOpt.isPresent()) {
-                    WorkItemGitHubLink link = linkOpt.get();
-                    link.setStatus("OPEN");
-                    workItemGitHubLinkRepository.save(link);
-
-                    WorkItem item = workItemRepository.findById(link.getWorkItemId()).orElse(null);
-                    if (item != null) {
-                        UUID doneStatusId = resolveDoneStatus(projectId);
-                        if (doneStatusId != null && doneStatusId.equals(item.getStatusId())) {
-                            UUID initialStatusId = resolveInitialStatus(projectId);
-                            if (initialStatusId != null) {
-                                item.setStatusId(initialStatusId);
-                                item.setResolution(null);
-                                item.setResolvedAt(null);
-                                workItemRepository.save(item);
-                                log.info("Auto-reopened WorkItem '{}' because GitHub issue #{} was reopened",
-                                        item.getCode(), issue.getNumber());
-                            }
-                        }
-                    }
+                boolean closed = "closed".equalsIgnoreCase(action);
+                WorkItemGitHubLink link = linkOpt.get();
+                link.setStatus(closed ? "CLOSED" : "OPEN");
+                workItemGitHubLinkRepository.save(link);
+                // Cờ riêng cho chiều GitHub -> DATN (autoCloseGithubIssueOnDone là chiều ngược lại)
+                if (!Boolean.TRUE.equals(repo.getAutoCloseTaskOnIssueClose())) {
+                    return null;
                 }
+                return new IssueFollowUp(link.getWorkItemId(), projectId, closed, issue.getNumber());
             }
             case "edited" -> {
-                if (linkOpt.isPresent()) {
-                    WorkItemGitHubLink link = linkOpt.get();
+                if (linkOpt.isEmpty()) {
+                    return null;
+                }
+                // Chỉ ghi đè trường thực sự đổi trên GitHub, không xoá nội dung đã sửa phía DATN
+                JsonNode changes = root.path("changes");
+                boolean titleChanged = changes.has("title");
+                boolean bodyChanged = changes.has("body");
+                WorkItemGitHubLink link = linkOpt.get();
+                if (titleChanged) {
                     link.setTitle(issue.getTitle());
                     workItemGitHubLinkRepository.save(link);
-
-                    WorkItem item = workItemRepository.findById(link.getWorkItemId()).orElse(null);
-                    if (item != null) {
-                        item.setSummary(issue.getTitle());
-                        if (issue.getBody() != null) {
-                            item.setDescription(issue.getBody());
+                }
+                if (titleChanged || bodyChanged) {
+                    workItemRepository.findById(link.getWorkItemId()).ifPresent(item -> {
+                        if (titleChanged) {
+                            item.setSummary(issue.getTitle());
+                        }
+                        if (bodyChanged) {
+                            item.setDescription(issue.getBody() != null ? issue.getBody() : "");
                         }
                         workItemRepository.save(item);
-                    }
+                    });
                 }
+                return null;
             }
-            case "deleted" -> linkOpt.ifPresent(workItemGitHubLinkRepository::delete);
-            default -> log.debug("Unhandled issue action: {}", action);
+            case "deleted" -> {
+                linkOpt.ifPresent(workItemGitHubLinkRepository::delete);
+                return null;
+            }
+            default -> {
+                log.debug("Unhandled issue action: {}", action);
+                return null;
+            }
         }
     }
 
+    /**
+     * Chuyển Task theo Issue đóng/mở lại bằng WorkflowEngine với tư cách người đã thao tác trên GitHub
+     * (tra theo sender.id ↔ tài khoản GitHub đã liên kết). Nhờ đi qua engine, mọi quy tắc vẫn áp dụng:
+     * người không phải Admin dự án chỉ tạo yêu cầu "Tạm hoàn thành", có lịch sử, thông báo, sổ ghi công.
+     * Không xác định được người thao tác (chưa liên kết DATN / không có quyền) thì chỉ cập nhật liên kết.
+     */
+    private void moveWorkItemByGitHub(IssueFollowUp followUp, Long senderGithubId) {
+        UUID actorId = resolveActor(senderGithubId, followUp.projectId());
+        if (actorId == null) {
+            log.info("GitHub issue #{}: người thao tác (github id={}) chưa liên kết tài khoản DATN hoặc không có quyền "
+                    + "chuyển trạng thái trong dự án, chỉ cập nhật trạng thái liên kết", followUp.issueNumber(), senderGithubId);
+            return;
+        }
+        try {
+            WorkItem item = workItemRepository.findById(followUp.workItemId()).orElse(null);
+            if (item == null || item.getDeletedAt() != null) {
+                return;
+            }
+            boolean currentlyDone = statusRepository.findById(item.getStatusId())
+                    .map(s -> s.getCategory() == StatusCategory.DONE)
+                    .orElse(false);
+            if (currentlyDone == followUp.toDone()) {
+                return;
+            }
+
+            List<AvailableTransitionResponse> transitions =
+                    workflowEngineService.getAvailableTransitions(item.getId(), actorId);
+            Optional<AvailableTransitionResponse> chosen = followUp.toDone()
+                    ? transitions.stream().filter(t -> t.getToStatusCategory() == StatusCategory.DONE).findFirst()
+                    : transitions.stream().filter(t -> t.getToStatusCategory() == StatusCategory.TODO).findFirst()
+                    .or(() -> transitions.stream().filter(t -> t.getToStatusCategory() != StatusCategory.DONE).findFirst());
+            if (chosen.isEmpty()) {
+                log.warn("WorkItem '{}': quy trình không có bước chuyển phù hợp để {} theo GitHub issue #{}",
+                        item.getCode(), followUp.toDone() ? "hoàn thành" : "mở lại", followUp.issueNumber());
+                return;
+            }
+
+            WorkItem result = workflowEngineService.executeTransition(item.getId(), chosen.get().getTransitionId(),
+                    ExecuteTransitionRequest.builder()
+                            .transitionId(chosen.get().getTransitionId())
+                            .resolution(followUp.toDone() ? WorkItemResolution.DONE.name() : null)
+                            .comment("Tự động theo GitHub issue #" + followUp.issueNumber())
+                            .build(),
+                    actorId);
+            log.info("WorkItem '{}' {} theo GitHub issue #{} (người thao tác {})", result.getCode(),
+                    followUp.toDone() ? "chuyển hoàn thành / gửi yêu cầu duyệt" : "mở lại", followUp.issueNumber(), actorId);
+        } catch (RuntimeException e) {
+            log.warn("Không thể chuyển trạng thái WorkItem {} theo GitHub issue #{}: {}",
+                    followUp.workItemId(), followUp.issueNumber(), e.getMessage());
+        }
+    }
+
+    private UUID resolveActor(Long senderGithubId, UUID projectId) {
+        if (senderGithubId == null) {
+            return null;
+        }
+        return userGitHubTokenRepository.findFirstByGithubUserId(senderGithubId)
+                .map(UserGitHubToken::getUserId)
+                .filter(userId -> projectMemberService.hasPermission(projectId, userId, PermissionKey.ISSUE_TRANSITION))
+                .orElse(null);
+    }
+
+    /**
+     * Gọi từ listener sau khi transaction đổi trạng thái đã COMMIT (bất đồng bộ), nên chạy transaction riêng.
+     */
     @Override
-    @Transactional
-    public void syncWorkItemStatusToGitHub(UUID workItemId, StatusCategory oldCategory, StatusCategory newCategory) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void syncWorkItemStatusToGitHub(UUID workItemId, StatusCategory oldCategory, StatusCategory newCategory,
+                                           UUID changedByUserId) {
+        boolean enteringDone = newCategory == StatusCategory.DONE && oldCategory != StatusCategory.DONE;
+        boolean leavingDone = oldCategory == StatusCategory.DONE && newCategory != StatusCategory.DONE;
+        if (!enteringDone && !leavingDone) {
+            return;
+        }
+
         WorkItem item = workItemRepository.findById(workItemId).orElse(null);
         if (item == null) return;
 
@@ -561,60 +579,116 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                 .findByWorkItemIdOrderByCreatedAtDesc(workItemId)
                 .stream()
                 .filter(l -> l.getLinkType() == GitHubLinkType.ISSUE && l.getGithubNumber() != null)
+                .filter(l -> enteringDone != "CLOSED".equalsIgnoreCase(l.getStatus()))
                 .toList();
-
         if (issueLinks.isEmpty()) return;
 
         Project project = projectRepository.findById(item.getProjectId()).orElse(null);
         if (project == null) return;
 
-        UserGitHubToken token = userGitHubTokenRepository.findByUserId(project.getLeadUserId())
-                .or(userGitHubTokenRepository::findTopByOrderByCreatedAtDesc)
+        // Người kết nối repo (chắc chắn có quyền ghi) -> Lead -> người vừa đổi trạng thái. KHÔNG lấy token người lạ.
+        UserGitHubToken token = findFirstToken(repo.getConnectedByUserId(), project.getLeadUserId(), changedByUserId)
                 .orElse(null);
-
         if (token == null) {
-            log.warn("Cannot sync status to GitHub: no user token available for repo {}", repo.getRepoFullName());
+            log.warn("Cannot sync status to GitHub: no project-related GitHub token for repo {}", repo.getRepoFullName());
             return;
         }
 
         String validToken = getValidAccessToken(token);
+        String targetState = enteringDone ? "closed" : "open";
 
-        if (newCategory == StatusCategory.DONE) {
-            for (WorkItemGitHubLink link : issueLinks) {
-                if (!"CLOSED".equalsIgnoreCase(link.getStatus())) {
-                    gitHubApiClient.updateIssueState(
-                            validToken,
-                            repo.getRepoOwner(),
-                            repo.getRepoName(),
-                            link.getGithubNumber(),
-                            "closed"
-                    );
-                    link.setStatus("CLOSED");
-                    workItemGitHubLinkRepository.save(link);
-                    log.info("Closed GitHub issue #{} on {}/{} because WorkItem '{}' is DONE",
-                            link.getGithubNumber(), repo.getRepoOwner(), repo.getRepoName(), item.getCode());
-                }
-            }
-        } else if (oldCategory == StatusCategory.DONE && newCategory != StatusCategory.DONE) {
-            for (WorkItemGitHubLink link : issueLinks) {
-                if ("CLOSED".equalsIgnoreCase(link.getStatus())) {
-                    gitHubApiClient.updateIssueState(
-                            validToken,
-                            repo.getRepoOwner(),
-                            repo.getRepoName(),
-                            link.getGithubNumber(),
-                            "open"
-                    );
-                    link.setStatus("OPEN");
-                    workItemGitHubLinkRepository.save(link);
-                    log.info("Reopened GitHub issue #{} on {}/{} because WorkItem '{}' moved out of DONE",
-                            link.getGithubNumber(), repo.getRepoOwner(), repo.getRepoName(), item.getCode());
-                }
+        for (WorkItemGitHubLink link : issueLinks) {
+            boolean ok = gitHubApiClient.updateIssueState(
+                    validToken, repo.getRepoOwner(), repo.getRepoName(), link.getGithubNumber(), targetState);
+            if (ok) {
+                link.setStatus(enteringDone ? "CLOSED" : "OPEN");
+                workItemGitHubLinkRepository.save(link);
+                log.info("{} GitHub issue #{} on {} because WorkItem '{}' {}",
+                        enteringDone ? "Closed" : "Reopened", link.getGithubNumber(), repo.getRepoFullName(),
+                        item.getCode(), enteringDone ? "is DONE" : "moved out of DONE");
             }
         }
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    private WorkItem createWorkItemFromIssue(Project project, GitHubIssueDto issue, UUID statusId, UUID reporterId,
+                                             boolean resolved) {
+        WorkItem workItem = WorkItem.builder()
+                .projectId(project.getId())
+                .typeId(resolveDefaultWorkItemTypeId(project.getId()))
+                .statusId(statusId)
+                .code(atomicKeySequenceGenerator.generateNextCode(project.getKey()))
+                .summary(issue.getTitle())
+                .description(issue.getBody() != null ? issue.getBody() : "")
+                .priority(WorkItemPriority.MEDIUM)
+                .reporterId(reporterId != null ? reporterId : project.getLeadUserId())
+                .rank(calculateInitialRankForNewItem(project.getId()))
+                .originalEstimateSeconds(0L)
+                .remainingEstimateSeconds(0L)
+                .timeSpentSeconds(0L)
+                .version(0)
+                .build();
+        if (resolved) {
+            workItem.setResolution(WorkItemResolution.DONE);
+            workItem.setResolvedAt(LocalDateTime.now());
+        }
+        return workItemRepository.save(workItem);
+    }
+
+    private WorkItemGitHubLink buildIssueLink(UUID projectId, UUID workItemId, GitHubIssueDto issue, String state) {
+        return WorkItemGitHubLink.builder()
+                .workItemId(workItemId)
+                .projectId(projectId)
+                .linkType(GitHubLinkType.ISSUE)
+                .githubId(issue.getId() != null ? String.valueOf(issue.getId()) : null)
+                .githubNumber(issue.getNumber())
+                .title(issue.getTitle())
+                .url(issue.getHtmlUrl() != null ? issue.getHtmlUrl() : "")
+                .status(state)
+                .authorName(issue.getUser() != null ? issue.getUser().getLogin() : null)
+                .authorAvatarUrl(issue.getUser() != null ? issue.getUser().getAvatarUrl() : null)
+                .build();
+    }
+
+    /** Token GitHub đầu tiên tìm thấy theo thứ tự người dùng truyền vào (bỏ qua null / trùng). */
+    private Optional<UserGitHubToken> findFirstToken(UUID... userIds) {
+        Set<UUID> seen = new LinkedHashSet<>();
+        for (UUID userId : userIds) {
+            if (userId == null || !seen.add(userId)) {
+                continue;
+            }
+            Optional<UserGitHubToken> token = userGitHubTokenRepository.findByUserId(userId);
+            if (token.isPresent()) {
+                return token;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private void deleteWebhookQuietly(ProjectGitHubRepo repo, UUID currentUserId) {
+        if (repo.getWebhookId() == null) {
+            return;
+        }
+        // Webhook do người kết nối tạo: ưu tiên token của họ
+        Optional<UserGitHubToken> token = findFirstToken(repo.getConnectedByUserId(), currentUserId);
+        if (token.isEmpty()) {
+            log.warn("Không có token để gỡ webhook {} trên {}", repo.getWebhookId(), repo.getRepoFullName());
+            return;
+        }
+        try {
+            gitHubApiClient.deleteWebhook(getValidAccessToken(token.get()),
+                    repo.getRepoOwner(), repo.getRepoName(), repo.getWebhookId());
+        } catch (Exception e) {
+            log.warn("Could not delete webhook on GitHub: {}", e.getMessage());
+        }
+    }
+
+    private String newWebhookSecret() {
+        byte[] bytes = new byte[32];
+        secureRandom.nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
+    }
 
     private UUID resolveDefaultWorkItemTypeId(UUID projectId) {
         List<WorkItemType> types = workItemTypeRepository.findByProjectIdOrProjectIdIsNull(projectId);
@@ -665,29 +739,31 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         }
 
         // Tự động làm mới token nếu có refresh_token và sắp hết hạn trong vòng 5 phút
-        if (userToken.getRefreshTokenEncrypted() != null && userToken.getExpiresAt() != null) {
-            if (userToken.getExpiresAt().isBefore(LocalDateTime.now().plusMinutes(5))) {
-                log.info("GitHub token for user {} expires at {}, auto-refreshing...",
-                        userToken.getUserId(), userToken.getExpiresAt());
-                try {
-                    GitHubOAuthTokenResponse refreshed = gitHubApiClient.refreshAccessToken(userToken.getRefreshTokenEncrypted());
-                    userToken.setAccessTokenEncrypted(refreshed.getAccessToken());
-                    if (refreshed.getRefreshToken() != null) {
-                        userToken.setRefreshTokenEncrypted(refreshed.getRefreshToken());
-                    }
-                    if (refreshed.getExpiresIn() != null) {
-                        userToken.setExpiresAt(LocalDateTime.now().plusSeconds(refreshed.getExpiresIn()));
-                    }
-                    if (refreshed.getRefreshTokenExpiresIn() != null) {
-                        userToken.setRefreshTokenExpiresAt(LocalDateTime.now().plusSeconds(refreshed.getRefreshTokenExpiresIn()));
-                    }
-                    userGitHubTokenRepository.save(userToken);
-                    log.info("Successfully auto-refreshed GitHub token for user {}, new expires_at={}",
-                            userToken.getUserId(), userToken.getExpiresAt());
-                } catch (Exception e) {
-                    log.error("Failed to auto-refresh GitHub token for user {}: {}", userToken.getUserId(), e.getMessage());
-                }
+        if (userToken.getRefreshTokenEncrypted() != null && userToken.getExpiresAt() != null
+                && userToken.getExpiresAt().isBefore(LocalDateTime.now().plusMinutes(5))) {
+            log.info("GitHub token for user {} expires at {}, auto-refreshing...",
+                    userToken.getUserId(), userToken.getExpiresAt());
+            GitHubOAuthTokenResponse refreshed;
+            try {
+                refreshed = gitHubApiClient.refreshAccessToken(userToken.getRefreshTokenEncrypted());
+            } catch (Exception e) {
+                log.error("Failed to auto-refresh GitHub token for user {}: {}", userToken.getUserId(), e.getMessage());
+                // Báo rõ ngay tại đây thay vì trả token đã hết hạn để lỗi 401 nổ ra ở chỗ khác
+                throw new BadRequestException("Phiên đăng nhập GitHub đã hết hạn, vui lòng kết nối lại tài khoản GitHub");
             }
+            userToken.setAccessTokenEncrypted(refreshed.getAccessToken());
+            if (refreshed.getRefreshToken() != null) {
+                userToken.setRefreshTokenEncrypted(refreshed.getRefreshToken());
+            }
+            if (refreshed.getExpiresIn() != null) {
+                userToken.setExpiresAt(LocalDateTime.now().plusSeconds(refreshed.getExpiresIn()));
+            }
+            if (refreshed.getRefreshTokenExpiresIn() != null) {
+                userToken.setRefreshTokenExpiresAt(LocalDateTime.now().plusSeconds(refreshed.getRefreshTokenExpiresIn()));
+            }
+            userGitHubTokenRepository.save(userToken);
+            log.info("Successfully auto-refreshed GitHub token for user {}, new expires_at={}",
+                    userToken.getUserId(), userToken.getExpiresAt());
         }
 
         return userToken.getAccessTokenEncrypted();

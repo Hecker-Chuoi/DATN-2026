@@ -65,6 +65,15 @@ public class ProjectGitHubRepo {
     @Builder.Default
     private Boolean autoCloseGithubIssueOnDone = true;
 
+    /** Chiều GitHub -> DATN: Issue đóng/mở lại thì chuyển Task qua workflow (vẫn qua cổng "Tạm hoàn thành"). */
+    @Column(name = "auto_close_task_on_issue_close")
+    @Builder.Default
+    private Boolean autoCloseTaskOnIssueClose = true;
+
+    /** Keycloak sub của người đã kết nối repo; token GitHub của họ dùng cho các tác vụ nền. */
+    @Column(name = "connected_by_user_id")
+    private UUID connectedByUserId;
+
     @Column(name = "last_synced_at")
     private LocalDateTime lastSyncedAt;
 

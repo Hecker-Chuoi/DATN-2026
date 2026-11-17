@@ -410,10 +410,10 @@ export const workItemTypeApi = {
 export const githubIntegrationApi = {
   getAuthUrl: (projectId, config = {}) =>
     apiClient.get(`${WORK_BASE}/projects/${projectId}/integrations/github/auth-url`, config),
-  handleCallback: (projectId, code, config = {}) =>
+  handleCallback: (projectId, code, state, config = {}) =>
     apiClient.post(`${WORK_BASE}/projects/${projectId}/integrations/github/oauth-callback`, null, {
       ...config,
-      params: { ...(config.params || {}), code },
+      params: { ...(config.params || {}), code, state },
     }),
   getStatus: (projectId, config = {}) =>
     apiClient.get(`${WORK_BASE}/projects/${projectId}/integrations/github/status`, config),

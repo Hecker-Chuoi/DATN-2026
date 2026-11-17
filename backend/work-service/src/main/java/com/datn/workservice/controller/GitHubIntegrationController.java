@@ -42,10 +42,11 @@ public class GitHubIntegrationController {
     @RequireProjectPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<ProjectGitHubStatusResponse>> handleCallback(
             @PathVariable UUID projectId,
-            @RequestParam String code
+            @RequestParam String code,
+            @RequestParam(required = false) String state
     ) {
         UUID currentUserId = SecurityUtils.getCurrentUserId();
-        ProjectGitHubStatusResponse response = gitHubIntegrationService.handleOAuthCallback(projectId, code, currentUserId);
+        ProjectGitHubStatusResponse response = gitHubIntegrationService.handleOAuthCallback(projectId, code, state, currentUserId);
         return ResponseEntity.ok(ApiResponse.success(response, "Liên kết tài khoản GitHub thành công"));
     }
 

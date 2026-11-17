@@ -15,12 +15,16 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class GitHubApiClient {
+
+    private static final int MAX_ISSUE_PAGES = 10;
 
     private final RestTemplate restTemplate;
 
@@ -43,7 +47,7 @@ public class GitHubApiClient {
         String scope = "repo,read:user,admin:repo_hook";
         return String.format(
                 "https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=%s&state=%s",
-                clientId, redirectUri, scope, state != null ? state : ""
+                enc(clientId), enc(redirectUri), enc(scope), enc(state != null ? state : "")
         );
     }
 
@@ -172,6 +176,31 @@ public class GitHubApiClient {
     }
 
     /**
+     * Lấy thông tin một Repository bằng token của người dùng. Dùng để kiểm tra người dùng thực sự truy cập được
+     * repo và lấy tên chuẩn (full_name, html_url, default_branch) thay vì tin dữ liệu client gửi lên.
+     */
+    public GitHubRepoDto getRepository(String accessToken, String owner, String repo) {
+        String url = String.format("%s/repos/%s/%s", apiUrl, owner, repo);
+        HttpEntity<Void> request = new HttpEntity<>(createAuthHeaders(accessToken));
+        try {
+            ResponseEntity<GitHubRepoDto> response = restTemplate.exchange(url, HttpMethod.GET, request, GitHubRepoDto.class);
+            if (response.getBody() == null) {
+                throw new BadRequestException("Không đọc được thông tin repository " + owner + "/" + repo);
+            }
+            return response.getBody();
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            throw new BadRequestException("Không tìm thấy repository " + owner + "/" + repo + " hoặc tài khoản GitHub của bạn không có quyền truy cập");
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
+            throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi (Bad credentials). Vui lòng kết nối lại tài khoản GitHub.");
+        } catch (BadRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to get GitHub repository {}/{}: {}", owner, repo, e.getMessage(), e);
+            throw new BadRequestException("Không thể đọc thông tin repository từ GitHub: " + e.getMessage());
+        }
+    }
+
+    /**
      * Đăng ký Webhook tự động lên GitHub Repository để nhận commit, PR, issues
      */
     public Long createWebhook(String accessToken, String owner, String repo, String webhookPayloadUrl, String secret) {
@@ -228,23 +257,32 @@ public class GitHubApiClient {
      */
     public List<GitHubIssueDto> getRepositoryIssues(String accessToken, String owner, String repo, String state) {
         String queryState = (state != null && !state.isBlank()) ? state : "all";
-        String url = String.format("%s/repos/%s/%s/issues?state=%s&per_page=100&sort=updated", apiUrl, owner, repo, queryState);
 
         HttpHeaders headers = createAuthHeaders(accessToken);
         HttpEntity<Void> request = new HttpEntity<>(headers);
 
         try {
-            ResponseEntity<List<GitHubIssueDto>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    request,
-                    new ParameterizedTypeReference<List<GitHubIssueDto>>() {}
-            );
-            List<GitHubIssueDto> list = response.getBody();
-            if (list == null) {
-                return Collections.emptyList();
+            List<GitHubIssueDto> all = new ArrayList<>();
+            // Phân trang (tối đa MAX_ISSUE_PAGES x 100 issue) thay vì chỉ lấy 100 issue đầu
+            for (int page = 1; page <= MAX_ISSUE_PAGES; page++) {
+                String url = String.format("%s/repos/%s/%s/issues?state=%s&per_page=100&sort=updated&page=%d",
+                        apiUrl, owner, repo, queryState, page);
+                ResponseEntity<List<GitHubIssueDto>> response = restTemplate.exchange(
+                        url,
+                        HttpMethod.GET,
+                        request,
+                        new ParameterizedTypeReference<List<GitHubIssueDto>>() {}
+                );
+                List<GitHubIssueDto> list = response.getBody();
+                if (list == null || list.isEmpty()) {
+                    break;
+                }
+                all.addAll(list);
+                if (list.size() < 100) {
+                    break;
+                }
             }
-            return list.stream()
+            return all.stream()
                     .filter(issue -> !issue.isPullRequest())
                     .toList();
         } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
@@ -262,7 +300,7 @@ public class GitHubApiClient {
     /**
      * Cập nhật trạng thái của GitHub Issue (ví dụ: open hoặc closed)
      */
-    public void updateIssueState(String accessToken, String owner, String repo, int issueNumber, String state) {
+    public boolean updateIssueState(String accessToken, String owner, String repo, int issueNumber, String state) {
         String url = String.format("%s/repos/%s/%s/issues/%d", apiUrl, owner, repo, issueNumber);
 
         HttpHeaders headers = createAuthHeaders(accessToken);
@@ -274,10 +312,16 @@ public class GitHubApiClient {
         try {
             restTemplate.exchange(url, HttpMethod.PATCH, request, Void.class);
             log.info("Updated GitHub issue #{}: state={} on {}/{}", issueNumber, state, owner, repo);
+            return true;
         } catch (Exception e) {
             log.warn("Failed to update GitHub issue #{} state={} on {}/{}: {}", issueNumber, state, owner, repo, e.getMessage());
-            // Ghi nhận cảnh báo, không throw để không làm rollback transaction chính nếu GitHub API lỗi/rate-limit
+            // Không throw: lỗi GitHub (rate-limit, thiếu quyền) không được làm hỏng nghiệp vụ phía DATN
+            return false;
         }
+    }
+
+    private static String enc(String value) {
+        return URLEncoder.encode(value != null ? value : "", StandardCharsets.UTF_8);
     }
 
     private HttpHeaders createAuthHeaders(String accessToken) {
