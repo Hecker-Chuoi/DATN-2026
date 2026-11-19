@@ -48,6 +48,7 @@ import StoryPointsPicker from '../common/StoryPointsPicker.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import ResolveSubtasksModal from '../modals/ResolveSubtasksModal.jsx';
 import CompletionPendingPanel from './CompletionPendingPanel.jsx';
+import DevelopmentPanel from '../github/DevelopmentPanel.jsx';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
@@ -777,6 +778,45 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontWeight: 700, color: '#2563EB', fontSize: 14 }}>{item?.code || '...'}</span>
             </div>
+
+            {item?.githubLinks && item.githubLinks.filter(l => l.linkType === 'ISSUE' || l.linkType === 'PULL_REQUEST').map(gh => {
+              const isPr = gh.linkType === 'PULL_REQUEST';
+              // OPEN: xanh lá · MERGED: tím · CLOSED: xám
+              const tone = gh.status === 'MERGED'
+                ? { bg: '#F5F3FF', border: '#DDD6FE', fg: '#7C3AED', chip: '#EDE9FE' }
+                : gh.status === 'CLOSED'
+                  ? { bg: '#F1F5F9', border: '#CBD5E1', fg: '#64748B', chip: '#E2E8F0' }
+                  : { bg: '#ECFDF5', border: '#A7F3D0', fg: '#059669', chip: '#D1FAE5' };
+              return (
+              <a
+                key={gh.id || `${gh.linkType}-${gh.githubNumber}`}
+                href={gh.url}
+                target="_blank"
+                rel="noreferrer"
+                title={`GitHub ${isPr ? 'Pull Request' : 'Issue'} #${gh.githubNumber}: ${gh.title || ''} (${gh.status})`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  backgroundColor: tone.bg,
+                  border: `1px solid ${tone.border}`,
+                  color: tone.fg,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span>{isPr ? 'PR' : 'GitHub'} #{gh.githubNumber}</span>
+                <span style={{ fontSize: 10, padding: '1px 4px', borderRadius: 4, backgroundColor: tone.chip }}>
+                  {gh.status}
+                </span>
+                <ExternalLink size={11} />
+              </a>
+              );
+            })}
 
             {(() => {
               const displayColor = item?.typeColor || typeInfo.color || '#2563EB';
@@ -2376,6 +2416,17 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   />
                 </div>
               </div>
+
+              {/* Development Section (GitHub): ẩn khi dự án chưa liên kết repo */}
+              {item?.id && (
+                <DevelopmentPanel
+                  key={item.id}
+                  itemId={item.id}
+                  githubLinks={item.githubLinks || []}
+                  canEdit={can('ISSUE_EDIT')}
+                  labelStyle={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}
+                />
+              )}
 
               {/* Due Date Section */}
               <div>

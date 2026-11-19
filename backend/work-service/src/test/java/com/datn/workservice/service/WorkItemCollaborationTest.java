@@ -156,7 +156,8 @@ class WorkItemCollaborationTest {
                 auditService,
                 identityClient,
                 completionGate,
-                workItemNotifier
+                workItemNotifier,
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class)
         );
     }
 

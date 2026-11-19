@@ -426,6 +426,8 @@ export default function ProjectDetailPage() {
             // "Báo cáo" gop ca Dong gop lan Tien do (2 tab ben trong ProjectReportsPage).
             { to: 'reports', label: 'Báo cáo', icon: BarChart3, visible: true },
             { to: 'workflow', label: 'Cấu hình Dự án', icon: Settings, visible: true },
+            // Chỉ người quản trị dự án (Leader, Admin dự án/workspace) mới cấu hình GitHub: khớp PROJECT_ADMIN ở backend
+            { to: 'github', label: 'Tích hợp GitHub', icon: GitBranch, visible: isAdmin },
           ]
             .filter((tab) => tab.visible)
             .map((tab) => {

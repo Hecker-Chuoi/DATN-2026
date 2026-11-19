@@ -16,7 +16,9 @@ public class SecurityConfig {
             "/actuator/info",
             // Handshake WebSocket thông báo: trình duyệt không gửi được header Authorization khi mở
             // WebSocket, nên notification-service xác thực JWT ở frame STOMP CONNECT.
-            "/notification/ws/**"
+            "/notification/ws/**",
+            // GitHub gọi webhook không kèm JWT; work-service tự xác thực bằng chữ ký HMAC X-Hub-Signature-256
+            "/work/api/v1/work/integrations/github/webhook"
     };
 
     private final KeycloakJwtConverter keycloakJwtConverter;
