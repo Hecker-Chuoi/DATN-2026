@@ -17,4 +17,10 @@ public class UpdateGitHubSyncConfigRequest {
     private Boolean autoCloseGithubIssueOnDone;
 
     private Boolean autoCloseTaskOnIssueClose;
+
+    /** Từ khoá hoàn thành, cách nhau dấu phẩy. Chuỗi rỗng = quay về bộ mặc định; null = không đổi. */
+    private String prCloseKeywords;
+
+    /** Nhánh đích: chỉ PR mở/merge vào nhánh này mới tự chuyển trạng thái Task. */
+    private String defaultBranch;
 }

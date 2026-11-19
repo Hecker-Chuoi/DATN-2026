@@ -1,460 +1,499 @@
 import { useState, useEffect } from 'react';
-import { X, Search, Lock, Globe, Star, Check, Loader2, GitBranch, AlertCircle, RefreshCw } from 'lucide-react';
+import { X, Search, Lock, Loader2, GitBranch, ArrowLeft, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { githubIntegrationApi } from '../../api.js';
 
-export default function ConnectRepoModal({ isOpen, onClose, projectId, onConnected, onReauth }) {
-  const [repos, setRepos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const C = {
+  accent: '#2563EB',
+  text: '#1B1B1F',
+  muted: '#6B6F76',
+  border: '#E6E6EA',
+  divider: '#ECECEF',
+  danger: '#B42318',
+};
+
+// Tương thích cả snake_case (GitHub API gốc) và camelCase
+const getRepoFullName = (r) => r?.full_name || r?.fullName || r?.name || '';
+const getRepoUrl = (r) => r?.html_url || r?.htmlUrl || '';
+const isRepoPrivate = (r) => r?.private ?? r?.isPrivate ?? false;
+const getRepoBranch = (r) => r?.default_branch || r?.defaultBranch || 'main';
+const sameName = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+
+/**
+ * Hộp chọn repository 2 bước: chọn repo → chọn nhánh đích → Kết nối.
+ * branchOnly: mở thẳng bước chọn nhánh cho repo đang liên kết (đổi nhánh), nút "Lưu".
+ */
+export default function ConnectRepoModal({
+  isOpen,
+  onClose,
+  projectId,
+  onConnected,
+  onReauth,
+  currentRepoFullName,
+  currentBranch,
+  config,
+  syncIssues = true,
+  branchOnly = false,
+}) {
+  const [pickedRepo, setPickedRepo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRepo, setSelectedRepo] = useState(null);
-  const [syncIssues, setSyncIssues] = useState(true);
 
-  // Safe accessor helpers để tương thích cả snake_case (GitHub API gốc) và camelCase
-  const getRepoFullName = (r) => r?.full_name || r?.fullName || r?.name || '';
-  const getRepoUrl = (r) => r?.html_url || r?.htmlUrl || '';
-  const isRepoPrivate = (r) => r?.private ?? r?.isPrivate ?? false;
-  const getRepoBranch = (r) => r?.default_branch || r?.defaultBranch || 'main';
-  const getRepoStars = (r) => r?.stargazers_count ?? r?.stargazersCount ?? 0;
-
-  const fetchRepos = async () => {
-    if (!projectId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await githubIntegrationApi.getRepositories(projectId, { skipErrorToast: true });
-      const data = res?.data;
-      setRepos(Array.isArray(data) ? data : []);
-    } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || 'Không thể tải danh sách kho mã nguồn từ GitHub';
-      setError(msg);
-      // Giữ thông báo inline trong modal, không bắn toast gián đoạn buổi thuyết trình
-    } finally {
-      setLoading(false);
-    }
+  // Mở lại hộp chọn luôn bắt đầu từ bước 1
+  const close = () => {
+    setPickedRepo(null);
+    onClose();
   };
 
   useEffect(() => {
-    if (isOpen && projectId) {
-      fetchRepos();
-    }
-  }, [isOpen, projectId]);
+    if (!isOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !submitting) close();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, submitting]);
 
-  const handleConnect = async () => {
-    if (!selectedRepo) {
-      toast.error('Vui lòng chọn một repository để liên kết');
-      return;
-    }
+  if (!isOpen) return null;
 
+  // Đổi nhánh: repo cố định là repo đang liên kết
+  const repo = branchOnly
+    ? { fullName: currentRepoFullName, defaultBranch: currentBranch }
+    : pickedRepo;
+
+  const handleSubmit = async (branch) => {
+    const fullName = getRepoFullName(repo);
     try {
       setSubmitting(true);
-      const payload = {
-        repoFullName: getRepoFullName(selectedRepo),
-        repoUrl: getRepoUrl(selectedRepo),
-        defaultBranch: getRepoBranch(selectedRepo),
-        syncIssues: syncIssues,
-      };
-
-      const res = await githubIntegrationApi.connect(projectId, payload, { skipErrorToast: true });
-      toast.success('Liên kết kho mã nguồn thành công!');
-      if (onConnected) {
-        onConnected(res?.data);
+      let res;
+      if (branchOnly) {
+        res = await githubIntegrationApi.updateConfig(projectId, { ...config, defaultBranch: branch }, { skipErrorToast: true });
+        toast.success(`Đã đổi nhánh sang ${branch}`);
+      } else {
+        res = await githubIntegrationApi.connect(
+          projectId,
+          { repoFullName: fullName, repoUrl: getRepoUrl(repo), defaultBranch: branch, syncIssues },
+          { skipErrorToast: true }
+        );
+        toast.success(`Đã kết nối ${fullName}`);
       }
-      onClose();
+      onConnected?.(res?.data);
+      close();
     } catch (err) {
-      // Kiểm tra xem thực tế repo đã được liên kết chưa trước khi báo lỗi
-      try {
-        const checkRes = await githubIntegrationApi.getStatus(projectId, { skipErrorToast: true });
-        if (checkRes?.data?.projectLinked) {
-          toast.success('Liên kết kho mã nguồn thành công!');
-          if (onConnected) {
-            onConnected(checkRes.data);
+      if (!branchOnly) {
+        // Request có thể đã thành công dù client báo lỗi: kiểm tra lại trạng thái
+        try {
+          const checkRes = await githubIntegrationApi.getStatus(projectId, { skipErrorToast: true });
+          const d = checkRes?.data;
+          if (d?.projectLinked && sameName(d.repoFullName, fullName) && d.defaultBranch === branch) {
+            toast.success(`Đã kết nối ${fullName}`);
+            onConnected?.(d);
+            close();
+            return;
           }
-          onClose();
-          return;
+        } catch {
+          /* báo lỗi bên dưới */
         }
-      } catch (_) {}
-
-      console.warn('Connect repo notice:', err);
-      toast.error(err?.message || 'Liên kết repository thất bại');
+      }
+      console.warn('GitHub connect notice:', err);
+      toast.error(err?.response?.data?.message || err?.message || 'Không lưu được thay đổi');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!isOpen) return null;
-
-  const repoList = Array.isArray(repos) ? repos : [];
-  const query = (searchQuery || '').toLowerCase().trim();
-
-  const filteredRepos = repoList.filter((r) => {
-    const fullName = getRepoFullName(r).toLowerCase();
-    const desc = (r?.description || '').toLowerCase();
-    return fullName.includes(query) || desc.includes(query);
-  });
-
   return (
     <div
+      onClick={() => !submitting && close()}
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.65)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
         zIndex: 1000,
-        padding: 16,
+        background: 'rgba(20, 20, 26, 0.32)',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '12vh 16px 16px',
+        boxSizing: 'border-box',
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        color: C.text,
       }}
-      onClick={onClose}
     >
       <div
-        style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: 16,
-          width: '100%',
-          maxWidth: 600,
-          maxHeight: '90vh',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-          border: '1px solid #E2E8F0',
-          overflow: 'hidden',
-          animation: 'fadeIn 0.15s ease',
-        }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="gh-pick-title"
         onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxWidth: 480, background: '#FFFFFF', border: `1px solid ${C.border}`, borderRadius: 10, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       >
-        {/* Header */}
-        <div
-          style={{
-            padding: '18px 24px',
-            borderBottom: '1px solid #F1F5F9',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <h2 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-              Liên kết kho mã nguồn GitHub
-            </h2>
-            <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>
-              Chọn repository bạn muốn kết nối với dự án này
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#94A3B8',
-              padding: 6,
-              borderRadius: 6,
-            }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Search Bar */}
-        <div style={{ padding: '16px 24px 8px 24px' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              borderRadius: 8,
-              padding: '8px 12px',
-            }}
-          >
-            <Search size={16} color="#94A3B8" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm repository..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                outline: 'none',
-                width: '100%',
-                fontSize: 13,
-                color: '#0F172A',
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Repository List */}
-        <div
-          style={{
-            padding: '8px 24px',
-            overflowY: 'auto',
-            flex: 1,
-            maxHeight: 360,
-          }}
-        >
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748B' }}>
-              <Loader2 size={28} className="animate-spin" style={{ margin: '0 auto 12px', color: '#2563EB' }} />
-              <p style={{ fontSize: 13, margin: 0 }}>Đang tải danh sách kho từ GitHub...</p>
-            </div>
-          ) : error ? (
-            <div
-              style={{
-                padding: '24px 20px',
-                textAlign: 'center',
-                backgroundColor: '#FEF2F2',
-                borderRadius: 12,
-                border: '1px solid #FEE2E2',
-                margin: '12px 0',
-              }}
-            >
-              <AlertCircle size={32} color="#DC2626" style={{ margin: '0 auto 10px' }} />
-              <div style={{ fontSize: 13, color: '#991B1B', fontWeight: 600, marginBottom: 6 }}>
-                Không thể tải danh sách kho mã nguồn
-              </div>
-              <p style={{ fontSize: 12, color: '#B91C1C', margin: '0 0 16px', lineHeight: 1.4 }}>
-                {error}
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
-                {onReauth && (
-                  <button
-                    onClick={onReauth}
-                    style={{
-                      height: 32,
-                      padding: '0 14px',
-                      backgroundColor: '#2563EB',
-                      color: '#FFFFFF',
-                      border: 'none',
-                      borderRadius: 8,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <RefreshCw size={13} />
-                    <span>Cấp quyền lại GitHub</span>
-                  </button>
-                )}
-                <button
-                  onClick={fetchRepos}
-                  style={{
-                    height: 32,
-                    padding: '0 14px',
-                    backgroundColor: '#FFFFFF',
-                    color: '#334155',
-                    border: '1px solid #CBD5E1',
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Thử lại
-                </button>
-              </div>
-            </div>
-          ) : filteredRepos.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#94A3B8', fontSize: 13 }}>
-              Không tìm thấy repository nào phù hợp
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {filteredRepos.map((repo) => {
-                const fullName = getRepoFullName(repo);
-                const isSelected = selectedRepo?.id === repo.id;
-                const isPrivate = isRepoPrivate(repo);
-                const branch = getRepoBranch(repo);
-                const stars = getRepoStars(repo);
-
-                return (
-                  <div
-                    key={repo.id}
-                    onClick={() => setSelectedRepo(repo)}
-                    style={{
-                      padding: '12px 16px',
-                      borderRadius: 10,
-                      border: `1.5px solid ${isSelected ? '#2563EB' : '#E2E8F0'}`,
-                      backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontWeight: 600, fontSize: 14, color: isSelected ? '#1D4ED8' : '#0F172A' }}>
-                          {fullName}
-                        </span>
-                        {isPrivate ? (
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 3,
-                              fontSize: 11,
-                              padding: '1px 6px',
-                              borderRadius: 4,
-                              backgroundColor: '#F1F5F9',
-                              color: '#64748B',
-                              fontWeight: 500,
-                            }}
-                          >
-                            <Lock size={10} /> Riêng tư
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 3,
-                              fontSize: 11,
-                              padding: '1px 6px',
-                              borderRadius: 4,
-                              backgroundColor: '#ECFDF5',
-                              color: '#059669',
-                              fontWeight: 500,
-                            }}
-                          >
-                            <Globe size={10} /> Công khai
-                          </span>
-                        )}
-                      </div>
-
-                      {repo.description && (
-                        <p
-                          style={{
-                            fontSize: 12,
-                            color: '#64748B',
-                            margin: '0 0 6px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {repo.description}
-                        </p>
-                      )}
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11, color: '#94A3B8' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <GitBranch size={12} /> {branch}
-                        </span>
-                        {stars > 0 && (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <Star size={11} fill="#EAB308" color="#EAB308" /> {stars}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: '50%',
-                        border: `2px solid ${isSelected ? '#2563EB' : '#CBD5E1'}`,
-                        backgroundColor: isSelected ? '#2563EB' : '#FFFFFF',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#FFFFFF',
-                        flexShrink: 0,
-                        marginTop: 2,
-                      }}
-                    >
-                      {isSelected && <Check size={12} strokeWidth={3} />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Options & Footer */}
-        <div
-          style={{
-            padding: '16px 24px',
-            borderTop: '1px solid #F1F5F9',
-            backgroundColor: '#F8FAFC',
-          }}
-        >
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              fontSize: 13,
-              color: '#334155',
-              cursor: 'pointer',
-              marginBottom: 16,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={syncIssues}
-              onChange={(e) => setSyncIssues(e.target.checked)}
-              style={{ width: 16, height: 16, accentColor: '#2563EB', cursor: 'pointer' }}
-            />
-            <span>Tự động kéo toàn bộ GitHub Issues đang mở về làm Task trên Board</span>
-          </label>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 8,
-                border: '1px solid #CBD5E1',
-                backgroundColor: '#FFFFFF',
-                color: '#334155',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Hủy
-            </button>
-            <button
-              type="button"
-              onClick={handleConnect}
-              disabled={!selectedRepo || submitting}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '8px 20px',
-                borderRadius: 8,
-                border: 'none',
-                backgroundColor: selectedRepo && !submitting ? '#2563EB' : '#94A3B8',
-                color: '#FFFFFF',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: selectedRepo && !submitting ? 'pointer' : 'not-allowed',
-                boxShadow: selectedRepo ? '0 1px 2px rgba(37,99,235,0.2)' : 'none',
-              }}
-            >
-              {submitting && <Loader2 size={15} className="animate-spin" />}
-              <span>Liên kết ngay</span>
-            </button>
-          </div>
-        </div>
+        {repo ? (
+          <BranchStep
+            key={getRepoFullName(repo)}
+            projectId={projectId}
+            repo={repo}
+            branchOnly={branchOnly}
+            currentBranch={branchOnly || sameName(getRepoFullName(repo), currentRepoFullName) ? currentBranch : null}
+            submitting={submitting}
+            onBack={branchOnly ? null : () => setPickedRepo(null)}
+            onClose={close}
+            onReauth={onReauth}
+            onSubmit={handleSubmit}
+          />
+        ) : (
+          <RepoStep
+            projectId={projectId}
+            currentRepoFullName={currentRepoFullName}
+            onClose={close}
+            onReauth={onReauth}
+            onPick={setPickedRepo}
+          />
+        )}
       </div>
     </div>
   );
 }
+
+/* ─── Bước 1: chọn repository ─── */
+function RepoStep({ projectId, currentRepoFullName, onClose, onReauth, onPick }) {
+  const [repos, setRepos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [query, setQuery] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+    githubIntegrationApi
+      .getRepositories(projectId, { skipErrorToast: true })
+      .then((res) => {
+        if (ignore) return;
+        setRepos(Array.isArray(res?.data) ? res.data : []);
+        setError(null);
+      })
+      .catch((err) => {
+        if (!ignore) setError(err?.response?.data?.message || err?.message || 'Không tải được danh sách repository');
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [projectId, reloadKey]);
+
+  const q = query.toLowerCase().trim();
+  const filtered = repos.filter(
+    (r) => !q || getRepoFullName(r).toLowerCase().includes(q) || (r?.description || '').toLowerCase().includes(q)
+  );
+
+  return (
+    <>
+      <Header title="Chọn repository" onClose={onClose} />
+      <SearchBox value={query} onChange={setQuery} label="Tìm repository" placeholder="Tìm theo tên…" />
+      <ListBox>
+        {loading ? (
+          <Loading />
+        ) : error ? (
+          <ErrorBox
+            message={error}
+            onReauth={onReauth}
+            onRetry={() => {
+              setLoading(true);
+              setReloadKey((k) => k + 1);
+            }}
+          />
+        ) : filtered.length === 0 ? (
+          <Empty>Không tìm thấy repository</Empty>
+        ) : (
+          filtered.map((repo) => {
+            const fullName = getRepoFullName(repo);
+            const isCurrent = sameName(fullName, currentRepoFullName);
+            return (
+              <RowButton key={repo.id ?? fullName} selected={isCurrent} onClick={() => onPick(repo)}>
+                <span style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <Ellipsis>{fullName}</Ellipsis>
+                    {isRepoPrivate(repo) && <Lock size={12} color={C.muted} aria-label="Riêng tư" style={{ flexShrink: 0 }} />}
+                  </span>
+                  {repo.description && (
+                    <span style={{ fontSize: 12, color: C.muted, minWidth: 0, display: 'flex' }}>
+                      <Ellipsis>{repo.description}</Ellipsis>
+                    </span>
+                  )}
+                </span>
+                {isCurrent && <span style={{ fontSize: 12, color: C.muted, flexShrink: 0 }}>Đang dùng</span>}
+              </RowButton>
+            );
+          })
+        )}
+      </ListBox>
+      <Footer>Cần quyền admin trên repo để GitHub gửi sự kiện về.</Footer>
+    </>
+  );
+}
+
+/* ─── Bước 2: chọn nhánh đích ─── */
+function BranchStep({ projectId, repo, branchOnly, currentBranch, submitting, onBack, onClose, onReauth, onSubmit }) {
+  const fullName = getRepoFullName(repo);
+  const githubDefault = branchOnly ? null : getRepoBranch(repo);
+  const [branches, setBranches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState(currentBranch || githubDefault || null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+    githubIntegrationApi
+      .getBranches(projectId, fullName, { skipErrorToast: true })
+      .then((res) => {
+        if (ignore) return;
+        const list = Array.isArray(res?.data) ? res.data : [];
+        setBranches(list);
+        setError(null);
+        // Backend trả nhánh mặc định của GitHub đứng đầu: dùng làm lựa chọn sẵn nếu chưa có
+        setSelected((cur) => (cur && list.some((b) => b.name === cur) ? cur : list[0]?.name ?? null));
+      })
+      .catch((err) => {
+        if (!ignore) setError(err?.response?.data?.message || err?.message || 'Không tải được danh sách nhánh');
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [projectId, fullName, reloadKey]);
+
+  const defaultName = branches[0]?.name;
+  const q = query.toLowerCase().trim();
+  const filtered = branches.filter((b) => !q || (b.name || '').toLowerCase().includes(q));
+  const unchanged = branchOnly && selected === currentBranch;
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '12px 12px 4px' }}>
+        {onBack && (
+          <IconButton label="Quay lại chọn repository" onClick={onBack} disabled={submitting}>
+            <ArrowLeft size={16} />
+          </IconButton>
+        )}
+        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', paddingLeft: onBack ? 0 : 4 }}>
+          <h2 id="gh-pick-title" style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
+            {branchOnly ? 'Đổi nhánh' : 'Chọn nhánh'}
+          </h2>
+          <span style={{ fontSize: 12, color: C.muted, display: 'flex', minWidth: 0 }}>
+            <Ellipsis>{fullName}</Ellipsis>
+          </span>
+        </span>
+        <IconButton label="Đóng" onClick={onClose} disabled={submitting}>
+          <X size={16} />
+        </IconButton>
+      </div>
+      <p style={{ margin: '0 16px 8px', fontSize: 12, color: C.muted }}>
+        Chỉ PR mở hoặc merge vào nhánh này mới tự chuyển trạng thái Task.
+      </p>
+      {branches.length > 8 && <SearchBox value={query} onChange={setQuery} label="Tìm nhánh" placeholder="Tìm nhánh…" />}
+      <ListBox>
+        {loading ? (
+          <Loading />
+        ) : error ? (
+          <ErrorBox
+            message={error}
+            onReauth={onReauth}
+            onRetry={() => {
+              setLoading(true);
+              setReloadKey((k) => k + 1);
+            }}
+          />
+        ) : filtered.length === 0 ? (
+          <Empty>Không tìm thấy nhánh</Empty>
+        ) : (
+          <div role="radiogroup" aria-label="Nhánh đích" style={{ display: 'flex', flexDirection: 'column' }}>
+            {filtered.map((b) => {
+              const isSelected = b.name === selected;
+              return (
+                <RowButton
+                  key={b.name}
+                  role="radio"
+                  aria-checked={isSelected}
+                  selected={isSelected}
+                  disabled={submitting}
+                  onClick={() => setSelected(b.name)}
+                >
+                  <GitBranch size={14} color={C.muted} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, fontSize: 13 }}>
+                    <Ellipsis>{b.name}</Ellipsis>
+                    {b.name === defaultName && <Tag>Mặc định</Tag>}
+                    {branchOnly && b.name === currentBranch && <Tag>Đang dùng</Tag>}
+                    {(b.isProtected ?? b.protected) && <Lock size={12} color={C.muted} aria-label="Được bảo vệ" style={{ flexShrink: 0 }} />}
+                  </span>
+                  {isSelected && <Check size={14} color={C.accent} style={{ flexShrink: 0 }} />}
+                </RowButton>
+              );
+            })}
+          </div>
+        )}
+      </ListBox>
+      <div style={{ borderTop: `1px solid ${C.divider}`, padding: '10px 12px', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button type="button" onClick={onClose} disabled={submitting} style={smallButton(false)}>
+          Huỷ
+        </button>
+        <button
+          type="button"
+          onClick={() => onSubmit(selected)}
+          disabled={!selected || loading || !!error || submitting || unchanged}
+          style={{ ...smallButton(true), opacity: !selected || loading || error || unchanged ? 0.5 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        >
+          {submitting && <Loader2 size={14} className="animate-spin" />}
+          {branchOnly ? 'Lưu' : 'Kết nối'}
+        </button>
+      </div>
+    </>
+  );
+}
+
+/* ─── Thành phần dùng chung ─── */
+
+function Header({ title, onClose }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 12px 12px 16px' }}>
+      <h2 id="gh-pick-title" style={{ margin: 0, flex: 1, fontSize: 14, fontWeight: 600 }}>
+        {title}
+      </h2>
+      <IconButton label="Đóng" onClick={onClose}>
+        <X size={16} />
+      </IconButton>
+    </div>
+  );
+}
+
+function IconButton({ label, onClick, disabled, children }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 6, border: 0, background: 'transparent', color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SearchBox({ value, onChange, label, placeholder }) {
+  return (
+    <label style={{ margin: '0 12px 8px', display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 10px', border: '1px solid #DCDCE1', borderRadius: 6, color: C.muted }}>
+      <Search size={14} />
+      <input
+        type="text"
+        autoFocus
+        aria-label={label}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ flex: 1, border: 0, outline: 'none', background: 'transparent', fontSize: 13, fontFamily: 'inherit', color: C.text }}
+      />
+    </label>
+  );
+}
+
+function ListBox({ children }) {
+  return (
+    <div style={{ borderTop: `1px solid ${C.divider}`, maxHeight: 340, overflowY: 'auto', padding: 4, display: 'flex', flexDirection: 'column' }}>
+      {children}
+    </div>
+  );
+}
+
+function RowButton({ selected, disabled, onClick, children, ...rest }) {
+  const base = selected ? '#F4F5FB' : 'transparent';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={(e) => (e.currentTarget.style.background = selected ? base : '#F4F4F7')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = base)}
+      style={{
+        textAlign: 'left',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        minHeight: 44,
+        padding: '6px 10px',
+        border: 0,
+        borderRadius: 6,
+        background: base,
+        color: C.text,
+        fontFamily: 'inherit',
+        cursor: disabled ? 'wait' : 'pointer',
+      }}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Ellipsis({ children }) {
+  return <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{children}</span>;
+}
+
+function Tag({ children }) {
+  return (
+    <span style={{ flexShrink: 0, fontSize: 11, color: C.muted, border: `1px solid ${C.border}`, borderRadius: 4, padding: '0 5px', lineHeight: '16px' }}>
+      {children}
+    </span>
+  );
+}
+
+function Loading() {
+  return (
+    <div style={{ padding: '28px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13, color: C.muted }}>
+      <Loader2 size={14} className="animate-spin" />
+      Đang tải…
+    </div>
+  );
+}
+
+function Empty({ children }) {
+  return <div style={{ padding: '24px 10px', textAlign: 'center', fontSize: 13, color: C.muted }}>{children}</div>;
+}
+
+function ErrorBox({ message, onReauth, onRetry }) {
+  return (
+    <div style={{ padding: '20px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, textAlign: 'center' }}>
+      <span style={{ fontSize: 13, color: C.danger }}>{message}</span>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {onReauth && (
+          <button type="button" onClick={onReauth} style={smallButton(true)}>
+            Cấp quyền lại
+          </button>
+        )}
+        <button type="button" onClick={onRetry} style={smallButton(false)}>
+          Thử lại
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Footer({ children }) {
+  return <div style={{ borderTop: `1px solid ${C.divider}`, padding: '10px 16px', fontSize: 12, color: C.muted }}>{children}</div>;
+}
+
+const smallButton = (primary) => ({
+  height: 32,
+  padding: '0 12px',
+  borderRadius: 6,
+  fontSize: 13,
+  fontWeight: 500,
+  fontFamily: 'inherit',
+  cursor: 'pointer',
+  border: `1px solid ${primary ? C.accent : '#DCDCE1'}`,
+  background: primary ? C.accent : '#FFFFFF',
+  color: primary ? '#FFFFFF' : C.text,
+});

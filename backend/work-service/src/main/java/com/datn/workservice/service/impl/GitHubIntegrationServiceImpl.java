@@ -31,7 +31,10 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -81,6 +84,13 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
 
     /** Tên trạng thái được coi là "đang review" (dự án có thể tự đặt tên tiếng Anh hoặc tiếng Việt). */
     private static final List<String> REVIEW_STATUS_KEYWORDS = List.of("review", "duyệt", "kiểm tra", "kiểm thử");
+    /** Từ khoá đóng đứng ngay trước mã Task trong tiêu đề/mô tả PR, kiểu GitHub: "Closes FRONE-2", "fixes: frone-2". */
+    private static final String CLOSE_KEYWORDS = "close[sd]?|fix(?:e[sd])?|resolve[sd]?|đóng|hoàn thành";
+    private static final int MAX_CLOSE_KEYWORDS = 10;
+    private static final int MAX_BRANCH_SLUG_LENGTH = 40;
+    /** Dấu ẩn trong mô tả Issue do DATN tạo: webhook issues.opened nhận ra để gắn vào Task có sẵn, không tạo Task trùng. */
+    private static final Pattern DATN_TASK_MARKER = Pattern.compile("<!--\\s*datn-task:([0-9a-fA-F-]{36})\\s*-->");
+    private static final int MAX_CLOSE_KEYWORD_LENGTH = 40;
 
     @Override
     public String getOAuthAuthorizeUrl(UUID projectId, UUID currentUserId) {
@@ -134,6 +144,42 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
 
     @Override
     @Transactional
+    public List<GitHubBranchDto> listBranches(UUID projectId, String repoFullName, UUID currentUserId) {
+        UserGitHubToken userToken = userGitHubTokenRepository.findByUserId(currentUserId)
+                .orElseThrow(() -> new BadRequestException("Bạn chưa kết nối tài khoản GitHub"));
+        String[] parts = splitRepoFullName(repoFullName);
+        String accessToken = getValidAccessToken(userToken);
+        GitHubRepoDto ghRepo = gitHubApiClient.getRepository(accessToken, parts[0], parts[1]);
+        List<GitHubBranchDto> branches = new ArrayList<>(gitHubApiClient.listBranches(accessToken, parts[0], parts[1]));
+        String githubDefault = ghRepo.getDefaultBranch();
+        // Nhánh mặc định trên GitHub lên đầu, còn lại theo tên
+        branches.sort(java.util.Comparator
+                .comparing((GitHubBranchDto b) -> !Objects.equals(b.getName(), githubDefault))
+                .thenComparing(b -> b.getName() != null ? b.getName().toLowerCase() : ""));
+        return branches;
+    }
+
+    private static String[] splitRepoFullName(String repoFullName) {
+        String[] parts = repoFullName != null ? repoFullName.trim().split("/") : new String[0];
+        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
+            throw new BadRequestException("Tên repository không hợp lệ. Định dạng chuẩn phải là: owner/repo");
+        }
+        return new String[]{parts[0].trim(), parts[1].trim()};
+    }
+
+    /** Nhánh người dùng chọn phải tồn tại trên repo; trả về đúng tên nhánh. */
+    private String requireExistingBranch(String accessToken, String owner, String repoName, String branch) {
+        String wanted = branch.trim();
+        boolean exists = gitHubApiClient.listBranches(accessToken, owner, repoName).stream()
+                .anyMatch(b -> wanted.equals(b.getName()));
+        if (!exists) {
+            throw new BadRequestException("Nhánh '" + wanted + "' không tồn tại trong repository " + owner + "/" + repoName);
+        }
+        return wanted;
+    }
+
+    @Override
+    @Transactional
     public ProjectGitHubStatusResponse connectRepository(UUID projectId, ConnectRepoRequest request, UUID currentUserId) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với ID: " + projectId));
@@ -141,17 +187,18 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         UserGitHubToken userToken = userGitHubTokenRepository.findByUserId(currentUserId)
                 .orElseThrow(() -> new BadRequestException("Vui lòng kết nối tài khoản GitHub trước khi liên kết kho"));
 
-        String[] parts = request.getRepoFullName() != null ? request.getRepoFullName().trim().split("/") : new String[0];
-        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
-            throw new BadRequestException("Tên repository không hợp lệ. Định dạng chuẩn phải là: owner/repo");
-        }
+        String[] parts = splitRepoFullName(request.getRepoFullName());
         String accessToken = getValidAccessToken(userToken);
 
         // Kiểm tra người dùng thực sự truy cập được repo, lấy tên/URL chuẩn từ GitHub thay vì tin client
-        GitHubRepoDto ghRepo = gitHubApiClient.getRepository(accessToken, parts[0].trim(), parts[1].trim());
-        String fullName = ghRepo.getFullName() != null ? ghRepo.getFullName() : parts[0].trim() + "/" + parts[1].trim();
+        GitHubRepoDto ghRepo = gitHubApiClient.getRepository(accessToken, parts[0], parts[1]);
+        String fullName = ghRepo.getFullName() != null ? ghRepo.getFullName() : parts[0] + "/" + parts[1];
         String owner = fullName.substring(0, fullName.indexOf('/'));
         String repoName = fullName.substring(fullName.indexOf('/') + 1);
+        // Nhánh đích: người dùng chọn (phải tồn tại), không chọn thì lấy nhánh mặc định trên GitHub
+        String targetBranch = request.getDefaultBranch() != null && !request.getDefaultBranch().isBlank()
+                ? requireExistingBranch(accessToken, owner, repoName, request.getDefaultBranch())
+                : (ghRepo.getDefaultBranch() != null ? ghRepo.getDefaultBranch() : "main");
 
         ProjectGitHubRepo projectRepo = projectGitHubRepoRepository.findByProjectId(projectId)
                 .orElse(ProjectGitHubRepo.builder().projectId(projectId).build());
@@ -172,8 +219,7 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         projectRepo.setRepoName(repoName);
         projectRepo.setRepoFullName(fullName);
         projectRepo.setRepoUrl(ghRepo.getHtmlUrl() != null ? ghRepo.getHtmlUrl() : request.getRepoUrl());
-        projectRepo.setDefaultBranch(ghRepo.getDefaultBranch() != null ? ghRepo.getDefaultBranch()
-                : (request.getDefaultBranch() != null ? request.getDefaultBranch() : "main"));
+        projectRepo.setDefaultBranch(targetBranch);
         projectRepo.setWebhookId(webhookId);
         projectRepo.setWebhookSecret(webhookSecret);
         projectRepo.setConnectedByUserId(currentUserId);
@@ -232,6 +278,7 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                     .autoCloseTaskOnPrMerge(repo.getAutoCloseTaskOnPrMerge())
                     .autoCloseGithubIssueOnDone(repo.getAutoCloseGithubIssueOnDone())
                     .autoCloseTaskOnIssueClose(repo.getAutoCloseTaskOnIssueClose())
+                    .prCloseKeywords(repo.getPrCloseKeywords())
                     .lastSyncedAt(repo.getLastSyncedAt());
         } else {
             builder.projectLinked(false);
@@ -260,6 +307,18 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         }
         if (request.getAutoCloseTaskOnIssueClose() != null) {
             repo.setAutoCloseTaskOnIssueClose(request.getAutoCloseTaskOnIssueClose());
+        }
+        if (request.getPrCloseKeywords() != null) {
+            repo.setPrCloseKeywords(normalizeCloseKeywords(request.getPrCloseKeywords()));
+        }
+        if (request.getDefaultBranch() != null && !request.getDefaultBranch().isBlank()
+                && !request.getDefaultBranch().trim().equals(repo.getDefaultBranch())) {
+            Project project = projectRepository.findById(projectId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với ID: " + projectId));
+            UserGitHubToken token = findFirstToken(currentUserId, repo.getConnectedByUserId(), project.getLeadUserId())
+                    .orElseThrow(() -> new BadRequestException("Kết nối tài khoản GitHub để đổi nhánh"));
+            repo.setDefaultBranch(requireExistingBranch(getValidAccessToken(token),
+                    repo.getRepoOwner(), repo.getRepoName(), request.getDefaultBranch()));
         }
 
         projectGitHubRepoRepository.save(repo);
@@ -446,6 +505,9 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         Long mergerId = longOrNull(pr.path("merged_by").path("id"));
         boolean merged = pr.path("merged").asBoolean(false);
         boolean draft = pr.path("draft").asBoolean(false);
+        // Chỉ PR nhắm vào nhánh đích của dự án mới tự chuyển trạng thái Task; PR vào nhánh khác chỉ gắn liên kết
+        String baseRef = pr.path("base").path("ref").asText("");
+        boolean targetsBranch = baseRef.isBlank() || baseRef.equals(repo.getDefaultBranch());
 
         List<FollowUp> followUps = transactionTemplate.execute(status -> {
             Project project = projectRepository.findById(repo.getProjectId()).orElse(null);
@@ -457,6 +519,9 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                     pr.path("head").path("ref").asText(""),
                     pr.path("body").asText(""));
             List<WorkItem> items = findMentionedWorkItems(project, text);
+            // Từ khoá đóng chỉ tính trong tiêu đề + mô tả: nhánh "fix/FRONE-2-..." là quy ước đặt tên, không phải ý định đóng
+            Set<String> closingCodes = findClosingCodes(project, repo.getPrCloseKeywords(),
+                    pr.path("title").asText("") + "\n" + pr.path("body").asText(""));
             if (items.isEmpty()) {
                 return List.<FollowUp>of();
             }
@@ -465,8 +530,15 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
             int number = pr.path("number").asInt();
             String ref = "PR #" + number;
             List<FollowUp> result = new ArrayList<>();
+            if (!targetsBranch) {
+                log.info("GitHub {} nhắm vào nhánh '{}' (nhánh đích '{}'): chỉ gắn liên kết, không chuyển trạng thái",
+                        ref, baseRef, repo.getDefaultBranch());
+            }
             for (WorkItem item : items) {
                 upsertPullRequestLink(project.getId(), item.getId(), pr, number, linkStatus);
+                if (!targetsBranch) {
+                    continue;
+                }
 
                 switch (action) {
                     case "opened", "reopened", "ready_for_review" -> {
@@ -476,8 +548,14 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                     }
                     case "closed" -> {
                         if (merged && Boolean.TRUE.equals(repo.getAutoCloseTaskOnPrMerge())) {
-                            result.add(new FollowUp(item.getId(), project.getId(), MoveTarget.DONE, ref,
-                                    mergerId != null ? mergerId : senderId));
+                            String code = item.getCode() != null ? item.getCode().toUpperCase(Locale.ROOT) : "";
+                            // Bắt buộc từ khoá đóng: Task cần nhiều PR không bị hoàn thành từ PR đầu tiên
+                            if (!closingCodes.contains(code)) {
+                                log.info("GitHub {} merged: {} chỉ được nhắc, không có Closes/Fixes → giữ trạng thái", ref, code);
+                            } else {
+                                result.add(new FollowUp(item.getId(), project.getId(), MoveTarget.DONE, ref,
+                                        mergerId != null ? mergerId : senderId));
+                            }
                         }
                     }
                     default -> {
@@ -510,6 +588,68 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         link.setAuthorName(pr.path("user").path("login").asText(null));
         link.setAuthorAvatarUrl(pr.path("user").path("avatar_url").asText(null));
         workItemGitHubLinkRepository.save(link);
+    }
+
+    /**
+     * Chuẩn hoá danh sách từ khoá người dùng nhập: tách theo dấu phẩy / xuống dòng, bỏ khoảng trắng thừa,
+     * bỏ trùng (không phân biệt hoa thường). Rỗng → null (dùng bộ mặc định).
+     */
+    public static String normalizeCloseKeywords(String raw) {
+        Map<String, String> unique = new LinkedHashMap<>();
+        for (String part : raw.split("[,\\n;]")) {
+            String kw = part.trim().replaceAll("\\s+", " ");
+            if (kw.isEmpty()) {
+                continue;
+            }
+            if (kw.length() > MAX_CLOSE_KEYWORD_LENGTH) {
+                throw new BadRequestException("Từ khoá \"" + kw + "\" dài quá " + MAX_CLOSE_KEYWORD_LENGTH + " ký tự");
+            }
+            if (!kw.matches(".*[\\p{L}\\p{N}].*")) {
+                throw new BadRequestException("Từ khoá \"" + kw + "\" phải có ít nhất một chữ hoặc số");
+            }
+            unique.putIfAbsent(kw.toLowerCase(Locale.ROOT), kw);
+        }
+        if (unique.size() > MAX_CLOSE_KEYWORDS) {
+            throw new BadRequestException("Tối đa " + MAX_CLOSE_KEYWORDS + " từ khoá hoàn thành");
+        }
+        return unique.isEmpty() ? null : String.join(", ", unique.values());
+    }
+
+    /** Biểu thức từ khoá: bộ mặc định (có biến thể closes/closed...) hoặc đúng các cụm người dùng đặt. */
+    private static String closeKeywordRegex(String customKeywords) {
+        if (customKeywords == null || customKeywords.isBlank()) {
+            return CLOSE_KEYWORDS;
+        }
+        List<String> alternatives = new ArrayList<>();
+        for (String kw : customKeywords.split(",")) {
+            String trimmed = kw.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            List<String> words = new ArrayList<>();
+            for (String word : trimmed.split("\\s+")) {
+                words.add(Pattern.quote(word));
+            }
+            alternatives.add(String.join("\\s+", words));
+        }
+        return alternatives.isEmpty() ? CLOSE_KEYWORDS : String.join("|", alternatives);
+    }
+
+    /** Mã Task (chuẩn hoá "KEY-n") đứng ngay sau từ khoá hoàn thành; mỗi mã cần từ khoá riêng như GitHub. */
+    private static Set<String> findClosingCodes(Project project, String customKeywords, String text) {
+        if (project.getKey() == null || project.getKey().isBlank() || text == null || text.isBlank()) {
+            return Set.of();
+        }
+        String key = project.getKey().trim().toUpperCase(Locale.ROOT);
+        Pattern pattern = Pattern.compile("(?<![\\p{L}\\p{N}])(?:" + closeKeywordRegex(customKeywords) + ")\\s*:?\\s+"
+                        + Pattern.quote(key) + "-(\\d+)(?![0-9])",
+                Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+        Matcher matcher = pattern.matcher(text);
+        Set<String> codes = new LinkedHashSet<>();
+        while (matcher.find()) {
+            codes.add(key + "-" + matcher.group(1));
+        }
+        return codes;
     }
 
     /** Tìm các mã Task dạng {@code KEY-123} của dự án xuất hiện trong văn bản (không phân biệt hoa/thường). */
@@ -552,6 +692,13 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         switch (action.toLowerCase()) {
             case "opened" -> {
                 if (linkOpt.isEmpty()) {
+                    Optional<WorkItem> origin = findMarkedWorkItem(projectId, issue.getBody());
+                    if (origin.isPresent()) {
+                        // Issue do nút "Tạo Issue" trong DATN tạo: chỉ gắn vào Task gốc
+                        workItemGitHubLinkRepository.saveAndFlush(buildIssueLink(projectId, origin.get().getId(), issue, "OPEN"));
+                        log.info("GitHub issue #{} tạo từ WorkItem '{}', chỉ gắn liên kết", issue.getNumber(), origin.get().getCode());
+                        return null;
+                    }
                     WorkItem saved = createWorkItemFromIssue(project, issue, resolveInitialStatus(projectId), null, false);
                     workItemGitHubLinkRepository.saveAndFlush(buildIssueLink(projectId, saved.getId(), issue, "OPEN"));
                     log.info("Auto-created WorkItem '{}' from GitHub issue #{} in project '{}'",
@@ -753,6 +900,211 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                         item.getCode(), enteringDone ? "is DONE" : "moved out of DONE");
             }
         }
+    }
+
+    // ─── Khung "Phát triển" của Task ─────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public WorkItemDevelopmentResponse getDevelopmentInfo(UUID workItemId) {
+        WorkItem item = workItemRepository.findById(workItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy công việc với ID: " + workItemId));
+        Optional<ProjectGitHubRepo> repo = projectGitHubRepoRepository.findByProjectId(item.getProjectId());
+        if (repo.isEmpty()) {
+            return WorkItemDevelopmentResponse.builder().linked(false).links(List.of()).build();
+        }
+        String branch = findBranchLink(item.getId()).map(WorkItemGitHubLink::getGithubId).orElse(null);
+        return buildDevelopmentInfo(item, repo.get(), branch);
+    }
+
+    @Override
+    @Transactional
+    public WorkItemDevelopmentResponse createBranch(UUID workItemId, UUID currentUserId) {
+        WorkItem item = workItemRepository.findById(workItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy công việc với ID: " + workItemId));
+        ProjectGitHubRepo repo = projectGitHubRepoRepository.findByProjectId(item.getProjectId())
+                .orElseThrow(() -> new BadRequestException("Dự án chưa liên kết với GitHub Repository nào"));
+        Project project = projectRepository.findById(item.getProjectId())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với ID: " + item.getProjectId()));
+
+        // Giống syncIssues: người đang thao tác -> người kết nối repo -> Lead. Member không cần tự liên kết GitHub.
+        UserGitHubToken token = findFirstToken(currentUserId, repo.getConnectedByUserId(), project.getLeadUserId())
+                .orElseThrow(() -> new BadRequestException(
+                        "Dự án chưa có tài khoản GitHub nào để tạo nhánh. Admin dự án cần kết nối GitHub trong trang Tích hợp GitHub"));
+
+        Optional<WorkItemGitHubLink> existing = findBranchLink(item.getId());
+        String branch = existing.map(WorkItemGitHubLink::getGithubId)
+                .orElseGet(() -> suggestBranchName(item.getCode(), item.getSummary()));
+        String base = baseBranchOf(repo);
+
+        boolean created = gitHubApiClient.createBranch(getValidAccessToken(token),
+                repo.getRepoOwner(), repo.getRepoName(), branch, base);
+        log.info("WorkItem {}: nhánh {} {} trên {} (tách từ {})", item.getCode(), branch,
+                created ? "đã tạo" : "đã có sẵn", repo.getRepoFullName(), base);
+
+        if (existing.isEmpty()) {
+            workItemGitHubLinkRepository.save(WorkItemGitHubLink.builder()
+                    .workItemId(item.getId())
+                    .projectId(item.getProjectId())
+                    .linkType(GitHubLinkType.BRANCH)
+                    .githubId(branch)
+                    .title(branch)
+                    .url(repoUrlOf(repo) + "/tree/" + branch)
+                    .status("ACTIVE")
+                    .build());
+        }
+        return buildDevelopmentInfo(item, repo, branch);
+    }
+
+    @Override
+    public WorkItemDevelopmentResponse createIssue(UUID workItemId, UUID currentUserId) {
+        WorkItem item = workItemRepository.findById(workItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy công việc với ID: " + workItemId));
+        ProjectGitHubRepo repo = projectGitHubRepoRepository.findByProjectId(item.getProjectId())
+                .orElseThrow(() -> new BadRequestException("Dự án chưa liên kết với GitHub Repository nào"));
+        boolean alreadyLinked = workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId()).stream()
+                .anyMatch(l -> l.getLinkType() == GitHubLinkType.ISSUE);
+        if (alreadyLinked) {
+            throw new BadRequestException("Công việc " + item.getCode() + " đã có GitHub Issue liên kết");
+        }
+        Project project = projectRepository.findById(item.getProjectId())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với ID: " + item.getProjectId()));
+        UserGitHubToken token = findFirstToken(currentUserId, repo.getConnectedByUserId(), project.getLeadUserId())
+                .orElseThrow(() -> new BadRequestException(
+                        "Dự án chưa có tài khoản GitHub nào để tạo Issue. Admin dự án cần kết nối GitHub trong trang Tích hợp GitHub"));
+
+        String title = item.getSummary() != null && !item.getSummary().isBlank() ? item.getSummary().trim() : item.getCode();
+        GitHubIssueDto issue = gitHubApiClient.createIssue(getValidAccessToken(token),
+                repo.getRepoOwner(), repo.getRepoName(), title, buildIssueBody(item));
+
+        // Webhook issues.opened có thể về trước và đã gắn liên kết nhờ dấu ẩn: khi đó bỏ qua
+        try {
+            transactionTemplate.execute(status -> {
+                if (workItemGitHubLinkRepository.findByProjectIdAndLinkTypeAndGithubNumber(
+                        item.getProjectId(), GitHubLinkType.ISSUE, issue.getNumber()).isEmpty()) {
+                    workItemGitHubLinkRepository.saveAndFlush(buildIssueLink(item.getProjectId(), item.getId(), issue, "OPEN"));
+                }
+                return null;
+            });
+        } catch (DataIntegrityViolationException e) {
+            log.info("GitHub issue #{} đã được webhook gắn vào {} trước", issue.getNumber(), item.getCode());
+        }
+        log.info("WorkItem {}: đã tạo GitHub issue #{} trên {}", item.getCode(), issue.getNumber(), repo.getRepoFullName());
+        String branch = findBranchLink(item.getId()).map(WorkItemGitHubLink::getGithubId).orElse(null);
+        return buildDevelopmentInfo(item, repo, branch);
+    }
+
+    private static String buildIssueBody(WorkItem item) {
+        StringBuilder body = new StringBuilder();
+        if (item.getDescription() != null && !item.getDescription().isBlank()) {
+            body.append(item.getDescription().trim()).append("\n\n");
+        }
+        body.append("---\n")
+                .append("Tạo từ DATN · ").append(item.getCode()).append("\n")
+                .append("<!-- datn-task:").append(item.getId()).append(" -->");
+        return body.toString();
+    }
+
+    /** Task gốc của Issue do DATN tạo (đọc dấu ẩn trong mô tả), chỉ nhận Task thuộc đúng dự án. */
+    private Optional<WorkItem> findMarkedWorkItem(UUID projectId, String body) {
+        if (body == null) {
+            return Optional.empty();
+        }
+        Matcher matcher = DATN_TASK_MARKER.matcher(body);
+        if (!matcher.find()) {
+            return Optional.empty();
+        }
+        try {
+            return workItemRepository.findById(UUID.fromString(matcher.group(1)))
+                    .filter(w -> projectId.equals(w.getProjectId()));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
+    }
+
+    /** Tên nhánh gợi ý: {@code feat/KEY-n-slug-tieu-de} (bỏ dấu tiếng Việt, slug tối đa 40 ký tự). */
+    public static String suggestBranchName(String code, String title) {
+        String slug = "";
+        if (title != null) {
+            slug = Normalizer.normalize(title.replace('đ', 'd').replace('Đ', 'D'), Normalizer.Form.NFD)
+                    .replaceAll("\\p{M}+", "")
+                    .toLowerCase(Locale.ROOT)
+                    .replaceAll("[^a-z0-9]+", "-")
+                    .replaceAll("^-+|-+$", "");
+            if (slug.length() > MAX_BRANCH_SLUG_LENGTH) {
+                slug = slug.substring(0, MAX_BRANCH_SLUG_LENGTH).replaceAll("-+$", "");
+            }
+        }
+        String key = code != null && !code.isBlank() ? code.trim().toUpperCase(Locale.ROOT) : "TASK";
+        return slug.isEmpty() ? "feat/" + key : "feat/" + key + "-" + slug;
+    }
+
+    private Optional<WorkItemGitHubLink> findBranchLink(UUID workItemId) {
+        return workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(workItemId).stream()
+                .filter(l -> l.getLinkType() == GitHubLinkType.BRANCH && l.getGithubId() != null && !l.getGithubId().isBlank())
+                .findFirst();
+    }
+
+    private WorkItemDevelopmentResponse buildDevelopmentInfo(WorkItem item, ProjectGitHubRepo repo, String createdBranch) {
+        String branch = createdBranch != null ? createdBranch : suggestBranchName(item.getCode(), item.getSummary());
+        String base = baseBranchOf(repo);
+        String repoUrl = repoUrlOf(repo);
+        String prTitle = ((item.getCode() != null ? item.getCode() : "") + " "
+                + (item.getSummary() != null ? item.getSummary().trim() : "")).trim();
+        String closePrTitle = firstCloseKeyword(repo.getPrCloseKeywords()) + " " + prTitle;
+        String compare = repoUrl + "/compare/" + base + "..." + branch + "?expand=1&title=";
+        List<WorkItemGitHubLinkDto> links = workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId()).stream()
+                .filter(l -> l.getLinkType() == GitHubLinkType.ISSUE || l.getLinkType() == GitHubLinkType.PULL_REQUEST)
+                .map(l -> WorkItemGitHubLinkDto.builder()
+                        .id(l.getId())
+                        .linkType(l.getLinkType())
+                        .githubNumber(l.getGithubNumber())
+                        .title(l.getTitle())
+                        .url(l.getUrl())
+                        .status(l.getStatus())
+                        .authorName(l.getAuthorName())
+                        .authorAvatarUrl(l.getAuthorAvatarUrl())
+                        .build())
+                .toList();
+        return WorkItemDevelopmentResponse.builder()
+                .linked(true)
+                .repoFullName(repo.getRepoFullName())
+                .repoUrl(repoUrl)
+                .baseBranch(base)
+                .branchName(branch)
+                .branchCreated(createdBranch != null)
+                .branchUrl(repoUrl + "/tree/" + branch)
+                .prTitle(prTitle)
+                .closePrTitle(closePrTitle)
+                .compareUrl(compare + urlEncode(prTitle))
+                .closeCompareUrl(compare + urlEncode(closePrTitle))
+                .checkoutCommand("git fetch origin && git checkout " + branch)
+                .links(links)
+                .issueLinked(links.stream().anyMatch(l -> l.getLinkType() == GitHubLinkType.ISSUE))
+                .build();
+    }
+
+    private static String baseBranchOf(ProjectGitHubRepo repo) {
+        return repo.getDefaultBranch() != null && !repo.getDefaultBranch().isBlank() ? repo.getDefaultBranch().trim() : "main";
+    }
+
+    private static String repoUrlOf(ProjectGitHubRepo repo) {
+        String url = repo.getRepoUrl() != null && !repo.getRepoUrl().isBlank()
+                ? repo.getRepoUrl().trim() : "https://github.com/" + repo.getRepoFullName();
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
+    /** Từ khoá đầu tiên trong danh sách tự đặt, mặc định "Closes". */
+    private static String firstCloseKeyword(String customKeywords) {
+        if (customKeywords == null || customKeywords.isBlank()) {
+            return "Closes";
+        }
+        String first = customKeywords.split(",")[0].trim();
+        return first.isEmpty() ? "Closes" : first;
+    }
+
+    private static String urlEncode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

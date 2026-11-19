@@ -3,6 +3,7 @@ package com.datn.workservice.client;
 import com.datn.common.exception.BadRequestException;
 import com.datn.workservice.dto.github.GitHubIssueDto;
 import com.datn.workservice.dto.github.GitHubOAuthTokenResponse;
+import com.datn.workservice.dto.github.GitHubBranchDto;
 import com.datn.workservice.dto.github.GitHubRepoDto;
 import com.datn.workservice.dto.github.GitHubUserResponse;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -200,6 +202,39 @@ public class GitHubApiClient {
         }
     }
 
+    private static final int MAX_BRANCH_PAGES = 3;
+
+    /**
+     * Lấy danh sách nhánh của Repository (tối đa {@value #MAX_BRANCH_PAGES} trang × 100 nhánh).
+     */
+    public List<GitHubBranchDto> listBranches(String accessToken, String owner, String repo) {
+        HttpEntity<Void> request = new HttpEntity<>(createAuthHeaders(accessToken));
+        List<GitHubBranchDto> all = new java.util.ArrayList<>();
+        try {
+            for (int page = 1; page <= MAX_BRANCH_PAGES; page++) {
+                String url = String.format("%s/repos/%s/%s/branches?per_page=100&page=%d", apiUrl, enc(owner), enc(repo), page);
+                ResponseEntity<List<GitHubBranchDto>> response = restTemplate.exchange(
+                        url, HttpMethod.GET, request, new ParameterizedTypeReference<List<GitHubBranchDto>>() {});
+                List<GitHubBranchDto> body = response.getBody();
+                if (body == null || body.isEmpty()) {
+                    break;
+                }
+                all.addAll(body);
+                if (body.size() < 100) {
+                    break;
+                }
+            }
+            return all;
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            throw new BadRequestException("Không tìm thấy repository " + owner + "/" + repo + " hoặc tài khoản GitHub của bạn không có quyền truy cập");
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
+            throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi (Bad credentials). Vui lòng kết nối lại tài khoản GitHub.");
+        } catch (Exception e) {
+            log.error("Failed to list branches of {}/{}: {}", owner, repo, e.getMessage(), e);
+            throw new BadRequestException("Không thể lấy danh sách nhánh từ GitHub: " + e.getMessage());
+        }
+    }
+
     /**
      * Đăng ký Webhook tự động lên GitHub Repository để nhận commit, PR, issues
      */
@@ -318,6 +353,98 @@ public class GitHubApiClient {
             // Không throw: lỗi GitHub (rate-limit, thiếu quyền) không được làm hỏng nghiệp vụ phía DATN
             return false;
         }
+    }
+
+    /**
+     * Tạo nhánh {@code branch} tách từ đầu nhánh {@code baseBranch}.
+     *
+     * @return true nếu vừa tạo, false nếu nhánh đã tồn tại trên GitHub (coi như thành công)
+     */
+    @SuppressWarnings("rawtypes")
+    public boolean createBranch(String accessToken, String owner, String repo, String branch, String baseBranch) {
+        String gitApi = String.format("%s/repos/%s/%s/git", apiUrl, enc(owner), enc(repo));
+        HttpHeaders headers = createAuthHeaders(accessToken);
+
+        String sha;
+        try {
+            // URI dựng sẵn để RestTemplate không mã hoá lại dấu "/" trong tên nhánh (VD: release/1.0)
+            ResponseEntity<Map> ref = restTemplate.exchange(URI.create(gitApi + "/ref/heads/" + encPath(baseBranch)),
+                    HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            Object object = ref.getBody() != null ? ref.getBody().get("object") : null;
+            sha = object instanceof Map<?, ?> obj && obj.get("sha") != null ? obj.get("sha").toString() : null;
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            throw new BadRequestException("Không tìm thấy nhánh đích \"" + baseBranch + "\" trên " + owner + "/" + repo
+                    + " (hoặc tài khoản GitHub không truy cập được repo)");
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
+            throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi. Vui lòng kết nối lại tài khoản GitHub.");
+        } catch (Exception e) {
+            log.error("Failed to read branch {} of {}/{}: {}", baseBranch, owner, repo, e.getMessage(), e);
+            throw new BadRequestException("Không đọc được nhánh đích từ GitHub: " + e.getMessage());
+        }
+        if (sha == null || sha.isBlank()) {
+            throw new BadRequestException("GitHub không trả về commit của nhánh đích \"" + baseBranch + "\"");
+        }
+
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Map<String, String> body = Map.of("ref", "refs/heads/" + branch, "sha", sha);
+        try {
+            restTemplate.exchange(URI.create(gitApi + "/refs"), HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
+            log.info("Created branch {} from {} on {}/{}", branch, baseBranch, owner, repo);
+            return true;
+        } catch (org.springframework.web.client.HttpClientErrorException.UnprocessableEntity e) {
+            if (e.getResponseBodyAsString().toLowerCase(Locale.ROOT).contains("already exists")) {
+                return false;
+            }
+            throw new BadRequestException("GitHub từ chối tên nhánh \"" + branch + "\"");
+        } catch (org.springframework.web.client.HttpClientErrorException.Forbidden
+                 | org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            throw new BadRequestException("Tài khoản GitHub dùng để tạo nhánh không có quyền ghi vào " + owner + "/" + repo);
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
+            throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi. Vui lòng kết nối lại tài khoản GitHub.");
+        } catch (Exception e) {
+            log.error("Failed to create branch {} on {}/{}: {}", branch, owner, repo, e.getMessage(), e);
+            throw new BadRequestException("Không tạo được nhánh trên GitHub: " + e.getMessage());
+        }
+    }
+
+    /** Tạo Issue mới trên repo, trả về Issue GitHub vừa tạo (số, URL, tác giả). */
+    public GitHubIssueDto createIssue(String accessToken, String owner, String repo, String title, String body) {
+        HttpHeaders headers = createAuthHeaders(accessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Map<String, String> payload = new HashMap<>();
+        payload.put("title", title);
+        payload.put("body", body);
+        try {
+            ResponseEntity<GitHubIssueDto> response = restTemplate.exchange(
+                    URI.create(String.format("%s/repos/%s/%s/issues", apiUrl, enc(owner), enc(repo))),
+                    HttpMethod.POST, new HttpEntity<>(payload, headers), GitHubIssueDto.class);
+            if (response.getBody() == null || response.getBody().getNumber() == null) {
+                throw new BadRequestException("GitHub không trả về Issue vừa tạo");
+            }
+            log.info("Created GitHub issue #{} on {}/{}", response.getBody().getNumber(), owner, repo);
+            return response.getBody();
+        } catch (BadRequestException e) {
+            throw e;
+        } catch (org.springframework.web.client.HttpClientErrorException.Gone e) {
+            throw new BadRequestException("Repository " + owner + "/" + repo + " đang tắt tính năng Issues trên GitHub");
+        } catch (org.springframework.web.client.HttpClientErrorException.Forbidden
+                 | org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            throw new BadRequestException("Tài khoản GitHub dùng để tạo Issue không có quyền ghi vào " + owner + "/" + repo);
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
+            throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi. Vui lòng kết nối lại tài khoản GitHub.");
+        } catch (Exception e) {
+            log.error("Failed to create issue on {}/{}: {}", owner, repo, e.getMessage(), e);
+            throw new BadRequestException("Không tạo được Issue trên GitHub: " + e.getMessage());
+        }
+    }
+
+    /** Mã hoá từng đoạn của tên nhánh, giữ nguyên dấu "/" phân cách. */
+    private static String encPath(String branch) {
+        List<String> parts = new ArrayList<>();
+        for (String part : (branch != null ? branch : "").split("/")) {
+            parts.add(enc(part).replace("+", "%20"));
+        }
+        return String.join("/", parts);
     }
 
     private static String enc(String value) {

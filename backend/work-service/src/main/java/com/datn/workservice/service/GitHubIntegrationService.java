@@ -24,6 +24,11 @@ public interface GitHubIntegrationService {
     List<GitHubRepoDto> getAvailableRepositories(UUID currentUserId);
 
     /**
+     * Lấy danh sách nhánh của một Repository (nhánh mặc định trên GitHub đứng đầu)
+     */
+    List<GitHubBranchDto> listBranches(UUID projectId, String repoFullName, UUID currentUserId);
+
+    /**
      * Liên kết một Repository cụ thể với Project hiện tại
      */
     ProjectGitHubStatusResponse connectRepository(UUID projectId, ConnectRepoRequest request, UUID currentUserId);
@@ -63,4 +68,13 @@ public interface GitHubIntegrationService {
      * Hủy liên kết tài khoản GitHub của người dùng (xóa token)
      */
     void unlinkUserAccount(UUID currentUserId);
+
+    /** Khung "Phát triển" của Task: nhánh gợi ý / đã tạo và link mở PR. */
+    com.datn.workservice.dto.github.WorkItemDevelopmentResponse getDevelopmentInfo(UUID workItemId);
+
+    /** Tạo nhánh cho Task trên GitHub (tách từ nhánh đích của dự án) và gắn link BRANCH. */
+    com.datn.workservice.dto.github.WorkItemDevelopmentResponse createBranch(UUID workItemId, UUID currentUserId);
+
+    /** Tạo GitHub Issue cho Task (bấm tay) và gắn liên kết ISSUE hai chiều. */
+    com.datn.workservice.dto.github.WorkItemDevelopmentResponse createIssue(UUID workItemId, UUID currentUserId);
 }

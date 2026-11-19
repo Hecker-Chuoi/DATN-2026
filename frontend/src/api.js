@@ -419,6 +419,13 @@ export const githubIntegrationApi = {
     apiClient.get(`${WORK_BASE}/projects/${projectId}/integrations/github/status`, config),
   getRepositories: (projectId, config = {}) =>
     apiClient.get(`${WORK_BASE}/projects/${projectId}/integrations/github/repos`, config),
+  getBranches: (projectId, repoFullName, config = {}) => {
+    const [owner, repo] = String(repoFullName || '').split('/');
+    return apiClient.get(
+      `${WORK_BASE}/projects/${projectId}/integrations/github/repos/${encodeURIComponent(owner || '')}/${encodeURIComponent(repo || '')}/branches`,
+      config
+    );
+  },
   connect: (projectId, data, config = {}) =>
     apiClient.post(`${WORK_BASE}/projects/${projectId}/integrations/github/connect`, data, config),
   disconnect: (projectId, config = {}) =>
@@ -429,6 +436,13 @@ export const githubIntegrationApi = {
     apiClient.post(`${WORK_BASE}/projects/${projectId}/integrations/github/sync-issues`, null, config),
   unlinkAccount: (projectId, config = {}) =>
     apiClient.delete(`${WORK_BASE}/projects/${projectId}/integrations/github/user-account`, config),
+  // Khung "Phát triển" trong chi tiết Task
+  getDevelopment: (itemId, config = {}) =>
+    apiClient.get(`${WORK_BASE}/items/${itemId}/github/development`, config),
+  createBranch: (itemId, config = {}) =>
+    apiClient.post(`${WORK_BASE}/items/${itemId}/github/branch`, null, config),
+  createIssue: (itemId, config = {}) =>
+    apiClient.post(`${WORK_BASE}/items/${itemId}/github/issue`, null, config),
 };
 
 

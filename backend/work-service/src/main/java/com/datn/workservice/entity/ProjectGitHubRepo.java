@@ -70,6 +70,10 @@ public class ProjectGitHubRepo {
     @Builder.Default
     private Boolean autoCloseTaskOnIssueClose = true;
 
+    /** Từ khoá hoàn thành tự đặt, cách nhau dấu phẩy ("done, final"); null = bộ mặc định Closes/Fixes/Resolves/Hoàn thành. */
+    @Column(name = "pr_close_keywords", length = 500)
+    private String prCloseKeywords;
+
     /** Keycloak sub của người đã kết nối repo; token GitHub của họ dùng cho các tác vụ nền. */
     @Column(name = "connected_by_user_id")
     private UUID connectedByUserId;

@@ -48,6 +48,7 @@ import StoryPointsPicker from '../common/StoryPointsPicker.jsx';
 import StoryPointsHelpTooltip from '../common/StoryPointsHelpTooltip.jsx';
 import ResolveSubtasksModal from '../modals/ResolveSubtasksModal.jsx';
 import CompletionPendingPanel from './CompletionPendingPanel.jsx';
+import DevelopmentPanel from '../github/DevelopmentPanel.jsx';
 import { getPriorityConfig, PRIORITY_CONFIG } from '../../utils/priorityConfig.js';
 import { getStatusDisplayName, getTypeDisplayName } from '../../constants/workConstants.js';
 import { useModalBackdrop } from '../../hooks/useModalBackdrop.js';
@@ -2415,6 +2416,17 @@ export default function WorkItemDetailModal({ itemId: initialItemId, isOpen, onC
                   />
                 </div>
               </div>
+
+              {/* Development Section (GitHub): ẩn khi dự án chưa liên kết repo */}
+              {item?.id && (
+                <DevelopmentPanel
+                  key={item.id}
+                  itemId={item.id}
+                  githubLinks={item.githubLinks || []}
+                  canEdit={can('ISSUE_EDIT')}
+                  labelStyle={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}
+                />
+              )}
 
               {/* Due Date Section */}
               <div>

@@ -51,6 +51,8 @@ npm run lint     # eslint flat config
 ```
 Không có test frontend.
 
+**Giao diện:** mọi yêu cầu thêm hoặc sửa giao diện đều phải theo `frontend/DESIGN.md` (phong cách tối giản kiểu Linear, mẫu chuẩn là `src/pages/ProjectGitHubPage.jsx`). Đọc file đó trước khi viết UI. Chỉ thay phần nội dung bên trong màn hình, giữ nguyên navbar và layout hệ thống.
+
 ## Kiến trúc
 
 ### Luồng request

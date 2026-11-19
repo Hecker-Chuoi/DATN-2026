@@ -39,5 +39,8 @@ public class ProjectGitHubStatusResponse {
 
     private Boolean autoCloseTaskOnIssueClose;
 
+    /** null = đang dùng bộ mặc định. */
+    private String prCloseKeywords;
+
     private LocalDateTime lastSyncedAt;
 }

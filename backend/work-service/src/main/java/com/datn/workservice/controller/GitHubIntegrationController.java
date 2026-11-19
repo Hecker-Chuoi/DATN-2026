@@ -71,6 +71,21 @@ public class GitHubIntegrationController {
     }
 
     /**
+     * Lấy danh sách nhánh của một Repository để chọn nhánh đích
+     */
+    @GetMapping("/repos/{owner}/{repo}/branches")
+    @RequireProjectPermission(PermissionKey.PROJECT_ADMIN)
+    public ResponseEntity<ApiResponse<List<GitHubBranchDto>>> getBranches(
+            @PathVariable UUID projectId,
+            @PathVariable String owner,
+            @PathVariable String repo
+    ) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                gitHubIntegrationService.listBranches(projectId, owner + "/" + repo, currentUserId)));
+    }
+
+    /**
      * Liên kết Repository cụ thể vào dự án
      */
     @PostMapping("/connect")
