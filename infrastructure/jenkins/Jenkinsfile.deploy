@@ -1,0 +1,76 @@
+// Job DATN/release/datn-deploy (docs/cicd/03 §12.4, 04 §12)
+// Deploy prod sau khi gắn tag (được Jenkinsfile gọi), deploy lại / rollback staging hoặc prod bằng tay.
+// Credential kubeconfig-prod CHỈ có trong folder DATN/release.
+pipeline {
+  agent none
+  parameters {
+    choice(name: 'TARGET', choices: ['staging', 'production'], description: 'Môi trường')
+    choice(name: 'ACTION', choices: ['deploy', 'helm-rollback'],
+           description: 'deploy: cài image IMAGE_TAG | helm-rollback: quay về REVISION (để trống = revision ngay trước)')
+    string(name: 'IMAGE_TAG', defaultValue: '', description: 'Git SHA đầy đủ 40 ký tự (ACTION=deploy)')
+    string(name: 'REVISION', defaultValue: '', description: 'Số revision Helm (ACTION=helm-rollback), xem helm history')
+    string(name: 'VERSION', defaultValue: '', description: 'Tag phiên bản, chỉ để ghi chú (vd v1.2.0)')
+  }
+  options {
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    disableConcurrentBuilds()
+  }
+  stages {
+    stage('Kiểm tra tham số') {
+      steps {
+        script {
+          if (params.ACTION == 'deploy' && !(params.IMAGE_TAG ==~ /[0-9a-f]{40}/)) {
+            error 'IMAGE_TAG phải là git SHA đầy đủ (40 ký tự hex)'
+          }
+          if (params.ACTION == 'helm-rollback' && params.REVISION && !(params.REVISION ==~ /\d+/)) {
+            error 'REVISION phải là số'
+          }
+          if (params.VERSION && !(params.VERSION ==~ /[0-9A-Za-z.\-]+/)) {
+            error 'VERSION chỉ gồm chữ, số, dấu chấm và gạch ngang'
+          }
+          def what = params.ACTION == 'deploy' ? (params.VERSION ?: params.IMAGE_TAG.substring(0, 7)) : "rollback ${params.REVISION ?: 'prev'}"
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.TARGET} ${what}"
+        }
+      }
+    }
+    stage('Duyệt') {
+      when { expression { params.TARGET == 'production' } }
+      // Không khai báo agent: chờ duyệt không giữ executor
+      steps {
+        timeout(time: 24, unit: 'HOURS') {
+          input message: "${params.ACTION} ${params.VERSION ?: params.IMAGE_TAG ?: params.REVISION} lên PRODUCTION?",
+                ok: 'Đồng ý', submitter: 'truongnhom'     // user ID Jenkins được duyệt, cách nhau dấu phẩy
+        }
+      }
+    }
+    stage('Thực hiện') {
+      agent any
+      environment { HELM_DRIVER = 'configmap' }
+      steps {
+        script {
+          def cfg = params.TARGET == 'production'
+            ? [env: 'prod',    ns: 'datn-prod',    url: 'https://app.example.com',     cred: 'kubeconfig-prod']
+            : [env: 'staging', ns: 'datn-staging', url: 'https://staging.example.com', cred: 'kubeconfig-staging']
+          lock("datn-deploy-${cfg.env}") {
+            withCredentials([file(credentialsId: cfg.cred, variable: 'KUBECONFIG')]) {
+              if (params.ACTION == 'deploy') {
+                // IMAGE_TAG đã được kiểm tra là hex 40 ký tự, nên nối vào lệnh shell an toàn
+                sh "bash infrastructure/scripts/deploy.sh ${cfg.env} ${cfg.ns} ${params.IMAGE_TAG} ${cfg.url}"
+              } else {
+                // REVISION đã được kiểm tra là số hoặc rỗng (rỗng = revision ngay trước)
+                sh """
+                  set -eu
+                  helm -n ${cfg.ns} history datn-app --max 10
+                  helm -n ${cfg.ns} rollback datn-app ${params.REVISION} --wait --timeout 15m
+                  helm -n ${cfg.ns} history datn-app --max 3
+                """
+              }
+            }
+          }
+        }
+      }
+      post { always { cleanWs(notFailBuild: true) } }
+    }
+  }
+}
