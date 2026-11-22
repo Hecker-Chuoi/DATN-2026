@@ -1,0 +1,33 @@
+# M9: 1 host cho cả frontend và API (cùng origin, không cần CORS)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: datn-app
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          {{- range list "/identity" "/work" "/workspace" "/notification" }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: {{ (index $.Values.backend "api-gateway").port }}
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

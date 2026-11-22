@@ -1,0 +1,12 @@
+# Quản trị viên tạo một lần: kubectl apply -f infrastructure/k8s/namespaces.yaml (03 §6.1)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: datn-staging
+  labels: { app.kubernetes.io/part-of: datn, datn/env: staging }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: datn-prod
+  labels: { app.kubernetes.io/part-of: datn, datn/env: prod }

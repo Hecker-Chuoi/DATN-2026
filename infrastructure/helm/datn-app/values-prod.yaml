@@ -1,0 +1,18 @@
+# Jenkins: deploy.sh prod datn-prod <sha> https://app.example.com
+publicUrl: https://app.example.com
+cookieSecure: true
+keycloak:
+  publicUrl: https://sso.example.com
+ingress:
+  host: app.example.com
+mail:                              # SMTP thật; tài khoản/mật khẩu trong app-secrets (MAIL_USERNAME, MAIL_PASSWORD)
+  host: smtp.gmail.com
+  port: "587"
+  smtpAuth: "true"
+  starttls: "true"
+  from: "DATN-2026 <no-reply@example.com>"
+backend:
+  api-gateway:
+    replicas: 2
+frontend:
+  replicas: 2

@@ -1,0 +1,18 @@
+{{- /* Profile Spring "k8s" của từng service, mount vào /config (SPRING_CONFIG_ADDITIONAL_LOCATION) */ -}}
+{{- range $name, $svc := .Values.backend }}
+{{- $file := printf "files/config/%s/application-k8s.yaml" $name }}
+{{- if not ($.Files.Get $file) }}
+{{- fail (printf "Thiếu %s" $file) }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-config
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+data:
+  application-k8s.yaml: |-
+{{ $.Files.Get $file | indent 4 }}
+{{- end }}

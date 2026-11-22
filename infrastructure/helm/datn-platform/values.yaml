@@ -1,0 +1,104 @@
+# Giá trị mặc định. Mỗi môi trường ghi đè bằng values-staging.yaml / values-prod.yaml.
+# Quản trị viên cài chart này (driver Secret mặc định của Helm); Jenkins KHÔNG có quyền với release này.
+
+secretName: app-secrets            # quản trị viên tạo (03 §6.1)
+pullSecretName: ghcr-pull          # quản trị viên tạo (03 §6.3)
+ingressClassName: nginx
+
+# Ingress công cụ quản trị (pgAdmin, Mailpit, MinIO Console)
+adminAccess:
+  basicAuthSecret: admin-basic-auth   # 03 §6.4, key bắt buộc tên "auth"
+  allowCidrs: ""                      # ví dụ "203.0.113.0/24,198.51.100.7/32"; rỗng = không giới hạn IP
+
+# Quota là TRẦN, không giữ chỗ. Tính cho lúc rolling update datn-app (mỗi Deployment thêm 1 pod, maxSurge 1):
+#   prod    requests ≈ 2.0 core / 4.9 GiB lúc thường, ≈ 3.1 core / 7.0 GiB lúc deploy
+#           limits   ≈ 12.1 core / 9.3 GiB lúc thường, ≈ 17.8 core / 13.0 GiB lúc deploy
+#   staging nhỏ hơn prod một chút (1 replica gateway/frontend, thêm Mailpit)
+quota:
+  enabled: true
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "24"
+    limits.memory: 16Gi
+    pods: "30"
+    persistentvolumeclaims: "8"
+    services.nodeports: "0"           # bắt buộc đi qua Ingress
+    services.loadbalancers: "0"
+
+networkPolicy:
+  enabled: true
+  # Pod mà ingress-nginx được gọi vào (theo nhãn app.kubernetes.io/name)
+  ingressAllowed: [api-gateway, frontend, keycloak, pgadmin, mailpit, minio]
+
+postgres:
+  image: postgres:15-alpine
+  instances:
+    postgres-app:
+      database: datn_main_db
+      user: postgres
+      passwordKey: DB_PASSWORD
+      storage: 5Gi                    # volumeClaimTemplates không sửa được sau khi tạo
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits: { cpu: "1", memory: 1Gi }
+    postgres-keycloak:
+      database: keycloak
+      user: kc_user
+      passwordKey: KC_DB_PASSWORD
+      storage: 2Gi
+      resources:
+        requests: { cpu: 50m, memory: 128Mi }
+        limits: { cpu: 500m, memory: 512Mi }
+
+keycloak:
+  image: quay.io/keycloak/keycloak:24.0.1     # cùng bản với docker-compose của nhóm
+  host: sso.example.invalid
+  hostnameUrl: http://sso.example.invalid     # URL công khai cố định -> claim iss của token
+  realmSecret: keycloak-realm                 # 03 §6.2, key realm.json
+  adminAllowCidrs: ""                         # giới hạn IP cho /admin (Admin Console); rỗng = không tách Ingress
+  resources:
+    requests: { cpu: 250m, memory: 768Mi }
+    limits: { cpu: 1500m, memory: 1Gi }
+
+kafka:
+  image: apache/kafka:3.8.0
+  heapOpts: "-Xms256m -Xmx512m"
+  storage: 5Gi
+  resources:
+    requests: { cpu: 200m, memory: 768Mi }
+    limits: { cpu: "1", memory: 1Gi }
+
+redis:
+  image: redis:7-alpine
+  resources:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits: { cpu: 200m, memory: 256Mi }
+
+minio:
+  # minio/minio đã bị gỡ khỏi Docker Hub. Chainguard bản miễn phí chỉ có tag latest (entrypoint /usr/bin/minio, uid 65532)
+  image: cgr.dev/chainguard/minio:latest
+  storage: 10Gi
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  console:
+    ingress: false                           # bật khi cần xem file đính kèm
+    host: minio.example.invalid
+
+mailpit:
+  enabled: false
+  image: axllent/mailpit:v1.34.0
+  host: mail.example.invalid
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { cpu: 100m, memory: 128Mi }
+
+pgadmin:
+  enabled: true
+  image: dpage/pgadmin4:9.19
+  host: pgadmin.example.invalid
+  storage: 1Gi
+  resources:
+    requests: { cpu: 50m, memory: 192Mi }
+    limits: { cpu: 500m, memory: 512Mi }

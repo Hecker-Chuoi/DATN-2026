@@ -1,0 +1,7 @@
+# Jenkins: deploy.sh staging datn-staging <sha> https://staging.example.com
+publicUrl: https://staging.example.com
+cookieSecure: true
+keycloak:
+  publicUrl: https://sso-staging.example.com
+ingress:
+  host: staging.example.com

@@ -1,0 +1,16 @@
+# helm upgrade --install datn-platform infrastructure/helm/datn-platform -n datn-prod -f values-prod.yaml
+keycloak:
+  host: sso.example.com
+  hostnameUrl: https://sso.example.com
+  adminAllowCidrs: ""            # điền IP nhóm
+postgres:
+  instances:
+    postgres-app:
+      storage: 10Gi
+pgadmin:
+  host: pgadmin.example.com
+minio:
+  console:
+    host: minio.example.com
+adminAccess:
+  allowCidrs: ""                 # điền IP nhóm

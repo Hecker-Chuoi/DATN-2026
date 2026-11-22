@@ -1,0 +1,135 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: keycloak
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: keycloak
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate                 # 1 bản, cache local
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        {{- include "platform.podLabels" . | nindent 8 }}
+        app.kubernetes.io/name: keycloak
+    spec:
+      {{- include "platform.podDefaults" . | nindent 6 }}
+      initContainers:
+        - name: wait-db
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z -w 2 postgres-keycloak 5432; do echo 'chờ postgres-keycloak'; sleep 3; done"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+      containers:
+        - name: keycloak
+          image: {{ .Values.keycloak.image }}
+          args: ["start", "--import-realm"]          # M5: Command/Args
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://postgres-keycloak:5432/{{ (index .Values.postgres.instances "postgres-keycloak").database }}" }
+            - { name: KC_DB_USERNAME, value: {{ (index .Values.postgres.instances "postgres-keycloak").user | quote }} }
+            - name: KC_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.secretName }}, key: KC_DB_PASSWORD } }
+            - { name: KEYCLOAK_ADMIN, value: admin }   # identity-service dùng keycloak.admin.username=admin
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.secretName }}, key: KC_ADMIN_PASSWORD } }
+            # URL công khai cố định: token lấy qua http://keycloak:8080 (nội bộ) vẫn có iss = URL công khai
+            - { name: KC_HOSTNAME_URL, value: {{ .Values.keycloak.hostnameUrl | quote }} }
+            - { name: KC_HOSTNAME_STRICT, value: "false" }
+            - { name: KC_HTTP_ENABLED, value: "true" }       # TLS kết thúc ở Nginx máy chủ
+            - { name: KC_PROXY_HEADERS, value: xforwarded }
+            - { name: KC_HEALTH_ENABLED, value: "true" }
+            - { name: KC_CACHE, value: local }
+          startupProbe:                              # lần đầu: tự build + import realm, cho 5 phút
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.keycloak.resources | nindent 12 }}
+          volumeMounts:
+            # --import-realm đọc mọi *.json trong thư mục này, chỉ import khi realm CHƯA tồn tại
+            - name: realm
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+      volumes:
+        - name: realm
+          secret:
+            secretName: {{ .Values.keycloak.realmSecret }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+spec:
+  ingressClassName: {{ .Values.ingressClassName }}
+  rules:
+    - host: {{ .Values.keycloak.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+{{- with .Values.keycloak.adminAllowCidrs }}
+---
+# Admin Console: CHỈ giới hạn IP. Không dùng basic auth vì console gọi API bằng header Authorization: Bearer (01 §5.17)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak-admin
+  labels:
+    {{- include "platform.labels" $ | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ . | quote }}
+spec:
+  ingressClassName: {{ $.Values.ingressClassName }}
+  rules:
+    - host: {{ $.Values.keycloak.host | quote }}
+      http:
+        paths:
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+{{- end }}

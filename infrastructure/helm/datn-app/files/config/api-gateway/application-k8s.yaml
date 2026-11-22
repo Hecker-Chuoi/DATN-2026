@@ -1,0 +1,45 @@
+# Profile "k8s": nạp đè lên application.yml trong image. ${...} lấy từ env-config / app-secrets.
+server:
+  shutdown: graceful
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  cloud:
+    gateway:
+      # Danh sách (list) trong profile THAY THẾ toàn bộ list gốc, nên phải khai ĐỦ 4 route (01 §5.2)
+      routes:
+        - id: identity-service
+          uri: http://identity-service:8082
+          predicates: ["Path=/identity/api/**,/identity/actuator/**"]
+          filters: ["StripPrefix=1"]
+        - id: work-service
+          uri: http://work-service:8083
+          predicates: ["Path=/work/api/**,/work/actuator/**,/work/ws-work/**"]
+          filters: ["StripPrefix=1"]
+        - id: workspace-service
+          uri: http://workspace-service:8087
+          predicates: ["Path=/workspace/api/**,/workspace/actuator/**"]
+          filters: ["StripPrefix=1"]
+        # CỐ Ý không route /notification/internal/** (gửi email nội bộ, không xác thực)
+        - id: notification-service
+          uri: http://notification-service:9994
+          predicates: ["Path=/notification/api/**,/notification/ws/**"]
+          filters: ["StripPrefix=1"]
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Lấy khoá qua DNS nội bộ; iss của token vẫn là URL công khai (KC_HOSTNAME_URL)
+          jwk-set-uri: http://keycloak:8080/realms/datn-realm/protocol/openid-connect/certs
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+app:
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS}
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+logging:
+  level:
+    com.datn.api_gateway: INFO

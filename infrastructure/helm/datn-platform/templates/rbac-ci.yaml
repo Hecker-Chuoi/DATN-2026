@@ -1,0 +1,62 @@
+# Quyền của Jenkins (M7): ServiceAccount ci-deployer CHỈ thao tác trong namespace của release này.
+# Kubeconfig cho Jenkins: infrastructure/scripts/make-ci-kubeconfig.sh
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ci-deployer
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+# Token dài hạn cho kubeconfig của CI (Kubernetes >= 1.24 không tự tạo nữa)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ci-deployer-token
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/service-account.name: ci-deployer
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ci-deployer
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+rules:
+  # Tài nguyên của chart datn-app. Helm cần delete khi gỡ tài nguyên khỏi chart và khi rollback.
+  # configmaps còn dùng để lưu release (HELM_DRIVER=configmap).
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # helm --wait / kubectl rollout status / chẩn đoán
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  # CỐ Ý KHÔNG có: secrets, statefulsets, persistentvolumeclaims, roles, rolebindings, serviceaccounts
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ci-deployer
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ci-deployer
+subjects:
+  - kind: ServiceAccount
+    name: ci-deployer
+    namespace: {{ .Release.Namespace }}

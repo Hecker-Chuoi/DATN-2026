@@ -1,0 +1,59 @@
+# frontend/nginx.conf proxy tới http://api-gateway:8081 (đúng tên Service cùng namespace), nhưng trên k8s
+# Ingress đã chuyển thẳng /identity, /work, /workspace, /notification tới api-gateway.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/name: frontend
+spec:
+  selector:
+    app.kubernetes.io/name: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/name: frontend
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  template:
+    metadata:
+      labels:
+        {{- include "app.podLabels" . | nindent 8 }}
+        app.kubernetes.io/name: frontend
+    spec:
+      serviceAccountName: {{ .Values.serviceAccountName }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: {{ include "app.image" (dict "root" . "name" "frontend") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}

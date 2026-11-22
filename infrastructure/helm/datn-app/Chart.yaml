@@ -1,0 +1,6 @@
+apiVersion: v2
+name: datn-app
+description: Ứng dụng DATN-2026 (api-gateway, identity, work, workspace, notification, frontend)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
