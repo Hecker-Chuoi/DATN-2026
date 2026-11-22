@@ -2,6 +2,7 @@
 
 > Lý do lựa chọn: [01](01_NGHIEN_CUU_CICD_KUBERNETES.md). Giai đoạn, ngân sách, nghiệm thu: [02](02_KE_HOACH_TRIEN_KHAI_CICD.md). Setup Jenkins: [04](04_HUONG_DAN_SETUP_JENKINS.md).
 > Lệnh chạy trên **máy chủ Linux** (Ubuntu 22.04/24.04) bằng user quản trị `datnadmin`, trừ khi ghi rõ là chạy ở máy dev.
+> **Các file ở mục 3–5, 6.1, 10, 12 và 14.1 đã có sẵn trong repo** (`backend/`, `frontend/Dockerfile`, `infrastructure/helm/`, `infrastructure/k8s/`, `infrastructure/scripts/`, `infrastructure/jenkins/`, `Jenkinsfile`). Khối code trong tài liệu là bản sao để đọc; sửa thì sửa file trong repo.
 
 ## Mục lục
 0. [Quy ước](#0-quy-ước)
@@ -165,6 +166,7 @@ private boolean cookieSecure;
 ### 3.4. `backend/.dockerignore` (mới)
 
 ```
+# Build context của mọi Dockerfile backend là thư mục backend/
 **/target
 **/.env
 **/.env.*
@@ -180,11 +182,13 @@ private boolean cookieSecure;
 
 ```dockerfile
 # syntax=docker/dockerfile:1
+# Stage 1: Build (build context = backend/, xem infrastructure/scripts/build-images.sh)
 FROM maven:3.9.9-eclipse-temurin-21-alpine AS builder
 WORKDIR /app
 # Build trên máy chủ dùng chung với cluster: giới hạn heap Maven
 ENV MAVEN_OPTS="-Xmx768m"
 
+# Parent pom liệt kê mọi module nên phải COPY đủ 6 pom
 COPY pom.xml ./
 COPY common/pom.xml ./common/
 COPY identity-service/pom.xml ./identity-service/
@@ -192,13 +196,16 @@ COPY api-gateway/pom.xml ./api-gateway/
 COPY work-service/pom.xml ./work-service/
 COPY workspace-service/pom.xml ./workspace-service/
 COPY notification-service/pom.xml ./notification-service/
+
+# Source của common và work-service
 COPY common/src ./common/src
 COPY work-service/src ./work-service/src
 
-# Cache ~/.m2 giữa các lần build (BuildKit, tồn tại trong daemon rootless của Jenkins)
+# Cache ~/.m2 giữa các lần build (BuildKit)
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -B -ntp clean package -DskipTests -pl work-service -am
 
+# Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app app
 WORKDIR /app
@@ -213,17 +220,25 @@ Bốn service còn lại chỉ đổi tên module (3 chỗ) và `EXPOSE`: api-ga
 ### 3.6. `frontend/Dockerfile`
 
 ```dockerfile
+# Stage 1: Build React application (Vite 8 cần Node ^20.19 hoặc >=22.12)
 FROM node:22-alpine AS builder
 WORKDIR /app
+
+# Cài đúng phiên bản trong package-lock.json (lỗi thì fail, không âm thầm npm install)
 COPY package.json package-lock.json ./
 RUN npm ci
+
+# Copy source code and build
 COPY . .
 RUN npm run build
 
+# Stage 2: Serve using Nginx
 FROM nginx:1.27-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 EXPOSE 80
+
 CMD ["nginx", "-g", "daemon off;"]
 ```
 
@@ -260,22 +275,29 @@ appVersion: "1.0.0"
 ### 4.2. `values.yaml`
 
 ```yaml
-secretName: app-secrets            # quản trị viên tạo (§6.1)
-pullSecretName: ghcr-pull          # quản trị viên tạo (§6.3)
+# Giá trị mặc định. Mỗi môi trường ghi đè bằng values-staging.yaml / values-prod.yaml.
+# Quản trị viên cài chart này (driver Secret mặc định của Helm); Jenkins KHÔNG có quyền với release này.
+
+secretName: app-secrets            # quản trị viên tạo (03 §6.1)
+pullSecretName: ghcr-pull          # quản trị viên tạo (03 §6.3)
 ingressClassName: nginx
 
 # Ingress công cụ quản trị (pgAdmin, Mailpit, MinIO Console)
 adminAccess:
-  basicAuthSecret: admin-basic-auth   # §9.1
+  basicAuthSecret: admin-basic-auth   # 03 §6.4, key bắt buộc tên "auth"
   allowCidrs: ""                      # ví dụ "203.0.113.0/24,198.51.100.7/32"; rỗng = không giới hạn IP
 
+# Quota là TRẦN, không giữ chỗ. Tính cho lúc rolling update datn-app (mỗi Deployment thêm 1 pod, maxSurge 1):
+#   prod    requests ≈ 2.0 core / 4.9 GiB lúc thường, ≈ 3.1 core / 7.0 GiB lúc deploy
+#           limits   ≈ 12.1 core / 9.3 GiB lúc thường, ≈ 17.8 core / 13.0 GiB lúc deploy
+#   staging nhỏ hơn prod một chút (1 replica gateway/frontend, thêm Mailpit)
 quota:
   enabled: true
   hard:
-    requests.cpu: "3"
-    requests.memory: 7Gi
-    limits.cpu: "16"
-    limits.memory: 14Gi
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "24"
+    limits.memory: 16Gi
     pods: "30"
     persistentvolumeclaims: "8"
     services.nodeports: "0"           # bắt buộc đi qua Ingress
@@ -283,6 +305,7 @@ quota:
 
 networkPolicy:
   enabled: true
+  # Pod mà ingress-nginx được gọi vào (theo nhãn app.kubernetes.io/name)
   ingressAllowed: [api-gateway, frontend, keycloak, pgadmin, mailpit, minio]
 
 postgres:
@@ -306,11 +329,11 @@ postgres:
         limits: { cpu: 500m, memory: 512Mi }
 
 keycloak:
-  image: quay.io/keycloak/keycloak:24.0.1
+  image: quay.io/keycloak/keycloak:24.0.1     # cùng bản với docker-compose của nhóm
   host: sso.example.invalid
-  hostnameUrl: http://sso.example.invalid   # URL công khai cố định -> claim iss
-  realmSecret: keycloak-realm
-  adminAllowCidrs: ""                        # giới hạn IP cho /admin (Admin Console)
+  hostnameUrl: http://sso.example.invalid     # URL công khai cố định -> claim iss của token
+  realmSecret: keycloak-realm                 # 03 §6.2, key realm.json
+  adminAllowCidrs: ""                         # giới hạn IP cho /admin (Admin Console); rỗng = không tách Ingress
   resources:
     requests: { cpu: 250m, memory: 768Mi }
     limits: { cpu: 1500m, memory: 1Gi }
@@ -330,7 +353,8 @@ redis:
     limits: { cpu: 200m, memory: 256Mi }
 
 minio:
-  image: cgr.dev/chainguard/minio:latest     # minio/minio đã bị gỡ khỏi Docker Hub
+  # minio/minio đã bị gỡ khỏi Docker Hub. Chainguard bản miễn phí chỉ có tag latest (entrypoint /usr/bin/minio, uid 65532)
+  image: cgr.dev/chainguard/minio:latest
   storage: 10Gi
   resources:
     requests: { cpu: 50m, memory: 256Mi }
@@ -341,7 +365,7 @@ minio:
 
 mailpit:
   enabled: false
-  image: axllent/mailpit:latest              # nên ghim bản cụ thể khi ổn định
+  image: axllent/mailpit:v1.34.0
   host: mail.example.invalid
   resources:
     requests: { cpu: 10m, memory: 32Mi }
@@ -349,7 +373,7 @@ mailpit:
 
 pgadmin:
   enabled: true
-  image: dpage/pgadmin4:8.14                 # cập nhật bản mới khi có
+  image: dpage/pgadmin4:9.19
   host: pgadmin.example.invalid
   storage: 1Gi
   resources:
@@ -360,11 +384,11 @@ pgadmin:
 ### 4.3. `values-staging.yaml` và `values-prod.yaml`
 
 ```yaml
-# values-staging.yaml
+# helm upgrade --install datn-platform infrastructure/helm/datn-platform -n datn-staging -f values-staging.yaml
 keycloak:
   host: sso-staging.example.com
   hostnameUrl: https://sso-staging.example.com
-  adminAllowCidrs: ""            # điền IP nhóm
+  adminAllowCidrs: ""            # điền IP nhóm, ví dụ "203.0.113.7/32"
 mailpit:
   enabled: true
   host: mail-staging.example.com
@@ -375,11 +399,11 @@ adminAccess:
 ```
 
 ```yaml
-# values-prod.yaml
+# helm upgrade --install datn-platform infrastructure/helm/datn-platform -n datn-prod -f values-prod.yaml
 keycloak:
   host: sso.example.com
   hostnameUrl: https://sso.example.com
-  adminAllowCidrs: ""
+  adminAllowCidrs: ""            # điền IP nhóm
 postgres:
   instances:
     postgres-app:
@@ -390,7 +414,7 @@ minio:
   console:
     host: minio.example.com
 adminAccess:
-  allowCidrs: ""
+  allowCidrs: ""                 # điền IP nhóm
 ```
 
 ### 4.4. `templates/_helpers.tpl`
@@ -409,8 +433,9 @@ app.kubernetes.io/part-of: datn
 datn/layer: platform
 {{- end }}
 
+{{/* Áp cho mọi pod của platform */}}
 {{- define "platform.podDefaults" -}}
-enableServiceLinks: false            # BẮT BUỘC cho Kafka (01 §5.3), áp luôn cho mọi pod
+enableServiceLinks: false            # BẮT BUỘC cho Kafka (01 §5.3): không có biến KAFKA_PORT=tcp://... do Service "kafka" sinh ra
 automountServiceAccountToken: false
 {{- end }}
 
@@ -430,6 +455,8 @@ nginx.ingress.kubernetes.io/whitelist-source-range: {{ . | quote }}
 ### 4.5. `templates/rbac-ci.yaml`: quyền của Jenkins (M7)
 
 ```yaml
+# Quyền của Jenkins (M7): ServiceAccount ci-deployer CHỈ thao tác trong namespace của release này.
+# Kubeconfig cho Jenkins: infrastructure/scripts/make-ci-kubeconfig.sh
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -438,6 +465,7 @@ metadata:
     {{- include "platform.labels" . | nindent 4 }}
 automountServiceAccountToken: false
 ---
+# Token dài hạn cho kubeconfig của CI (Kubernetes >= 1.24 không tự tạo nữa)
 apiVersion: v1
 kind: Secret
 metadata:
@@ -494,6 +522,7 @@ subjects:
 ### 4.6. `templates/serviceaccount-app.yaml`
 
 ```yaml
+# SA cho pod của chart datn-app: kéo image private từ GHCR, không cầm token API
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -509,6 +538,7 @@ imagePullSecrets:
 
 ```yaml
 {{- if .Values.quota.enabled }}
+# M3: trần tài nguyên của cả namespace + giá trị mặc định cho container không khai resources
 apiVersion: v1
 kind: ResourceQuota
 metadata:
@@ -538,10 +568,13 @@ spec:
 
 ```yaml
 {{- if .Values.networkPolicy.enabled }}
+# M9, cần minikube --cni=calico (CNI mặc định của minikube không thực thi NetworkPolicy)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-ingress
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
 spec:
   podSelector: {}
   policyTypes: ["Ingress"]
@@ -551,8 +584,11 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-same-namespace
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
 spec:
   podSelector: {}
+  policyTypes: ["Ingress"]
   ingress:
     - from:
         - podSelector: {}
@@ -562,12 +598,15 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-from-ingress-controller
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
         values: {{ toJson .Values.networkPolicy.ingressAllowed }}
+  policyTypes: ["Ingress"]
   ingress:
     - from:
         - namespaceSelector:
@@ -579,6 +618,7 @@ spec:
 ### 4.9. `templates/postgres.yaml` (một template cho 2 instance)
 
 ```yaml
+{{- /* Một template cho 2 instance: postgres-app (datn_main_db) và postgres-keycloak */ -}}
 {{- range $name, $pg := .Values.postgres.instances }}
 ---
 apiVersion: v1
@@ -616,6 +656,7 @@ spec:
         app.kubernetes.io/name: {{ $name }}
     spec:
       {{- include "platform.podDefaults" $ | nindent 6 }}
+      terminationGracePeriodSeconds: 60
       containers:
         - name: postgres
           image: {{ $.Values.postgres.image }}
@@ -632,6 +673,7 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.secretName }}
                   key: {{ $pg.passwordKey }}
+            # Thư mục con: tránh lỗi initdb khi gốc volume có sẵn lost+found
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
           readinessProbe:
@@ -698,6 +740,13 @@ spec:
         app.kubernetes.io/name: keycloak
     spec:
       {{- include "platform.podDefaults" . | nindent 6 }}
+      initContainers:
+        - name: wait-db
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z -w 2 postgres-keycloak 5432; do echo 'chờ postgres-keycloak'; sleep 3; done"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
       containers:
         - name: keycloak
           image: {{ .Values.keycloak.image }}
@@ -707,16 +756,17 @@ spec:
               containerPort: 8080
           env:
             - { name: KC_DB, value: postgres }
-            - { name: KC_DB_URL, value: "jdbc:postgresql://postgres-keycloak:5432/keycloak" }
-            - { name: KC_DB_USERNAME, value: kc_user }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://postgres-keycloak:5432/{{ (index .Values.postgres.instances "postgres-keycloak").database }}" }
+            - { name: KC_DB_USERNAME, value: {{ (index .Values.postgres.instances "postgres-keycloak").user | quote }} }
             - name: KC_DB_PASSWORD
               valueFrom: { secretKeyRef: { name: {{ .Values.secretName }}, key: KC_DB_PASSWORD } }
-            - { name: KEYCLOAK_ADMIN, value: admin }
+            - { name: KEYCLOAK_ADMIN, value: admin }   # identity-service dùng keycloak.admin.username=admin
             - name: KEYCLOAK_ADMIN_PASSWORD
               valueFrom: { secretKeyRef: { name: {{ .Values.secretName }}, key: KC_ADMIN_PASSWORD } }
+            # URL công khai cố định: token lấy qua http://keycloak:8080 (nội bộ) vẫn có iss = URL công khai
             - { name: KC_HOSTNAME_URL, value: {{ .Values.keycloak.hostnameUrl | quote }} }
             - { name: KC_HOSTNAME_STRICT, value: "false" }
-            - { name: KC_HTTP_ENABLED, value: "true" }
+            - { name: KC_HTTP_ENABLED, value: "true" }       # TLS kết thúc ở Nginx máy chủ
             - { name: KC_PROXY_HEADERS, value: xforwarded }
             - { name: KC_HEALTH_ENABLED, value: "true" }
             - { name: KC_CACHE, value: local }
@@ -733,6 +783,7 @@ spec:
           resources:
             {{- toYaml .Values.keycloak.resources | nindent 12 }}
           volumeMounts:
+            # --import-realm đọc mọi *.json trong thư mục này, chỉ import khi realm CHƯA tồn tại
             - name: realm
               mountPath: /opt/keycloak/data/import
               readOnly: true
@@ -795,6 +846,7 @@ spec:
 ### 4.11. `templates/kafka.yaml`
 
 ```yaml
+# Kafka KRaft 1 node (broker + controller), cùng cấu hình docker-compose của nhóm nhưng chỉ 1 listener nội bộ
 apiVersion: v1
 kind: Service
 metadata:
@@ -916,7 +968,7 @@ spec:
       containers:
         - name: redis
           image: {{ .Values.redis.image }}
-          args: ["redis-server", "--save", "", "--appendonly", "no"]   # chỉ cache và khoá
+          args: ["redis-server", "--save", "", "--appendonly", "no"]   # chỉ cache và khoá, không cần lưu đĩa
           ports:
             - name: redis
               containerPort: 6379
@@ -1032,6 +1084,7 @@ Bucket `work-attachments` do `work-service` tự tạo khi khởi động.
 
 ```yaml
 {{- if .Values.mailpit.enabled }}
+# Hộp thư giả cho staging: notification-service gửi SMTP tới mailpit:1025, xem thư qua Ingress
 apiVersion: v1
 kind: Service
 metadata:
@@ -1074,6 +1127,9 @@ spec:
           readinessProbe:
             tcpSocket: { port: 8025 }
             periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 1025 }
+            periodSeconds: 30
           resources:
             {{- toYaml .Values.mailpit.resources | nindent 12 }}
 ---
@@ -1107,7 +1163,7 @@ spec:
 {{- if .Values.pgadmin.enabled }}
 {{- $app := index .Values.postgres.instances "postgres-app" }}
 {{- $kc := index .Values.postgres.instances "postgres-keycloak" }}
-# Khai sẵn 2 server DB của CHÍNH namespace này (chỉ được nạp ở lần khởi động đầu tiên của pgAdmin)
+# Khai sẵn 2 server DB của CHÍNH namespace này (pgAdmin chỉ nạp ở lần khởi động đầu tiên, khi PVC còn trống)
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -1292,13 +1348,16 @@ appVersion: "1.0.0"
 ### 5.2. `values.yaml`
 
 ```yaml
+# Giá trị mặc định. Mỗi môi trường ghi đè bằng values-staging.yaml / values-prod.yaml.
+# Jenkins cài chart này bằng HELM_DRIVER=configmap và CHỈ đổi image.tag (infrastructure/scripts/deploy.sh).
+
 image:
-  registry: ghcr.io/hecker-chuoi
-  tag: bootstrap                   # Jenkins: --set image.tag=<git sha>
+  registry: ghcr.io/hecker-chuoi    # GHCR bắt buộc chữ thường
+  tag: bootstrap                    # Jenkins: --set image.tag=<git sha>
   pullPolicy: IfNotPresent
 
-serviceAccountName: datn-app       # do datn-platform tạo (có imagePullSecrets)
-secretName: app-secrets
+serviceAccountName: datn-app        # do datn-platform tạo (có imagePullSecrets)
+secretName: app-secrets             # do quản trị viên tạo (03 §6.1)
 
 publicUrl: http://app.example.invalid
 cookieSecure: false
@@ -1322,7 +1381,8 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"   # STOMP WebSocket
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 
-# 5 service Spring Boot: một template (templates/backend.yaml) sinh Deployment + Service + ConfigMap
+# 5 service Spring Boot: một template (templates/backend.yaml) sinh Deployment + Service cho mỗi mục.
+# waitFor: "host:port" chờ mở cổng TCP; waitForReady: URL chờ trả 2xx (init container).
 backend:
   api-gateway:
     port: 8081
@@ -1343,7 +1403,7 @@ backend:
   work-service:
     port: 8083
     replicas: 1
-    waitFor: ["postgres-app:5432", "redis:6379", "kafka:9092"]
+    waitFor: ["postgres-app:5432", "redis:6379", "kafka:9092", "minio:9000"]
     secretEnv: [DB_PASSWORD, MINIO_ROOT_USER, MINIO_ROOT_PASSWORD]
     resources:
       requests: { cpu: 250m, memory: 512Mi }
@@ -1361,7 +1421,7 @@ backend:
   notification-service:
     port: 9994
     replicas: 1
-    waitFor: ["postgres-app:5432", "kafka:9092"]
+    waitFor: ["postgres-app:5432", "kafka:9092", "redis:6379"]
     secretEnv: [DB_PASSWORD, MAIL_USERNAME, MAIL_PASSWORD]
     resources:
       requests: { cpu: 200m, memory: 384Mi }
@@ -1377,7 +1437,7 @@ frontend:
 ### 5.3. `values-staging.yaml` và `values-prod.yaml`
 
 ```yaml
-# values-staging.yaml
+# Jenkins: deploy.sh staging datn-staging <sha> https://staging.example.com
 publicUrl: https://staging.example.com
 cookieSecure: true
 keycloak:
@@ -1387,14 +1447,14 @@ ingress:
 ```
 
 ```yaml
-# values-prod.yaml
+# Jenkins: deploy.sh prod datn-prod <sha> https://app.example.com
 publicUrl: https://app.example.com
 cookieSecure: true
 keycloak:
   publicUrl: https://sso.example.com
 ingress:
   host: app.example.com
-mail:                              # SMTP thật; tài khoản/mật khẩu trong app-secrets
+mail:                              # SMTP thật; tài khoản/mật khẩu trong app-secrets (MAIL_USERNAME, MAIL_PASSWORD)
   host: smtp.gmail.com
   port: "587"
   smtpAuth: "true"
@@ -1417,20 +1477,22 @@ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 datn/layer: app
 {{- end }}
 
+{{/* Nhãn cho pod template: không có phiên bản chart */}}
 {{- define "app.podLabels" -}}
 app.kubernetes.io/part-of: datn
 datn/layer: app
 {{- end }}
 
-{{/* dict "root" $ "name" "<service>" */}}
+{{/* dict "root" $ "name" "<service>"  ->  ghcr.io/<owner>/datn-<service>:<tag> */}}
 {{- define "app.image" -}}
-{{ .root.Values.image.registry }}/datn-{{ .name }}:{{ .root.Values.image.tag }}
+{{ .root.Values.image.registry }}/datn-{{ .name }}:{{ required "image.tag là bắt buộc" .root.Values.image.tag }}
 {{- end }}
 ```
 
 ### 5.5. `templates/configmap-env.yaml`
 
 ```yaml
+# Biến môi trường dùng chung cho 5 service (M5: ConfigMap). Mật khẩu nằm ở Secret app-secrets.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -1453,7 +1515,12 @@ data:
 ### 5.6. `templates/configmap-spring.yaml`
 
 ```yaml
+{{- /* Profile Spring "k8s" của từng service, mount vào /config (SPRING_CONFIG_ADDITIONAL_LOCATION) */ -}}
 {{- range $name, $svc := .Values.backend }}
+{{- $file := printf "files/config/%s/application-k8s.yaml" $name }}
+{{- if not ($.Files.Get $file) }}
+{{- fail (printf "Thiếu %s" $file) }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -1464,13 +1531,14 @@ metadata:
     app.kubernetes.io/name: {{ $name }}
 data:
   application-k8s.yaml: |-
-{{ $.Files.Get (printf "files/config/%s/application-k8s.yaml" $name) | indent 4 }}
+{{ $.Files.Get $file | indent 4 }}
 {{- end }}
 ```
 
 ### 5.7. `templates/backend.yaml`: một template cho 5 service Spring Boot
 
 ```yaml
+{{- /* Một template cho 5 service Spring Boot (values.backend): Service + Deployment */ -}}
 {{- range $name, $svc := .Values.backend }}
 ---
 apiVersion: v1
@@ -1503,7 +1571,7 @@ spec:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
-      maxUnavailable: 0               # pod mới Ready rồi mới tắt pod cũ
+      maxUnavailable: 0               # pod mới Ready rồi mới tắt pod cũ (M5: zero downtime)
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ $name }}
@@ -1537,12 +1605,15 @@ spec:
             - sh
             - -c
             - |
-              for t in {{ join " " $svc.waitFor }}; do
+              for t in {{ join " " ($svc.waitFor | default list) }}; do
                 until nc -z -w 2 "${t%:*}" "${t#*:}"; do echo "chờ $t"; sleep 3; done
               done
               {{- range $svc.waitForReady }}
-              until wget -q -O /dev/null {{ . }}; do echo "chờ {{ . }}"; sleep 3; done
+              until wget -q -T 5 -O /dev/null {{ . | quote }}; do echo "chờ {{ . }}"; sleep 3; done
               {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
           resources:
             requests: { cpu: 10m, memory: 16Mi }
             limits: { cpu: 100m, memory: 64Mi }
@@ -1584,7 +1655,7 @@ spec:
             periodSeconds: 20
             failureThreshold: 3
           lifecycle:
-            preStop:
+            preStop:                        # chờ Endpoints gỡ pod rồi mới tắt (graceful shutdown)
               exec: { command: ["sh", "-c", "sleep 10"] }
           securityContext:
             allowPrivilegeEscalation: false
@@ -1609,6 +1680,8 @@ spec:
 ### 5.8. `templates/frontend.yaml`
 
 ```yaml
+# frontend/nginx.conf proxy tới http://api-gateway:8081 (đúng tên Service cùng namespace), nhưng trên k8s
+# Ingress đã chuyển thẳng /identity, /work, /workspace, /notification tới api-gateway.
 apiVersion: v1
 kind: Service
 metadata:
@@ -1673,6 +1746,7 @@ spec:
 ### 5.9. `templates/ingress.yaml`
 
 ```yaml
+# M9: 1 host cho cả frontend và API (cùng origin, không cần CORS)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -1714,6 +1788,7 @@ spec:
 `files/config/api-gateway/application-k8s.yaml`:
 
 ```yaml
+# Profile "k8s": nạp đè lên application.yml trong image. ${...} lấy từ env-config / app-secrets.
 server:
   shutdown: graceful
 spring:
@@ -1721,7 +1796,8 @@ spring:
     timeout-per-shutdown-phase: 20s
   cloud:
     gateway:
-      routes:                      # khai ĐỦ danh sách (01 §5.2)
+      # Danh sách (list) trong profile THAY THẾ toàn bộ list gốc, nên phải khai ĐỦ 4 route (01 §5.2)
+      routes:
         - id: identity-service
           uri: http://identity-service:8082
           predicates: ["Path=/identity/api/**,/identity/actuator/**"]
@@ -1734,6 +1810,7 @@ spring:
           uri: http://workspace-service:8087
           predicates: ["Path=/workspace/api/**,/workspace/actuator/**"]
           filters: ["StripPrefix=1"]
+        # CỐ Ý không route /notification/internal/** (gửi email nội bộ, không xác thực)
         - id: notification-service
           uri: http://notification-service:9994
           predicates: ["Path=/notification/api/**,/notification/ws/**"]
@@ -1742,6 +1819,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
+          # Lấy khoá qua DNS nội bộ; iss của token vẫn là URL công khai (KC_HOSTNAME_URL)
           jwk-set-uri: http://keycloak:8080/realms/datn-realm/protocol/openid-connect/certs
           issuer-uri: ${KEYCLOAK_ISSUER_URI}
 app:
@@ -1760,6 +1838,7 @@ logging:
 `files/config/identity-service/application-k8s.yaml`:
 
 ```yaml
+# Profile "k8s": nạp đè lên application.yaml trong image. ${...} lấy từ env-config / app-secrets.
 server:
   shutdown: graceful
 spring:
@@ -1784,12 +1863,12 @@ keycloak:
   server-url: http://keycloak:8080          # Admin API / token qua DNS nội bộ
   public-url: ${KEYCLOAK_PUBLIC_URL}        # URL trình duyệt được chuyển tới (đăng nhập Google)
   admin:
-    username: admin
+    username: admin                         # = KEYCLOAK_ADMIN trong chart datn-platform
     password: ${KC_ADMIN_PASSWORD}
   client:
     client-secret: ${KEYCLOAK_CLIENT_SECRET}
 app:
-  frontend-url: ${APP_PUBLIC_URL}
+  frontend-url: ${APP_PUBLIC_URL}           # link trong email xác thực / đặt lại mật khẩu
   cookie:
     secure: ${APP_COOKIE_SECURE}
   services:
@@ -1807,6 +1886,7 @@ management:
 `files/config/work-service/application-k8s.yaml`:
 
 ```yaml
+# Profile "k8s": nạp đè lên application.yaml trong image. ${...} lấy từ env-config / app-secrets.
 server:
   shutdown: graceful
 spring:
@@ -1839,7 +1919,7 @@ minio:
   secret-key: ${MINIO_ROOT_PASSWORD}
 app:
   cluster:
-    redis-enabled: true            # rolling update luôn có lúc 2 pod (01 §5.6)
+    redis-enabled: true            # rolling update luôn có lúc 2 pod chạy job (01 §5.6)
   frontend-url: ${APP_PUBLIC_URL}
   services:
     identity:
@@ -1862,6 +1942,7 @@ logging:
 `files/config/workspace-service/application-k8s.yaml`:
 
 ```yaml
+# Profile "k8s": nạp đè lên application.yaml trong image. ${...} lấy từ env-config / app-secrets.
 server:
   shutdown: graceful
 spring:
@@ -1907,6 +1988,8 @@ logging:
 `files/config/notification-service/application-k8s.yaml` (các biến `MAIL_*` đã được `application.yaml` đọc từ môi trường):
 
 ```yaml
+# Profile "k8s": nạp đè lên application.yaml trong image. ${...} lấy từ env-config / app-secrets.
+# Các biến MAIL_* và KEYCLOAK_ISSUER_URI được application.yaml gốc đọc thẳng từ môi trường.
 server:
   shutdown: graceful
 spring:
@@ -1929,7 +2012,7 @@ spring:
       host: redis
       port: 6379
 app:
-  frontend-url: ${APP_PUBLIC_URL}
+  frontend-url: ${APP_PUBLIC_URL}           # link trong thông báo / email
   cluster:
     redis-enabled: true            # WebSocket qua Redis Pub/Sub khi 2 pod cùng chạy
   services:
@@ -1967,6 +2050,7 @@ Làm cho `datn-staging` trước, sau đó lặp lại với `ENV=prod`.
 `infrastructure/k8s/namespaces.yaml`:
 
 ```yaml
+# Quản trị viên tạo một lần: kubectl apply -f infrastructure/k8s/namespaces.yaml (03 §6.1)
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -2013,7 +2097,8 @@ jq --arg secret "$KEYCLOAK_CLIENT_SECRET" --arg app "$APP_URL" '
   (.clients[] | select(.clientId == "datn-backend")) |= (
       .secret = $secret
     | .redirectUris = [$app + "/*"]
-    | .webOrigins = [$app])
+    | .webOrigins = [$app]
+    | .attributes["post.logout.redirect.uris"] = ($app + "/*"))
 ' infrastructure/keycloak/realm-export_08082026.json > ~/datn-secrets/realm-$ENV.json
 # Chạy HTTP qua nip.io: thêm  | .sslRequired = "none"  vào cuối biểu thức jq
 kubectl -n $NS create secret generic keycloak-realm --from-file=realm.json=$HOME/datn-secrets/realm-$ENV.json
@@ -2200,7 +2285,8 @@ ssh -L 5050:127.0.0.1:5050 datnadmin@<server>      # rồi mở http://localhost
 
 ```bash
 #!/usr/bin/env bash
-# Dựng kubeconfig CHỈ có quyền của SA ci-deployer trong 1 namespace. Chạy bằng kubeconfig admin.
+# Dựng kubeconfig CHỈ có quyền của SA ci-deployer trong 1 namespace (03 §10). Chạy bằng kubeconfig admin.
+# Cách dùng: make-ci-kubeconfig.sh <namespace>     ->  tạo file kubeconfig-<namespace> ở thư mục hiện tại
 set -euo pipefail
 NS="${1:?Cách dùng: $0 <namespace>}"
 OUT="kubeconfig-${NS}"
@@ -2208,6 +2294,7 @@ OUT="kubeconfig-${NS}"
 SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 CA=$(kubectl config view --raw --flatten --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
 TOKEN=$(kubectl -n "$NS" get secret ci-deployer-token -o jsonpath='{.data.token}' | base64 -d)
+[ -n "$TOKEN" ] || { echo "Secret ci-deployer-token chưa có token (đã cài datn-platform vào $NS chưa?)"; exit 1; }
 
 umask 077
 cat > "$OUT" <<EOF
@@ -2233,9 +2320,10 @@ EOF
 
 echo "== Kiểm tra quyền (kỳ vọng: yes yes yes no no no)"
 for check in "patch deployments" "delete configmaps" "get replicasets" "get secrets" "delete statefulsets" "patch persistentvolumeclaims"; do
+  # shellcheck disable=SC2086  # cố ý tách "động từ tài nguyên"
   printf '%-30s ' "$check"; KUBECONFIG="$OUT" kubectl auth can-i $check -n "$NS" || true
 done
-printf '%-30s ' "namespace default"; KUBECONFIG="$OUT" kubectl auth can-i patch deployments -n default || true
+printf '%-30s ' "namespace default (kỳ vọng no)"; KUBECONFIG="$OUT" kubectl auth can-i patch deployments -n default || true
 echo "== Helm (driver configmap) thấy release:"
 KUBECONFIG="$OUT" HELM_DRIVER=configmap helm -n "$NS" list || true
 echo "Tải $OUT lên Jenkins làm credential 'Secret file' (04 §10.3), rồi xoá file."
@@ -2277,35 +2365,38 @@ bash infrastructure/scripts/make-ci-kubeconfig.sh datn-prod
 
 ```bash
 #!/usr/bin/env bash
-# Build + quét + push 6 image, TUẦN TỰ để không tranh RAM với cluster. Cần đã `docker login ghcr.io`.
+# Build + quét + push 6 image, TUẦN TỰ để không tranh RAM với cluster (03 §12.1). Cần đã `docker login ghcr.io`.
 # Chạy bằng Docker rootless của Jenkins (DOCKER_HOST). Cách dùng: build-images.sh <git-sha>
 set -euo pipefail
-TAG="${1:?git sha}"
-REGISTRY="${REGISTRY:-ghcr.io/hecker-chuoi}"
+TAG="${1:?Cách dùng: $0 <git-sha>}"
+REGISTRY="${REGISTRY:-ghcr.io/hecker-chuoi}"         # GHCR bắt buộc chữ thường
+SOURCE_URL="${SOURCE_URL:-https://github.com/Hecker-Chuoi/DATN-2026}"
+SERVICES="${SERVICES:-api-gateway identity-service work-service workspace-service notification-service frontend}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 export DOCKER_BUILDKIT=1
 
-for s in api-gateway identity-service work-service workspace-service notification-service frontend; do
+for s in $SERVICES; do
   if [ "$s" = frontend ]; then ctx=frontend; file=frontend/Dockerfile; else ctx=backend; file="backend/$s/Dockerfile"; fi
   img="$REGISTRY/datn-$s"
   echo "== Build $img:$TAG"
   docker build \
     --label "org.opencontainers.image.revision=$TAG" \
-    --label "org.opencontainers.image.source=https://github.com/Hecker-Chuoi/DATN-2026" \
+    --label "org.opencontainers.image.source=$SOURCE_URL" \
     -t "$img:$TAG" -t "$img:main" -f "$file" "$ctx"
   echo "== Quét $img:$TAG (chặn nếu có lỗ hổng CRITICAL đã có bản vá)"
   trivy image --quiet --severity CRITICAL --ignore-unfixed --exit-code 1 "$img:$TAG"
   docker push "$img:$TAG"
   docker push "$img:main"
 done
+echo "✅ Đã push $(echo "$SERVICES" | wc -w) image với tag $TAG"
 ```
 
 ### 12.2. `infrastructure/scripts/deploy.sh`
 
 ```bash
 #!/usr/bin/env bash
-# helm upgrade --install release datn-app, tự rollback khi rollout lỗi hoặc smoke test lỗi.
+# helm upgrade --install release datn-app, tự rollback khi rollout lỗi hoặc smoke test lỗi (03 §12.2).
 # Cách dùng: KUBECONFIG=<kubeconfig ci-deployer> deploy.sh <staging|prod> <namespace> <git-sha> <app-url>
 set -euo pipefail
 ENV_NAME="${1:?staging|prod}"; NS="${2:?namespace}"; TAG="${3:?git sha}"; APP_URL="${4:?app url}"
@@ -2314,10 +2405,14 @@ CHART="$ROOT/infrastructure/helm/datn-app"
 VALUES="$CHART/values-$ENV_NAME.yaml"
 RELEASE=datn-app
 SELECTOR="datn/layer=app"
+TIMEOUT="${DEPLOY_TIMEOUT:-15m}"
 export HELM_DRIVER=configmap           # release lưu ở ConfigMap: CI không cần quyền Secret
 
-# Helm 4 đổi --atomic thành --rollback-on-failure
-if helm version --short | grep -q '^v3'; then ROLLBACK_FLAG=--atomic; else ROLLBACK_FLAG=--rollback-on-failure; fi
+[ -f "$VALUES" ] || { echo "Không có $VALUES"; exit 1; }
+[[ "$TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "TAG phải là git SHA đầy đủ (40 ký tự hex): $TAG"; exit 1; }
+
+# Helm 4 đổi --atomic thành --rollback-on-failure: dò theo trợ giúp của chính bản helm đang cài
+if helm upgrade --help | grep -q -- '--rollback-on-failure'; then ROLLBACK_FLAG=--rollback-on-failure; else ROLLBACK_FLAG=--atomic; fi
 
 kubectl auth can-i patch deployments -n "$NS" | grep -qx yes || { echo "ci-deployer không có quyền trên $NS"; exit 1; }
 
@@ -2341,24 +2436,26 @@ diagnose() {
 
 smoke() {
   local p
+  # /<service>/actuator/health đi qua Ingress -> api-gateway -> service (gồm cả kiểm tra DB, Redis)
   for p in identity work workspace; do
+    echo -n "$p: "
     curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "$APP_URL/$p/actuator/health" || return 1; echo
   done
-  curl -fsS -o /dev/null "$APP_URL/" || return 1
+  echo -n "frontend: "; curl -fsS -o /dev/null -w '%{http_code}\n' "$APP_URL/" || return 1
 }
 
-echo "== helm upgrade --install ($ROLLBACK_FLAG)"
+echo "== helm upgrade --install ($ROLLBACK_FLAG, timeout $TIMEOUT)"
 if ! helm upgrade --install "$RELEASE" "$CHART" -n "$NS" -f "$VALUES" --set image.tag="$TAG" \
-       $ROLLBACK_FLAG --wait --timeout 10m --history-max 10; then
+       "$ROLLBACK_FLAG" --wait --timeout "$TIMEOUT" --history-max 10; then
   echo "❌ Rollout lỗi, Helm đã tự rollback"
   diagnose; exit 1
 fi
 
-echo "== Smoke test qua Ingress"
+echo "== Smoke test qua Ingress ($APP_URL)"
 if ! smoke; then
   echo "❌ Smoke test lỗi, rollback về revision ${PREV:-<không có>}"
   diagnose
-  [ -n "$PREV" ] && helm -n "$NS" rollback "$RELEASE" "$PREV" --wait --timeout 10m
+  if [ -n "$PREV" ]; then helm -n "$NS" rollback "$RELEASE" "$PREV" --wait --timeout "$TIMEOUT"; fi
   exit 1
 fi
 
@@ -2369,6 +2466,7 @@ echo "✅ $RELEASE@$TAG đã chạy trên $NS"
 ### 12.3. `Jenkinsfile` (gốc repo, job Multibranch `DATN/ci/datn`)
 
 ```groovy
+// Job Multibranch DATN/ci/datn (docs/cicd/03 §12.3, 04 §11)
 // PR / nhánh : test backend, lint+build frontend, helm lint + kubeconform
 // main       : + build/quét/push 6 image (tag = git SHA) + helm upgrade staging
 // tag vX.Y.Z : KHÔNG build lại; gắn tag phiên bản cho image đã có rồi kích hoạt job duyệt deploy prod
@@ -2384,6 +2482,7 @@ pipeline {
     REGISTRY    = 'ghcr.io/hecker-chuoi'
     HELM_DRIVER = 'configmap'
     MAVEN_OPTS  = '-Xmx768m'
+    STAGING_URL = 'https://staging.example.com'
   }
   stages {
     stage('CI') {
@@ -2397,7 +2496,11 @@ pipeline {
       stages {
         stage('Backend: build & unit test') {
           steps {
-            dir('backend') { sh 'mvn -B -ntp verify' }
+            // IdentityServiceApplicationTests (@SpringBootTest) cần Postgres thật ở localhost:5433, CI không có:
+            // loại riêng test đó, mọi test unit khác vẫn chạy.
+            dir('backend') {
+              sh 'mvn -B -ntp verify "-Dtest=!IdentityServiceApplicationTests" -Dsurefire.failIfNoSpecifiedTests=false'
+            }
           }
           post {
             always { junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml' }
@@ -2406,8 +2509,8 @@ pipeline {
         stage('Frontend: lint & build') {
           steps {
             dir('frontend') {
-              sh 'npm ci'
-              // Lint CHƯA chặn (còn ~190 lỗi): lỗi thì stage UNSTABLE, build vẫn tiếp tục
+              sh 'npm ci --no-audit --no-fund'
+              // Lint CHƯA chặn (còn ~190 lỗi có từ trước): lỗi thì stage UNSTABLE, build vẫn tiếp tục
               catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') { sh 'npm run lint' }
               sh 'npm run build'
             }
@@ -2416,6 +2519,7 @@ pipeline {
         stage('Helm lint & kubeconform') {
           steps {
             sh '''
+              set -eu
               for e in staging prod; do
                 for c in datn-platform datn-app; do
                   helm lint infrastructure/helm/$c -f infrastructure/helm/$c/values-$e.yaml
@@ -2432,7 +2536,7 @@ pipeline {
             withCredentials([usernamePassword(credentialsId: 'ghcr-push', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
               sh '''
                 echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-                infrastructure/scripts/build-images.sh "$GIT_COMMIT"
+                bash infrastructure/scripts/build-images.sh "$GIT_COMMIT"
               '''
             }
           }
@@ -2443,7 +2547,7 @@ pipeline {
           options { lock('datn-deploy-staging') }
           steps {
             withCredentials([file(credentialsId: 'kubeconfig-staging', variable: 'KUBECONFIG')]) {
-              sh 'infrastructure/scripts/deploy.sh staging datn-staging "$GIT_COMMIT" https://staging.example.com'
+              sh 'bash infrastructure/scripts/deploy.sh staging datn-staging "$GIT_COMMIT" "$STAGING_URL"'
             }
           }
         }
@@ -2462,6 +2566,7 @@ pipeline {
             script { env.RELEASE_SHA = env.GIT_COMMIT }
             withCredentials([usernamePassword(credentialsId: 'ghcr-push', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
               sh '''
+                set -eu
                 echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
                 for s in api-gateway identity-service work-service workspace-service notification-service frontend; do
                   src="$REGISTRY/datn-$s:$GIT_COMMIT"
@@ -2486,6 +2591,7 @@ pipeline {
               string(name: 'TARGET', value: 'production'),
               string(name: 'ACTION', value: 'deploy'),
               string(name: 'IMAGE_TAG', value: env.RELEASE_SHA),
+              string(name: 'REVISION', value: ''),
               string(name: 'VERSION', value: env.TAG_NAME)
             ]
           }
@@ -2499,6 +2605,7 @@ pipeline {
 ### 12.4. `infrastructure/jenkins/Jenkinsfile.deploy` (job `DATN/release/datn-deploy`)
 
 ```groovy
+// Job DATN/release/datn-deploy (docs/cicd/03 §12.4, 04 §12)
 // Deploy prod sau khi gắn tag (được Jenkinsfile gọi), deploy lại / rollback staging hoặc prod bằng tay.
 // Credential kubeconfig-prod CHỈ có trong folder DATN/release.
 pipeline {
@@ -2525,6 +2632,9 @@ pipeline {
           }
           if (params.ACTION == 'helm-rollback' && params.REVISION && !(params.REVISION ==~ /\d+/)) {
             error 'REVISION phải là số'
+          }
+          if (params.VERSION && !(params.VERSION ==~ /[0-9A-Za-z.\-]+/)) {
+            error 'VERSION chỉ gồm chữ, số, dấu chấm và gạch ngang'
           }
           def what = params.ACTION == 'deploy' ? (params.VERSION ?: params.IMAGE_TAG.substring(0, 7)) : "rollback ${params.REVISION ?: 'prev'}"
           currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.TARGET} ${what}"
@@ -2553,11 +2663,13 @@ pipeline {
             withCredentials([file(credentialsId: cfg.cred, variable: 'KUBECONFIG')]) {
               if (params.ACTION == 'deploy') {
                 // IMAGE_TAG đã được kiểm tra là hex 40 ký tự, nên nối vào lệnh shell an toàn
-                sh "infrastructure/scripts/deploy.sh ${cfg.env} ${cfg.ns} ${params.IMAGE_TAG} ${cfg.url}"
+                sh "bash infrastructure/scripts/deploy.sh ${cfg.env} ${cfg.ns} ${params.IMAGE_TAG} ${cfg.url}"
               } else {
+                // REVISION đã được kiểm tra là số hoặc rỗng (rỗng = revision ngay trước)
                 sh """
+                  set -eu
                   helm -n ${cfg.ns} history datn-app --max 10
-                  helm -n ${cfg.ns} rollback datn-app ${params.REVISION} --wait --timeout 10m
+                  helm -n ${cfg.ns} rollback datn-app ${params.REVISION} --wait --timeout 15m
                   helm -n ${cfg.ns} history datn-app --max 3
                 """
               }
@@ -2619,9 +2731,10 @@ for c in "patch deployments" "get secrets" "delete statefulsets"; do echo -n "$c
 echo -n "ns prod: "; kubectl auth can-i patch deployments -n datn-prod --as=$SA
 
 # T7 – quota
-kubectl -n $NS create deployment stress --image=busybox:1.36 -- sleep 3600
-kubectl -n $NS set resources deployment stress --requests=memory=8Gi --limits=memory=8Gi
-kubectl -n $NS get events | grep -i quota ; kubectl -n $NS delete deployment stress
+# Mỗi container tối đa 2Gi (LimitRange), nên dùng 3 pod x 2Gi để vượt trần requests.memory 8Gi của namespace
+kubectl -n $NS create deployment stress --image=busybox:1.36 --replicas=3 -- sleep 3600
+kubectl -n $NS set resources deployment stress --requests=memory=2Gi --limits=memory=2Gi
+sleep 10; kubectl -n $NS get events | grep -i "exceeded quota" ; kubectl -n $NS delete deployment stress
 
 # T9 – NetworkPolicy chặn chéo namespace
 kubectl -n $NS run np-test --rm -it --image=busybox:1.36 --restart=Never -- \
@@ -2648,14 +2761,25 @@ kubectl -n $NS top pods                                                   # đ�
 
 ```bash
 #!/usr/bin/env bash
+# Sao lưu 2 DB của một namespace (03 §14.1). Chạy bằng kubeconfig admin (cần quyền exec vào StatefulSet).
+# Luôn khôi phục CẢ HAI DB cùng thời điểm: user id toàn hệ thống là Keycloak sub.
+# Cron: 0 2 * * * /opt/datn/infrastructure/scripts/backup-db.sh datn-prod >> /var/backups/datn/backup.log 2>&1
 set -euo pipefail
 NS="${1:-datn-prod}"
-DIR="/var/backups/datn/$NS"; TS=$(date +%Y%m%d-%H%M%S)
+DIR="${BACKUP_DIR:-/var/backups/datn}/$NS"; TS=$(date +%Y%m%d-%H%M%S)
+KEEP_DAYS="${KEEP_DAYS:-7}"
 mkdir -p "$DIR"
-kubectl -n "$NS" exec postgres-app-0      -- pg_dump -U postgres -d datn_main_db -Fc > "$DIR/datn_main_db-$TS.dump"
-kubectl -n "$NS" exec postgres-keycloak-0 -- pg_dump -U kc_user  -d keycloak     -Fc > "$DIR/keycloak-$TS.dump"
-find "$DIR" -name '*.dump' -mtime +7 -delete
-echo "OK $DIR/*-$TS.dump"
+
+dump() {  # dump <pod> <user> <db>
+  local out="$DIR/$3-$TS.dump"
+  # Ghi ra file tạm trước: lỗi giữa chừng thì không để lại bản dump hỏng mang tên hợp lệ
+  kubectl -n "$NS" exec "$1" -- pg_dump -U "$2" -d "$3" -Fc > "$out.part"
+  mv "$out.part" "$out"
+  echo "OK $out ($(du -h "$out" | cut -f1))"
+}
+dump postgres-app-0      postgres datn_main_db
+dump postgres-keycloak-0 kc_user  keycloak
+find "$DIR" -name '*.dump' -mtime +"$KEEP_DAYS" -delete
 ```
 
 ```bash

@@ -157,7 +157,8 @@ Quy ước: nhánh `feat/*`, `fix/*` → PR vào `main`; branch protection cho `
 | **Tổng requests staging** | **≈1,8 core** | **≈4,5 GiB** | | | |
 | **Tổng requests prod** | **≈2,0 core** | **≈4,9 GiB** | | | |
 
-**ResourceQuota mỗi namespace:** `requests.cpu: 3`, `requests.memory: 7Gi`, `limits.cpu: 16`, `limits.memory: 14Gi`, `pods: 30`, `persistentvolumeclaims: 8`, `services.nodeports: 0`, `services.loadbalancers: 0`.
+**ResourceQuota mỗi namespace:** `requests.cpu: 4`, `requests.memory: 8Gi`, `limits.cpu: 24`, `limits.memory: 16Gi`, `pods: 30`, `persistentvolumeclaims: 8`, `services.nodeports: 0`, `services.loadbalancers: 0`.
+Quota là trần, không giữ chỗ, nên phải tính cho **lúc rolling update** (mỗi Deployment của `datn-app` thêm 1 pod): prod lên ≈3,1 core / 7,0 GiB requests và ≈17,8 core / 13,0 GiB limits. Trần cũ (3 core requests, 16 core limits) sẽ chặn pod mới với lỗi `exceeded quota` giữa lúc deploy.
 **LimitRange:** mặc định 50m/64Mi → 500m/256Mi; tối đa 2 core/2Gi mỗi container.
 
 ### 6.2. Jenkins (ngoài cluster)
