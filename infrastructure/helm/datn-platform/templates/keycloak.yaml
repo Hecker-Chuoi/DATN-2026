@@ -64,6 +64,7 @@ spec:
             - { name: KC_PROXY_HEADERS, value: xforwarded }
             - { name: KC_HEALTH_ENABLED, value: "true" }
             - { name: KC_CACHE, value: local }
+            - { name: JAVA_OPTS_KC_HEAP, value: {{ .Values.keycloak.heapOpts | quote }} }
           startupProbe:                              # lần đầu: tự build + import realm, cho 5 phút
             httpGet: { path: /health/ready, port: http }
             periodSeconds: 5

@@ -146,7 +146,7 @@ Quy ước: nhánh `feat/*`, `fix/*` → PR vào `main`; branch protection cho `
 | workspace-service | 200 | 384 | 1000 | 640 | 1 / 1 |
 | notification-service | 200 | 384 | 1000 | 640 | 1 / 1 |
 | frontend | 20 | 32 | 200 | 128 | 1 / 2 |
-| keycloak | 250 | 768 | 1500 | 1024 | 1 / 1 |
+| keycloak | 250 | 768 | 1500 | 1280 | 1 / 1 |
 | postgres-app | 100 | 256 | 1000 | 1024 | 1 / 1 |
 | postgres-keycloak | 50 | 128 | 500 | 512 | 1 / 1 |
 | kafka | 200 | 768 | 1000 | 1024 | 1 / 1 |

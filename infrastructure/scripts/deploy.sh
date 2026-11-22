@@ -38,11 +38,13 @@ diagnose() {
 }
 
 smoke() {
-  local p
-  # /<service>/actuator/health đi qua Ingress -> api-gateway -> service (gồm cả kiểm tra DB, Redis)
+  local p out
+  # /<service>/actuator/health đi qua Ingress -> api-gateway -> service (gồm cả kiểm tra DB, Redis).
+  # Kiểm cả NỘI DUNG: nếu route hỏng rơi về frontend, nginx của SPA vẫn trả index.html với mã 200.
   for p in identity work workspace; do
-    echo -n "$p: "
-    curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "$APP_URL/$p/actuator/health" || return 1; echo
+    out=$(curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "$APP_URL/$p/actuator/health") || return 1
+    echo "$p: $out"
+    echo "$out" | grep -q '"status":"UP"' || { echo "  -> không phải health JSON UP"; return 1; }
   done
   echo -n "frontend: "; curl -fsS -o /dev/null -w '%{http_code}\n' "$APP_URL/" || return 1
 }

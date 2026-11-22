@@ -57,9 +57,12 @@ keycloak:
   hostnameUrl: http://sso.example.invalid     # URL công khai cố định -> claim iss của token
   realmSecret: keycloak-realm                 # 03 §6.2, key realm.json
   adminAllowCidrs: ""                         # giới hạn IP cho /admin (Admin Console); rỗng = không tách Ingress
+  # Mặc định kc.sh dùng 70% RAM cho heap; cộng metaspace (tối đa 256m) và bộ nhớ native thì bước tự build
+  # lúc "start" (không --optimized) bị OOMKilled ở limit 1Gi (đã gặp khi chạy thử). 50% của 1280Mi = 640m heap.
+  heapOpts: "-XX:MaxRAMPercentage=50 -XX:InitialRAMPercentage=25 -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20"
   resources:
     requests: { cpu: 250m, memory: 768Mi }
-    limits: { cpu: 1500m, memory: 1Gi }
+    limits: { cpu: 1500m, memory: 1280Mi }
 
 kafka:
   image: apache/kafka:3.8.0

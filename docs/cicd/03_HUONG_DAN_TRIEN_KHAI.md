@@ -334,9 +334,12 @@ keycloak:
   hostnameUrl: http://sso.example.invalid     # URL công khai cố định -> claim iss của token
   realmSecret: keycloak-realm                 # 03 §6.2, key realm.json
   adminAllowCidrs: ""                         # giới hạn IP cho /admin (Admin Console); rỗng = không tách Ingress
+  # Mặc định kc.sh dùng 70% RAM cho heap; cộng metaspace (tối đa 256m) và bộ nhớ native thì bước tự build
+  # lúc "start" (không --optimized) bị OOMKilled ở limit 1Gi (đã gặp khi chạy thử). 50% của 1280Mi = 640m heap.
+  heapOpts: "-XX:MaxRAMPercentage=50 -XX:InitialRAMPercentage=25 -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20"
   resources:
     requests: { cpu: 250m, memory: 768Mi }
-    limits: { cpu: 1500m, memory: 1Gi }
+    limits: { cpu: 1500m, memory: 1280Mi }
 
 kafka:
   image: apache/kafka:3.8.0
@@ -770,6 +773,7 @@ spec:
             - { name: KC_PROXY_HEADERS, value: xforwarded }
             - { name: KC_HEALTH_ENABLED, value: "true" }
             - { name: KC_CACHE, value: local }
+            - { name: JAVA_OPTS_KC_HEAP, value: {{ .Values.keycloak.heapOpts | quote }} }
           startupProbe:                              # lần đầu: tự build + import realm, cho 5 phút
             httpGet: { path: /health/ready, port: http }
             periodSeconds: 5
@@ -2435,11 +2439,13 @@ diagnose() {
 }
 
 smoke() {
-  local p
-  # /<service>/actuator/health đi qua Ingress -> api-gateway -> service (gồm cả kiểm tra DB, Redis)
+  local p out
+  # /<service>/actuator/health đi qua Ingress -> api-gateway -> service (gồm cả kiểm tra DB, Redis).
+  # Kiểm cả NỘI DUNG: nếu route hỏng rơi về frontend, nginx của SPA vẫn trả index.html với mã 200.
   for p in identity work workspace; do
-    echo -n "$p: "
-    curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "$APP_URL/$p/actuator/health" || return 1; echo
+    out=$(curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "$APP_URL/$p/actuator/health") || return 1
+    echo "$p: $out"
+    echo "$out" | grep -q '"status":"UP"' || { echo "  -> không phải health JSON UP"; return 1; }
   done
   echo -n "frontend: "; curl -fsS -o /dev/null -w '%{http_code}\n' "$APP_URL/" || return 1
 }
@@ -2753,6 +2759,28 @@ curl -s -o /dev/null -w "%{http_code}\n" -u quantri:<mật-khẩu> https://pgadm
 kubectl -n $NS top pods                                                   # đối chiếu ngân sách 02 §6
 ```
 
+### 13.1. Kết quả chạy thử trước khi lên máy chủ (23/11/2026)
+
+Chạy trên cluster `kind` tạm ở máy dev (Kubernetes 1.37, Helm 4.3.2, ingress-nginx 1.15.1), namespace `datn-staging`, HTTP và tên miền `*.localtest.me:18080` thay cho TLS. Image do chính `build-images.sh` build (không push); `datn-app` do `deploy.sh` cài bằng kubeconfig `ci-deployer` sinh từ `make-ci-kubeconfig.sh`.
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `helm lint` + `kubeconform -strict`, 2 chart × 2 môi trường | Đạt (31/19/28/19 tài nguyên hợp lệ) |
+| Cài `datn-platform` | 8 pod Ready trong 66 giây, 0 restart (sau khi sửa Keycloak OOM, §14.2) |
+| Issuer Keycloak | Đúng URL công khai `KC_HOSTNAME_URL` |
+| RBAC `ci-deployer` (T6) | `patch deployments`, `delete configmaps`, `get replicasets` = yes; `get secrets`, `delete statefulsets`, `patch pvc`, namespace khác = no |
+| Cài lần đầu bằng `deploy.sh` | Đạt sau 80 giây, smoke test UP |
+| Luồng nghiệp vụ qua Ingress | Đăng ký → email xác thực tới Mailpit → xác thực → đăng nhập → identity/work/notification nhận token; tạo workspace, tạo dự án đều 201; token giả 401 |
+| T1 zero downtime (rolling restart gateway + work) | 371/371 request trả 200 |
+| T2/T3 deploy lần 2 | Nhận `PREV`, nâng revision, smoke test đạt |
+| Smoke test lỗi | `deploy.sh` tự `helm rollback` về `PREV` bằng quyền `ci-deployer`, chẩn đoán không bị `forbidden` |
+| Rollout lỗi (image không tồn tại) | Helm tự rollback (`--rollback-on-failure`), 197/197 request vẫn 200 trong lúc lỗi |
+| T9 NetworkPolicy | Cùng namespace gọi được; từ `datn-prod` sang identity/Postgres của staging bị chặn |
+| T12 công cụ quản trị | pgAdmin, Mailpit: 401 khi không có basic auth, 200 khi có |
+| `helm uninstall datn-platform` | PVC của StatefulSet và `pgadmin-data` được giữ lại |
+
+Chưa kiểm được ở máy dev: TLS/certbot, Nginx máy chủ và whitelist IP thật, Docker rootless của Jenkins, Trivy, push GHCR, Jenkins thật (job, credential, webhook, duyệt prod).
+
 ---
 
 ## 14. Vận hành và xử lý sự cố
@@ -2812,6 +2840,8 @@ kubectl -n datn-prod rollout restart deploy/keycloak
 | Spring `CrashLoopBackOff`, log `Connection refused postgres-app` | DB chưa Ready, sai mật khẩu | `kubectl logs <pod> -c wait-deps`; Postgres chỉ nhận mật khẩu ở lần khởi tạo đầu, đổi về sau phải `ALTER USER` |
 | `Liveness probe failed: 401` | Chưa mở `/actuator/health/**` | §3.2 |
 | `OOMKilled` | Limit thấp | Tăng `backend.<svc>.resources.limits.memory` trong values |
+| Keycloak `OOMKilled` ngay sau dòng `Updating the server image` | Lệnh `start` tự build lại Quarkus, mặc định heap 70% RAM | Giữ `keycloak.heapOpts` (heap 50%) và limit 1280Mi (§4.2); đã gặp khi chạy thử với limit 1Gi |
+| Smoke test báo `không phải health JSON UP` | Route `/identity`… hỏng nên rơi về frontend (nginx của SPA trả `index.html` mã 200) | `kubectl -n $NS get ing datn-app -o yaml`; kiểm tra Ingress và route của gateway |
 | Mọi API 401 sau đăng nhập | `iss` ≠ `KEYCLOAK_ISSUER_URI` | So token (jwt.io) với `kubectl -n $NS get cm env-config -o yaml`; kiểm tra `keycloak.hostnameUrl` |
 | POST/PUT/WebSocket 403 | CORS: gateway thấy `http` | `use-forwarded-headers` (§2); header `X-Forwarded-Proto/Port` ở Nginx máy chủ |
 | Keycloak "HTTPS required" | `sslRequired=external` mà chạy HTTP | TLS (§8) hoặc `sslRequired=none` (§6.2) |
