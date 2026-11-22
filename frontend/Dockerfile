@@ -1,17 +1,17 @@
-# Stage 1: Build React application
-FROM node:20-alpine AS builder
+# Stage 1: Build React application (Vite 8 cần Node ^20.19 hoặc >=22.12)
+FROM node:22-alpine AS builder
 WORKDIR /app
 
-# Copy dependency specifications
-COPY package*.json ./
-RUN npm ci || npm install
+# Cài đúng phiên bản trong package-lock.json (lỗi thì fail, không âm thầm npm install)
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Copy source code and build
 COPY . .
 RUN npm run build
 
 # Stage 2: Serve using Nginx
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
