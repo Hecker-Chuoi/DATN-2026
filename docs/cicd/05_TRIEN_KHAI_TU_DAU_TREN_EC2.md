@@ -115,7 +115,7 @@ EC2 → **Launch instance**:
 | Instance type | `t3.2xlarge` (bước 2.1) |
 | Key pair | `datn-ec2` |
 | Network settings | Chọn *Select existing security group* → `datn-sg`; *Auto-assign public IP*: Enable |
-| Storage | **100 GiB, gp3** |
+| Storage (Configure storage) | Đổi `8` thành **100** GiB, **gp3**, giữ 3000 IOPS mặc định. *Advanced* → **Encrypted** (KMS key mặc định `aws/ebs`, miễn phí), *Delete on termination*: Yes. Không *Add new volume*; *File systems*: **None** |
 | Advanced details → IAM instance profile | **Để trống** (máy không cần quyền AWS nào) |
 | Advanced details → Metadata version | **V2 only (token required)** |
 | Advanced details → Metadata response hop limit | **1** (container và pod không gọi được metadata của EC2) |
