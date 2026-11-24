@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Build + quét + push 6 image, TUẦN TỰ để không tranh RAM với cluster (03 §12.1). Cần đã `docker login ghcr.io`.
-# Chạy bằng Docker rootless của Jenkins (DOCKER_HOST). Cách dùng: build-images.sh <git-sha>
+# Build + quét + push image (03 §12.1). Cần đã `docker login ghcr.io`. Cách dùng: build-images.sh <git-sha>
+# Workflow ci-cd.yml gọi mỗi service một job song song (SERVICES=<một service>); chạy tay thì build tuần tự cả 6.
 set -euo pipefail
 TAG="${1:?Cách dùng: $0 <git-sha>}"
 REGISTRY="${REGISTRY:-ghcr.io/hecker-chuoi}"         # GHCR bắt buộc chữ thường
 SOURCE_URL="${SOURCE_URL:-https://github.com/Hecker-Chuoi/DATN-2026}"
 SERVICES="${SERVICES:-api-gateway identity-service work-service workspace-service notification-service frontend}"
 # Trivy CHỈ BÁO CÁO, không chặn (quyết định của nhóm, 24/11/2026): thư viện của Spring Boot 3.5.x có CVE CRITICAL
-# mà bản vá chỉ có ở Spring 7. Muốn bật lại cổng chặn: đặt TRIVY_EXIT_CODE=1 (biến môi trường của job Jenkins).
+# mà bản vá chỉ có ở Spring 7. Muốn bật lại cổng chặn: đặt TRIVY_EXIT_CODE=1 (env của job "Image" trong ci-cd.yml).
 TRIVY_EXIT_CODE="${TRIVY_EXIT_CODE:-0}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"

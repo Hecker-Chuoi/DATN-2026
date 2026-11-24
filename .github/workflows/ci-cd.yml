@@ -1,0 +1,121 @@
+# CI cho mọi PR vào main; với push vào main: build + quét + push 6 image (tag = git SHA) rồi deploy staging.
+# Chạy hoàn toàn trên runner của GitHub. Tài liệu: docs/cicd/03 §12, docs/cicd/04.
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  # PR: bản mới thay bản cũ. main: không huỷ giữa chừng một lần deploy
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io/hecker-chuoi   # GHCR bắt buộc chữ thường; khớp image.registry trong chart datn-app
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build và unit test
+        working-directory: backend
+        # IdentityServiceApplicationTests (@SpringBootTest) cần Postgres thật ở localhost:5433, CI không có:
+        # loại riêng test đó, mọi test unit khác vẫn chạy.
+        run: mvn -B -ntp verify "-Dtest=!IdentityServiceApplicationTests" -Dsurefire.failIfNoSpecifiedTests=false
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Lint (chưa chặn, còn ~190 lỗi có từ trước)
+        run: npm run lint
+        continue-on-error: true
+      - run: npm run build
+
+  charts:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.2
+      - name: Cài kubeconform
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz \
+            | tar xz -C "$RUNNER_TEMP/bin" kubeconform
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: helm lint + kubeconform (2 chart x 2 môi trường)
+        run: |
+          set -eu
+          for e in staging prod; do
+            for c in datn-platform datn-app; do
+              helm lint "infrastructure/helm/$c" -f "infrastructure/helm/$c/values-$e.yaml" --set image.tag="$GITHUB_SHA"
+              helm template "$c" "infrastructure/helm/$c" -n "datn-$e" -f "infrastructure/helm/$c/values-$e.yaml" \
+                  --set image.tag="$GITHUB_SHA" \
+                | kubeconform -strict -summary -ignore-missing-schemas
+            done
+          done
+
+  image:
+    name: Image (${{ matrix.service }})
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend, frontend, charts]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write          # push GHCR bằng GITHUB_TOKEN, không cần PAT
+    strategy:
+      fail-fast: true
+      matrix:
+        service: [api-gateway, identity-service, work-service, workspace-service, notification-service, frontend]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: aquasecurity/setup-trivy@v0.3.1
+        with:
+          cache: true
+      - name: Build, quét (Trivy chỉ báo cáo), push
+        env:
+          SERVICES: ${{ matrix.service }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: bash infrastructure/scripts/build-images.sh "$GITHUB_SHA"
+
+  deploy-staging:
+    name: Deploy staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: image
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: staging
+      action: deploy
+      image_tag: ${{ github.sha }}
+    secrets: inherit

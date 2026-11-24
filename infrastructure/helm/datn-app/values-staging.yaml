@@ -1,4 +1,4 @@
-# Jenkins: deploy.sh staging datn-staging <sha> https://staging.example.com
+# GitHub Actions (ci-cd.yml -> deploy.yml): deploy.sh staging datn-staging <sha>; smoke test dùng publicUrl
 publicUrl: https://staging.example.com
 cookieSecure: true
 keycloak:

@@ -1,4 +1,4 @@
-# Jenkins: deploy.sh prod datn-prod <sha> https://app.example.com
+# GitHub Actions (release.yml -> deploy.yml): deploy.sh prod datn-prod <sha>; smoke test dùng publicUrl
 publicUrl: https://app.example.com
 cookieSecure: true
 keycloak:

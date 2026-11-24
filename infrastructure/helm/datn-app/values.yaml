@@ -1,9 +1,9 @@
 # Giá trị mặc định. Mỗi môi trường ghi đè bằng values-staging.yaml / values-prod.yaml.
-# Jenkins cài chart này bằng HELM_DRIVER=configmap và CHỈ đổi image.tag (infrastructure/scripts/deploy.sh).
+# GitHub Actions cài chart này bằng HELM_DRIVER=configmap và CHỈ đổi image.tag (infrastructure/scripts/deploy.sh).
 
 image:
   registry: ghcr.io/hecker-chuoi    # GHCR bắt buộc chữ thường
-  tag: bootstrap                    # Jenkins: --set image.tag=<git sha>
+  tag: bootstrap                    # CI: --set image.tag=<git sha>
   pullPolicy: IfNotPresent
 
 serviceAccountName: datn-app        # do datn-platform tạo (có imagePullSecrets)

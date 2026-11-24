@@ -3,7 +3,8 @@
 # Cách dùng (chạy ở máy dev, gốc repo, rồi commit):
 #   set-public-host.sh 13-250-1-2.sslip.io http    # tạm dùng IP EC2 13.250.1.2, chưa có tên miền, chưa HTTPS
 #   set-public-host.sh tenmien.vn https            # khi đã có tên miền thật và chứng chỉ TLS
-# Đổi: host trong values của 2 chart, URL trong Jenkinsfile / Jenkinsfile.deploy, cookieSecure của datn-app.
+# Đổi: host và URL trong values của 2 chart, cookieSecure của datn-app. Workflow GitHub Actions và deploy.sh
+# tự đọc URL công khai từ publicUrl của values, nên không phải sửa ở nơi khác.
 set -euo pipefail
 NEW="${1:?Cách dùng: $0 <tên miền gốc> <http|https>}"
 SCHEME="${2:?Cách dùng: $0 <tên miền gốc> <http|https>}"
@@ -13,8 +14,6 @@ case "$SCHEME" in http) SECURE=false ;; https) SECURE=true ;; *) echo "Giao th�
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 FILES=(
-  Jenkinsfile
-  infrastructure/jenkins/Jenkinsfile.deploy
   infrastructure/helm/datn-app/values-staging.yaml
   infrastructure/helm/datn-app/values-prod.yaml
   infrastructure/helm/datn-platform/values-staging.yaml

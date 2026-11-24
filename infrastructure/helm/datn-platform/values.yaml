@@ -1,5 +1,5 @@
 # Giá trị mặc định. Mỗi môi trường ghi đè bằng values-staging.yaml / values-prod.yaml.
-# Quản trị viên cài chart này (driver Secret mặc định của Helm); Jenkins KHÔNG có quyền với release này.
+# Quản trị viên cài chart này (driver Secret mặc định của Helm); CI (GitHub Actions) KHÔNG có quyền với release này.
 
 secretName: app-secrets            # quản trị viên tạo (03 §6.1)
 pullSecretName: ghcr-pull          # quản trị viên tạo (03 §6.3)

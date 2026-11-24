@@ -1,5 +1,5 @@
-# Quyền của Jenkins (M7): ServiceAccount ci-deployer CHỈ thao tác trong namespace của release này.
-# Kubeconfig cho Jenkins: infrastructure/scripts/make-ci-kubeconfig.sh
+# Quyền của CI/CD (M7): ServiceAccount ci-deployer CHỈ thao tác trong namespace của release này.
+# Kubeconfig cho GitHub Actions (secret KUBE_CONFIG): infrastructure/scripts/make-ci-kubeconfig.sh
 apiVersion: v1
 kind: ServiceAccount
 metadata:

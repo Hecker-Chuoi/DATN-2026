@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 # helm upgrade --install release datn-app, tự rollback khi rollout lỗi hoặc smoke test lỗi (03 §12.2).
-# Cách dùng: KUBECONFIG=<kubeconfig ci-deployer> deploy.sh <staging|prod> <namespace> <git-sha> <app-url>
+# Cách dùng: KUBECONFIG=<kubeconfig ci-deployer> deploy.sh <staging|prod> <namespace> <git-sha> [app-url]
+#   app-url mặc định = publicUrl trong values-<env>.yaml của chart datn-app (URL smoke test qua Ingress).
+# Được workflow .github/workflows/deploy.yml gọi; chạy tay được với kubeconfig ci-deployer.
 set -euo pipefail
-ENV_NAME="${1:?staging|prod}"; NS="${2:?namespace}"; TAG="${3:?git sha}"; APP_URL="${4:?app url}"
+ENV_NAME="${1:?staging|prod}"; NS="${2:?namespace}"; TAG="${3:?git sha}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CHART="$ROOT/infrastructure/helm/datn-app"
 VALUES="$CHART/values-$ENV_NAME.yaml"
+[ -f "$VALUES" ] || { echo "Không có $VALUES"; exit 1; }
+APP_URL="${4:-$(sed -n 's/^publicUrl: *//p' "$VALUES")}"
+[[ "$APP_URL" =~ ^https?:// ]] || { echo "Không xác định được URL công khai (publicUrl trong $VALUES): '$APP_URL'"; exit 1; }
 RELEASE=datn-app
 SELECTOR="datn/layer=app"
 TIMEOUT="${DEPLOY_TIMEOUT:-15m}"
 export HELM_DRIVER=configmap           # release lưu ở ConfigMap: CI không cần quyền Secret
 
-[ -f "$VALUES" ] || { echo "Không có $VALUES"; exit 1; }
 [[ "$TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "TAG phải là git SHA đầy đủ (40 ký tự hex): $TAG"; exit 1; }
 
 # Helm 4 đổi --atomic thành --rollback-on-failure: dò theo trợ giúp của chính bản helm đang cài
