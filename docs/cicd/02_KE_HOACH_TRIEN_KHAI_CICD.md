@@ -260,7 +260,7 @@ Backup `pg_dump` + `JENKINS_HOME`; chạy kịch bản §9; runbook ([03 §14](0
 | T8 | Duyệt prod | Push tag `v1.0.0` | `datn-deploy` chờ duyệt; người ngoài `submitter` không duyệt được; duyệt xong prod = digest staging |
 | T9 | NetworkPolicy | Pod staging gọi `identity-service.datn-prod...` | Timeout |
 | T10 | Đổi cấu hình | Sửa `values-staging.yaml` (`mail.from`), merge | `checksum/env` đổi nên Deployment tự rolling update |
-| T11 | Cách ly Jenkins | `sudo -u jenkins kubectl get pods -A`; `sudo -u jenkins docker ps` | Cả hai lỗi |
+| T11 | Cách ly Jenkins | `sudo -u jenkins kubectl get pods -A`; `sudo -u jenkins docker -H unix:///var/run/docker.sock ps` | Cả hai lỗi |
 | T12 | Công cụ quản trị | Mở `https://pgadmin-staging.<domain>` từ IP ngoài danh sách, rồi từ IP trong danh sách | Ngoài danh sách: 403; trong: hỏi basic auth rồi tới đăng nhập pgAdmin; thấy 2 server DB của **đúng** namespace |
 
 ---

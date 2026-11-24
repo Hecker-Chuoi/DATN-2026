@@ -194,8 +194,11 @@ sudo machinectl shell jenkins@ /usr/bin/systemctl --user enable --now docker
 J=$(id -u jenkins)
 sudo -u jenkins DOCKER_HOST=unix:///run/user/$J/docker.sock docker info --format '{{.SecurityOptions}}'
 sudo -u jenkins DOCKER_HOST=unix:///run/user/$J/docker.sock docker ps     # danh sách rỗng
-sudo -u jenkins docker ps                                                 # Docker gốc: permission denied (đúng)
+sudo -u jenkins docker -H unix:///var/run/docker.sock ps                   # Docker gốc: permission denied (đúng)
+id -u jenkins                                                              # UID dùng cho DOCKER_HOST ở mục 3
 ```
+
+Script cài đặt tạo context `rootless` và đặt làm mặc định cho user `jenkins`, nên `sudo -u jenkins docker ps` (không chỉ định `-H`) cũng vào Docker rootless và ra danh sách rỗng. Muốn chứng minh Jenkins **không** chạm được Docker gốc thì phải gọi thẳng socket gốc bằng `-H unix:///var/run/docker.sock` như dòng trên.
 
 ### 4.4. Giới hạn tài nguyên của daemon rootless (khuyến nghị)
 
@@ -385,7 +388,7 @@ Lưu ý: Jenkins thường khuyên không build trên controller. Ở đây ch�
 systemctl is-active jenkins                                              # active
 curl -sI http://127.0.0.1:8080/login | head -1                           # HTTP/1.1 200
 J=$(id -u jenkins); sudo -u jenkins DOCKER_HOST=unix:///run/user/$J/docker.sock docker info --format '{{.SecurityOptions}}'   # có "rootless"
-sudo -u jenkins docker ps                                                # PHẢI lỗi permission denied (không chạm Docker gốc)
+sudo -u jenkins docker -H unix:///var/run/docker.sock ps                                                # PHẢI lỗi permission denied (không chạm Docker gốc)
 sudo -u jenkins bash -lc 'kubectl version --client && helm version && kubeconform -v && trivy --version && jq --version'
 id jenkins                                                               # không có nhóm docker, sudo
 ```
@@ -517,7 +520,7 @@ Trong `Jenkinsfile.deploy`, sửa `submitter: 'truongnhom'` thành danh sách us
 | E5 | `datn-deploy` → Build with Parameters → `TARGET=staging`, `ACTION=deploy`, `IMAGE_TAG=<sha cũ>` | Staging chạy SHA cũ; `helm -n datn-staging history datn-app` có revision mới |
 | E5b | `datn-deploy` → `TARGET=staging`, `ACTION=helm-rollback`, `REVISION` trống | Staging quay về revision Helm ngay trước |
 | E6 | Trong một PR, thêm dòng `withCredentials([file(credentialsId: 'kubeconfig-prod', ...)])` vào `Jenkinsfile` | Build PR lỗi: `Could not find credentials entry with ID 'kubeconfig-prod'` |
-| E7 | `sudo -u jenkins kubectl get pods -A` ; `sudo -u jenkins docker ps` | Cả hai đều lỗi: Jenkins không có quyền admin cluster, không chạm được Docker gốc |
+| E7 | `sudo -u jenkins kubectl get pods -A` ; `sudo -u jenkins docker -H unix:///var/run/docker.sock ps` | Cả hai đều lỗi: Jenkins không có quyền admin cluster, không chạm được Docker gốc |
 
 ---
 

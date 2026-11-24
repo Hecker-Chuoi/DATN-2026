@@ -2753,7 +2753,7 @@ kubectl -n $NS run np-test --rm -it --image=busybox:1.36 --restart=Never -- \
 kubectl -n $NS get deploy work-service -o jsonpath='{.spec.template.metadata.annotations}'; echo
 
 # T11 – cách ly Jenkins
-sudo -u jenkins kubectl get pods -A ; sudo -u jenkins docker ps          # cả hai phải lỗi
+sudo -u jenkins kubectl get pods -A ; sudo -u jenkins docker -H unix:///var/run/docker.sock ps          # cả hai phải lỗi
 
 # T12 – công cụ quản trị
 curl -s -o /dev/null -w "%{http_code}\n" https://pgadmin-staging.example.com/                  # 401 (basic auth) hoặc 403 (ngoài whitelist)
