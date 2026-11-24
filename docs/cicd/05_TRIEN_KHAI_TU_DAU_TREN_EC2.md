@@ -3,53 +3,62 @@
 > Dành cho người dựng máy chủ. Làm **theo đúng thứ tự** từ bước 1 đến bước 12. Mỗi bước có lệnh cần chạy và cách kiểm tra trước khi sang bước sau.
 > Tài liệu này là **trình tự**. Nội dung chi tiết (file chart, cấu hình Nginx, Jenkins…) nằm ở [03](03_HUONG_DAN_TRIEN_KHAI.md) và [04](04_HUONG_DAN_SETUP_JENKINS.md); chỗ nào trỏ sang thì làm đúng mục đó rồi quay lại đây.
 > Mọi file chart, script, Jenkinsfile **đã có trong repo** và đã chạy thử trên cluster thật ([03 §13.1](03_HUONG_DAN_TRIEN_KHAI.md)).
+>
+> **Chế độ hiện tại: TẠM DÙNG IP CỦA SERVER, CHƯA CÓ TÊN MIỀN, CHẠY HTTP.** Khi có tên miền thật, làm [mục cuối](#chuyển-sang-tên-miền-thật-và-https) để chuyển sang HTTPS.
 
 ## Tổng quan
 
 | Bước | Việc | Làm ở đâu | Thời gian |
 |---|---|---|---|
-| 1 | Chuẩn bị tên miền, tài khoản AWS, token GitHub | Trình duyệt | 30 phút |
+| 1 | Tài khoản AWS, token GitHub | Trình duyệt | 30 phút |
 | 2 | Tạo EC2, Security Group, Elastic IP | AWS Console | 30 phút |
-| 3 | Trỏ DNS | Nhà cung cấp tên miền | 10 phút (+ chờ cập nhật) |
-| 4 | Sửa tên miền trong repo, merge vào `main` | Máy dev | 30 phút |
+| 3 | Kiểm tra tên host dựng từ IP | Máy dev | 5 phút |
+| 4 | Ghi IP vào repo, merge vào `main` | Máy dev | 20 phút |
 | 5 | Chuẩn bị máy chủ, cài công cụ | SSH vào EC2 | 45 phút |
 | 6 | Khởi động minikube | EC2 | 15 phút |
 | 7 | Secret + cài `datn-platform` (staging, prod) | EC2 | 45 phút |
-| 8 | Nginx máy chủ + TLS | EC2 | 30 phút |
+| 8 | Nginx máy chủ (HTTP) | EC2 | 20 phút |
 | 9 | Cài và cấu hình Jenkins | EC2 + trình duyệt | 2–3 giờ |
 | 10 | Kubeconfig cho Jenkins, webhook GitHub | EC2 + trình duyệt | 30 phút |
 | 11 | Deploy staging lần đầu, phát hành prod | GitHub + Jenkins | 1 giờ |
 | 12 | Sao lưu, theo dõi chi phí, nghiệm thu | AWS + EC2 | 1 giờ |
 
-Quy ước trong tài liệu: tên miền là `tenmien.vn`, IP tĩnh của EC2 là `<EIP>`, owner GitHub là `Hecker-Chuoi` (image trên GHCR viết **chữ thường**: `hecker-chuoi`). Thay bằng giá trị thật.
+---
+
+## Tên host khi chưa có tên miền
+
+Hệ thống phân biệt app, Keycloak, pgAdmin, staging, prod… bằng **tên host** (Ingress), nên không thể dùng một địa chỉ `http://<IP>` trần cho tất cả. Thay vào đó dùng dịch vụ DNS miễn phí **[sslip.io](https://sslip.io)**: mọi tên có dạng `<gì-đó>.<IP-viết-gạch-ngang>.sslip.io` tự trỏ về đúng IP đó. Không cần mua tên miền, không cần cấu hình DNS.
+
+Ví dụ Elastic IP là `13.250.1.2` thì **tên gốc** (gọi là `BASE` trong tài liệu) là `13-250-1-2.sslip.io`:
+
+| Tên | Dùng cho |
+|---|---|
+| `http://app.BASE` | Ứng dụng (prod) |
+| `http://sso.BASE` | Keycloak (prod) |
+| `http://pgadmin.BASE` | pgAdmin (prod) |
+| `http://staging.BASE` | Ứng dụng (staging) |
+| `http://sso-staging.BASE` | Keycloak (staging) |
+| `http://pgadmin-staging.BASE` | pgAdmin (staging) |
+| `http://mail-staging.BASE` | Mailpit (staging) |
+| `http://jenkins.BASE` | Jenkins (chỉ webhook GitHub, giao diện vào qua SSH tunnel) |
+
+**Giới hạn của chế độ tạm (chấp nhận được cho giai đoạn phát triển, không dùng cho người dùng thật):**
+- **Không có HTTPS.** Let's Encrypt giới hạn số chứng chỉ theo tên miền gốc; `sslip.io` không nằm trong Public Suffix List (đã kiểm tra 24/11/2026) nên hạn mức đó dùng chung cho mọi người trên thế giới và thường đã cạn. Mật khẩu (đăng nhập app, basic auth, pgAdmin) đi qua mạng dạng chữ thường → **nên giới hạn IP cho công cụ quản trị** (bước 7.4) và vào Jenkins qua SSH tunnel.
+- **Đăng nhập Google không dùng được**: Google chỉ chấp nhận redirect URI `https` (trừ `localhost`). Đăng ký/đăng nhập bằng mật khẩu và email xác thực vẫn chạy bình thường.
+- Keycloak phải tắt yêu cầu HTTPS (`sslRequired=none`) ở realm ứng dụng và realm `master` (bước 7.2, 7.6).
+- **Giữ nguyên Elastic IP.** Đổi IP là đổi toàn bộ tên host, phải làm lại bước 4 và cấu hình Keycloak.
 
 ---
 
 ## Bước 1. Chuẩn bị
 
-### 1.1. Tên miền
-
-Cần **một tên miền** để có HTTPS (Let's Encrypt) và để Keycloak có URL công khai cố định. Mua tên miền rẻ (`.id.vn`, `.site`, `.xyz`…) ở bất kỳ nhà cung cấp nào cho sửa bản ghi DNS. Sẽ dùng các tên sau:
-
-| Tên | Dùng cho |
-|---|---|
-| `app.tenmien.vn` | Ứng dụng (prod) |
-| `sso.tenmien.vn` | Keycloak (prod) |
-| `pgadmin.tenmien.vn` | pgAdmin (prod) |
-| `staging.tenmien.vn` | Ứng dụng (staging) |
-| `sso-staging.tenmien.vn` | Keycloak (staging) |
-| `pgadmin-staging.tenmien.vn` | pgAdmin (staging) |
-| `mail-staging.tenmien.vn` | Mailpit (staging) |
-| `jenkins.tenmien.vn` | Jenkins |
-| `minio.tenmien.vn` | MinIO Console (chỉ khi bật, mặc định tắt) |
-
-### 1.2. Tài khoản AWS
+### 1.1. Tài khoản AWS
 
 1. **Region:** chọn **Asia Pacific (Singapore) `ap-southeast-1`**, gần Việt Nam nhất. Mọi bước sau làm trong cùng region này.
 2. **Hạn mức vCPU:** tài khoản mới thường chỉ được chạy ít vCPU. Vào **Service Quotas → Amazon EC2 → Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances**. Giá trị phải **≥ 8**, nếu thấp hơn thì bấm *Request increase* lên 8 (thường được duyệt trong vài giờ tới 1 ngày). Làm việc này **trước tiên**.
 3. **Cảnh báo chi phí:** **Billing → Budgets → Create budget** → *Monthly cost budget*, đặt mức bạn chấp nhận được (ví dụ 100 USD), nhận email khi chạm 80%.
 
-### 1.3. Token GitHub
+### 1.2. Token GitHub
 
 Tạo tại GitHub → Settings → Developer settings → **Personal access tokens (classic)**. GHCR chỉ nhận PAT classic. Đặt hạn dùng 90 ngày, lưu vào trình quản lý mật khẩu.
 
@@ -90,10 +99,10 @@ EC2 → **Security Groups → Create security group**, tên `datn-sg`:
 | Inbound | Port | Source | Lý do |
 |---|---|---|---|
 | SSH | 22 | **My IP** | Chỉ máy của bạn SSH được. Đổi mạng thì sửa lại rule này |
-| HTTP | 80 | `0.0.0.0/0` | Let's Encrypt cấp chứng chỉ, chuyển hướng sang HTTPS |
-| HTTPS | 443 | `0.0.0.0/0` | Ứng dụng, Keycloak, công cụ quản trị, Jenkins, webhook GitHub |
+| HTTP | 80 | `0.0.0.0/0` | Ứng dụng, Keycloak, công cụ quản trị, webhook GitHub (chế độ tạm chạy HTTP) |
+| HTTPS | 443 | `0.0.0.0/0` | Chưa dùng; mở sẵn cho lúc chuyển sang tên miền thật |
 
-**Không** mở thêm cổng nào khác (8080, 8443, 5432…): mọi thứ đi qua Nginx ở cổng 443. Outbound để mặc định (cho phép hết).
+**Không** mở thêm cổng nào khác (8080, 8443, 5432…): mọi thứ đi qua Nginx máy chủ. Outbound để mặc định (cho phép hết).
 
 ### 2.4. Launch instance
 
@@ -116,7 +125,12 @@ Bấm **Launch**, chờ trạng thái *Running* và *2/2 checks passed*.
 
 ### 2.5. Elastic IP
 
-IP công khai mặc định **đổi mỗi lần tắt/bật máy**, nên cần IP tĩnh: EC2 → **Elastic IPs → Allocate** → chọn IP vừa cấp → **Associate** → instance `datn-server`. Ghi lại IP này, gọi là `<EIP>`.
+IP công khai mặc định **đổi mỗi lần tắt/bật máy**, mà mọi tên host đều dựng từ IP, nên bắt buộc dùng IP tĩnh: EC2 → **Elastic IPs → Allocate** → chọn IP vừa cấp → **Associate** → instance `datn-server`. Ghi lại IP này, gọi là `<EIP>`, và tính `BASE`:
+
+```bash
+EIP=13.250.1.2                                   # <- IP thật của bạn
+echo "BASE=$(echo $EIP | tr . -).sslip.io"       # BASE=13-250-1-2.sslip.io
+```
 
 ### 2.6. SSH thử
 
@@ -137,28 +151,31 @@ Host datn
 
 ---
 
-## Bước 3. Trỏ DNS
+## Bước 3. Kiểm tra tên host
 
-Ở trang quản lý DNS của tên miền, tạo **bản ghi A** cho từng tên ở bước 1.1 (trừ `minio` nếu chưa bật), giá trị `<EIP>`, TTL 300. Có thể dùng một bản ghi wildcard `*.tenmien.vn → <EIP>` thay cho từng bản ghi.
-
-Kiểm tra (máy dev, chờ vài phút tới vài giờ tuỳ nhà cung cấp):
+Không có gì để cấu hình. Chỉ cần kiểm tra tên dựng từ IP trỏ đúng máy (máy dev):
 
 ```powershell
-nslookup staging.tenmien.vn
-nslookup jenkins.tenmien.vn      # cả hai phải ra <EIP>
+nslookup staging.13-250-1-2.sslip.io      # Address: 13.250.1.2
+nslookup jenkins.13-250-1-2.sslip.io      # Address: 13.250.1.2
 ```
 
 ---
 
-## Bước 4. Sửa repo cho tên miền thật (máy dev)
+## Bước 4. Ghi IP vào repo (máy dev)
 
-Các file sau đang dùng `example.com`: `Jenkinsfile`, `infrastructure/jenkins/Jenkinsfile.deploy`, `infrastructure/helm/*/values-staging.yaml`, `infrastructure/helm/*/values-prod.yaml`.
+Các file `Jenkinsfile`, `infrastructure/jenkins/Jenkinsfile.deploy`, `infrastructure/helm/*/values-staging.yaml`, `infrastructure/helm/*/values-prod.yaml` đang dùng `https://….example.com`. Script `set-public-host.sh` đổi một lần cả tên host, giao thức và cờ cookie `Secure`:
 
 ```bash
 # Git Bash, ở gốc repo, trên nhánh feat/cicd-helm-jenkins
-grep -rl 'example\.com' Jenkinsfile infrastructure/jenkins infrastructure/helm \
-  | xargs sed -i 's/example\.com/tenmien.vn/g'
-grep -rn 'example\.com' Jenkinsfile infrastructure/jenkins infrastructure/helm   # phải rỗng
+bash infrastructure/scripts/set-public-host.sh 13-250-1-2.sslip.io http
+```
+
+Script in lại mọi URL/host sau khi đổi; phần *Còn sót tên cũ* phải là `(không còn)`. Kiểm tra nhanh:
+
+```bash
+git diff --stat           # 6 file thay đổi
+grep -n "cookieSecure" infrastructure/helm/datn-app/values-*.yaml    # false (vì chạy HTTP)
 ```
 
 Sửa thêm bằng tay:
@@ -171,7 +188,7 @@ Sửa thêm bằng tay:
 
 Commit, push, mở PR từ `feat/cicd-helm-jenkins` vào `main`, review rồi **merge**. Từ đây máy chủ và Jenkins chỉ dùng nhánh `main`.
 
-> **Không** ghi IP của nhóm vào repo: danh sách IP được phép vào công cụ quản trị nằm trong file riêng trên máy chủ (bước 7.4).
+> **Không** ghi IP của nhóm (IP được vào công cụ quản trị) vào repo: chúng nằm trong file riêng trên máy chủ (bước 7.4). IP của server thì ghi vào repo được, vì ai mở web cũng thấy.
 
 ---
 
@@ -219,6 +236,8 @@ Làm theo **[03 §1](03_HUONG_DAN_TRIEN_KHAI.md)** (gói apt, Docker, kubectl, m
 2. Lệnh `newgrp docker` mở một shell mới: thay bằng `exit` rồi SSH lại để nhóm `docker` có hiệu lực.
 3. **Chưa** chạy lệnh `git clone` ở cuối §1 (làm ở 5.4).
 
+`certbot` trong danh sách gói apt chưa dùng tới (chế độ HTTP), cài sẵn cũng không sao.
+
 Kiểm tra:
 
 ```bash
@@ -246,7 +265,7 @@ EOF
 sudo mkdir -p /opt/datn && sudo chown datnadmin: /opt/datn
 git clone git@github.com:Hecker-Chuoi/DATN-2026.git /opt/datn
 cd /opt/datn && git log --oneline -1          # đúng commit merge ở bước 4
-ls infrastructure/helm                        # datn-app  datn-platform
+grep -m1 "host:" infrastructure/helm/datn-app/values-staging.yaml   # host: staging.<BASE>
 ```
 
 Repo public thì clone bằng HTTPS như 03 §1.
@@ -276,6 +295,12 @@ sudo systemctl is-enabled minikube                 # enabled
 
 ## Bước 7. Secret và `datn-platform`
 
+Đặt sẵn biến cho các lệnh bên dưới (thay bằng BASE thật):
+
+```bash
+BASE=13-250-1-2.sslip.io
+```
+
 ### 7.1. Namespace
 
 ```bash
@@ -286,24 +311,43 @@ cd /opt/datn && kubectl apply -f infrastructure/k8s/namespaces.yaml
 
 Làm **[03 §6.1 → §6.4](03_HUONG_DAN_TRIEN_KHAI.md)** với `ENV=staging`:
 
-| Mục | Ghi chú trên EC2 |
+| Mục | Ghi chú cho chế độ tạm (HTTP) |
 |---|---|
 | 6.1 `app-secrets` | `PGADMIN_EMAIL`: email thật của bạn (pgAdmin từ chối tên miền đặc biệt như `.local`) |
-| 6.2 `keycloak-realm` | `APP_URL=https://staging.tenmien.vn`. Không cần thêm `sslRequired = "none"` vì có HTTPS |
+| 6.2 `keycloak-realm` | **Dùng lệnh dưới thay cho lệnh ở 03 §6.2**: `APP_URL` là `http://…` và có thêm `sslRequired = "none"` |
 | 6.3 `ghcr-pull` | `--docker-username=<user GitHub>`, `--docker-password=<token cluster-ghcr>` |
 | 6.4 `admin-basic-auth` | Tạo user basic auth, ví dụ `quantri` |
 
-**Google đăng nhập:** file realm export trong repo chứa client secret Google thật (đã lộ trong Git). Tạo secret mới trên Google Cloud Console; sau khi Keycloak chạy (7.5), vào Admin Console → `datn-realm` → *Identity providers* → `google` để nhập secret mới. Thêm *Authorized redirect URI* trên Google: `https://sso-staging.tenmien.vn/realms/datn-realm/broker/google/endpoint` (và bản `sso.tenmien.vn` cho prod).
+Lệnh 6.2 đầy đủ cho chế độ HTTP (đã chạy thử biểu thức jq trên file realm của repo):
+
+```bash
+source ~/datn-secrets/$ENV.env
+APP_URL=http://staging.$BASE                  # prod: http://app.$BASE
+jq --arg secret "$KEYCLOAK_CLIENT_SECRET" --arg app "$APP_URL" '
+  (.clients[] | select(.clientId == "datn-backend")) |= (
+      .secret = $secret
+    | .redirectUris = [$app + "/*"]
+    | .webOrigins = [$app]
+    | .attributes["post.logout.redirect.uris"] = ($app + "/*"))
+  | .sslRequired = "none"
+' infrastructure/keycloak/realm-export_08082026.json > ~/datn-secrets/realm-$ENV.json
+jq -r '.sslRequired, (.clients[] | select(.clientId=="datn-backend") | .redirectUris[0])' ~/datn-secrets/realm-$ENV.json
+# none
+# http://staging.<BASE>/*
+kubectl -n datn-$ENV create secret generic keycloak-realm --from-file=realm.json=$HOME/datn-secrets/realm-$ENV.json
+```
+
+> Thiếu `sslRequired = "none"` thì người dùng truy cập từ Internet (IP công khai) qua HTTP sẽ gặp lỗi **"HTTPS required"** khi đăng nhập. Keycloak chỉ import realm ở **lần khởi động đầu**; quên bước này thì sửa trong Admin Console (*Realm settings → General → Require SSL: none*) hoặc bằng lệnh ở 7.6.
 
 ### 7.3. Secret cho prod
 
-Lặp lại 03 §6.1 → §6.4 với `ENV=prod`, `APP_URL=https://app.tenmien.vn`. Khác staging:
+Lặp lại 03 §6.1 → §6.4 và lệnh 6.2 ở trên với `ENV=prod`, `APP_URL=http://app.$BASE`. Khác staging:
 - `MAIL_USERNAME` = địa chỉ Gmail, `MAIL_PASSWORD` = **App Password** của Gmail (Google Account → Security → 2-Step Verification → App passwords). EC2 chặn cổng 25 nhưng cho phép 587, đúng cổng chart dùng.
 - Mật khẩu mọi thứ khác **sinh mới**, không dùng lại của staging.
 
 Sao lưu cả thư mục `~/datn-secrets` vào trình quản lý mật khẩu của nhóm. Mất file này thì phải đặt lại mật khẩu DB bằng tay.
 
-### 7.4. Giới hạn IP cho công cụ quản trị (tuỳ chọn, nên làm)
+### 7.4. Giới hạn IP cho công cụ quản trị (rất nên làm khi chạy HTTP)
 
 IP của nhóm để ngoài repo, trong file riêng trên máy chủ:
 
@@ -348,34 +392,55 @@ Kiểm tra (chưa cần Nginx máy chủ):
 
 ```bash
 for e in staging prod; do kubectl -n datn-$e get pods; done          # mọi pod 1/1 Running, RESTARTS 0
-curl -s -H "Host: sso-staging.tenmien.vn" -H "X-Forwarded-Proto: https" \
-  http://$(minikube ip)/realms/datn-realm/.well-known/openid-configuration | jq -r .issuer
-# Kỳ vọng: https://sso-staging.tenmien.vn/realms/datn-realm
+curl -s -H "Host: sso-staging.$BASE" http://$(minikube ip)/realms/datn-realm/.well-known/openid-configuration | jq -r .issuer
+# Kỳ vọng: http://sso-staging.<BASE>/realms/datn-realm
 ```
 
 Keycloak lần đầu mất 1–2 phút để tự build và import realm. Nếu thấy `OOMKilled`, xem [03 §14.2](03_HUONG_DAN_TRIEN_KHAI.md).
 
+### 7.6. Admin Console của Keycloak qua HTTP (chỉ khi cần)
+
+Realm `master` (tài khoản `admin` của Admin Console) do Keycloak tự tạo, vẫn bắt HTTPS với truy cập từ Internet. Muốn mở `http://sso-staging.$BASE/admin` thì tắt yêu cầu đó bằng lệnh chạy **bên trong pod** (truy cập từ `localhost` luôn được phép):
+
+```bash
+ENV=staging; source ~/datn-secrets/$ENV.env
+kubectl -n datn-$ENV exec deploy/keycloak -- bash -c "
+  /opt/keycloak/bin/kcadm.sh config credentials --config /tmp/kcadm.config \
+    --server http://localhost:8080 --realm master --user admin --password '$KC_ADMIN_PASSWORD' &&
+  /opt/keycloak/bin/kcadm.sh update realms/master --config /tmp/kcadm.config -s sslRequired=NONE &&
+  /opt/keycloak/bin/kcadm.sh get realms/master --config /tmp/kcadm.config --fields sslRequired"
+# { "sslRequired" : "none" }      (đã chạy thử trên Keycloak 24.0.1)
+```
+
+Đăng nhập Admin Console bằng user `admin` và `KC_ADMIN_PASSWORD`. Nhớ đặt lại `EXTERNAL` khi chuyển sang HTTPS (mục cuối).
+
 ---
 
-## Bước 8. Nginx máy chủ và HTTPS
+## Bước 8. Nginx máy chủ (HTTP)
 
-Làm theo **[03 §8](03_HUONG_DAN_TRIEN_KHAI.md)**: tạo `/etc/nginx/sites-available/datn` (thay `example.com` bằng `tenmien.vn`, `proxy_pass` bằng `minikube ip` nếu khác `192.168.49.2`), bật site, chạy `certbot --nginx`.
+Tạo `/etc/nginx/sites-available/datn` theo **[03 §8](03_HUONG_DAN_TRIEN_KHAI.md)**, chỉ khác dòng `server_name` (và `proxy_pass` nếu `minikube ip` khác `192.168.49.2`). Sinh sẵn dòng `server_name` đúng BASE:
+
+```bash
+BASE=13-250-1-2.sslip.io
+echo "server_name app.$BASE sso.$BASE pgadmin.$BASE staging.$BASE sso-staging.$BASE pgadmin-staging.$BASE mail-staging.$BASE;"
+```
+
+Bật site như 03 §8 (`ln -s …`, xoá site `default`, `nginx -t`, `reload`). **Bỏ qua lệnh `certbot`** (chế độ HTTP).
 
 Thêm bản ghi `/etc/hosts` để các lệnh **chạy ngay trên máy chủ** (smoke test của Jenkins) đi thẳng vào Nginx cục bộ thay vì vòng ra IP công khai:
 
 ```bash
-echo "127.0.0.1 app.tenmien.vn staging.tenmien.vn sso.tenmien.vn sso-staging.tenmien.vn" | sudo tee -a /etc/hosts
+echo "127.0.0.1 app.$BASE staging.$BASE sso.$BASE sso-staging.$BASE" | sudo tee -a /etc/hosts
 ```
 
-Kiểm tra từ **máy cá nhân**:
+Kiểm tra từ **máy cá nhân** (Git Bash):
 
 ```bash
-curl -sI https://sso-staging.tenmien.vn/realms/datn-realm | head -1         # HTTP/2 200
-curl -s -o /dev/null -w "%{http_code}\n" https://pgadmin-staging.tenmien.vn/ # 401 (basic auth) hoặc 403 (ngoài IP cho phép)
-sudo certbot renew --dry-run                                                 # (trên máy chủ) gia hạn tự động hoạt động
+BASE=13-250-1-2.sslip.io
+curl -s -o /dev/null -w "%{http_code}\n" http://sso-staging.$BASE/realms/datn-realm      # 200
+curl -s -o /dev/null -w "%{http_code}\n" http://pgadmin-staging.$BASE/                   # 401 (basic auth) hoặc 403 (ngoài IP cho phép)
+curl -s -o /dev/null -w "%{http_code}\n" http://staging.$BASE/                           # 503: chưa có datn-app, bước 11 sẽ cài
 ```
-
-`https://staging.tenmien.vn` lúc này trả 503 vì chưa có `datn-app`. Bình thường, bước 11 sẽ cài.
 
 ---
 
@@ -383,14 +448,14 @@ sudo certbot renew --dry-run                                                 # (
 
 Làm lần lượt **[04 §2 → §13](04_HUONG_DAN_SETUP_JENKINS.md)**:
 
-| Mục 04 | Ghi chú trên EC2 |
+| Mục 04 | Ghi chú trên EC2, chế độ HTTP |
 |---|---|
 | §2 Java + Jenkins | |
 | §3 systemd | Máy 32 GiB giữ `MemoryMax=4G` |
 | §4 Docker rootless | Ubuntu 24.04: **bắt buộc** làm §4.2 (AppArmor) |
 | §5 Công cụ | `kubeconform`, `trivy`. Trivy hiện chỉ báo cáo, không chặn build |
-| §6 Nginx + TLS | `jenkins.tenmien.vn`. Nên chỉ mở `/github-webhook/` và vào UI qua SSH tunnel: `ssh -L 8080:127.0.0.1:8080 datn` rồi mở `http://localhost:8080` |
-| §7 Plugin | |
+| §6 Nginx | `server_name jenkins.$BASE;`. **Bỏ qua `certbot`.** Vì chạy HTTP, **bắt buộc** chọn cách an toàn: bỏ comment `deny all;` trong `location /` (chỉ mở `/github-webhook/`), vào giao diện qua SSH tunnel: `ssh -L 8080:127.0.0.1:8080 datn` rồi mở `http://localhost:8080` |
+| §7 Plugin | *Jenkins URL* = `http://jenkins.<BASE>/` |
 | §8 Bảo mật | Tạo tài khoản quản trị đúng user ID đã ghi vào `submitter` ở bước 4. Máy 32 GiB: **2 executor** |
 | §9 Tools | |
 | §10 Folder, credential | `kubeconfig-staging`, `kubeconfig-prod` tạo ở bước 10.1 |
@@ -402,6 +467,7 @@ Kiểm tra cách ly (bắt buộc):
 ```bash
 sudo -u jenkins kubectl get pods -A        # PHẢI lỗi: Jenkins không có kubeconfig admin
 sudo -u jenkins docker ps                  # PHẢI lỗi: Jenkins không chạm được Docker gốc (nơi chạy minikube)
+curl -s -o /dev/null -w "%{http_code}\n" http://jenkins.$BASE/login     # 403 (deny all): giao diện không mở ra Internet
 ```
 
 ---
@@ -425,7 +491,7 @@ Tải từ máy chủ về máy cá nhân: `scp datn:kubeconfig-datn-* .` Tải 
 
 | Việc | Ở đâu |
 |---|---|
-| Webhook `https://jenkins.tenmien.vn/github-webhook/` | [04 §13](04_HUONG_DAN_SETUP_JENKINS.md); *Recent Deliveries* phải trả `200` |
+| Webhook `http://jenkins.<BASE>/github-webhook/` | [04 §13](04_HUONG_DAN_SETUP_JENKINS.md) (dùng `http`, không có HTTPS). Payload được ký bằng `github-webhook-secret` nên Jenkins vẫn từ chối request giả. *Recent Deliveries* phải trả `200` |
 | Branch protection cho `main` (cần PR + check `continuous-integration/jenkins/pr-merge`) | [03 §11](03_HUONG_DAN_TRIEN_KHAI.md) |
 
 ---
@@ -441,11 +507,10 @@ Tải từ máy chủ về máy cá nhân: `scp datn:kubeconfig-datn-* .` Tải 
 3. Kỳ vọng log kết thúc bằng `✅ datn-app@<sha> đã chạy trên datn-staging`.
 4. GitHub → **Packages**: 6 package `datn-*`, đặt **Private** nếu chưa phải.
 
-Kiểm tra bằng trình duyệt `https://staging.tenmien.vn`:
-- Đăng ký tài khoản → email xác thực trong `https://mail-staging.tenmien.vn` (basic auth) → bấm link → đăng nhập.
+Kiểm tra bằng trình duyệt `http://staging.<BASE>` (trình duyệt sẽ báo "Not secure", đúng với chế độ HTTP):
+- Đăng ký tài khoản → email xác thực trong `http://mail-staging.<BASE>` (basic auth) → bấm link → đăng nhập.
 - Tạo workspace, dự án, công việc; tải đính kèm.
 - Thông báo realtime: DevTools → Network → WS `/notification/ws` trả `101`.
-- Đăng nhập Google (nếu đã làm 7.2).
 
 ### 11.2. Prod
 
@@ -455,7 +520,7 @@ git checkout main && git pull
 git tag -a v1.0.0 -m "Phát hành v1.0.0" && git push origin v1.0.0
 ```
 
-Jenkins: build `v1.0.0` gắn tag image → job `DATN/release/datn-deploy` chờ duyệt → người có trong `submitter` bấm **Đồng ý** → kiểm tra `https://app.tenmien.vn` giống 11.1 (email thật gửi qua Gmail).
+Jenkins: build `v1.0.0` gắn tag image → job `DATN/release/datn-deploy` chờ duyệt → người có trong `submitter` bấm **Đồng ý** → kiểm tra `http://app.<BASE>` giống 11.1 (email thật gửi qua Gmail).
 
 Rollback, deploy lại SHA cũ: [03 §12.5](03_HUONG_DAN_TRIEN_KHAI.md).
 
@@ -471,17 +536,17 @@ Rollback, deploy lại SHA cũ: [03 §12.5](03_HUONG_DAN_TRIEN_KHAI.md).
 | Cả ổ đĩa EC2 | EC2 → **Lifecycle Manager → Create lifecycle policy** → *EBS snapshot policy*, target: volume gắn với `datn-server` (gắn tag `Backup=datn` cho volume rồi chọn theo tag), lịch hằng ngày 03:00, giữ 7 bản |
 | Bí mật | `~/datn-secrets` trong trình quản lý mật khẩu (bước 7.3) |
 
-Snapshot EBS chụp cả dữ liệu Postgres, Kafka, MinIO (nằm trong container minikube) và Jenkins. Khôi phục máy hỏng: tạo volume từ snapshot, gắn vào instance mới.
+Snapshot EBS chụp cả dữ liệu Postgres, Kafka, MinIO (nằm trong container minikube) và Jenkins. Khôi phục máy hỏng: tạo volume từ snapshot, gắn vào instance mới (và gắn lại **đúng Elastic IP cũ**, vì tên host dựng từ IP).
 
 ### 12.2. Nghiệm thu
 
-Chạy các kịch bản **T1 → T12** ở [03 §13](03_HUONG_DAN_TRIEN_KHAI.md) và **E1 → E7** ở [04 §14](04_HUONG_DAN_SETUP_JENKINS.md). Chụp màn hình/kết quả làm minh chứng.
+Chạy các kịch bản **T1 → T12** ở [03 §13](03_HUONG_DAN_TRIEN_KHAI.md) và **E1 → E7** ở [04 §14](04_HUONG_DAN_SETUP_JENKINS.md), thay `https://….example.com` bằng `http://….<BASE>`. Chụp màn hình/kết quả làm minh chứng.
 
 ### 12.3. Tắt / bật máy để tiết kiệm
 
-- **Tắt:** EC2 → Instance state → **Stop** (không chọn *Terminate*: Terminate là xoá máy). Khi dừng chỉ trả tiền đĩa và Elastic IP.
-- **Bật:** **Start**. `minikube.service` tự khởi động cluster (1–3 phút), Jenkins tự chạy. Elastic IP giữ nguyên nên DNS không phải sửa.
-- Kiểm tra sau khi bật: `kubectl get pods -A | grep -v Running` (chỉ còn dòng tiêu đề và pod `Completed`), rồi mở `https://staging.tenmien.vn`.
+- **Tắt:** EC2 → Instance state → **Stop** (không chọn *Terminate*: Terminate là xoá máy). Khi dừng chỉ trả tiền đĩa và Elastic IP. **Không** *Release* Elastic IP.
+- **Bật:** **Start**. `minikube.service` tự khởi động cluster (1–3 phút), Jenkins tự chạy. Elastic IP giữ nguyên nên tên host không đổi.
+- Kiểm tra sau khi bật: `kubectl get pods -A | grep -v Running` (chỉ còn dòng tiêu đề và pod `Completed`), rồi mở `http://staging.<BASE>`.
 
 ### 12.4. Định kỳ
 
@@ -489,21 +554,41 @@ Chạy các kịch bản **T1 → T12** ở [03 §13](03_HUONG_DAN_TRIEN_KHAI.md
 |---|---|
 | Hằng tuần | `df -h /` và `minikube ssh -- df -h /` (đĩa < 80%); dọn Docker rootless của Jenkins ([04 §15](04_HUONG_DAN_SETUP_JENKINS.md)) |
 | Hằng tháng | `sudo apt-get update && sudo apt-get -y upgrade`; cập nhật Jenkins và plugin; xem báo cáo Trivy trong log build `main` |
-| Trước 90 ngày | Xoay 3 token GitHub (bước 1.3): cập nhật credential Jenkins và Secret `ghcr-pull` |
+| Trước 90 ngày | Xoay 3 token GitHub (bước 1.2): cập nhật credential Jenkins và Secret `ghcr-pull` |
 
 ---
 
-## Sự cố riêng trên EC2
+## Chuyển sang tên miền thật và HTTPS
+
+Làm khi đã mua tên miền (ví dụ `tenmien.vn`). Dữ liệu giữ nguyên; người dùng chỉ phải đăng nhập lại (issuer của token đổi).
+
+1. **DNS:** tạo bản ghi A `*.tenmien.vn` (hoặc từng tên `app`, `sso`, `pgadmin`, `staging`, `sso-staging`, `pgadmin-staging`, `mail-staging`, `jenkins`) → `<EIP>`. Kiểm tra `nslookup staging.tenmien.vn`.
+2. **Repo (máy dev):** `bash infrastructure/scripts/set-public-host.sh tenmien.vn https` (đổi host, `https`, `cookieSecure: true`), commit, PR, merge vào `main`.
+3. **Nginx + chứng chỉ (máy chủ):** đổi `server_name` trong `/etc/nginx/sites-available/datn` và `jenkins` sang tên mới, `sudo nginx -t && sudo systemctl reload nginx`, rồi chạy các lệnh `certbot --nginx` ở 03 §8 và 04 §6. Sửa dòng `/etc/hosts` (bước 8) sang tên mới.
+4. **Platform:** `~/datn-secrets/upgrade-platform.sh staging` rồi `prod` (Keycloak nhận `hostnameUrl` mới).
+5. **Keycloak (Admin Console, mỗi môi trường):**
+   - Realm `datn-realm` → *Realm settings → General → Require SSL* = **external requests**. Realm `master`: tương tự (hoặc lệnh 7.6 với `sslRequired=EXTERNAL`).
+   - *Clients → datn-backend*: *Valid redirect URIs* = `https://staging.tenmien.vn/*` (prod: `https://app.tenmien.vn/*`), *Web origins* = `https://staging.tenmien.vn`, *Valid post logout redirect URIs* tương tự. (Realm đã import từ lần đầu nên **không** tự cập nhật theo file.)
+   - Lúc này mới bật được đăng nhập Google: tạo secret mới trên Google Cloud Console, nhập ở *Identity providers → google*, thêm redirect URI `https://sso-staging.tenmien.vn/realms/datn-realm/broker/google/endpoint` (và bản `sso.tenmien.vn`).
+6. **Jenkins:** *Jenkins URL* = `https://jenkins.tenmien.vn/`; GitHub webhook đổi Payload URL sang `https://jenkins.tenmien.vn/github-webhook/`.
+7. **Deploy lại ứng dụng:** build `main` (staging) tự deploy với URL mới; prod: chạy `DATN/release/datn-deploy` với `ACTION=deploy`, `IMAGE_TAG=<sha đang chạy ở prod>` (xem `HELM_DRIVER=configmap helm -n datn-prod get values datn-app`).
+8. Security Group: có thể đóng 80 chỉ còn 443? **Không**: giữ 80 để Let's Encrypt gia hạn và chuyển hướng HTTP → HTTPS.
+
+---
+
+## Sự cố riêng trên EC2 / chế độ IP
 
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
-| Launch báo `VcpuLimitExceeded` | Hạn mức vCPU thấp | Bước 1.2, xin tăng lên 8 |
+| Launch báo `VcpuLimitExceeded` | Hạn mức vCPU thấp | Bước 1.1, xin tăng lên 8 |
 | SSH `Connection timed out` | IP của bạn đổi, rule SSH chỉ cho IP cũ | Security Group → sửa rule 22 → *My IP* |
-| Certbot `Timeout during connect` | DNS chưa trỏ đúng, hoặc thiếu rule 80 | `nslookup`; Security Group mở 80 cho `0.0.0.0/0` |
+| Đăng nhập báo **"HTTPS required"** | Realm còn `sslRequired=external` mà đang chạy HTTP | Realm ứng dụng: bước 7.2 (hoặc Admin Console); Admin Console: lệnh 7.6 |
+| Tên `*.sslip.io` không phân giải | Mạng chặn DNS lạ, hoặc gõ sai định dạng IP | `nslookup staging.<BASE> 8.8.8.8`; IP phải viết bằng gạch ngang (`13-250-1-2`) |
+| Mọi tên host hỏng sau khi bật lại máy | Elastic IP bị gỡ (Release/Disassociate) nên IP đổi | Gắn lại đúng EIP cũ; nếu buộc phải đổi IP: làm lại bước 4, 7.2 (realm qua Admin Console), 8, 10.2 |
 | Mọi trang 502 sau khi bật lại máy | minikube chưa lên xong, hoặc `minikube ip` đổi | `systemctl status minikube`; so `minikube ip` với `proxy_pass` trong `/etc/nginx/sites-available/datn` |
 | Pod `Pending`, `Insufficient cpu` | Máy không đủ cho cả 2 môi trường | Đúng cỡ máy ở bước 2.1; tạm `kubectl -n datn-staging scale deploy --all --replicas=0` |
 | Không gửi được email prod | Dùng cổng 25 (EC2 chặn) hoặc sai App Password | Chart dùng 587; tạo lại App Password, cập nhật `app-secrets` |
-| Smoke test Jenkins lỗi `Could not resolve host` / chứng chỉ | Thiếu dòng `/etc/hosts` (bước 8) hoặc DNS chưa cập nhật | Thêm dòng `/etc/hosts`; `curl -sI https://staging.tenmien.vn` trên máy chủ |
+| Smoke test Jenkins lỗi `Could not resolve host` | Thiếu dòng `/etc/hosts` (bước 8) | Thêm dòng `/etc/hosts`; `curl -s http://staging.<BASE>/` trên máy chủ |
 | Hoá đơn cao bất thường | Máy chạy 24/7, CPU credit của `t3` | Bước 12.3; Billing → Cost Explorer; cân nhắc `m7i-flex` |
 
 Các sự cố về Kubernetes, Helm, Keycloak: [03 §14.2](03_HUONG_DAN_TRIEN_KHAI.md). Về Jenkins: [04 §16](04_HUONG_DAN_SETUP_JENKINS.md).
