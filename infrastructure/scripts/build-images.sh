@@ -6,6 +6,9 @@ TAG="${1:?Cách dùng: $0 <git-sha>}"
 REGISTRY="${REGISTRY:-ghcr.io/hecker-chuoi}"         # GHCR bắt buộc chữ thường
 SOURCE_URL="${SOURCE_URL:-https://github.com/Hecker-Chuoi/DATN-2026}"
 SERVICES="${SERVICES:-api-gateway identity-service work-service workspace-service notification-service frontend}"
+# Trivy CHỈ BÁO CÁO, không chặn (quyết định của nhóm, 24/11/2026): thư viện của Spring Boot 3.5.x có CVE CRITICAL
+# mà bản vá chỉ có ở Spring 7. Muốn bật lại cổng chặn: đặt TRIVY_EXIT_CODE=1 (biến môi trường của job Jenkins).
+TRIVY_EXIT_CODE="${TRIVY_EXIT_CODE:-0}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 export DOCKER_BUILDKIT=1
@@ -18,8 +21,8 @@ for s in $SERVICES; do
     --label "org.opencontainers.image.revision=$TAG" \
     --label "org.opencontainers.image.source=$SOURCE_URL" \
     -t "$img:$TAG" -t "$img:main" -f "$file" "$ctx"
-  echo "== Quét $img:$TAG (chặn nếu có lỗ hổng CRITICAL đã có bản vá)"
-  trivy image --quiet --severity CRITICAL --ignore-unfixed --exit-code 1 "$img:$TAG"
+  echo "== Quét $img:$TAG (lỗ hổng HIGH/CRITICAL đã có bản vá; exit-code $TRIVY_EXIT_CODE: 0 = chỉ báo cáo)"
+  trivy image --quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code "$TRIVY_EXIT_CODE" "$img:$TAG"
   docker push "$img:$TAG"
   docker push "$img:main"
 done

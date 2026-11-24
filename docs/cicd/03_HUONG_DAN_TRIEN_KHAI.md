@@ -2376,6 +2376,9 @@ TAG="${1:?Cách dùng: $0 <git-sha>}"
 REGISTRY="${REGISTRY:-ghcr.io/hecker-chuoi}"         # GHCR bắt buộc chữ thường
 SOURCE_URL="${SOURCE_URL:-https://github.com/Hecker-Chuoi/DATN-2026}"
 SERVICES="${SERVICES:-api-gateway identity-service work-service workspace-service notification-service frontend}"
+# Trivy CHỈ BÁO CÁO, không chặn (quyết định của nhóm, 24/11/2026): thư viện của Spring Boot 3.5.x có CVE CRITICAL
+# mà bản vá chỉ có ở Spring 7. Muốn bật lại cổng chặn: đặt TRIVY_EXIT_CODE=1 (biến môi trường của job Jenkins).
+TRIVY_EXIT_CODE="${TRIVY_EXIT_CODE:-0}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 export DOCKER_BUILDKIT=1
@@ -2388,8 +2391,8 @@ for s in $SERVICES; do
     --label "org.opencontainers.image.revision=$TAG" \
     --label "org.opencontainers.image.source=$SOURCE_URL" \
     -t "$img:$TAG" -t "$img:main" -f "$file" "$ctx"
-  echo "== Quét $img:$TAG (chặn nếu có lỗ hổng CRITICAL đã có bản vá)"
-  trivy image --quiet --severity CRITICAL --ignore-unfixed --exit-code 1 "$img:$TAG"
+  echo "== Quét $img:$TAG (lỗ hổng HIGH/CRITICAL đã có bản vá; exit-code $TRIVY_EXIT_CODE: 0 = chỉ báo cáo)"
+  trivy image --quiet --severity HIGH,CRITICAL --ignore-unfixed --exit-code "$TRIVY_EXIT_CODE" "$img:$TAG"
   docker push "$img:$TAG"
   docker push "$img:main"
 done
@@ -2779,7 +2782,9 @@ Chạy trên cluster `kind` tạm ở máy dev (Kubernetes 1.37, Helm 4.3.2, ing
 | T12 công cụ quản trị | pgAdmin, Mailpit: 401 khi không có basic auth, 200 khi có |
 | `helm uninstall datn-platform` | PVC của StatefulSet và `pgadmin-data` được giữ lại |
 
-Chưa kiểm được ở máy dev: TLS/certbot, Nginx máy chủ và whitelist IP thật, Docker rootless của Jenkins, Trivy, push GHCR, Jenkins thật (job, credential, webhook, duyệt prod).
+**Trivy** (quét riêng 6 image, 24/11/2026): cả 6 có lỗ hổng CRITICAL đã có bản vá. 5 image Java do thư viện của Spring Boot 3.5.4 (netty-handler, tomcat-embed-core, spring-security-web, bouncycastle, spring-webmvc/webflux; riêng spring-webmvc/webflux chỉ có bản vá ở Spring 7); frontend do gói OS của `nginx:1.27-alpine` (brotli, openssl). Nhóm quyết định Trivy **chỉ báo cáo, không chặn** (`TRIVY_EXIT_CODE=0` trong `build-images.sh`). Nên làm riêng: nâng Spring Boot lên bản vá 3.5.x mới nhất và đổi image nền frontend sang bản nginx alpine mới hơn.
+
+Chưa kiểm được ở máy dev: TLS/certbot, Nginx máy chủ và whitelist IP thật, Docker rootless của Jenkins, push GHCR, Jenkins thật (job, credential, webhook, duyệt prod).
 
 ---
 

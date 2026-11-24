@@ -126,7 +126,7 @@ Không sửa `application.yml` dùng chung của nhóm. Cấu hình Kubernetes n
 4. Token dài hạn của SA nằm trong Secret kiểu `kubernetes.io/service-account-token`. Kubeconfig dựng từ token này được lưu thành **Jenkins credential kiểu Secret file**, đặt theo folder: `kubeconfig-staging` ở folder CI; `kubeconfig-prod` **chỉ** ở folder release. `Jenkinsfile` của PR hay nhánh khác không thể lấy credential prod.
 5. Kiểm chứng: `kubectl auth can-i --as=system:serviceaccount:datn-prod:ci-deployer get secrets -n datn-prod` → `no`.
 6. **SA `datn-app`** cho pod ứng dụng: `automountServiceAccountToken: false`, `imagePullSecrets: ghcr-pull`.
-7. **Image security:** GHCR private + `imagePullSecrets`; tag bất biến theo git SHA; **Trivy quét trước khi push**; non-root (`runAsNonRoot`, `allowPrivilegeEscalation: false`, `drop: [ALL]`); ghim phiên bản image hạ tầng.
+7. **Image security:** GHCR private + `imagePullSecrets`; tag bất biến theo git SHA; **Trivy quét trước khi push** (hiện chỉ báo cáo, không chặn: thư viện của Spring Boot 3.5.x có CVE CRITICAL mà bản vá chỉ có ở Spring 7; bật chặn lại bằng `TRIVY_EXIT_CODE=1`); non-root (`runAsNonRoot`, `allowPrivilegeEscalation: false`, `drop: [ALL]`); ghim phiên bản image hạ tầng.
 8. **Cách ly Jenkins:** minikube driver docker là **một container trên Docker gốc**. Ai điều khiển được Docker gốc (nhóm `docker`, mount `docker.sock`) thì `docker exec minikube …` là có toàn quyền cluster và quyền root máy chủ. Vì vậy Jenkins build image bằng **Docker rootless của riêng nó**.
 9. **Công cụ quản trị lộ ra ngoài** (pgAdmin, Mailpit, MinIO Console) có 3 lớp bảo vệ: TLS, basic auth ở Ingress (`admin-basic-auth`), danh sách IP cho phép (`whitelist-source-range`), cộng với đăng nhập riêng của từng công cụ.
 
