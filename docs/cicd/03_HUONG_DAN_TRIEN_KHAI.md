@@ -1,6 +1,6 @@
 # 03 — Hướng dẫn triển khai lên Minikube bằng Helm + Jenkins (từng bước)
 
-> Lý do lựa chọn: [01](01_NGHIEN_CUU_CICD_KUBERNETES.md). Giai đoạn, ngân sách, nghiệm thu: [02](02_KE_HOACH_TRIEN_KHAI_CICD.md). Setup Jenkins: [04](04_HUONG_DAN_SETUP_JENKINS.md).
+> Lý do lựa chọn: [01](01_NGHIEN_CUU_CICD_KUBERNETES.md). Giai đoạn, ngân sách, nghiệm thu: [02](02_KE_HOACH_TRIEN_KHAI_CICD.md). Setup Jenkins: [04](04_HUONG_DAN_SETUP_JENKINS.md). **Làm từ đầu trên AWS EC2 (thứ tự các bước): [05](05_TRIEN_KHAI_TU_DAU_TREN_EC2.md).**
 > Lệnh chạy trên **máy chủ Linux** (Ubuntu 22.04/24.04) bằng user quản trị `datnadmin`, trừ khi ghi rõ là chạy ở máy dev.
 > **Các file ở mục 3–5, 6.1, 10, 12 và 14.1 đã có sẵn trong repo** (`backend/`, `frontend/Dockerfile`, `infrastructure/helm/`, `infrastructure/k8s/`, `infrastructure/scripts/`, `infrastructure/jenkins/`, `Jenkinsfile`). Khối code trong tài liệu là bản sao để đọc; sửa thì sửa file trong repo.
 
@@ -63,7 +63,7 @@ curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-
 sudo install minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
 
 # Helm: chọn bản ổn định mới nhất tại https://github.com/helm/helm/releases (Helm 4.x; Helm 3 cũng chạy được)
-HELM_VERSION=v4.0.0            # <- thay bằng bản mới nhất
+HELM_VERSION=v4.3.2            # bản đã chạy thử với 2 chart (03 §13.1); bản mới hơn cùng dòng 4.x cũng được
 curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" | tar xz
 sudo install -m 0755 linux-amd64/helm /usr/local/bin/helm && rm -rf linux-amd64
 helm version
