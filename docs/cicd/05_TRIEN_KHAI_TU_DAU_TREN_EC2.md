@@ -147,7 +147,7 @@ nslookup sso-staging.52-62-135-59.sslip.io
 `infrastructure/helm/*/values-staging.yaml`, `values-prod.yaml` đang dùng `https://….example.com`. Script `set-public-host.sh` đổi một lần cả tên host, giao thức và cờ cookie `Secure` (workflow và `deploy.sh` tự đọc URL từ đây):
 
 ```bash
-# Git Bash, ở gốc repo, trên nhánh feat/cicd-helm-jenkins
+# Git Bash, ở gốc repo, trên nhánh feat/cicd-helm-actions
 bash infrastructure/scripts/set-public-host.sh 52-62-135-59.sslip.io http
 ```
 
@@ -170,7 +170,7 @@ Sửa thêm bằng tay:
 ### 4.2. Chuyển repo sang public và merge
 
 1. Làm **[04 §1](04_HUONG_DAN_GITHUB_ACTIONS.md)**: xoay client secret Google, kiểm tra lịch sử Git, chuyển repo sang **public**, cài đặt Actions.
-2. Commit, push, mở PR từ `feat/cicd-helm-jenkins` vào `main`. Workflow **CI/CD** chạy 3 check trên PR (`Backend`, `Frontend`, `Helm chart`) và phải xanh.
+2. Commit, push, mở PR từ `feat/cicd-helm-actions` vào `main`. Workflow **CI/CD** chạy 3 check trên PR (`Backend`, `Frontend`, `Helm chart`) và phải xanh.
 3. **Chưa merge vội**: merge vào `main` sẽ kích hoạt build + deploy staging, mà lúc này cluster chưa có. Merge ở bước 10.
 
 ## Bước 5. Chuẩn bị máy chủ
@@ -231,7 +231,7 @@ Repo đã public (bước 4.2):
 ```bash
 sudo mkdir -p /opt/datn && sudo chown datnadmin: /opt/datn
 git clone https://github.com/Hecker-Chuoi/DATN-2026.git /opt/datn
-cd /opt/datn && git checkout feat/cicd-helm-jenkins     # sau khi merge (bước 10) thì: git checkout main && git pull
+cd /opt/datn && git checkout feat/cicd-helm-actions     # sau khi merge (bước 10) thì: git checkout main && git pull
 grep -m1 "host:" infrastructure/helm/datn-app/values-staging.yaml   # host: staging.<BASE>
 ```
 
