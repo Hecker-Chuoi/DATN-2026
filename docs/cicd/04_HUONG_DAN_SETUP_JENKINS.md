@@ -109,10 +109,11 @@ sudo apt-get update
 sudo apt-get install -y fontconfig openjdk-21-jdk git curl jq
 java -version        # openjdk 21.x. Jenkins và pipeline (mvn verify) dùng chung JDK này
 
-# Kho apt Jenkins LTS. Jenkins thay khoá ký định kỳ: lấy đúng URL khoá mới nhất tại
-# https://www.jenkins.io/doc/book/installing/linux/#debianubuntu  (dưới đây là ví dụ)
+# Kho apt Jenkins LTS. Jenkins thay khoá ký định kỳ (khoá 2023 đã thôi dùng, apt báo NO_PUBKEY 7198F4B714ABFC68).
+# Khoá hiện tại (kiểm tra 24/11/2026): jenkins.io-2026.key, hết hạn 21/12/2028. Bản mới hơn xem tại
+# https://www.jenkins.io/doc/book/installing/linux/#debianubuntu
 sudo mkdir -p /etc/apt/keyrings
-sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
 echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" \
   | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
 sudo apt-get update && sudo apt-get install -y jenkins
@@ -550,6 +551,7 @@ sudo find /var/backups/jenkins -name '*.tgz' -mtime +14 -delete
 
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
+| `apt-get update` báo `NO_PUBKEY …` / `The repository 'https://pkg.jenkins.io/debian-stable binary/ Release' is not signed`; `id jenkins` báo `no such user` | Khoá ký kho Jenkins đã đổi, Jenkins chưa được cài | Tải khoá mới về đúng `/etc/apt/keyrings/jenkins-keyring.asc` (mục 2), `apt-get update`, cài lại |
 | Jenkins không lên, `journalctl -u jenkins` báo `Address already in use` | Cổng 8080 đã bị dùng | Đổi `JENKINS_PORT` (mục 3) và `upstream` trong Nginx |
 | `Cannot connect to the Docker daemon at unix:///run/user/...` | Daemon rootless chưa chạy, thiếu linger, sai `<UID>` | `sudo machinectl shell jenkins@ /usr/bin/systemctl --user status docker`; `loginctl show-user jenkins \| grep Linger`; kiểm tra `DOCKER_HOST` |
 | `dockerd-rootless-setuptool.sh` lỗi `permission denied` / `newuidmap` | Ubuntu 24.04 chặn userns, hoặc thiếu subuid | Mục 4.2; `grep jenkins /etc/subuid` |
