@@ -31,3 +31,5 @@ docs/deployment
 
 .antigravity
 !.env.example
+
+secret/

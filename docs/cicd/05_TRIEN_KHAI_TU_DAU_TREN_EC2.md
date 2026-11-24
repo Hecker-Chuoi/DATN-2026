@@ -110,17 +110,24 @@ IP công khai mặc định **đổi mỗi lần tắt/bật máy**, mà mọi t
 1. EC2 → **Elastic IPs → Allocate Elastic IP address**: *Amazon's pool of IPv4 addresses*, *Network border group* để mặc định (đúng region), không tạo Global Accelerator → **Allocate**.
 2. Chọn IP vừa cấp → **Actions → Associate Elastic IP address** → Resource type *Instance* → `datn-server` → **Associate**.
 
-Ghi lại IP này (`<EIP>`) và tính `BASE`:
+Ghi lại IP này (`<EIP>`) và tính `BASE` (trên máy Windows, PowerShell):
+
+```powershell
+$EIP = "52.62.135.59"                            # <- IP thật của bạn
+"BASE=$($EIP -replace '\.','-').sslip.io"        # BASE=52-62-135-59.sslip.io
+```
+
+Nếu đang ở Bash (Git Bash, hoặc đã SSH vào máy chủ):
 
 ```bash
-EIP=52.62.135.59                                 # <- IP thật của bạn
-echo "BASE=$(echo $EIP | tr . -).sslip.io"       # BASE=52-62-135-59.sslip.io
+EIP=52.62.135.59
+echo "BASE=$(echo $EIP | tr . -).sslip.io"
 ```
 
 ### 2.6. SSH vào máy
 
 ```powershell
-ssh -i "$env:USERPROFILE\.ssh\datn-ec2.pem" ubuntu@<EIP>
+ssh -i "$env:USERPROFILE\.ssh\datn-ec2.pem" ubuntu@$EIP     # $EIP đặt ở bước 2.5; mở cửa sổ mới thì đặt lại
 ```
 
 Vào được thì kiểm tra hệ điều hành: `lsb_release -d` phải ra `Ubuntu 24.04…`. Gặp lỗi xem [Sự cố](#sự-cố-riêng-trên-ec2--chế-độ-ip) (quyền file `.pem`, nhầm AMI, *REMOTE HOST IDENTIFICATION HAS CHANGED*).
