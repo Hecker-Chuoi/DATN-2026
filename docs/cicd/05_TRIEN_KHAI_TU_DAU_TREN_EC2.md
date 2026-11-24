@@ -582,6 +582,8 @@ Làm khi đã mua tên miền (ví dụ `tenmien.vn`). Dữ liệu giữ nguyên
 |---|---|---|
 | Launch báo `VcpuLimitExceeded` | Hạn mức vCPU thấp | Bước 1.1, xin tăng lên 8 |
 | SSH `Connection timed out` | IP của bạn đổi, rule SSH chỉ cho IP cũ | Security Group → sửa rule 22 → *My IP* |
+| SSH `ubuntu@…: Permission denied (publickey,gssapi-keyex,gssapi-with-mic)`, trang *Connect* gợi ý `ec2-user` | Máy tạo nhầm AMI **Amazon Linux** (mặc định của Launch instance) | Thử `ec2-user@<EIP>`: thấy *Amazon Linux* thì tắt Termination protection, Terminate, Launch lại với **Ubuntu Server 24.04 LTS**, gắn lại đúng Elastic IP, `ssh-keygen -R <EIP>` |
+| SSH `Bad permissions … BUILTIN\Users`, `UNPROTECTED PRIVATE KEY FILE` | File `.pem` kế thừa quyền của thư mục (ổ `D:`) | Chuyển vào `%USERPROFILE%\.ssh` và chạy lệnh `icacls` ở bước 2.2. Không để file khoá trong thư mục repo |
 | Đăng nhập báo **"HTTPS required"** | Realm còn `sslRequired=external` mà đang chạy HTTP | Realm ứng dụng: bước 7.2 (hoặc Admin Console); Admin Console: lệnh 7.6 |
 | Tên `*.sslip.io` không phân giải | Mạng chặn DNS lạ, hoặc gõ sai định dạng IP | `nslookup staging.<BASE> 8.8.8.8`; IP phải viết bằng gạch ngang (`13-250-1-2`) |
 | Mọi tên host hỏng sau khi bật lại máy | Elastic IP bị gỡ (Release/Disassociate) nên IP đổi | Gắn lại đúng EIP cũ; nếu buộc phải đổi IP: làm lại bước 4, 7.2 (realm qua Admin Console), 8, 10.2 |
