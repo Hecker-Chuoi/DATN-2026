@@ -1,21 +1,32 @@
 # 04 — Hướng dẫn setup Jenkins trên máy chủ (tách biệt khỏi hệ thống ứng dụng)
 
 > Jenkins là công cụ CI/CD của DATN-2026. Nó chạy **trên cùng máy chủ** với minikube nhưng **không thuộc hệ thống ứng dụng**: không nằm trong cluster, không có quyền admin cluster, không dùng chung Docker daemon với minikube.
-> Đọc kèm: [01](01_NGHIEN_CUU_CICD_KUBERNETES.md) (lý do), [02](02_KE_HOACH_TRIEN_KHAI_CICD.md) (kế hoạch), [03](03_HUONG_DAN_TRIEN_KHAI.md) (cluster, Helm chart, `Jenkinsfile`, script deploy).
-> Thứ tự: làm xong [03](03_HUONG_DAN_TRIEN_KHAI.md) mục 1–10 (cluster và 2 chart Helm chạy được, đã có kubeconfig của `ci-deployer`), rồi làm tài liệu này, rồi quay lại 03 mục 11–12.
+> Đọc kèm: [01](01_NGHIEN_CUU_CICD_KUBERNETES.md) (lý do), [02](02_KE_HOACH_TRIEN_KHAI_CICD.md) (kế hoạch), [03](03_HUONG_DAN_TRIEN_KHAI.md) (cluster, Helm chart, `Jenkinsfile`, script deploy), [05](05_TRIEN_KHAI_TU_DAU_TREN_EC2.md) (thứ tự làm trên EC2).
+>
+> Tài liệu chia **hai phần độc lập**:
+> - **Phần A (mục 1–9): cài Jenkins bằng tay trên máy chủ.** Chỉ cần một máy Ubuntu 24.04 có SSH và `sudo`. **Không** cần repo dự án, minikube hay cluster. Làm ngay sau khi có máy chủ. Xong phần A: Jenkins chạy, có HTTPS/HTTP qua Nginx, có plugin, bảo mật, công cụ build, nhưng **chưa có job nào**.
+> - **Phần B (mục 10–14): nối Jenkins với dự án DATN** (credential, job, webhook). Làm khi cluster và 2 chart Helm đã chạy, đã có kubeconfig của `ci-deployer` (03 §1–§10 hoặc 05 phần C).
+>
 > Jenkins deploy bằng **Helm** (`helm upgrade --install` release `datn-app`, `HELM_DRIVER=configmap`). Chart `datn-platform` do quản trị viên cài, Jenkins không đụng tới.
+> Ký hiệu `<JENKINS_HOST>`: tên host của Jenkins, ví dụ `jenkins.tenmien.vn`, hoặc khi chưa có tên miền thì `jenkins.<IP-gạch-ngang>.sslip.io` (05).
 
 ## Mục lục
 0. [Kiến trúc và nguyên tắc tách biệt](#0-kiến-trúc-và-nguyên-tắc-tách-biệt)
-1. [Yêu cầu tài nguyên](#1-yêu-cầu-tài-nguyên)
+
+**Phần A: cài Jenkins trên máy chủ (không cần repo dự án)**
+
+1. [Yêu cầu tài nguyên, chuẩn bị máy chủ](#1-yêu-cầu-tài-nguyên-và-chuẩn-bị-máy-chủ)
 2. [Cài Java 21 và Jenkins LTS](#2-cài-java-21-và-jenkins-lts)
 3. [Cấu hình dịch vụ Jenkins](#3-cấu-hình-dịch-vụ-jenkins-systemd)
 4. [Docker rootless riêng cho Jenkins](#4-docker-rootless-riêng-cho-user-jenkins)
 5. [Công cụ dòng lệnh](#5-công-cụ-dòng-lệnh-cho-pipeline)
-6. [Nginx và TLS cho Jenkins](#6-nginx-và-tls-cho-jenkins)
+6. [Nginx cho Jenkins](#6-nginx-cho-jenkins)
 7. [Khởi tạo Jenkins và cài plugin](#7-khởi-tạo-jenkins-và-cài-plugin)
 8. [Bảo mật Jenkins](#8-bảo-mật-jenkins)
 9. [Global Tools](#9-global-tools)
+
+**Phần B: nối Jenkins với dự án DATN (sau khi cluster chạy)**
+
 10. [Folder và Credentials](#10-folder-và-credentials)
 11. [Job CI (Multibranch)](#11-job-ci-multibranch-datncidatn)
 12. [Job deploy/duyệt prod](#12-job-deploy--duyệt-prod-datnreleasedatn-deploy)
@@ -61,7 +72,18 @@
 
 ---
 
-## 1. Yêu cầu tài nguyên
+# Phần A: cài Jenkins trên máy chủ
+
+## 1. Yêu cầu tài nguyên và chuẩn bị máy chủ
+
+SSH vào máy chủ bằng user có `sudo` (trên EC2 Ubuntu là `ubuntu`). Cập nhật hệ thống và đặt múi giờ:
+
+```bash
+sudo apt-get update && sudo apt-get -y upgrade
+sudo timedatectl set-timezone Asia/Ho_Chi_Minh
+sudo hostnamectl set-hostname datn-server
+sudo reboot          # nếu upgrade có kernel mới; SSH lại sau 1 phút
+```
 
 | Thành phần | RAM | Đĩa |
 |---|---|---|
@@ -131,8 +153,11 @@ curl -sI http://127.0.0.1:8080/login | head -1      # HTTP/1.1 200
 
 ### 4.1. Gói cần thiết và subuid
 
+Docker rootless cần các gói của Docker Engine. Máy chưa có Docker thì cài bằng script chính thức (cài cả Docker gốc: sau này **chỉ quản trị viên** dùng để chạy minikube, user `jenkins` **không** vào nhóm `docker`):
+
 ```bash
-# docker-ce-rootless-extras đã có nếu Docker được cài bằng get.docker.com (03 §1)
+command -v docker || curl -fsSL https://get.docker.com | sudo sh
+# docker-ce-rootless-extras đi kèm khi cài bằng get.docker.com
 sudo apt-get install -y uidmap dbus-user-session systemd-container slirp4netns docker-ce-rootless-extras
 sudo usermod --add-subuids 200000-265535 --add-subgids 200000-265535 jenkins
 sudo loginctl enable-linger jenkins     # user service của jenkins chạy cả khi không ai đăng nhập
@@ -180,11 +205,20 @@ Build image bị giới hạn ở 3 GB RAM và 2 core, nên prod trong minikube 
 
 ## 5. Công cụ dòng lệnh cho pipeline
 
-`kubectl` và `helm` đã cài ở [03 §1](03_HUONG_DAN_TRIEN_KHAI.md#1-chuẩn-bị-máy-chủ) vào `/usr/local/bin`, nên user `jenkins` dùng được luôn. Cài thêm:
+Cài vào `/usr/local/bin` để mọi user (kể cả `jenkins` và quản trị viên) dùng chung. Đã có (ví dụ cài theo 03 §1) thì bỏ qua dòng tương ứng.
 
 ```bash
+# kubectl
+command -v kubectl || { curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+  && sudo install -m 0755 kubectl /usr/local/bin/kubectl && rm kubectl; }
+
+# Helm 4 (bản đã chạy thử với 2 chart của dự án)
+HELM_VERSION=v4.3.2
+command -v helm || { curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" | tar xz \
+  && sudo install -m 0755 linux-amd64/helm /usr/local/bin/helm && rm -rf linux-amd64; }
+
 # kubeconform: kiểm tra schema manifest
-curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz
+curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar xz
 sudo install -m 0755 kubeconform /usr/local/bin/ && rm kubeconform
 
 # Trivy: quét lỗ hổng image TRƯỚC khi push
@@ -202,9 +236,13 @@ Maven và Node **không** cài bằng apt: Jenkins tự tải về qua Global To
 
 ---
 
-## 6. Nginx và TLS cho Jenkins
+## 6. Nginx cho Jenkins
 
-Trỏ bản ghi DNS A `jenkins.example.com` về IP máy chủ. Tạo file `/etc/nginx/sites-available/jenkins`:
+```bash
+sudo apt-get install -y nginx certbot python3-certbot-nginx
+```
+
+Tên host `<JENKINS_HOST>` phải trỏ về IP máy chủ: có tên miền thì tạo bản ghi DNS A; chưa có tên miền thì dùng `jenkins.<IP-gạch-ngang>.sslip.io` (tự trỏ, không cần cấu hình). Tạo file `/etc/nginx/sites-available/jenkins`, thay `jenkins.example.com` bằng `<JENKINS_HOST>`:
 
 ```nginx
 upstream jenkins_local {
@@ -250,8 +288,11 @@ server {
 ```bash
 sudo ln -s /etc/nginx/sites-available/jenkins /etc/nginx/sites-enabled/jenkins
 sudo nginx -t && sudo systemctl reload nginx
+# CHỈ khi có tên miền thật (HTTPS). Chạy tạm bằng IP (sslip.io, HTTP) thì bỏ qua dòng này:
 sudo certbot --nginx -d jenkins.example.com
 ```
+
+**Chạy tạm bằng IP (HTTP, chưa có tên miền):** mật khẩu đăng nhập Jenkins sẽ đi qua mạng dạng chữ thường, nên **bắt buộc** dùng cách an toàn nhất ngay dưới đây (chỉ mở `/github-webhook/`, vào UI qua SSH tunnel).
 
 - **Cách an toàn nhất:** chỉ mở `/github-webhook/`, đặt `deny all;` cho `location /`, và vào UI bằng `ssh -L 8080:127.0.0.1:8080 datnadmin@<server>` rồi mở `http://localhost:8080`.
 - **Không có tên miền hoặc không muốn mở webhook:** bỏ mục này, vào UI qua SSH tunnel, và dùng quét định kỳ thay webhook (mục 11, *Scan triggers*).
@@ -261,8 +302,8 @@ sudo certbot --nginx -d jenkins.example.com
 ## 7. Khởi tạo Jenkins và cài plugin
 
 1. Lấy mật khẩu khởi tạo: `sudo cat /var/lib/jenkins/secrets/initialAdminPassword`.
-2. Mở `https://jenkins.example.com`, chọn **Select plugins to install**, bỏ chọn hết, rồi tick các plugin ở bảng dưới (hoặc cài bằng CLI ở cuối mục).
-3. Tạo tài khoản quản trị (đừng đặt tên `admin`), **Jenkins URL** = `https://jenkins.example.com/`.
+2. Mở Jenkins: qua SSH tunnel `ssh -L 8080:127.0.0.1:8080 <user>@<IP>` rồi vào `http://localhost:8080` (hoặc `https://<JENKINS_HOST>` nếu đã mở UI qua Nginx có TLS). Chọn **Select plugins to install**, bỏ chọn hết, rồi tick các plugin ở bảng dưới (hoặc cài bằng CLI ở cuối mục).
+3. Tạo tài khoản quản trị (đừng đặt tên `admin`; ghi lại user ID này, nó là người được duyệt deploy prod ở mục 12). **Jenkins URL** = `https://<JENKINS_HOST>/` (có tên miền) hoặc `http://<JENKINS_HOST>/` (chạy tạm bằng IP).
 
 | Plugin (ID) | Dùng cho |
 |---|---|
@@ -333,6 +374,23 @@ Lưu ý: Jenkins thường khuyên không build trên controller. Ở đây ch�
 | Git | `Default` | `git` |
 
 ---
+
+**Hết phần A.** Kiểm tra trước khi dừng:
+
+```bash
+systemctl is-active jenkins                                              # active
+curl -sI http://127.0.0.1:8080/login | head -1                           # HTTP/1.1 200
+J=$(id -u jenkins); sudo -u jenkins DOCKER_HOST=unix:///run/user/$J/docker.sock docker info --format '{{.SecurityOptions}}'   # có "rootless"
+sudo -u jenkins docker ps                                                # PHẢI lỗi permission denied (không chạm Docker gốc)
+sudo -u jenkins bash -lc 'kubectl version --client && helm version && kubeconform -v && trivy --version && jq --version'
+id jenkins                                                               # không có nhóm docker, sudo
+```
+
+Jenkins giờ chạy độc lập, chưa biết gì về dự án. Phần B làm khi cluster của dự án đã chạy.
+
+---
+
+# Phần B: nối Jenkins với dự án DATN
 
 ## 10. Folder và Credentials
 
@@ -436,7 +494,7 @@ Trong `Jenkinsfile.deploy`, sửa `submitter: 'truongnhom'` thành danh sách us
 
 1. Jenkins: Manage Jenkins → System → **GitHub** → Advanced → *Shared secrets* → chọn `github-webhook-secret`. Bỏ tick *Manage hooks* (tạo webhook bằng tay ở bước 2).
 2. GitHub: repo → Settings → Webhooks → **Add webhook**:
-   - Payload URL: `https://jenkins.example.com/github-webhook/` (có dấu `/` cuối, dùng **https** để tránh chuyển hướng 301)
+   - Payload URL: `https://<JENKINS_HOST>/github-webhook/` (có dấu `/` cuối). Đã chạy certbot thì **phải** dùng https, vì Nginx chuyển hướng http → https và GitHub không theo chuyển hướng (301). Chạy tạm bằng IP (chưa certbot) thì dùng `http://<JENKINS_HOST>/github-webhook/`; payload vẫn được ký bằng secret nên Jenkins từ chối request giả
    - Content type: `application/json`
    - Secret: cùng chuỗi với `github-webhook-secret`
    - Events: *Let me select individual events* → **Pushes**, **Pull requests** (tag cũng được gửi qua sự kiện Push)
@@ -493,7 +551,7 @@ sudo find /var/backups/jenkins -name '*.tgz' -mtime +14 -delete
 | `Cannot connect to the Docker daemon at unix:///run/user/...` | Daemon rootless chưa chạy, thiếu linger, sai `<UID>` | `sudo machinectl shell jenkins@ /usr/bin/systemctl --user status docker`; `loginctl show-user jenkins \| grep Linger`; kiểm tra `DOCKER_HOST` |
 | `dockerd-rootless-setuptool.sh` lỗi `permission denied` / `newuidmap` | Ubuntu 24.04 chặn userns, hoặc thiếu subuid | Mục 4.2; `grep jenkins /etc/subuid` |
 | `got permission denied while trying to connect to /var/run/docker.sock` | Pipeline đang gọi Docker gốc | `DOCKER_HOST` chưa vào môi trường dịch vụ: `sudo systemctl show jenkins -p Environment` |
-| Webhook GitHub báo `302`/`301` | Payload URL dùng http hoặc thiếu `/` cuối | Mục 13 |
+| Webhook GitHub báo `302`/`301` | Payload URL dùng http trong khi Nginx đã chuyển sang https (sau certbot), hoặc thiếu `/` cuối | Mục 13 |
 | Webhook `403 No valid crumb` | URL sai (không phải `/github-webhook/`) | Sửa URL |
 | PR không có check trên GitHub | Token `github-pat` thiếu scope `repo` / `repo:status` | Tạo lại token (mục 10.2) |
 | Tag mới không tự build | Thiếu *Discover tags* hoặc *Build strategies → Tags*, hoặc tag cũ hơn 1 ngày | Mục 11; hoặc vào job tag và bấm Build |
@@ -501,7 +559,7 @@ sudo find /var/backups/jenkins -name '*.tgz' -mtime +14 -delete
 | `RejectedAccessException: Scripts not permitted` | Groovy sandbox chặn một method | Manage Jenkins → In-process Script Approval: đọc kỹ rồi mới duyệt |
 | Build bị `Killed` / máy chủ chậm | Thiếu RAM | 1 executor, swap, `MemoryMax` (mục 3, 4.4), xem `free -h` |
 | `kubectl: Unauthorized` ở bước deploy | Token SA đã xoay hoặc credential cũ | Chạy lại 03 §10, cập nhật credential `kubeconfig-*` |
-| `helm: command not found` / `kubeconform: not found` | Công cụ chưa cài vào `/usr/local/bin` | Mục 5 và 03 §1 |
+| `helm: command not found` / `kubeconform: not found` | Công cụ chưa cài vào `/usr/local/bin` | Mục 5 |
 | `secrets is forbidden … ci-deployer` | Lệnh helm chạy thiếu `HELM_DRIVER=configmap` | `Jenkinsfile` và `deploy.sh` đều đặt biến này; kiểm tra lệnh helm tự viết thêm |
 | `another operation (install/upgrade/rollback) is in progress` | Lần deploy trước bị huỷ giữa chừng | `datn-deploy` → `ACTION=helm-rollback`; chi tiết ở [03 §14](03_HUONG_DAN_TRIEN_KHAI.md#14-vận-hành-và-xử-lý-sự-cố) |
 | Bước duyệt prod giữ executor, các build khác phải chờ | Stage `input` có `agent` | Stage duyệt không được khai báo `agent` (xem `Jenkinsfile.deploy`) |

@@ -41,7 +41,7 @@
 | `pgadmin-staging.example.com` / `pgadmin.example.com` | pgAdmin | basic auth + IP |
 | `mail-staging.example.com` | Mailpit | basic auth + IP |
 | `minio.example.com` | MinIO Console (tắt mặc định) | basic auth + IP |
-| `jenkins.example.com` | Jenkins (ngoài cluster) | [04 §6](04_HUONG_DAN_SETUP_JENKINS.md#6-nginx-và-tls-cho-jenkins) |
+| `jenkins.example.com` | Jenkins (ngoài cluster) | [04 §6](04_HUONG_DAN_SETUP_JENKINS.md#6-nginx-cho-jenkins) |
 
 ---
 
