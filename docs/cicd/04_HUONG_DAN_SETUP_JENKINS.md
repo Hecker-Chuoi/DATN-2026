@@ -90,7 +90,10 @@ sudo reboot          # nếu upgrade có kernel mới; SSH lại sau 1 phút
 | Jenkins controller (`-Xmx1g`) | khoảng 1,3 GB | `/var/lib/jenkins`: 10–20 GB (workspace, `~/.m2`, Node, log build) |
 | Mỗi build đang chạy (Maven test, build 6 image tuần tự, Trivy) | đỉnh khoảng 2–2,5 GB | Docker rootless (`/var/lib/jenkins/.local/share/docker`): 20–30 GB |
 
-Ngân sách cả máy chủ (minikube + Jenkins) nằm ở [02 §6](02_KE_HOACH_TRIEN_KHAI_CICD.md#6-ngân-sách-tài-nguyên-và-cấu-hình-máy-chủ). Với máy 16 GB, đặt **1 executor** và thêm swap:
+Bảng trên **chỉ để tham khảo** (Jenkins tốn bao nhiêu); ngân sách cả máy chủ (minikube + Jenkins) nằm ở [02 §6](02_KE_HOACH_TRIEN_KHAI_CICD.md#6-ngân-sách-tài-nguyên-và-cấu-hình-máy-chủ). Xem RAM của máy bằng `free -h` (dòng `Mem:`, cột `total`):
+
+- Khoảng **31 Gi** (máy 32 GB): **không** cần swap; mục 8 đặt **2 executor**.
+- Khoảng **15 Gi** (máy 16 GB): mục 8 đặt **1 executor** (mỗi lúc chỉ 1 build) và thêm swap 4 GB làm RAM dự phòng, tránh bị hệ điều hành giết tiến trình khi build đẩy RAM lên cao. Kiểm tra sau khi chạy: `swapon --show` hiện `/swapfile`.
 
 ```bash
 sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
