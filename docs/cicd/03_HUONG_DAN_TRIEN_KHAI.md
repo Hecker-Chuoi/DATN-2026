@@ -1,8 +1,8 @@
-# 03 — Hướng dẫn triển khai lên Minikube bằng Helm + Jenkins (từng bước)
+# 03 — Hướng dẫn triển khai lên Minikube bằng Helm + GitHub Actions (từng bước)
 
-> Lý do lựa chọn: [01](01_NGHIEN_CUU_CICD_KUBERNETES.md). Giai đoạn, ngân sách, nghiệm thu: [02](02_KE_HOACH_TRIEN_KHAI_CICD.md). Setup Jenkins: [04](04_HUONG_DAN_SETUP_JENKINS.md). **Làm từ đầu trên AWS EC2 (thứ tự các bước): [05](05_TRIEN_KHAI_TU_DAU_TREN_EC2.md).**
+> Lý do lựa chọn: [01](01_NGHIEN_CUU_CICD_KUBERNETES.md). Giai đoạn, ngân sách, nghiệm thu: [02](02_KE_HOACH_TRIEN_KHAI_CICD.md). Cấu hình GitHub Actions: [04](04_HUONG_DAN_GITHUB_ACTIONS.md). **Làm từ đầu trên AWS EC2 (thứ tự các bước): [05](05_TRIEN_KHAI_TU_DAU_TREN_EC2.md).**
 > Lệnh chạy trên **máy chủ Linux** (Ubuntu 22.04/24.04) bằng user quản trị `datnadmin`, trừ khi ghi rõ là chạy ở máy dev.
-> **Các file ở mục 3–5, 6.1, 10, 12 và 14.1 đã có sẵn trong repo** (`backend/`, `frontend/Dockerfile`, `infrastructure/helm/`, `infrastructure/k8s/`, `infrastructure/scripts/`, `infrastructure/jenkins/`, `Jenkinsfile`). Khối code trong tài liệu là bản sao để đọc; sửa thì sửa file trong repo.
+> **Các file ở mục 3–5, 6.1, 10, 12 và 14.1 đã có sẵn trong repo** (`backend/`, `frontend/Dockerfile`, `infrastructure/helm/`, `infrastructure/k8s/`, `infrastructure/scripts/`, `.github/workflows/`). Khối code trong tài liệu là bản sao để đọc; sửa thì sửa file trong repo.
 
 ## Mục lục
 0. [Quy ước](#0-quy-ước)
@@ -10,14 +10,14 @@
 2. [Khởi động minikube](#2-khởi-động-minikube)
 3. [Sửa mã nguồn](#3-sửa-mã-nguồn-giai-đoạn-1)
 4. [Helm chart `datn-platform`](#4-helm-chart-datn-platform-quản-trị-viên-cài)
-5. [Helm chart `datn-app`](#5-helm-chart-datn-app-jenkins-cài)
+5. [Helm chart `datn-app`](#5-helm-chart-datn-app-ci-cài)
 6. [Tạo Secret và cài platform](#6-tạo-secret-và-cài-platform)
 7. [Cài ứng dụng lần đầu](#7-cài-ứng-dụng-lần-đầu-bằng-tay)
 8. [Nginx máy chủ và TLS](#8-nginx-máy-chủ-và-tls)
-9. [Công cụ quản trị](#9-công-cụ-quản-trị-pgadmin-mailpit-minio-console-keycloak-admin-jenkins)
+9. [Công cụ quản trị](#9-công-cụ-quản-trị-pgadmin-mailpit-minio-console-keycloak-admin)
 10. [Kubeconfig cho CI](#10-kubeconfig-cho-ci-serviceaccount-ci-deployer)
-11. [Jenkins và GitHub](#11-jenkins-và-github)
-12. [Pipeline Jenkins](#12-pipeline-jenkins)
+11. [GitHub](#11-github)
+12. [Pipeline GitHub Actions](#12-pipeline-github-actions)
 13. [Kiểm thử nghiệm thu](#13-kiểm-thử-nghiệm-thu)
 14. [Vận hành và xử lý sự cố](#14-vận-hành-và-xử-lý-sự-cố)
 
@@ -27,10 +27,10 @@
 
 | Ký hiệu | Ý nghĩa |
 |---|---|
-| `example.com` | Tên miền của bạn. Viết xong file thì thay hàng loạt: `grep -rl example.com infrastructure Jenkinsfile \| xargs sed -i 's/example\.com/tenmien.vn/g'` |
+| `example.com` | Tên miền của bạn. Đổi hàng loạt bằng `infrastructure/scripts/set-public-host.sh tenmien.vn https` (chưa có tên miền: xem 05) |
 | `hecker-chuoi` | Owner GitHub viết **chữ thường** (GHCR bắt buộc) |
 | `datnadmin` | User quản trị máy chủ: chạy minikube, giữ kubeconfig admin, cài chart `datn-platform` |
-| `jenkins` | User chạy Jenkins: không sudo, không nhóm docker, không kubeconfig admin ([04](04_HUONG_DAN_SETUP_JENKINS.md)) |
+| `tunnel` | User hệ thống cho GitHub Actions: không shell, khoá SSH chỉ port-forward tới API minikube ([04 §2](04_HUONG_DAN_GITHUB_ACTIONS.md)) |
 | `datn-staging`, `datn-prod` | Namespace |
 | `datn-platform`, `datn-app` | Tên 2 release Helm trong mỗi namespace |
 
@@ -41,7 +41,6 @@
 | `pgadmin-staging.example.com` / `pgadmin.example.com` | pgAdmin | basic auth + IP |
 | `mail-staging.example.com` | Mailpit | basic auth + IP |
 | `minio.example.com` | MinIO Console (tắt mặc định) | basic auth + IP |
-| `jenkins.example.com` | Jenkins (ngoài cluster) | [04 §6](04_HUONG_DAN_SETUP_JENKINS.md#6-nginx-cho-jenkins) |
 
 ---
 
@@ -81,7 +80,7 @@ git clone https://github.com/Hecker-Chuoi/DATN-2026.git /opt/datn
 ## 2. Khởi động minikube
 
 ```bash
-# Máy 16 GB (staging + prod + Jenkins): 11g. Máy 32 GB: 14g. Chỉ prod trên máy 8 GB: --cpus=3 --memory=6g
+# Máy 32 GB: 14g. Máy 8 vCPU/16 GB (staging + prod): --cpus=7 --memory=13g. Một môi trường (4 vCPU/16 GB): --cpus=3 --memory=9g
 minikube start --driver=docker --cni=calico --cpus=6 --memory=11g --disk-size=60g
 minikube addons enable ingress
 minikube addons enable metrics-server
@@ -276,7 +275,7 @@ appVersion: "1.0.0"
 
 ```yaml
 # Giá trị mặc định. Mỗi môi trường ghi đè bằng values-staging.yaml / values-prod.yaml.
-# Quản trị viên cài chart này (driver Secret mặc định của Helm); Jenkins KHÔNG có quyền với release này.
+# Quản trị viên cài chart này (driver Secret mặc định của Helm); CI (GitHub Actions) KHÔNG có quyền với release này.
 
 secretName: app-secrets            # quản trị viên tạo (03 §6.1)
 pullSecretName: ghcr-pull          # quản trị viên tạo (03 §6.3)
@@ -455,11 +454,11 @@ nginx.ingress.kubernetes.io/whitelist-source-range: {{ . | quote }}
 
 > Bản ingress-nginx mới dùng tên annotation `allowlist-source-range` song song với `whitelist-source-range`. Nếu giới hạn IP không có tác dụng, kiểm tra phiên bản controller (`kubectl -n ingress-nginx get deploy -o wide`) rồi đổi tên annotation ở đây.
 
-### 4.5. `templates/rbac-ci.yaml`: quyền của Jenkins (M7)
+### 4.5. `templates/rbac-ci.yaml`: quyền của CI (M7)
 
 ```yaml
-# Quyền của Jenkins (M7): ServiceAccount ci-deployer CHỈ thao tác trong namespace của release này.
-# Kubeconfig cho Jenkins: infrastructure/scripts/make-ci-kubeconfig.sh
+# Quyền của CI/CD (M7): ServiceAccount ci-deployer CHỈ thao tác trong namespace của release này.
+# Kubeconfig cho GitHub Actions (secret KUBE_CONFIG): infrastructure/scripts/make-ci-kubeconfig.sh
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -1329,7 +1328,7 @@ grep -n "kind: Ingress" -A12 /tmp/platform-staging.yaml | grep -E "host|auth-|wh
 
 ---
 
-## 5. Helm chart `datn-app` (Jenkins cài)
+## 5. Helm chart `datn-app` (CI cài)
 
 ```
 infrastructure/helm/datn-app/
@@ -1353,11 +1352,11 @@ appVersion: "1.0.0"
 
 ```yaml
 # Giá trị mặc định. Mỗi môi trường ghi đè bằng values-staging.yaml / values-prod.yaml.
-# Jenkins cài chart này bằng HELM_DRIVER=configmap và CHỈ đổi image.tag (infrastructure/scripts/deploy.sh).
+# GitHub Actions cài chart này bằng HELM_DRIVER=configmap và CHỈ đổi image.tag (infrastructure/scripts/deploy.sh).
 
 image:
   registry: ghcr.io/hecker-chuoi    # GHCR bắt buộc chữ thường
-  tag: bootstrap                    # Jenkins: --set image.tag=<git sha>
+  tag: bootstrap                    # CI: --set image.tag=<git sha>
   pullPolicy: IfNotPresent
 
 serviceAccountName: datn-app        # do datn-platform tạo (có imagePullSecrets)
@@ -1441,7 +1440,7 @@ frontend:
 ### 5.3. `values-staging.yaml` và `values-prod.yaml`
 
 ```yaml
-# Jenkins: deploy.sh staging datn-staging <sha> https://staging.example.com
+# GitHub Actions (ci-cd.yml -> deploy.yml): deploy.sh staging datn-staging <sha>; smoke test dùng publicUrl
 publicUrl: https://staging.example.com
 cookieSecure: true
 keycloak:
@@ -1451,7 +1450,7 @@ ingress:
 ```
 
 ```yaml
-# Jenkins: deploy.sh prod datn-prod <sha> https://app.example.com
+# GitHub Actions (release.yml -> deploy.yml): deploy.sh prod datn-prod <sha>; smoke test dùng publicUrl
 publicUrl: https://app.example.com
 cookieSecure: true
 keycloak:
@@ -2155,7 +2154,7 @@ curl -s -H "Host: sso-staging.example.com" -H "X-Forwarded-Proto: https" \
 
 ## 7. Cài ứng dụng lần đầu (bằng tay)
 
-Chưa có Jenkins pipeline: build image ngay trên máy chủ và nạp vào minikube với tag `bootstrap`. Với tag khác `latest`, `IfNotPresent` dùng image có sẵn, không kéo từ GHCR.
+Không bắt buộc: lần chạy đầu của workflow tự cài `datn-app`. Chỉ làm mục này khi muốn thử trước khi có CI: build image ngay trên máy chủ và nạp vào minikube với tag `bootstrap`. Với tag khác `latest`, `IfNotPresent` dùng image có sẵn, không kéo từ GHCR.
 
 ```bash
 cd /opt/datn && git pull
@@ -2167,7 +2166,7 @@ done
 docker build -t ghcr.io/$OWNER/datn-frontend:bootstrap frontend
 minikube image load ghcr.io/$OWNER/datn-frontend:bootstrap
 
-# BẮT BUỘC driver configmap: Jenkins (không có quyền Secret) phải thấy và nâng cấp được release này
+# BẮT BUỘC driver configmap: CI (không có quyền Secret) phải thấy và nâng cấp được release này
 export HELM_DRIVER=configmap
 helm upgrade --install datn-app infrastructure/helm/datn-app -n datn-staging \
   -f infrastructure/helm/datn-app/values-staging.yaml --set image.tag=bootstrap --wait --timeout 15m
@@ -2187,7 +2186,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "$H" http://$IP/        # 200
 
 ## 8. Nginx máy chủ và TLS
 
-Trỏ DNS A cho mọi host ở §0 (trừ `jenkins`, xem 04) về IP máy chủ. `/etc/nginx/sites-available/datn`:
+Trỏ DNS A cho mọi host ở §0 về IP máy chủ (chưa có tên miền: tên `*.sslip.io` tự trỏ, xem 05). `/etc/nginx/sites-available/datn`:
 
 ```nginx
 map $http_upgrade $connection_upgrade {
@@ -2236,7 +2235,7 @@ Kiểm tra `https://staging.example.com`: đăng nhập mật khẩu và Google,
 
 ---
 
-## 9. Công cụ quản trị (pgAdmin, Mailpit, MinIO Console, Keycloak Admin, Jenkins)
+## 9. Công cụ quản trị (pgAdmin, Mailpit, MinIO Console, Keycloak Admin)
 
 ### 9.1. Tổng quan
 
@@ -2246,7 +2245,6 @@ Kiểm tra `https://staging.example.com`: đăng nhập mật khẩu và Google,
 | **Mailpit** | `https://mail-staging.example.com` | Pod `mailpit` (staging) | TLS → whitelist → basic auth | Không có |
 | **MinIO Console** | `https://minio.example.com` | Pod `minio` cổng 9001 | TLS → whitelist → basic auth → đăng nhập MinIO | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` |
 | **Keycloak Admin** | `https://sso[-staging].example.com/admin` | Pod `keycloak` | TLS → whitelist (`keycloak.adminAllowCidrs`) | `admin` / `KC_ADMIN_PASSWORD` |
-| **Jenkins** | `https://jenkins.example.com` | Systemd trên máy chủ, **ngoài cluster** | TLS → (whitelist / SSH tunnel) → đăng nhập Jenkins | [04 §7–8](04_HUONG_DAN_SETUP_JENKINS.md#7-khởi-tạo-jenkins-và-cài-plugin) |
 
 ### 9.2. Bật/tắt và giới hạn IP
 
@@ -2289,25 +2287,29 @@ ssh -L 5050:127.0.0.1:5050 datnadmin@<server>      # rồi mở http://localhost
 
 ```bash
 #!/usr/bin/env bash
-# Dựng kubeconfig CHỈ có quyền của SA ci-deployer trong 1 namespace (03 §10). Chạy bằng kubeconfig admin.
-# Cách dùng: make-ci-kubeconfig.sh <namespace>     ->  tạo file kubeconfig-<namespace> ở thư mục hiện tại
+# Dựng kubeconfig CHỈ có quyền của SA ci-deployer trong 1 namespace (03 §10). Chạy bằng kubeconfig admin trên máy chủ.
+# Cách dùng: make-ci-kubeconfig.sh <namespace> [server-url]   ->  tạo file kubeconfig-<namespace> ở thư mục hiện tại
+#   server-url: địa chỉ API server ghi vào file. GitHub Actions đi qua đường hầm SSH nên dùng https://127.0.0.1:8443
+#   (chứng chỉ API minikube có sẵn IP 127.0.0.1). Bỏ trống = địa chỉ thật của cluster (dùng ngay trên máy chủ).
 set -euo pipefail
-NS="${1:?Cách dùng: $0 <namespace>}"
+NS="${1:?Cách dùng: $0 <namespace> [server-url]}"
 OUT="kubeconfig-${NS}"
 
-SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+REAL_SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+SERVER="${2:-$REAL_SERVER}"
 CA=$(kubectl config view --raw --flatten --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
 TOKEN=$(kubectl -n "$NS" get secret ci-deployer-token -o jsonpath='{.data.token}' | base64 -d)
 [ -n "$TOKEN" ] || { echo "Secret ci-deployer-token chưa có token (đã cài datn-platform vào $NS chưa?)"; exit 1; }
 
-umask 077
-cat > "$OUT" <<EOF
+write_kubeconfig() {  # write_kubeconfig <file> <server>
+  umask 077
+  cat > "$1" <<EOF
 apiVersion: v1
 kind: Config
 clusters:
   - name: minikube
     cluster:
-      server: ${SERVER}
+      server: $2
       certificate-authority-data: ${CA}
 users:
   - name: ci-deployer
@@ -2321,63 +2323,69 @@ contexts:
       namespace: ${NS}
 current-context: ci-deployer@${NS}
 EOF
+}
 
+# Kiểm tra bằng địa chỉ thật (máy chủ không có đường hầm 127.0.0.1:8443), rồi mới ghi file với SERVER
+CHECK=$(mktemp); trap 'rm -f "$CHECK"' EXIT
+write_kubeconfig "$CHECK" "$REAL_SERVER"
 echo "== Kiểm tra quyền (kỳ vọng: yes yes yes no no no)"
 for check in "patch deployments" "delete configmaps" "get replicasets" "get secrets" "delete statefulsets" "patch persistentvolumeclaims"; do
   # shellcheck disable=SC2086  # cố ý tách "động từ tài nguyên"
-  printf '%-30s ' "$check"; KUBECONFIG="$OUT" kubectl auth can-i $check -n "$NS" || true
+  printf '%-30s ' "$check"; KUBECONFIG="$CHECK" kubectl auth can-i $check -n "$NS" || true
 done
-printf '%-30s ' "namespace default (kỳ vọng no)"; KUBECONFIG="$OUT" kubectl auth can-i patch deployments -n default || true
+printf '%-30s ' "namespace default (kỳ vọng no)"; KUBECONFIG="$CHECK" kubectl auth can-i patch deployments -n default || true
 echo "== Helm (driver configmap) thấy release:"
-KUBECONFIG="$OUT" HELM_DRIVER=configmap helm -n "$NS" list || true
-echo "Tải $OUT lên Jenkins làm credential 'Secret file' (04 §10.3), rồi xoá file."
+KUBECONFIG="$CHECK" HELM_DRIVER=configmap helm -n "$NS" list || true
+
+write_kubeconfig "$OUT" "$SERVER"
+echo "== Đã ghi $OUT (server: $SERVER)"
+echo "Dán toàn bộ nội dung file vào secret KUBE_CONFIG của GitHub Environment tương ứng (04 §4), rồi xoá file."
 ```
 
 ```bash
-bash infrastructure/scripts/make-ci-kubeconfig.sh datn-staging
-bash infrastructure/scripts/make-ci-kubeconfig.sh datn-prod
+# Trên máy chủ, user datnadmin. Đối số thứ 2: địa chỉ API mà runner GitHub thấy qua đường hầm SSH (04 §2)
+bash /opt/datn/infrastructure/scripts/make-ci-kubeconfig.sh datn-staging https://127.0.0.1:8443
+bash /opt/datn/infrastructure/scripts/make-ci-kubeconfig.sh datn-prod    https://127.0.0.1:8443
 ```
 
-**Xoay token** khi nghi bị lộ: `kubectl -n datn-staging delete secret ci-deployer-token`, chạy lại `helm upgrade datn-platform ...` (§6.5) để tạo lại Secret, chạy lại script, cập nhật credential trong Jenkins.
+Script kiểm quyền bằng địa chỉ thật của cluster, rồi mới ghi file với địa chỉ đường hầm. Dán từng file vào secret `KUBE_CONFIG` của Environment tương ứng ([04 §3–§4](04_HUONG_DAN_GITHUB_ACTIONS.md)), rồi xoá file.
+
+**Xoay token** khi nghi bị lộ: `kubectl -n datn-staging delete secret ci-deployer-token`, chạy lại `helm upgrade datn-platform ...` (§6.5) để tạo lại Secret, chạy lại script, cập nhật secret `KUBE_CONFIG`.
 
 ---
 
-## 11. Jenkins và GitHub
+## 11. GitHub
 
-**Jenkins:** cài và cấu hình theo [04](04_HUONG_DAN_SETUP_JENKINS.md). Khi xong, máy chủ có:
+Cấu hình GitHub Actions theo [04](04_HUONG_DAN_GITHUB_ACTIONS.md). Khi xong có:
 
 | Thứ | Giá trị |
 |---|---|
-| Job | `DATN/ci/datn` (Multibranch, `Jenkinsfile`), `DATN/release/datn-deploy` (`infrastructure/jenkins/Jenkinsfile.deploy`) |
-| Tools | `jdk-21`, `maven-3.9`, `node-22`; trên PATH: `kubectl`, `helm`, `kubeconform`, `trivy`, Docker rootless (`DOCKER_HOST`) |
-| Credentials | `github-pat`, `ghcr-push`, `kubeconfig-staging`, `kubeconfig-prod` (chỉ folder release), `github-webhook-secret` |
-| Lock | `datn-deploy-staging`, `datn-deploy-prod` (Lockable Resources tự tạo khi dùng lần đầu) |
-
-**GitHub:**
-
-| Nơi | Cấu hình |
-|---|---|
-| Settings → Webhooks | `https://jenkins.example.com/github-webhook/`, JSON, secret = `github-webhook-secret`, events: Pushes + Pull requests ([04 §13](04_HUONG_DAN_SETUP_JENKINS.md#13-webhook-github)) |
-| Settings → Branches → rule `main` | Require PR + 1 approval; Require status checks: `continuous-integration/jenkins/pr-merge` |
-| Packages (sau lần push đầu) | Mỗi `datn-*`: **Private**. Label `org.opencontainers.image.source` do `build-images.sh` gắn sẽ tự liên kết package với repo |
+| Workflow | `.github/workflows/ci-cd.yml`, `release.yml`, `deploy-manual.yml`, `deploy.yml` (reusable) |
+| Máy chủ | User `tunnel`: khoá SSH chỉ port-forward tới `192.168.49.2:8443`, không shell ([04 §2](04_HUONG_DAN_GITHUB_ACTIONS.md)) |
+| Environment | `staging` (nhánh `main`, secret `KUBE_CONFIG`); `production` (`main` + tag `v*`, required reviewers, secret `KUBE_CONFIG`) |
+| Secret / biến repo | Secret `DEPLOY_SSH_KEY`; biến `DEPLOY_SSH_HOST`, `DEPLOY_SSH_KNOWN_HOSTS` |
+| Ruleset `main` | Require PR + 1 approval; required checks `Backend`, `Frontend`, `Helm chart` |
+| Packages | 6 package `datn-*`, Private; workflow push bằng `GITHUB_TOKEN` |
 
 ---
 
-## 12. Pipeline Jenkins
+## 12. Pipeline GitHub Actions
+
+Mọi job chạy trên runner `ubuntu-latest` của GitHub; máy chủ không chạy gì của CI. Đã kiểm bằng `actionlint` + `shellcheck`; bước đường hầm SSH đã chạy thử trên cluster thật (04 §2).
 
 ### 12.1. `infrastructure/scripts/build-images.sh`
 
 ```bash
 #!/usr/bin/env bash
-# Build + quét + push 6 image, TUẦN TỰ để không tranh RAM với cluster (03 §12.1). Cần đã `docker login ghcr.io`.
-# Chạy bằng Docker rootless của Jenkins (DOCKER_HOST). Cách dùng: build-images.sh <git-sha>
+# Build + quét + push image (03 §12.1). Cần đã `docker login ghcr.io`. Cách dùng: build-images.sh <git-sha>
+# Workflow ci-cd.yml gọi mỗi service một job song song (SERVICES=<một service>); chạy tay thì build tuần tự cả 6.
 set -euo pipefail
 TAG="${1:?Cách dùng: $0 <git-sha>}"
 REGISTRY="${REGISTRY:-ghcr.io/hecker-chuoi}"         # GHCR bắt buộc chữ thường
 SOURCE_URL="${SOURCE_URL:-https://github.com/Hecker-Chuoi/DATN-2026}"
 SERVICES="${SERVICES:-api-gateway identity-service work-service workspace-service notification-service frontend}"
 # Trivy CHỈ BÁO CÁO, không chặn (quyết định của nhóm, 24/11/2026): thư viện của Spring Boot 3.5.x có CVE CRITICAL
-# mà bản vá chỉ có ở Spring 7. Muốn bật lại cổng chặn: đặt TRIVY_EXIT_CODE=1 (biến môi trường của job Jenkins).
+# mà bản vá chỉ có ở Spring 7. Muốn bật lại cổng chặn: đặt TRIVY_EXIT_CODE=1 (env của job "Image" trong ci-cd.yml).
 TRIVY_EXIT_CODE="${TRIVY_EXIT_CODE:-0}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
@@ -2404,18 +2412,22 @@ echo "✅ Đã push $(echo "$SERVICES" | wc -w) image với tag $TAG"
 ```bash
 #!/usr/bin/env bash
 # helm upgrade --install release datn-app, tự rollback khi rollout lỗi hoặc smoke test lỗi (03 §12.2).
-# Cách dùng: KUBECONFIG=<kubeconfig ci-deployer> deploy.sh <staging|prod> <namespace> <git-sha> <app-url>
+# Cách dùng: KUBECONFIG=<kubeconfig ci-deployer> deploy.sh <staging|prod> <namespace> <git-sha> [app-url]
+#   app-url mặc định = publicUrl trong values-<env>.yaml của chart datn-app (URL smoke test qua Ingress).
+# Được workflow .github/workflows/deploy.yml gọi; chạy tay được với kubeconfig ci-deployer.
 set -euo pipefail
-ENV_NAME="${1:?staging|prod}"; NS="${2:?namespace}"; TAG="${3:?git sha}"; APP_URL="${4:?app url}"
+ENV_NAME="${1:?staging|prod}"; NS="${2:?namespace}"; TAG="${3:?git sha}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CHART="$ROOT/infrastructure/helm/datn-app"
 VALUES="$CHART/values-$ENV_NAME.yaml"
+[ -f "$VALUES" ] || { echo "Không có $VALUES"; exit 1; }
+APP_URL="${4:-$(sed -n 's/^publicUrl: *//p' "$VALUES")}"
+[[ "$APP_URL" =~ ^https?:// ]] || { echo "Không xác định được URL công khai (publicUrl trong $VALUES): '$APP_URL'"; exit 1; }
 RELEASE=datn-app
 SELECTOR="datn/layer=app"
 TIMEOUT="${DEPLOY_TIMEOUT:-15m}"
 export HELM_DRIVER=configmap           # release lưu ở ConfigMap: CI không cần quyền Secret
 
-[ -f "$VALUES" ] || { echo "Không có $VALUES"; exit 1; }
 [[ "$TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "TAG phải là git SHA đầy đủ (40 ký tự hex): $TAG"; exit 1; }
 
 # Helm 4 đổi --atomic thành --rollback-on-failure: dò theo trợ giúp của chính bản helm đang cài
@@ -2472,243 +2484,397 @@ helm -n "$NS" history "$RELEASE" --max 3
 echo "✅ $RELEASE@$TAG đã chạy trên $NS"
 ```
 
-### 12.3. `Jenkinsfile` (gốc repo, job Multibranch `DATN/ci/datn`)
+### 12.3. `.github/workflows/ci-cd.yml` (PR và `main`)
 
-```groovy
-// Job Multibranch DATN/ci/datn (docs/cicd/03 §12.3, 04 §11)
-// PR / nhánh : test backend, lint+build frontend, helm lint + kubeconform
-// main       : + build/quét/push 6 image (tag = git SHA) + helm upgrade staging
-// tag vX.Y.Z : KHÔNG build lại; gắn tag phiên bản cho image đã có rồi kích hoạt job duyệt deploy prod
-pipeline {
-  agent none
-  options {
-    timestamps()
-    buildDiscarder(logRotator(numToKeepStr: '20'))
-    disableConcurrentBuilds()
-    timeout(time: 90, unit: 'MINUTES')
-  }
-  environment {
-    REGISTRY    = 'ghcr.io/hecker-chuoi'
-    HELM_DRIVER = 'configmap'
-    MAVEN_OPTS  = '-Xmx768m'
-    STAGING_URL = 'https://staging.example.com'
-  }
-  stages {
-    stage('CI') {
-      when { not { buildingTag() } }
-      agent any
-      tools {
-        jdk 'jdk-21'
-        maven 'maven-3.9'
-        nodejs 'node-22'
-      }
-      stages {
-        stage('Backend: build & unit test') {
-          steps {
-            // IdentityServiceApplicationTests (@SpringBootTest) cần Postgres thật ở localhost:5433, CI không có:
-            // loại riêng test đó, mọi test unit khác vẫn chạy.
-            dir('backend') {
-              sh 'mvn -B -ntp verify "-Dtest=!IdentityServiceApplicationTests" -Dsurefire.failIfNoSpecifiedTests=false'
-            }
-          }
-          post {
-            always { junit allowEmptyResults: true, testResults: 'backend/**/target/surefire-reports/*.xml' }
-          }
-        }
-        stage('Frontend: lint & build') {
-          steps {
-            dir('frontend') {
-              sh 'npm ci --no-audit --no-fund'
-              // Lint CHƯA chặn (còn ~190 lỗi có từ trước): lỗi thì stage UNSTABLE, build vẫn tiếp tục
-              catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') { sh 'npm run lint' }
-              sh 'npm run build'
-            }
-          }
-        }
-        stage('Helm lint & kubeconform') {
-          steps {
-            sh '''
-              set -eu
-              for e in staging prod; do
-                for c in datn-platform datn-app; do
-                  helm lint infrastructure/helm/$c -f infrastructure/helm/$c/values-$e.yaml
-                  helm template $c infrastructure/helm/$c -n datn-$e -f infrastructure/helm/$c/values-$e.yaml \
-                    | kubeconform -strict -summary -ignore-missing-schemas
-                done
-              done
-            '''
-          }
-        }
-        stage('Build, quét & push image') {
-          when { branch 'main' }
-          steps {
-            withCredentials([usernamePassword(credentialsId: 'ghcr-push', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
-              sh '''
-                echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-                bash infrastructure/scripts/build-images.sh "$GIT_COMMIT"
-              '''
-            }
-          }
-          post { always { sh 'docker logout ghcr.io || true' } }
-        }
-        stage('Deploy staging') {
-          when { branch 'main' }
-          options { lock('datn-deploy-staging') }
-          steps {
-            withCredentials([file(credentialsId: 'kubeconfig-staging', variable: 'KUBECONFIG')]) {
-              sh 'bash infrastructure/scripts/deploy.sh staging datn-staging "$GIT_COMMIT" "$STAGING_URL"'
-            }
-          }
-        }
-      }
-      post {
-        always { cleanWs(notFailBuild: true) }
-      }
-    }
+```yaml
+# CI cho mọi PR vào main; với push vào main: build + quét + push 6 image (tag = git SHA) rồi deploy staging.
+# Chạy hoàn toàn trên runner của GitHub. Tài liệu: docs/cicd/03 §12, docs/cicd/04.
+name: CI/CD
 
-    stage('Release') {
-      when { tag pattern: 'v\\d+\\.\\d+\\.\\d+', comparator: 'REGEXP' }
-      stages {
-        stage('Gắn tag phiên bản cho image') {
-          agent any
-          steps {
-            script { env.RELEASE_SHA = env.GIT_COMMIT }
-            withCredentials([usernamePassword(credentialsId: 'ghcr-push', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
-              sh '''
-                set -eu
-                echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-                for s in api-gateway identity-service work-service workspace-service notification-service frontend; do
-                  src="$REGISTRY/datn-$s:$GIT_COMMIT"
-                  docker buildx imagetools inspect "$src" > /dev/null \
-                    || { echo "Chưa có $src. Commit được tag phải qua pipeline main trước."; exit 1; }
-                  docker buildx imagetools create -t "$REGISTRY/datn-$s:$TAG_NAME" "$src"
-                done
-              '''
-            }
-          }
-          post {
-            always {
-              sh 'docker logout ghcr.io || true'
-              cleanWs(notFailBuild: true)
-            }
-          }
-        }
-        stage('Kích hoạt job duyệt & deploy prod') {
-          // Không có agent: không giữ executor
-          steps {
-            build job: '/DATN/release/datn-deploy', wait: false, parameters: [
-              string(name: 'TARGET', value: 'production'),
-              string(name: 'ACTION', value: 'deploy'),
-              string(name: 'IMAGE_TAG', value: env.RELEASE_SHA),
-              string(name: 'REVISION', value: ''),
-              string(name: 'VERSION', value: env.TAG_NAME)
-            ]
-          }
-        }
-      }
-    }
-  }
-}
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  # PR: bản mới thay bản cũ. main: không huỷ giữa chừng một lần deploy
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io/hecker-chuoi   # GHCR bắt buộc chữ thường; khớp image.registry trong chart datn-app
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build và unit test
+        working-directory: backend
+        # IdentityServiceApplicationTests (@SpringBootTest) cần Postgres thật ở localhost:5433, CI không có:
+        # loại riêng test đó, mọi test unit khác vẫn chạy.
+        run: mvn -B -ntp verify "-Dtest=!IdentityServiceApplicationTests" -Dsurefire.failIfNoSpecifiedTests=false
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Lint (chưa chặn, còn ~190 lỗi có từ trước)
+        run: npm run lint
+        continue-on-error: true
+      - run: npm run build
+
+  charts:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.2
+      - name: Cài kubeconform
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz \
+            | tar xz -C "$RUNNER_TEMP/bin" kubeconform
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: helm lint + kubeconform (2 chart x 2 môi trường)
+        run: |
+          set -eu
+          for e in staging prod; do
+            for c in datn-platform datn-app; do
+              helm lint "infrastructure/helm/$c" -f "infrastructure/helm/$c/values-$e.yaml" --set image.tag="$GITHUB_SHA"
+              helm template "$c" "infrastructure/helm/$c" -n "datn-$e" -f "infrastructure/helm/$c/values-$e.yaml" \
+                  --set image.tag="$GITHUB_SHA" \
+                | kubeconform -strict -summary -ignore-missing-schemas
+            done
+          done
+
+  image:
+    name: Image (${{ matrix.service }})
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend, frontend, charts]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write          # push GHCR bằng GITHUB_TOKEN, không cần PAT
+    strategy:
+      fail-fast: true
+      matrix:
+        service: [api-gateway, identity-service, work-service, workspace-service, notification-service, frontend]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: aquasecurity/setup-trivy@v0.3.1
+        with:
+          cache: true
+      - name: Build, quét (Trivy chỉ báo cáo), push
+        env:
+          SERVICES: ${{ matrix.service }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: bash infrastructure/scripts/build-images.sh "$GITHUB_SHA"
+
+  deploy-staging:
+    name: Deploy staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: image
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: staging
+      action: deploy
+      image_tag: ${{ github.sha }}
+    secrets: inherit
 ```
 
-### 12.4. `infrastructure/jenkins/Jenkinsfile.deploy` (job `DATN/release/datn-deploy`)
+### 12.4. `.github/workflows/deploy.yml` (reusable: đường hầm SSH + deploy hoặc rollback)
 
-```groovy
-// Job DATN/release/datn-deploy (docs/cicd/03 §12.4, 04 §12)
-// Deploy prod sau khi gắn tag (được Jenkinsfile gọi), deploy lại / rollback staging hoặc prod bằng tay.
-// Credential kubeconfig-prod CHỈ có trong folder DATN/release.
-pipeline {
-  agent none
-  parameters {
-    choice(name: 'TARGET', choices: ['staging', 'production'], description: 'Môi trường')
-    choice(name: 'ACTION', choices: ['deploy', 'helm-rollback'],
-           description: 'deploy: cài image IMAGE_TAG | helm-rollback: quay về REVISION (để trống = revision ngay trước)')
-    string(name: 'IMAGE_TAG', defaultValue: '', description: 'Git SHA đầy đủ 40 ký tự (ACTION=deploy)')
-    string(name: 'REVISION', defaultValue: '', description: 'Số revision Helm (ACTION=helm-rollback), xem helm history')
-    string(name: 'VERSION', defaultValue: '', description: 'Tag phiên bản, chỉ để ghi chú (vd v1.2.0)')
-  }
-  options {
-    timestamps()
-    buildDiscarder(logRotator(numToKeepStr: '30'))
-    disableConcurrentBuilds()
-  }
-  stages {
-    stage('Kiểm tra tham số') {
-      steps {
-        script {
-          if (params.ACTION == 'deploy' && !(params.IMAGE_TAG ==~ /[0-9a-f]{40}/)) {
-            error 'IMAGE_TAG phải là git SHA đầy đủ (40 ký tự hex)'
-          }
-          if (params.ACTION == 'helm-rollback' && params.REVISION && !(params.REVISION ==~ /\d+/)) {
-            error 'REVISION phải là số'
-          }
-          if (params.VERSION && !(params.VERSION ==~ /[0-9A-Za-z.\-]+/)) {
-            error 'VERSION chỉ gồm chữ, số, dấu chấm và gạch ngang'
-          }
-          def what = params.ACTION == 'deploy' ? (params.VERSION ?: params.IMAGE_TAG.substring(0, 7)) : "rollback ${params.REVISION ?: 'prev'}"
-          currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.TARGET} ${what}"
-        }
-      }
-    }
-    stage('Duyệt') {
-      when { expression { params.TARGET == 'production' } }
-      // Không khai báo agent: chờ duyệt không giữ executor
-      steps {
-        timeout(time: 24, unit: 'HOURS') {
-          input message: "${params.ACTION} ${params.VERSION ?: params.IMAGE_TAG ?: params.REVISION} lên PRODUCTION?",
-                ok: 'Đồng ý', submitter: 'truongnhom'     // user ID Jenkins được duyệt, cách nhau dấu phẩy
-        }
-      }
-    }
-    stage('Thực hiện') {
-      agent any
-      environment { HELM_DRIVER = 'configmap' }
-      steps {
-        script {
-          def cfg = params.TARGET == 'production'
-            ? [env: 'prod',    ns: 'datn-prod',    url: 'https://app.example.com',     cred: 'kubeconfig-prod']
-            : [env: 'staging', ns: 'datn-staging', url: 'https://staging.example.com', cred: 'kubeconfig-staging']
-          lock("datn-deploy-${cfg.env}") {
-            withCredentials([file(credentialsId: cfg.cred, variable: 'KUBECONFIG')]) {
-              if (params.ACTION == 'deploy') {
-                // IMAGE_TAG đã được kiểm tra là hex 40 ký tự, nên nối vào lệnh shell an toàn
-                sh "bash infrastructure/scripts/deploy.sh ${cfg.env} ${cfg.ns} ${params.IMAGE_TAG} ${cfg.url}"
-              } else {
-                // REVISION đã được kiểm tra là số hoặc rỗng (rỗng = revision ngay trước)
-                sh """
-                  set -eu
-                  helm -n ${cfg.ns} history datn-app --max 10
-                  helm -n ${cfg.ns} rollback datn-app ${params.REVISION} --wait --timeout 15m
-                  helm -n ${cfg.ns} history datn-app --max 3
-                """
-              }
-            }
-          }
-        }
-      }
-      post { always { cleanWs(notFailBuild: true) } }
-    }
-  }
-}
+```yaml
+# Reusable: deploy datn-app hoặc helm rollback vào staging/production.
+# Đường vào cluster: đường hầm SSH tới user "tunnel" trên máy chủ, khoá chỉ được port-forward tới API minikube
+# (authorized_keys: restrict,port-forwarding,permitopen="192.168.49.2:8443"). Kubeconfig là SA ci-deployer,
+# lưu trong secret KUBE_CONFIG của GitHub Environment (production: chờ người duyệt). Tài liệu: docs/cicd/04.
+name: Deploy (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: staging | production
+        type: string
+        required: true
+      action:
+        description: deploy | rollback
+        type: string
+        default: deploy
+      image_tag:
+        description: Git SHA đầy đủ 40 ký tự (action=deploy)
+        type: string
+        default: ''
+      revision:
+        description: Số revision Helm (action=rollback); để trống = revision ngay trước
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: ${{ inputs.action }} ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ steps.vars.outputs.app_url }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      HELM_DRIVER: configmap                     # release lưu ở ConfigMap: CI không cần quyền Secret
+      ENVIRONMENT: ${{ inputs.environment }}
+      ACTION: ${{ inputs.action }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      REVISION: ${{ inputs.revision }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Kiểm tra tham số
+        id: vars
+        run: |
+          set -eu
+          case "$ENVIRONMENT" in
+            staging)    ns=datn-staging; env_name=staging ;;
+            production) ns=datn-prod;    env_name=prod ;;
+            *) echo "environment phải là staging hoặc production"; exit 1 ;;
+          esac
+          case "$ACTION" in
+            deploy)   [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "image_tag phải là git SHA đầy đủ (40 ký tự hex)"; exit 1; } ;;
+            rollback) [[ -z "$REVISION" || "$REVISION" =~ ^[0-9]+$ ]] || { echo "revision phải là số"; exit 1; } ;;
+            *) echo "action phải là deploy hoặc rollback"; exit 1 ;;
+          esac
+          app_url=$(sed -n 's/^publicUrl: *//p' "infrastructure/helm/datn-app/values-$env_name.yaml")
+          {
+            echo "namespace=$ns"
+            echo "env_name=$env_name"
+            echo "app_url=$app_url"
+          } >> "$GITHUB_OUTPUT"
+          echo "== $ACTION $ENVIRONMENT (namespace $ns, $app_url)"
+
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.2
+
+      - name: Mở đường hầm SSH tới API server
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ vars.DEPLOY_SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ vars.DEPLOY_SSH_HOST }}
+          K8S_API: ${{ vars.MINIKUBE_API || '192.168.49.2:8443' }}
+        run: |
+          set -eu
+          [ -n "$SSH_KEY" ] && [ -n "$KNOWN_HOSTS" ] && [ -n "$SSH_HOST" ] || {
+            echo "Thiếu secret DEPLOY_SSH_KEY hoặc biến DEPLOY_SSH_KNOWN_HOSTS / DEPLOY_SSH_HOST (docs/cicd/04)"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # -f -N: chạy nền, không mở shell; ExitOnForwardFailure: lỗi ngay nếu không mở được cổng
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=4 \
+              -f -N -L "127.0.0.1:8443:$K8S_API" "tunnel@$SSH_HOST"
+          echo "Đường hầm 127.0.0.1:8443 -> $K8S_API đã mở"
+
+      - name: Kubeconfig của ci-deployer
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          set -eu
+          [ -n "$KUBE_CONFIG" ] || { echo "Environment '$ENVIRONMENT' thiếu secret KUBE_CONFIG (docs/cicd/04)"; exit 1; }
+          umask 077
+          printf '%s\n' "$KUBE_CONFIG" > "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+          KUBECONFIG="$RUNNER_TEMP/kubeconfig" kubectl version --request-timeout=20s
+
+      - name: Deploy (helm upgrade --install + smoke test)
+        if: inputs.action == 'deploy'
+        env:
+          NAMESPACE: ${{ steps.vars.outputs.namespace }}
+          ENV_NAME: ${{ steps.vars.outputs.env_name }}
+        run: bash infrastructure/scripts/deploy.sh "$ENV_NAME" "$NAMESPACE" "$IMAGE_TAG"
+
+      - name: Helm rollback
+        if: inputs.action == 'rollback'
+        env:
+          NAMESPACE: ${{ steps.vars.outputs.namespace }}
+        run: |
+          set -eu
+          helm -n "$NAMESPACE" history datn-app --max 10
+          # REVISION rỗng = quay về revision ngay trước
+          helm -n "$NAMESPACE" rollback datn-app ${REVISION:+"$REVISION"} --wait --timeout 15m
+          helm -n "$NAMESPACE" history datn-app --max 3
+
+      - name: Đóng đường hầm, xoá khoá
+        if: always()
+        run: |
+          pkill -f "127.0.0.1:8443:" || true
+          rm -f ~/.ssh/deploy_key "$RUNNER_TEMP/kubeconfig"
 ```
 
-> Job này luôn lấy script từ nhánh `main` ([04 §12](04_HUONG_DAN_SETUP_JENKINS.md#12-job-deploy--duyệt-prod-datnreleasedatn-deploy)). Khi `ACTION=deploy` với SHA cũ thì dùng **image cũ + chart hiện tại**. Muốn quay về đúng cả chart lẫn image cũ thì dùng `ACTION=helm-rollback`.
+### 12.5. `.github/workflows/release.yml` (tag `vX.Y.Z` → prod, chờ duyệt)
 
-### 12.5. Phát hành prod và rollback
+```yaml
+# Phát hành prod: push tag vX.Y.Z trỏ vào commit đã qua main (đã có image :<sha> trên GHCR).
+# KHÔNG build lại: gắn thêm tag phiên bản cho đúng image đó, rồi deploy production (Environment
+# "production" chờ người duyệt bấm Approve). Tài liệu: docs/cicd/03 §12, docs/cicd/04.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io/hecker-chuoi
+  SERVICES: api-gateway identity-service work-service workspace-service notification-service frontend
+
+jobs:
+  promote:
+    name: Gắn tag phiên bản cho image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Commit của tag
+        id: commit
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Tag phải có dạng vX.Y.Z: $TAG"; exit 1; }
+          sha=$(git rev-parse 'HEAD^{commit}')      # tag có chú thích (git tag -a) vẫn ra đúng SHA của commit
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "== $TAG -> $sha"
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Gắn tag
+        env:
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          set -eu
+          for s in $SERVICES; do
+            src="$REGISTRY/datn-$s:$SHA"
+            docker buildx imagetools inspect "$src" > /dev/null \
+              || { echo "Chưa có $src. Commit được tag phải qua workflow CI/CD trên main trước."; exit 1; }
+            docker buildx imagetools create -t "$REGISTRY/datn-$s:$TAG" "$src"
+            echo "$REGISTRY/datn-$s:$TAG = $src"
+          done
+
+  deploy-production:
+    name: Deploy production
+    needs: promote
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+      action: deploy
+      image_tag: ${{ needs.promote.outputs.sha }}
+    secrets: inherit
+```
+
+### 12.6. `.github/workflows/deploy-manual.yml` (deploy lại, rollback)
+
+```yaml
+# Chạy tay (Actions -> Deploy thủ công -> Run workflow, chọn nhánh main):
+#   action=deploy   + image_tag=<git SHA>  : cài lại image cũ (dùng chart của nhánh đang chọn)
+#   action=rollback + revision=<số|trống>  : helm rollback cả release (chart + image) về revision đó
+# production luôn qua bước duyệt của Environment "production". Tài liệu: docs/cicd/03 §12.
+name: Deploy thủ công
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Môi trường
+        type: choice
+        options: [staging, production]
+        default: staging
+      action:
+        description: deploy = cài image_tag | rollback = helm rollback về revision
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+      image_tag:
+        description: Git SHA đầy đủ 40 ký tự (action=deploy)
+        type: string
+        required: false
+      revision:
+        description: Số revision Helm (action=rollback), để trống = revision ngay trước
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: ${{ inputs.action }} ${{ inputs.target }}
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: ${{ inputs.target }}
+      action: ${{ inputs.action }}
+      image_tag: ${{ inputs.image_tag }}
+      revision: ${{ inputs.revision }}
+    secrets: inherit
+```
+
+> *Deploy thủ công* với `action=deploy` và SHA cũ dùng **image cũ + chart của nhánh đang chọn** (`main`). Muốn quay về đúng cả chart lẫn image cũ thì dùng `action=rollback`.
+
+### 12.7. Phát hành prod và rollback
 
 ```bash
-# Máy dev, sau khi staging đã ổn với commit cần phát hành
+# Máy dev, sau khi staging đã ổn với commit cần phát hành (workflow CI/CD của commit đó đã xanh)
 git checkout main && git pull
 git tag -a v1.0.0 -m "Phát hành v1.0.0" && git push origin v1.0.0
-# Jenkins: DATN/ci/datn → v1.0.0 (gắn tag image) → DATN/release/datn-deploy chờ duyệt → "Đồng ý"
+# Actions → Release: "Gắn tag phiên bản cho image" → "Deploy production" chờ duyệt → Approve and deploy
 ```
 
 | Tình huống | Cách làm |
 |---|---|
 | Bản mới lỗi ngay khi deploy | Tự động: `--rollback-on-failure` hoặc smoke test rồi `helm rollback` |
-| Phát hiện lỗi sau vài giờ | `datn-deploy` → `ACTION=helm-rollback`, `TARGET=…`, `REVISION` trống (về bản trước) hoặc số cụ thể |
-| Muốn chạy lại một SHA cũ | `datn-deploy` → `ACTION=deploy`, `IMAGE_TAG=<sha>` |
-| Khẩn cấp, Jenkins hỏng | Quản trị viên: `HELM_DRIVER=configmap helm -n datn-prod rollback datn-app` |
+| Phát hiện lỗi sau vài giờ | Actions → *Deploy thủ công*: `action=rollback`, `target=…`, `revision` trống (về bản trước) hoặc số cụ thể |
+| Muốn chạy lại một SHA cũ | *Deploy thủ công*: `action=deploy`, `image_tag=<sha>` |
+| Khẩn cấp, GitHub Actions không dùng được | Quản trị viên trên máy chủ: `HELM_DRIVER=configmap helm -n datn-prod rollback datn-app` |
 
 ---
 
@@ -2719,7 +2885,7 @@ Chạy bằng kubeconfig admin. Tương ứng [02 §9](02_KE_HOACH_TRIEN_KHAI_CI
 ```bash
 NS=datn-staging; export HELM_DRIVER=configmap
 
-# T1 – zero downtime (chạy trong lúc Jenkins deploy)
+# T1 – zero downtime (chạy trong lúc workflow deploy)
 while true; do curl -s -o /dev/null -w "%{http_code} " https://staging.example.com/work/actuator/health; sleep 0.2; done
 
 # T2/T3 – lịch sử, rollback của Helm
@@ -2752,8 +2918,9 @@ kubectl -n $NS run np-test --rm -it --image=busybox:1.36 --restart=Never -- \
 # T10 – đổi cấu hình thì checksum đổi
 kubectl -n $NS get deploy work-service -o jsonpath='{.spec.template.metadata.annotations}'; echo
 
-# T11 – cách ly Jenkins
-sudo -u jenkins kubectl get pods -A ; sudo -u jenkins docker -H unix:///var/run/docker.sock ps          # cả hai phải lỗi
+# T11 – khoá SSH của CI bị khoá chặt (chạy ở máy có khoá DEPLOY_SSH_KEY; chi tiết 04 §2.2)
+ssh -i deploy_key tunnel@<máy chủ>                                    # This account is currently not available.
+ssh -i deploy_key -N -L 15432:127.0.0.1:22 tunnel@<máy chủ> &        # kết nối 15432: administratively prohibited
 
 # T12 – công cụ quản trị
 curl -s -o /dev/null -w "%{http_code}\n" https://pgadmin-staging.example.com/                  # 401 (basic auth) hoặc 403 (ngoài whitelist)
@@ -2784,7 +2951,7 @@ Chạy trên cluster `kind` tạm ở máy dev (Kubernetes 1.37, Helm 4.3.2, ing
 
 **Trivy** (quét riêng 6 image, 24/11/2026): cả 6 có lỗ hổng CRITICAL đã có bản vá. 5 image Java do thư viện của Spring Boot 3.5.4 (netty-handler, tomcat-embed-core, spring-security-web, bouncycastle, spring-webmvc/webflux; riêng spring-webmvc/webflux chỉ có bản vá ở Spring 7); frontend do gói OS của `nginx:1.27-alpine` (brotli, openssl). Nhóm quyết định Trivy **chỉ báo cáo, không chặn** (`TRIVY_EXIT_CODE=0` trong `build-images.sh`). Nên làm riêng: nâng Spring Boot lên bản vá 3.5.x mới nhất và đổi image nền frontend sang bản nginx alpine mới hơn.
 
-Chưa kiểm được ở máy dev: TLS/certbot, Nginx máy chủ và whitelist IP thật, Docker rootless của Jenkins, push GHCR, Jenkins thật (job, credential, webhook, duyệt prod).
+Chưa kiểm được ở máy dev: TLS/certbot, Nginx máy chủ và whitelist IP thật, push GHCR và workflow chạy thật trên GitHub (Environment, duyệt prod). Bước đường hầm SSH của `deploy.yml` đã chạy thử riêng: 04 §2.
 
 ---
 
@@ -2836,8 +3003,8 @@ kubectl -n datn-prod rollout restart deploy/keycloak
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
 | `Error: UPGRADE FAILED: another operation (install/upgrade/rollback) is in progress` | Lần deploy trước bị ngắt giữa chừng | `helm -n $NS history datn-app`; `helm -n $NS rollback datn-app <revision deployed gần nhất>` (driver configmap) |
-| Jenkins: `rendered manifests contain a resource that already exists ... invalid ownership metadata` | Lần cài đầu không dùng `HELM_DRIVER=configmap`, hoặc tài nguyên tạo bằng `kubectl apply` | Quản trị viên: `helm -n $NS uninstall datn-app` (driver đã dùng khi cài), rồi cài lại theo §7 |
-| Jenkins: `secrets is forbidden: User "system:serviceaccount:…:ci-deployer"` | Quên `HELM_DRIVER=configmap` | `deploy.sh` đã export; kiểm tra lệnh helm chạy tay trong Jenkinsfile |
+| CI: `rendered manifests contain a resource that already exists ... invalid ownership metadata` | Lần cài đầu không dùng `HELM_DRIVER=configmap`, hoặc tài nguyên tạo bằng `kubectl apply` | Quản trị viên: `helm -n $NS uninstall datn-app` (driver đã dùng khi cài), rồi cài lại theo §7 |
+| CI: `secrets is forbidden: User "system:serviceaccount:…:ci-deployer"` | Quên `HELM_DRIVER=configmap` | `deploy.sh` đã export; kiểm tra lệnh helm tự viết thêm trong workflow |
 | `UPGRADE FAILED: … StatefulSet … spec: Forbidden: updates to statefulset spec for fields other than …` | Sửa `storage`/selector của StatefulSet trong values platform | Trả lại giá trị cũ; muốn tăng dung lượng thì làm thủ tục riêng (backup, xoá StatefulSet `--cascade=orphan`, sửa PVC) |
 | Pod `Pending`, `Insufficient memory` / `exceeded quota` | Hết RAM node hoặc quota | `kubectl describe node minikube`; giảm replicas; tạm tắt pgAdmin/Mailpit staging; tắt staging |
 | `CreateContainerConfigError` | Thiếu Secret hoặc key (`app-secrets`, `PGADMIN_*`, `admin-basic-auth`…) | `kubectl describe pod`; bổ sung key: `kubectl -n $NS create secret generic app-secrets --from-env-file=... --dry-run=client -o yaml \| kubectl apply -f -` |
@@ -2857,7 +3024,7 @@ kubectl -n datn-prod rollout restart deploy/keycloak
 | Kafka `CrashLoopBackOff`, log lạ về `port` | Thiếu `enableServiceLinks: false` | `platform.podDefaults` |
 | Không có thông báo realtime | WS bị cắt | DevTools: WS `/notification/ws` = 101; timeout Nginx/Ingress |
 | Mất kết nối sau khởi động lại máy | minikube chưa chạy / IP đổi | `systemctl status minikube`; `minikube ip` khớp Nginx |
-| Sự cố về Jenkins | — | [04 §16](04_HUONG_DAN_SETUP_JENKINS.md#16-xử-lý-sự-cố) |
+| Sự cố về GitHub Actions, đường hầm SSH | — | [04 §8](04_HUONG_DAN_GITHUB_ACTIONS.md#8-xử-lý-sự-cố) |
 
 ### 14.3. Lệnh hằng ngày
 
