@@ -1,6 +1,5 @@
 # File chạy trên máy chủ Linux / trong container: luôn LF, kể cả khi checkout trên Windows (core.autocrlf=true)
 *.sh            text eol=lf
-.github/**      text eol=lf
 Dockerfile      text eol=lf
 *.Dockerfile    text eol=lf
 .dockerignore   text eol=lf

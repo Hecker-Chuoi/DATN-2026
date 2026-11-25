@@ -1,6 +1,0 @@
-apiVersion: v2
-name: datn-platform
-description: Hạ tầng của DATN-2026 trong 1 namespace (DB, Keycloak, Kafka, Redis, MinIO, công cụ quản trị, RBAC CI)
-type: application
-version: 0.1.0
-appVersion: "1.0.0"

@@ -1,7 +1,0 @@
-# GitHub Actions (ci-cd.yml -> deploy.yml): deploy.sh staging datn-staging <sha>; smoke test dùng publicUrl
-publicUrl: https://staging.example.com
-cookieSecure: true
-keycloak:
-  publicUrl: https://sso-staging.example.com
-ingress:
-  host: staging.example.com

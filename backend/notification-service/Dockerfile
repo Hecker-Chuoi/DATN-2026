@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Stage 1: Build (build context = backend/, xem infrastructure/scripts/build-images.sh)
+# Stage 1: Build (build context = backend/)
 FROM maven:3.9.9-eclipse-temurin-21-alpine AS builder
 WORKDIR /app
 # Build trên máy chủ dùng chung với cluster: giới hạn heap Maven
