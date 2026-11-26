@@ -31,8 +31,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.text.Normalizer;
 import java.time.LocalDateTime;
@@ -61,6 +59,9 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
     private final WorkflowEngineService workflowEngineService;
     private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper;
+    private final com.datn.workservice.client.IdentityClient identityClient;
+    private final com.datn.workservice.service.WorkItemAuditService workItemAuditService;
+    private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -700,6 +701,10 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                         return null;
                     }
                     WorkItem saved = createWorkItemFromIssue(project, issue, resolveInitialStatus(projectId), null, false);
+                    firstMappedAssignee(issue, projectId).ifPresent(assignee -> {
+                        saved.setAssigneeId(assignee);
+                        workItemRepository.save(saved);
+                    });
                     workItemGitHubLinkRepository.saveAndFlush(buildIssueLink(projectId, saved.getId(), issue, "OPEN"));
                     log.info("Auto-created WorkItem '{}' from GitHub issue #{} in project '{}'",
                             saved.getCode(), issue.getNumber(), project.getName());
@@ -749,6 +754,10 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
             }
             case "deleted" -> {
                 linkOpt.ifPresent(workItemGitHubLinkRepository::delete);
+                return null;
+            }
+            case "assigned", "unassigned" -> {
+                linkOpt.ifPresent(link -> applyIssueAssignee(projectId, link, "assigned".equalsIgnoreCase(action), root));
                 return null;
             }
             default -> {
@@ -902,6 +911,128 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         }
     }
 
+    // ─── Người được giao ↔ GitHub assignee ───────────────────────────────────
+
+    /**
+     * Webhook {@code issues.assigned / unassigned}: đổi người được giao của Task theo tài khoản GitHub
+     * (chỉ khi tài khoản đó đã liên kết DATN và là thành viên dự án). Không phát
+     * {@code WorkItemAssigneeChangedEvent} để không đẩy ngược lại GitHub.
+     */
+    private void applyIssueAssignee(UUID projectId, WorkItemGitHubLink link, boolean assigned, JsonNode root) {
+        Long githubId = longOrNull(root.path("assignee").path("id"));
+        String login = root.path("assignee").path("login").asText(null);
+        UUID mapped = resolveMember(githubId, projectId).orElse(null);
+        if (mapped == null) {
+            log.info("GitHub @{} chưa liên kết DATN hoặc không thuộc dự án, bỏ qua {} cho issue #{}",
+                    login, assigned ? "assigned" : "unassigned", link.getGithubNumber());
+            return;
+        }
+        WorkItem item = workItemRepository.findById(link.getWorkItemId()).orElse(null);
+        if (item == null || item.getDeletedAt() != null) {
+            return;
+        }
+        UUID oldAssignee = item.getAssigneeId();
+        UUID newAssignee;
+        if (assigned) {
+            newAssignee = mapped;
+        } else if (mapped.equals(oldAssignee)) {
+            newAssignee = null;
+        } else {
+            return; // gỡ một người không phải người được giao trong DATN: giữ nguyên
+        }
+        if (Objects.equals(oldAssignee, newAssignee)) {
+            return;
+        }
+        item.setAssigneeId(newAssignee);
+        workItemRepository.save(item);
+        UUID actor = resolveMember(longOrNull(root.path("sender").path("id")), projectId).orElse(mapped);
+        workItemAuditService.recordAssigneeChange(item.getId(), oldAssignee, newAssignee, actor);
+        workItemNotifier.assigneeChanged(item, oldAssignee, newAssignee, actor);
+        log.info("WorkItem '{}': người được giao {} -> {} theo GitHub issue #{}",
+                item.getCode(), oldAssignee, newAssignee, link.getGithubNumber());
+    }
+
+    /** Người dùng DATN (thành viên dự án) đã liên kết tài khoản GitHub có id này. */
+    private Optional<UUID> resolveMember(Long githubUserId, UUID projectId) {
+        if (githubUserId == null) {
+            return Optional.empty();
+        }
+        return userGitHubTokenRepository.findFirstByGithubUserId(githubUserId)
+                .map(UserGitHubToken::getUserId)
+                .filter(userId -> projectMemberService.hasPermission(projectId, userId, PermissionKey.PROJECT_VIEW));
+    }
+
+    private Optional<UUID> firstMappedAssignee(GitHubIssueDto issue, UUID projectId) {
+        if (issue.getAssignees() == null) {
+            return Optional.empty();
+        }
+        return issue.getAssignees().stream()
+                .filter(Objects::nonNull)
+                .map(a -> resolveMember(a.getId(), projectId))
+                .flatMap(Optional::stream)
+                .findFirst();
+    }
+
+    private Optional<String> githubLoginOf(UUID userId) {
+        if (userId == null) {
+            return Optional.empty();
+        }
+        return userGitHubTokenRepository.findByUserId(userId)
+                .map(UserGitHubToken::getGithubUsername)
+                .filter(login -> !login.isBlank());
+    }
+
+    /** Tên hiển thị từ identity-service; lỗi hoặc không thấy thì null (không chặn nghiệp vụ). */
+    private String displayNameOf(UUID userId) {
+        if (userId == null) {
+            return null;
+        }
+        try {
+            var res = identityClient.getUsersByIds(List.of(userId));
+            var user = com.datn.workservice.client.IdentityUsers
+                    .indexByAnyId(res != null ? res.getData() : null).get(userId);
+            if (user == null) {
+                return null;
+            }
+            return user.getFullName() != null && !user.getFullName().isBlank() ? user.getFullName().trim() : user.getUsername();
+        } catch (Exception e) {
+            log.warn("Không lấy được tên người dùng {}: {}", userId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Gọi từ listener sau commit (bất đồng bộ): đặt assignee của các Issue đang liên kết theo người được giao mới.
+     * Người mới chưa liên kết GitHub hoặc hủy giao thì gỡ assignee để Issue không hiện sai người.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public void syncAssigneeToGitHub(UUID workItemId, UUID newAssigneeId, UUID changedByUserId) {
+        WorkItem item = workItemRepository.findById(workItemId).orElse(null);
+        if (item == null) return;
+        ProjectGitHubRepo repo = projectGitHubRepoRepository.findByProjectId(item.getProjectId()).orElse(null);
+        if (repo == null) return;
+        List<WorkItemGitHubLink> issueLinks = workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(workItemId)
+                .stream()
+                .filter(l -> l.getLinkType() == GitHubLinkType.ISSUE && l.getGithubNumber() != null)
+                .toList();
+        if (issueLinks.isEmpty()) return;
+        Project project = projectRepository.findById(item.getProjectId()).orElse(null);
+        if (project == null) return;
+        UserGitHubToken token = findFirstToken(repo.getConnectedByUserId(), project.getLeadUserId(), changedByUserId)
+                .orElse(null);
+        if (token == null) {
+            log.warn("Không có token GitHub của dự án để đổi assignee trên {}", repo.getRepoFullName());
+            return;
+        }
+        List<String> logins = githubLoginOf(newAssigneeId).map(List::of).orElse(List.of());
+        String validToken = getValidAccessToken(token);
+        for (WorkItemGitHubLink link : issueLinks) {
+            gitHubApiClient.setIssueAssignees(validToken, repo.getRepoOwner(), repo.getRepoName(),
+                    link.getGithubNumber(), logins);
+        }
+    }
+
     // ─── Khung "Phát triển" của Task ─────────────────────────────────────────
 
     @Override
@@ -913,47 +1044,7 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         if (repo.isEmpty()) {
             return WorkItemDevelopmentResponse.builder().linked(false).links(List.of()).build();
         }
-        String branch = findBranchLink(item.getId()).map(WorkItemGitHubLink::getGithubId).orElse(null);
-        return buildDevelopmentInfo(item, repo.get(), branch);
-    }
-
-    @Override
-    @Transactional
-    public WorkItemDevelopmentResponse createBranch(UUID workItemId, UUID currentUserId) {
-        WorkItem item = workItemRepository.findById(workItemId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy công việc với ID: " + workItemId));
-        ProjectGitHubRepo repo = projectGitHubRepoRepository.findByProjectId(item.getProjectId())
-                .orElseThrow(() -> new BadRequestException("Dự án chưa liên kết với GitHub Repository nào"));
-        Project project = projectRepository.findById(item.getProjectId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dự án với ID: " + item.getProjectId()));
-
-        // Giống syncIssues: người đang thao tác -> người kết nối repo -> Lead. Member không cần tự liên kết GitHub.
-        UserGitHubToken token = findFirstToken(currentUserId, repo.getConnectedByUserId(), project.getLeadUserId())
-                .orElseThrow(() -> new BadRequestException(
-                        "Dự án chưa có tài khoản GitHub nào để tạo nhánh. Admin dự án cần kết nối GitHub trong trang Tích hợp GitHub"));
-
-        Optional<WorkItemGitHubLink> existing = findBranchLink(item.getId());
-        String branch = existing.map(WorkItemGitHubLink::getGithubId)
-                .orElseGet(() -> suggestBranchName(item.getCode(), item.getSummary()));
-        String base = baseBranchOf(repo);
-
-        boolean created = gitHubApiClient.createBranch(getValidAccessToken(token),
-                repo.getRepoOwner(), repo.getRepoName(), branch, base);
-        log.info("WorkItem {}: nhánh {} {} trên {} (tách từ {})", item.getCode(), branch,
-                created ? "đã tạo" : "đã có sẵn", repo.getRepoFullName(), base);
-
-        if (existing.isEmpty()) {
-            workItemGitHubLinkRepository.save(WorkItemGitHubLink.builder()
-                    .workItemId(item.getId())
-                    .projectId(item.getProjectId())
-                    .linkType(GitHubLinkType.BRANCH)
-                    .githubId(branch)
-                    .title(branch)
-                    .url(repoUrlOf(repo) + "/tree/" + branch)
-                    .status("ACTIVE")
-                    .build());
-        }
-        return buildDevelopmentInfo(item, repo, branch);
+        return buildDevelopmentInfo(item, repo.get());
     }
 
     @Override
@@ -974,8 +1065,11 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                         "Dự án chưa có tài khoản GitHub nào để tạo Issue. Admin dự án cần kết nối GitHub trong trang Tích hợp GitHub"));
 
         String title = item.getSummary() != null && !item.getSummary().isBlank() ? item.getSummary().trim() : item.getCode();
+        List<String> assignees = githubLoginOf(item.getAssigneeId()).map(List::of).orElse(List.of());
         GitHubIssueDto issue = gitHubApiClient.createIssue(getValidAccessToken(token),
-                repo.getRepoOwner(), repo.getRepoName(), title, buildIssueBody(item));
+                repo.getRepoOwner(), repo.getRepoName(), title,
+                buildIssueBody(item, item.getAssigneeId() != null ? displayNameOf(item.getAssigneeId()) : null),
+                assignees);
 
         // Webhook issues.opened có thể về trước và đã gắn liên kết nhờ dấu ẩn: khi đó bỏ qua
         try {
@@ -990,17 +1084,19 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
             log.info("GitHub issue #{} đã được webhook gắn vào {} trước", issue.getNumber(), item.getCode());
         }
         log.info("WorkItem {}: đã tạo GitHub issue #{} trên {}", item.getCode(), issue.getNumber(), repo.getRepoFullName());
-        String branch = findBranchLink(item.getId()).map(WorkItemGitHubLink::getGithubId).orElse(null);
-        return buildDevelopmentInfo(item, repo, branch);
+        return buildDevelopmentInfo(item, repo);
     }
 
-    private static String buildIssueBody(WorkItem item) {
+    private static String buildIssueBody(WorkItem item, String assigneeName) {
         StringBuilder body = new StringBuilder();
         if (item.getDescription() != null && !item.getDescription().isBlank()) {
             body.append(item.getDescription().trim()).append("\n\n");
         }
         body.append("---\n")
                 .append("Tạo từ DATN · ").append(item.getCode()).append("\n")
+                .append("Người được giao: ")
+                .append(item.getAssigneeId() == null ? "Chưa giao" : (assigneeName != null ? assigneeName : "thành viên dự án"))
+                .append("\n")
                 .append("<!-- datn-task:").append(item.getId()).append(" -->");
         return body.toString();
     }
@@ -1039,20 +1135,9 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         return slug.isEmpty() ? "feat/" + key : "feat/" + key + "-" + slug;
     }
 
-    private Optional<WorkItemGitHubLink> findBranchLink(UUID workItemId) {
-        return workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(workItemId).stream()
-                .filter(l -> l.getLinkType() == GitHubLinkType.BRANCH && l.getGithubId() != null && !l.getGithubId().isBlank())
-                .findFirst();
-    }
-
-    private WorkItemDevelopmentResponse buildDevelopmentInfo(WorkItem item, ProjectGitHubRepo repo, String createdBranch) {
-        String branch = createdBranch != null ? createdBranch : suggestBranchName(item.getCode(), item.getSummary());
-        String base = baseBranchOf(repo);
-        String repoUrl = repoUrlOf(repo);
-        String prTitle = ((item.getCode() != null ? item.getCode() : "") + " "
-                + (item.getSummary() != null ? item.getSummary().trim() : "")).trim();
-        String closePrTitle = firstCloseKeyword(repo.getPrCloseKeywords()) + " " + prTitle;
-        String compare = repoUrl + "/compare/" + base + "..." + branch + "?expand=1&title=";
+    private WorkItemDevelopmentResponse buildDevelopmentInfo(WorkItem item, ProjectGitHubRepo repo) {
+        String code = item.getCode() != null ? item.getCode() : "";
+        String assigneeLogin = githubLoginOf(item.getAssigneeId()).orElse(null);
         List<WorkItemGitHubLinkDto> links = workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId()).stream()
                 .filter(l -> l.getLinkType() == GitHubLinkType.ISSUE || l.getLinkType() == GitHubLinkType.PULL_REQUEST)
                 .map(l -> WorkItemGitHubLinkDto.builder()
@@ -1064,21 +1149,21 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
                         .status(l.getStatus())
                         .authorName(l.getAuthorName())
                         .authorAvatarUrl(l.getAuthorAvatarUrl())
+                        .authorNotAssignee(l.getLinkType() == GitHubLinkType.PULL_REQUEST
+                                && assigneeLogin != null && l.getAuthorName() != null
+                                && !assigneeLogin.equalsIgnoreCase(l.getAuthorName()))
                         .build())
                 .toList();
         return WorkItemDevelopmentResponse.builder()
                 .linked(true)
                 .repoFullName(repo.getRepoFullName())
-                .repoUrl(repoUrl)
-                .baseBranch(base)
-                .branchName(branch)
-                .branchCreated(createdBranch != null)
-                .branchUrl(repoUrl + "/tree/" + branch)
-                .prTitle(prTitle)
-                .closePrTitle(closePrTitle)
-                .compareUrl(compare + urlEncode(prTitle))
-                .closeCompareUrl(compare + urlEncode(closePrTitle))
-                .checkoutCommand("git fetch origin && git checkout " + branch)
+                .repoUrl(repoUrlOf(repo))
+                .baseBranch(baseBranchOf(repo))
+                .branchName(suggestBranchName(item.getCode(), item.getSummary()))
+                .closeExample((firstCloseKeyword(repo.getPrCloseKeywords()) + " " + code).trim())
+                .assigneeId(item.getAssigneeId())
+                .assigneeName(displayNameOf(item.getAssigneeId()))
+                .assigneeGithubLogin(assigneeLogin)
                 .links(links)
                 .issueLinked(links.stream().anyMatch(l -> l.getLinkType() == GitHubLinkType.ISSUE))
                 .build();
@@ -1101,10 +1186,6 @@ public class GitHubIntegrationServiceImpl implements GitHubIntegrationService {
         }
         String first = customKeywords.split(",")[0].trim();
         return first.isEmpty() ? "Closes" : first;
-    }
-
-    private static String urlEncode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

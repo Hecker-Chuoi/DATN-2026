@@ -48,7 +48,7 @@ const RULES = [
   {
     key: 'autoMoveInReviewOnPr',
     from: 'Mở PR',
-    to: 'Task sang Review',
+    to: 'Task sang đang xử lý',
     hint: (branch) => `PR vào ${branch}, có mã Task trong tên nhánh hoặc tiêu đề (VD: DATN-15)`,
   },
   {

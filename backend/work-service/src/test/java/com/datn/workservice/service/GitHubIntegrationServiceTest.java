@@ -71,6 +71,12 @@ class GitHubIntegrationServiceTest {
     private WorkflowEngineService workflowEngineService;
     @Mock
     private TransactionTemplate transactionTemplate;
+    @Mock
+    private com.datn.workservice.client.IdentityClient identityClient;
+    @Mock
+    private com.datn.workservice.service.WorkItemAuditService workItemAuditService;
+    @Mock
+    private com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -469,101 +475,24 @@ class GitHubIntegrationServiceTest {
     }
 
     @Test
-    @DisplayName("development: chưa có nhánh thì gợi ý tên, link PR dùng nhánh đích và từ khoá tự đặt")
-    void testDevelopmentInfo_SuggestsBranchAndPrLinks() {
+    @DisplayName("development: gợi ý tên nhánh và cách ghi PR hoàn thành theo từ khoá tự đặt")
+    void testDevelopmentInfo_DevConvention() {
         WorkItem item = stubDevTask("DATN-15", "Đăng nhập Google");
         stubDevRepo("develop");
         projectRepo.setPrCloseKeywords("final, done");
-        when(workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())).thenReturn(List.of());
+        when(workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())).thenReturn(List.of(
+                WorkItemGitHubLink.builder().linkType(GitHubLinkType.PULL_REQUEST).githubNumber(21).status("OPEN").authorName("dev1").build(),
+                WorkItemGitHubLink.builder().linkType(GitHubLinkType.BRANCH).githubId("feat/old").build()));
 
         var info = gitHubIntegrationService.getDevelopmentInfo(item.getId());
 
         assertThat(info.isLinked()).isTrue();
-        assertThat(info.isBranchCreated()).isFalse();
         assertThat(info.getBranchName()).isEqualTo("feat/DATN-15-dang-nhap-google");
-        assertThat(info.getPrTitle()).isEqualTo("DATN-15 Đăng nhập Google");
-        assertThat(info.getClosePrTitle()).isEqualTo("final DATN-15 Đăng nhập Google");
-        assertThat(info.getCompareUrl()).startsWith(
-                "https://github.com/datn-team/work-service/compare/develop...feat/DATN-15-dang-nhap-google?expand=1&title=DATN-15%20");
-        assertThat(info.getCheckoutCommand()).isEqualTo("git fetch origin && git checkout feat/DATN-15-dang-nhap-google");
+        assertThat(info.getCloseExample()).isEqualTo("final DATN-15");
+        assertThat(info.getBaseBranch()).isEqualTo("develop");
+        assertThat(info.getLinks()).singleElement().satisfies(l -> assertThat(l.getAuthorName()).isEqualTo("dev1"));
+        assertThat(info.isIssueLinked()).isFalse();
     }
-
-    @Test
-    @DisplayName("tạo nhánh: tách từ nhánh đích, lưu link BRANCH")
-    void testCreateBranch_CreatesFromBaseAndSavesLink() {
-        WorkItem item = stubDevTask("DATN-15", "Đăng nhập");
-        stubDevRepo("develop");
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
-        when(userGitHubTokenRepository.findByUserId(currentUserId)).thenReturn(Optional.of(userToken));
-        when(workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())).thenReturn(List.of());
-        when(gitHubApiClient.createBranch("gho_mockToken123", "datn-team", "work-service", "feat/DATN-15-dang-nhap", "develop"))
-                .thenReturn(true);
-
-        var info = gitHubIntegrationService.createBranch(item.getId(), currentUserId);
-
-        assertThat(info.isBranchCreated()).isTrue();
-        verify(workItemGitHubLinkRepository).save(argThat(l -> l.getLinkType() == GitHubLinkType.BRANCH
-                && "feat/DATN-15-dang-nhap".equals(l.getGithubId())
-                && "https://github.com/datn-team/work-service/tree/feat/DATN-15-dang-nhap".equals(l.getUrl())));
-    }
-
-    @Test
-    @DisplayName("tạo nhánh: nhánh đã có trên GitHub vẫn gắn link")
-    void testCreateBranch_AlreadyExists_StillLinks() {
-        WorkItem item = stubDevTask("DATN-15", "Đăng nhập");
-        stubDevRepo("main");
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
-        when(userGitHubTokenRepository.findByUserId(currentUserId)).thenReturn(Optional.of(userToken));
-        when(workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())).thenReturn(List.of());
-        when(gitHubApiClient.createBranch(any(), any(), any(), any(), any())).thenReturn(false);
-
-        gitHubIntegrationService.createBranch(item.getId(), currentUserId);
-
-        verify(workItemGitHubLinkRepository).save(argThat(l -> l.getLinkType() == GitHubLinkType.BRANCH));
-    }
-
-    @Test
-    @DisplayName("tạo nhánh: Task đã gắn nhánh thì tạo lại đúng nhánh đó, không lưu link trùng")
-    void testCreateBranch_ExistingLink_NoDuplicate() {
-        WorkItem item = stubDevTask("DATN-15", "Tên mới khác");
-        stubDevRepo("main");
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
-        when(userGitHubTokenRepository.findByUserId(currentUserId)).thenReturn(Optional.of(userToken));
-        WorkItemGitHubLink link = WorkItemGitHubLink.builder().workItemId(item.getId())
-                .linkType(GitHubLinkType.BRANCH).githubId("feat/DATN-15-cu").build();
-        when(workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())).thenReturn(List.of(link));
-        when(gitHubApiClient.createBranch(any(), any(), any(), eq("feat/DATN-15-cu"), eq("main"))).thenReturn(true);
-
-        var info = gitHubIntegrationService.createBranch(item.getId(), currentUserId);
-
-        assertThat(info.getBranchName()).isEqualTo("feat/DATN-15-cu");
-        verify(workItemGitHubLinkRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("tạo nhánh: không ai trong dự án có token GitHub → báo lỗi, không gọi GitHub")
-    void testCreateBranch_NoToken() {
-        WorkItem item = stubDevTask("DATN-15", "Đăng nhập");
-        stubDevRepo("main");
-        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
-        when(userGitHubTokenRepository.findByUserId(any())).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> gitHubIntegrationService.createBranch(item.getId(), currentUserId))
-                .isInstanceOf(BadRequestException.class);
-        verifyNoInteractions(gitHubApiClient);
-    }
-
-    @Test
-    @DisplayName("tạo nhánh: dự án chưa liên kết repo → báo lỗi")
-    void testCreateBranch_NotLinked() {
-        WorkItem item = stubDevTask("DATN-15", "Đăng nhập");
-        when(projectGitHubRepoRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> gitHubIntegrationService.createBranch(item.getId(), currentUserId))
-                .isInstanceOf(BadRequestException.class);
-    }
-
-    // ─── Tạo Issue từ Task ───
 
     @Test
     @DisplayName("tạo Issue: gửi tiêu đề + mô tả có dấu ẩn datn-task, lưu liên kết ISSUE")
@@ -580,7 +509,9 @@ class GitHubIntegrationServiceTest {
         created.setTitle("Đăng nhập Google");
         created.setHtmlUrl("https://github.com/datn-team/work-service/issues/7");
         when(gitHubApiClient.createIssue(eq("gho_mockToken123"), eq("datn-team"), eq("work-service"), eq("Đăng nhập Google"),
-                argThat(b -> b.startsWith("Dùng OAuth2") && b.contains("<!-- datn-task:" + item.getId() + " -->"))))
+                argThat(b -> b.startsWith("Dùng OAuth2") && b.contains("Người được giao: Chưa giao")
+                        && b.contains("<!-- datn-task:" + item.getId() + " -->")),
+                eq(List.of())))
                 .thenReturn(created);
         when(workItemGitHubLinkRepository.findByProjectIdAndLinkTypeAndGithubNumber(projectId, GitHubLinkType.ISSUE, 7))
                 .thenReturn(Optional.empty());
@@ -589,6 +520,187 @@ class GitHubIntegrationServiceTest {
 
         verify(workItemGitHubLinkRepository).saveAndFlush(argThat(l -> l.getLinkType() == GitHubLinkType.ISSUE
                 && l.getGithubNumber() == 7 && item.getId().equals(l.getWorkItemId())));
+    }
+
+    private UUID assignDev(WorkItem item, String githubLogin, String fullName) {
+        UUID devId = UUID.randomUUID();
+        item.setAssigneeId(devId);
+        when(userGitHubTokenRepository.findByUserId(devId)).thenReturn(githubLogin == null ? Optional.empty()
+                : Optional.of(UserGitHubToken.builder().userId(devId).githubUsername(githubLogin).build()));
+        com.datn.workservice.client.dto.UserResponse user = new com.datn.workservice.client.dto.UserResponse();
+        user.setKeycloakId(devId.toString());
+        user.setUsername("dev");
+        user.setFirstName(fullName);
+        com.datn.common.dto.ApiResponse<List<com.datn.workservice.client.dto.UserResponse>> res =
+                new com.datn.common.dto.ApiResponse<>();
+        res.setData(List.of(user));
+        lenient().when(identityClient.getUsersByIds(List.of(devId))).thenReturn(res);
+        return devId;
+    }
+
+    @Test
+    @DisplayName("tạo Issue: assign cho tài khoản GitHub của người được giao, mô tả ghi tên người đó")
+    void testCreateIssue_AssignsLinkedAssignee() {
+        WorkItem item = stubDevTask("DATN-15", "Đăng nhập Google");
+        stubDevRepo("main");
+        assignDev(item, "dev-a", "An");
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(userGitHubTokenRepository.findByUserId(currentUserId)).thenReturn(Optional.of(userToken));
+        when(workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())).thenReturn(List.of());
+        GitHubIssueDto created = new GitHubIssueDto();
+        created.setNumber(8);
+        when(gitHubApiClient.createIssue(anyString(), anyString(), anyString(), anyString(),
+                argThat(b -> b.contains("Người được giao: An")), eq(List.of("dev-a")))).thenReturn(created);
+
+        gitHubIntegrationService.createIssue(item.getId(), currentUserId);
+
+        verify(gitHubApiClient).createIssue(anyString(), anyString(), anyString(), anyString(), anyString(), eq(List.of("dev-a")));
+    }
+
+    @Test
+    @DisplayName("tạo Issue: người được giao chưa liên kết GitHub thì không assign ai")
+    void testCreateIssue_AssigneeNotLinked() {
+        WorkItem item = stubDevTask("DATN-15", "Đăng nhập Google");
+        stubDevRepo("main");
+        assignDev(item, null, "An");
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(userGitHubTokenRepository.findByUserId(currentUserId)).thenReturn(Optional.of(userToken));
+        when(workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())).thenReturn(List.of());
+        GitHubIssueDto created = new GitHubIssueDto();
+        created.setNumber(8);
+        when(gitHubApiClient.createIssue(anyString(), anyString(), anyString(), anyString(), anyString(), eq(List.of())))
+                .thenReturn(created);
+
+        gitHubIntegrationService.createIssue(item.getId(), currentUserId);
+
+        verify(gitHubApiClient).createIssue(anyString(), anyString(), anyString(), anyString(), anyString(), eq(List.of()));
+    }
+
+    @Test
+    @DisplayName("đổi người được giao: Issue liên kết đổi assignee; hủy giao thì gỡ hết")
+    void testSyncAssigneeToGitHub() {
+        WorkItem item = stubDevTask("DATN-15", "Đăng nhập");
+        stubDevRepo("main");
+        projectRepo.setConnectedByUserId(currentUserId);
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(userGitHubTokenRepository.findByUserId(currentUserId)).thenReturn(Optional.of(userToken));
+        when(workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())).thenReturn(List.of(
+                WorkItemGitHubLink.builder().linkType(GitHubLinkType.ISSUE).githubNumber(7).build(),
+                WorkItemGitHubLink.builder().linkType(GitHubLinkType.PULL_REQUEST).githubNumber(21).build()));
+        UUID devId = UUID.randomUUID();
+        when(userGitHubTokenRepository.findByUserId(devId))
+                .thenReturn(Optional.of(UserGitHubToken.builder().userId(devId).githubUsername("dev-a").build()));
+
+        gitHubIntegrationService.syncAssigneeToGitHub(item.getId(), devId, currentUserId);
+        gitHubIntegrationService.syncAssigneeToGitHub(item.getId(), null, currentUserId);
+
+        verify(gitHubApiClient).setIssueAssignees("gho_mockToken123", "datn-team", "work-service", 7, List.of("dev-a"));
+        verify(gitHubApiClient).setIssueAssignees("gho_mockToken123", "datn-team", "work-service", 7, List.of());
+        verify(gitHubApiClient, never()).setIssueAssignees(anyString(), anyString(), anyString(), eq(21), anyList());
+    }
+
+    @Test
+    @DisplayName("đổi người được giao: Task chưa có Issue thì không gọi GitHub")
+    void testSyncAssigneeToGitHub_NoIssue() {
+        WorkItem item = stubDevTask("DATN-15", "Đăng nhập");
+        stubDevRepo("main");
+        when(workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())).thenReturn(List.of());
+
+        gitHubIntegrationService.syncAssigneeToGitHub(item.getId(), UUID.randomUUID(), currentUserId);
+
+        verifyNoInteractions(gitHubApiClient);
+    }
+
+    private String assigneePayload(String action, long assigneeGithubId, long senderGithubId) {
+        return "{ \"action\": \"" + action + "\", \"repository\": { \"full_name\": \"datn-team/work-service\" },"
+                + " \"issue\": { \"id\": 99, \"number\": 7, \"title\": \"Đăng nhập\", \"state\": \"open\" },"
+                + " \"assignee\": { \"id\": " + assigneeGithubId + ", \"login\": \"dev-a\" },"
+                + " \"sender\": { \"id\": " + senderGithubId + " } }";
+    }
+
+    private WorkItem stubAssigneeWebhook(UUID currentAssignee) {
+        WorkItem item = WorkItem.builder().id(UUID.randomUUID()).projectId(projectId).code("DATN-15")
+                .assigneeId(currentAssignee).build();
+        when(projectGitHubRepoRepository.findAllByRepoFullNameIgnoreCase("datn-team/work-service")).thenReturn(List.of(projectRepo));
+        when(gitHubWebhookSignatureValidator.isValidSignature(anyString(), anyString(), eq("secret-xyz"))).thenReturn(true);
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(workItemGitHubLinkRepository.findByProjectIdAndLinkTypeAndGithubNumber(projectId, GitHubLinkType.ISSUE, 7))
+                .thenReturn(Optional.of(WorkItemGitHubLink.builder().workItemId(item.getId())
+                        .linkType(GitHubLinkType.ISSUE).githubNumber(7).build()));
+        lenient().when(workItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+        return item;
+    }
+
+    private void mapMember(long githubId, UUID userId) {
+        when(userGitHubTokenRepository.findFirstByGithubUserId(githubId))
+                .thenReturn(Optional.of(UserGitHubToken.builder().userId(userId).build()));
+        when(projectMemberService.hasPermission(projectId, userId, PermissionKey.PROJECT_VIEW)).thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("webhook issues.assigned: tài khoản đã liên kết thì Task đổi người được giao, có ghi lịch sử")
+    void testIssueAssigned_UpdatesTaskAssignee() {
+        UUID devId = UUID.randomUUID();
+        WorkItem item = stubAssigneeWebhook(null);
+        mapMember(555L, devId);
+        when(userGitHubTokenRepository.findFirstByGithubUserId(777L)).thenReturn(Optional.empty());
+
+        gitHubIntegrationService.handleWebhook("issues", "sig", assigneePayload("assigned", 555L, 777L));
+
+        assertThat(item.getAssigneeId()).isEqualTo(devId);
+        verify(workItemRepository).save(item);
+        verify(workItemAuditService).recordAssigneeChange(item.getId(), null, devId, devId);
+        verify(workItemNotifier).assigneeChanged(item, null, devId, devId);
+    }
+
+    @Test
+    @DisplayName("webhook issues.assigned: tài khoản GitHub chưa liên kết thì giữ nguyên người được giao")
+    void testIssueAssigned_UnlinkedGithubUser_Ignored() {
+        UUID oldDev = UUID.randomUUID();
+        WorkItem item = stubAssigneeWebhook(oldDev);
+        when(userGitHubTokenRepository.findFirstByGithubUserId(555L)).thenReturn(Optional.empty());
+
+        gitHubIntegrationService.handleWebhook("issues", "sig", assigneePayload("assigned", 555L, 777L));
+
+        assertThat(item.getAssigneeId()).isEqualTo(oldDev);
+        verify(workItemRepository, never()).save(any());
+        verifyNoInteractions(workItemAuditService);
+    }
+
+    @Test
+    @DisplayName("webhook issues.unassigned: chỉ gỡ khi đúng là người đang được giao")
+    void testIssueUnassigned_OnlyCurrentAssignee() {
+        UUID devId = UUID.randomUUID();
+        UUID otherDev = UUID.randomUUID();
+        WorkItem item = stubAssigneeWebhook(otherDev);
+        mapMember(555L, devId);
+
+        gitHubIntegrationService.handleWebhook("issues", "sig", assigneePayload("unassigned", 555L, 555L));
+        assertThat(item.getAssigneeId()).isEqualTo(otherDev);
+
+        item.setAssigneeId(devId);
+        gitHubIntegrationService.handleWebhook("issues", "sig", assigneePayload("unassigned", 555L, 555L));
+        assertThat(item.getAssigneeId()).isNull();
+        verify(workItemAuditService).recordAssigneeChange(item.getId(), devId, null, devId);
+    }
+
+    @Test
+    @DisplayName("development: hiện người được giao + GitHub, PR do người khác mở được đánh dấu")
+    void testDevelopmentInfo_AssigneeAndPrAuthorMismatch() {
+        WorkItem item = stubDevTask("DATN-15", "Đăng nhập");
+        stubDevRepo("main");
+        UUID devId = assignDev(item, "dev-a", "An");
+        when(workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())).thenReturn(List.of(
+                WorkItemGitHubLink.builder().linkType(GitHubLinkType.PULL_REQUEST).githubNumber(21).authorName("DEV-A").build(),
+                WorkItemGitHubLink.builder().linkType(GitHubLinkType.PULL_REQUEST).githubNumber(22).authorName("someone").build(),
+                WorkItemGitHubLink.builder().linkType(GitHubLinkType.ISSUE).githubNumber(7).authorName("someone").build()));
+
+        var info = gitHubIntegrationService.getDevelopmentInfo(item.getId());
+
+        assertThat(info.getAssigneeId()).isEqualTo(devId);
+        assertThat(info.getAssigneeName()).isEqualTo("An");
+        assertThat(info.getAssigneeGithubLogin()).isEqualTo("dev-a");
+        assertThat(info.getLinks()).extracting(l -> l.isAuthorNotAssignee()).containsExactly(false, true, false);
     }
 
     @Test

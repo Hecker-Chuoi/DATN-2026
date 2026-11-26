@@ -26,4 +26,7 @@ public class WorkItemGitHubLinkDto {
     private String authorName;
 
     private String authorAvatarUrl;
+
+    /** PR do người khác mở, không phải tài khoản GitHub của người được giao (chỉ đúng khi so được). */
+    private boolean authorNotAssignee;
 }

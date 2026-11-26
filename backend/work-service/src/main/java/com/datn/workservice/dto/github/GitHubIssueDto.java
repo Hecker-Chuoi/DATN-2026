@@ -28,6 +28,9 @@ public class GitHubIssueDto {
 
     private GitHubUserResponse user;
 
+    /** Người được assign trên GitHub (webhook issues / API đều gửi kèm). */
+    private java.util.List<GitHubUserResponse> assignees;
+
     @JsonProperty("pull_request")
     private Map<String, Object> pullRequest;
 

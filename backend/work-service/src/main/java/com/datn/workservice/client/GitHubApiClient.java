@@ -356,64 +356,21 @@ public class GitHubApiClient {
     }
 
     /**
-     * Tạo nhánh {@code branch} tách từ đầu nhánh {@code baseBranch}.
-     *
-     * @return true nếu vừa tạo, false nếu nhánh đã tồn tại trên GitHub (coi như thành công)
+     * Tạo Issue mới trên repo, trả về Issue GitHub vừa tạo (số, URL, tác giả).
+     * {@code assignees}: login GitHub cần assign; GitHub từ chối (422, VD người đó chưa là collaborator)
+     * thì tạo lại không assign để Issue vẫn được tạo.
      */
-    @SuppressWarnings("rawtypes")
-    public boolean createBranch(String accessToken, String owner, String repo, String branch, String baseBranch) {
-        String gitApi = String.format("%s/repos/%s/%s/git", apiUrl, enc(owner), enc(repo));
-        HttpHeaders headers = createAuthHeaders(accessToken);
-
-        String sha;
-        try {
-            // URI dựng sẵn để RestTemplate không mã hoá lại dấu "/" trong tên nhánh (VD: release/1.0)
-            ResponseEntity<Map> ref = restTemplate.exchange(URI.create(gitApi + "/ref/heads/" + encPath(baseBranch)),
-                    HttpMethod.GET, new HttpEntity<>(headers), Map.class);
-            Object object = ref.getBody() != null ? ref.getBody().get("object") : null;
-            sha = object instanceof Map<?, ?> obj && obj.get("sha") != null ? obj.get("sha").toString() : null;
-        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
-            throw new BadRequestException("Không tìm thấy nhánh đích \"" + baseBranch + "\" trên " + owner + "/" + repo
-                    + " (hoặc tài khoản GitHub không truy cập được repo)");
-        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
-            throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi. Vui lòng kết nối lại tài khoản GitHub.");
-        } catch (Exception e) {
-            log.error("Failed to read branch {} of {}/{}: {}", baseBranch, owner, repo, e.getMessage(), e);
-            throw new BadRequestException("Không đọc được nhánh đích từ GitHub: " + e.getMessage());
-        }
-        if (sha == null || sha.isBlank()) {
-            throw new BadRequestException("GitHub không trả về commit của nhánh đích \"" + baseBranch + "\"");
-        }
-
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        Map<String, String> body = Map.of("ref", "refs/heads/" + branch, "sha", sha);
-        try {
-            restTemplate.exchange(URI.create(gitApi + "/refs"), HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
-            log.info("Created branch {} from {} on {}/{}", branch, baseBranch, owner, repo);
-            return true;
-        } catch (org.springframework.web.client.HttpClientErrorException.UnprocessableEntity e) {
-            if (e.getResponseBodyAsString().toLowerCase(Locale.ROOT).contains("already exists")) {
-                return false;
-            }
-            throw new BadRequestException("GitHub từ chối tên nhánh \"" + branch + "\"");
-        } catch (org.springframework.web.client.HttpClientErrorException.Forbidden
-                 | org.springframework.web.client.HttpClientErrorException.NotFound e) {
-            throw new BadRequestException("Tài khoản GitHub dùng để tạo nhánh không có quyền ghi vào " + owner + "/" + repo);
-        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
-            throw new BadRequestException("Token GitHub đã hết hạn hoặc bị thu hồi. Vui lòng kết nối lại tài khoản GitHub.");
-        } catch (Exception e) {
-            log.error("Failed to create branch {} on {}/{}: {}", branch, owner, repo, e.getMessage(), e);
-            throw new BadRequestException("Không tạo được nhánh trên GitHub: " + e.getMessage());
-        }
-    }
-
-    /** Tạo Issue mới trên repo, trả về Issue GitHub vừa tạo (số, URL, tác giả). */
-    public GitHubIssueDto createIssue(String accessToken, String owner, String repo, String title, String body) {
+    public GitHubIssueDto createIssue(String accessToken, String owner, String repo, String title, String body,
+                                      List<String> assignees) {
         HttpHeaders headers = createAuthHeaders(accessToken);
         headers.setContentType(MediaType.APPLICATION_JSON);
-        Map<String, String> payload = new HashMap<>();
+        Map<String, Object> payload = new HashMap<>();
         payload.put("title", title);
         payload.put("body", body);
+        boolean withAssignees = assignees != null && !assignees.isEmpty();
+        if (withAssignees) {
+            payload.put("assignees", assignees);
+        }
         try {
             ResponseEntity<GitHubIssueDto> response = restTemplate.exchange(
                     URI.create(String.format("%s/repos/%s/%s/issues", apiUrl, enc(owner), enc(repo))),
@@ -425,6 +382,12 @@ public class GitHubApiClient {
             return response.getBody();
         } catch (BadRequestException e) {
             throw e;
+        } catch (org.springframework.web.client.HttpClientErrorException.UnprocessableEntity e) {
+            if (!withAssignees) {
+                throw new BadRequestException("GitHub từ chối dữ liệu Issue: " + e.getMessage());
+            }
+            log.warn("GitHub không cho assign {} trên {}/{} ({}), tạo Issue không assign", assignees, owner, repo, e.getMessage());
+            return createIssue(accessToken, owner, repo, title, body, List.of());
         } catch (org.springframework.web.client.HttpClientErrorException.Gone e) {
             throw new BadRequestException("Repository " + owner + "/" + repo + " đang tắt tính năng Issues trên GitHub");
         } catch (org.springframework.web.client.HttpClientErrorException.Forbidden
@@ -438,13 +401,24 @@ public class GitHubApiClient {
         }
     }
 
-    /** Mã hoá từng đoạn của tên nhánh, giữ nguyên dấu "/" phân cách. */
-    private static String encPath(String branch) {
-        List<String> parts = new ArrayList<>();
-        for (String part : (branch != null ? branch : "").split("/")) {
-            parts.add(enc(part).replace("+", "%20"));
+    /**
+     * Đặt lại danh sách người được assign của Issue ({@code logins} rỗng = gỡ hết).
+     * Không throw: lỗi GitHub không được làm hỏng nghiệp vụ phía DATN.
+     */
+    public boolean setIssueAssignees(String accessToken, String owner, String repo, int issueNumber, List<String> logins) {
+        HttpHeaders headers = createAuthHeaders(accessToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Map<String, Object> body = Map.of("assignees", logins != null ? logins : List.of());
+        try {
+            restTemplate.exchange(
+                    URI.create(String.format("%s/repos/%s/%s/issues/%d", apiUrl, enc(owner), enc(repo), issueNumber)),
+                    HttpMethod.PATCH, new HttpEntity<>(body, headers), Void.class);
+            log.info("Set assignees {} on GitHub issue #{} of {}/{}", logins, issueNumber, owner, repo);
+            return true;
+        } catch (Exception e) {
+            log.warn("Failed to set assignees {} on GitHub issue #{} of {}/{}: {}", logins, issueNumber, owner, repo, e.getMessage());
+            return false;
         }
-        return String.join("/", parts);
     }
 
     private static String enc(String value) {

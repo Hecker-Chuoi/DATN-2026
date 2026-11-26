@@ -42,4 +42,19 @@ public class GitHubSyncEventListener {
             log.warn("Lỗi khi đồng bộ trạng thái WorkItem sang GitHub: {}", e.getMessage(), e);
         }
     }
+
+    /** Đổi người được giao trong DATN thì đổi assignee của GitHub Issue đã liên kết (sau commit, luồng riêng). */
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onWorkItemAssigneeChanged(WorkItemAssigneeChangedEvent event) {
+        if (event == null || event.getWorkItemId() == null) {
+            return;
+        }
+        try {
+            gitHubIntegrationService.syncAssigneeToGitHub(
+                    event.getWorkItemId(), event.getNewAssigneeId(), event.getChangedByUserId());
+        } catch (Exception e) {
+            log.warn("Lỗi khi đồng bộ người được giao sang GitHub: {}", e.getMessage(), e);
+        }
+    }
 }

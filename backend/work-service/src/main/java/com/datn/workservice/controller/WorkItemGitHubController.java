@@ -13,10 +13,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 /**
- * Khung "Phát triển" của Task (kiểu Jira Development panel):
- * GET  /api/v1/work/items/{itemId}/github/development : nhánh gợi ý / đã tạo + link mở PR
- * POST /api/v1/work/items/{itemId}/github/branch      : tạo nhánh trên GitHub từ nhánh đích của dự án
- * POST /api/v1/work/items/{itemId}/github/issue       : tạo GitHub Issue cho Task và gắn liên kết
+ * Bảng "Phát triển" của Task, dành cho người quản lý (dev tự làm nhánh / PR trên GitHub):
+ * GET  /api/v1/work/items/{itemId}/github/development : PR / Issue đã liên kết + quy ước đặt tên cho dev
+ * POST /api/v1/work/items/{itemId}/github/issue       : tạo GitHub Issue cho Task (giao việc) và gắn liên kết
  */
 @RestController
 @RequestMapping("/api/v1/work")
@@ -29,14 +28,6 @@ public class WorkItemGitHubController {
     @RequireTaskPermission(PermissionKey.PROJECT_VIEW)
     public ResponseEntity<ApiResponse<WorkItemDevelopmentResponse>> getDevelopment(@PathVariable("itemId") UUID workItemId) {
         return ResponseEntity.ok(ApiResponse.success(gitHubIntegrationService.getDevelopmentInfo(workItemId)));
-    }
-
-    @PostMapping({"/items/{itemId}/github/branch", "/work-items/{itemId}/github/branch"})
-    @RequireTaskPermission(PermissionKey.ISSUE_EDIT)
-    public ResponseEntity<ApiResponse<WorkItemDevelopmentResponse>> createBranch(@PathVariable("itemId") UUID workItemId) {
-        UUID currentUserId = SecurityUtils.getCurrentUserId();
-        return ResponseEntity.ok(ApiResponse.success(
-                gitHubIntegrationService.createBranch(workItemId, currentUserId), "Đã tạo nhánh trên GitHub"));
     }
 
     @PostMapping({"/items/{itemId}/github/issue", "/work-items/{itemId}/github/issue"})
