@@ -4,6 +4,7 @@ import com.datn.common.dto.ApiResponse;
 import com.datn.common.exception.BadRequestException;
 import com.datn.common.exception.ResourceNotFoundException;
 import com.datn.workservice.client.IdentityClient;
+import com.datn.workservice.client.IdentityUsers;
 import com.datn.workservice.client.dto.UserResponse;
 import com.datn.workservice.dto.request.CreateWorkItemLinkRequest;
 import com.datn.workservice.dto.response.WorkItemLinkResponse;
@@ -14,6 +15,7 @@ import com.datn.workservice.enums.WorkItemResolution;
 import com.datn.workservice.repository.*;
 import com.datn.workservice.service.DependencyCycleDetector;
 import com.datn.workservice.service.WorkItemAuditService;
+import com.datn.workservice.service.WorkItemCompletionGate;
 import com.datn.workservice.service.WorkItemLinkService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +39,9 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
     private final DependencyCycleDetector dependencyCycleDetector;
     private final WorkItemAuditService auditService;
     private final IdentityClient identityClient;
+    private final WorkItemCompletionGate completionGate;
+    private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
+    private final org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -163,13 +168,32 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
         if (linkType == LinkType.DUPLICATES) {
             Status sourceStatus = statusRepository.findById(sourceItem.getStatusId()).orElse(null);
             if (sourceStatus == null || sourceStatus.getCategory() != StatusCategory.DONE) {
-                List<Status> doneStatuses = statusRepository.findByCategory(StatusCategory.DONE);
-                if (!doneStatuses.isEmpty()) {
+                // Ưu tiên trạng thái DONE của chính dự án, chỉ dùng trạng thái toàn cục khi dự án không có
+                List<Status> doneStatuses = statusRepository.findByProjectId(sourceItem.getProjectId()).stream()
+                        .filter(s -> s.getCategory() == StatusCategory.DONE)
+                        .toList();
+                if (doneStatuses.isEmpty()) {
+                    doneStatuses = statusRepository.findByCategory(StatusCategory.DONE);
+                }
+                if (!doneStatuses.isEmpty() && !completionGate.canConfirmCompletion(sourceItem.getProjectId(), userId)) {
+                    // BR-W03: không phải Admin dự án -> chỉ tạo yêu cầu "Tạm hoàn thành" với kết quả DUPLICATE
+                    completionGate.submit(sourceItem, null, sourceStatus, doneStatuses.get(0),
+                            WorkItemResolution.DUPLICATE.name(), false,
+                            "Trùng lặp với " + targetItem.getCode(), userId);
+                } else if (!doneStatuses.isEmpty()) {
                     Status doneStatus = doneStatuses.get(0);
                     sourceItem.setStatusId(doneStatus.getId());
                     sourceItem.setResolution(WorkItemResolution.DUPLICATE);
                     sourceItem.setResolvedAt(LocalDateTime.now());
                     workItemRepository.save(sourceItem);
+                    completionGate.onStatusChanged(sourceItem, doneStatus, true, userId);
+                    if (applicationEventPublisher != null) {
+                        // Đồng bộ GitHub: việc bị đánh dấu trùng lặp vừa vào nhóm DONE
+                        applicationEventPublisher.publishEvent(new com.datn.workservice.event.WorkItemStatusChangedEvent(
+                                sourceItem.getId(), sourceItem.getProjectId(),
+                                sourceStatus != null ? sourceStatus.getCategory() : null,
+                                doneStatus.getCategory(), userId));
+                    }
                     auditService.recordCustomEvent(
                             sourceItemId,
                             "STATUS",
@@ -177,6 +201,9 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
                             "Tự động hoàn thành với kết quả DUPLICATE do phát hiện trùng lặp với " + targetItem.getCode(),
                             userId
                     );
+                    // A9 (+ B2 cho các việc nó đang chặn, vì nó vừa vào nhóm DONE)
+                    workItemNotifier.markedDuplicate(sourceItem, targetItem, userId);
+                    workItemNotifier.blockerCleared(sourceItem, "DONE", userId);
                 }
             }
         }
@@ -190,6 +217,9 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
 
         WorkItemLink saved = workItemLinkRepository.save(link);
         log.info("Created link '{}' between {} and {} by user {}", linkType, sourceItem.getCode(), targetItem.getCode(), userId);
+        if (linkType == LinkType.BLOCKS) {
+            workItemNotifier.blocked(sourceItem, targetItem, userId); // B1
+        }
 
         // Audit Trail on both items
         String relDesc = resolveRelationshipDescription(linkType, true);
@@ -258,6 +288,11 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
 
         workItemLinkRepository.delete(link);
         log.info("Deleted link ID {} on WorkItem {}", linkId, workItemId);
+        // B2: gỡ liên kết "chặn" thì công việc bị chặn có thể đã được bắt đầu
+        workItemNotifier.linkRemoved(link,
+                workItemRepository.findById(link.getSourceItemId()).orElse(null),
+                workItemRepository.findById(link.getTargetItemId()).orElse(null),
+                userId);
 
         // Audit trail
         auditService.recordCustomEvent(
@@ -299,9 +334,8 @@ public class WorkItemLinkServiceImpl implements WorkItemLinkService {
         try {
             ApiResponse<List<UserResponse>> res = identityClient.getUsersByIds(new ArrayList<>(userIds));
             if (res != null && res.getData() != null) {
-                return res.getData().stream()
-                        .filter(u -> u.getId() != null)
-                        .collect(Collectors.toMap(UserResponse::getId, u -> u, (a, b) -> a));
+                // Map theo cả id của identity lẫn Keycloak sub (bảng work-service lưu sub)
+                return IdentityUsers.indexByAnyId(res.getData());
             }
         } catch (Exception e) {
             log.warn("Failed to fetch user batch for links: {}", e.getMessage());

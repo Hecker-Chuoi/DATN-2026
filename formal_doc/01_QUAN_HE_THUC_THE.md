@@ -53,7 +53,7 @@ flowchart LR
 | Service | Số bảng | Quản lý schema | Bảng lịch sử Flyway |
 |---------|:-------:|----------------|---------------------|
 | identity-service | 2 | `ddl-auto: update` (không Flyway) | — |
-| workspace-service | 3 | Flyway V1..V5 (`ddl-auto: validate`) | `flyway_workspace_schema_history` |
+| workspace-service | 3 | Flyway V1..V6 (`ddl-auto: validate`) | `flyway_workspace_schema_history` |
 | work-service | ~29 | Flyway V1..V8 **và** `ddl-auto: update` | `flyway_work_schema_history` |
 
 > ℹ️ **Lưu ý kiến trúc sau refactor (Flyway V8 & V5):**  
@@ -61,23 +61,29 @@ flowchart LR
 
 ---
 
-## 2. Định danh người dùng — hai loại ID
+## 2. Định danh người dùng — thống nhất theo Keycloak `sub`
 
-Không có bảng nào ngoài `users` lưu thông tin cá nhân người dùng. Các service khác chỉ lưu **UUID** của người dùng, nhưng theo hai quy ước phân định:
+Không có bảng nào ngoài `users` lưu thông tin cá nhân người dùng. Các service khác chỉ lưu **UUID** của người dùng, và toàn hệ thống dùng chung một loại UUID: **Keycloak `sub`** (K). ID riêng của identity-service (`users.id`, D) chỉ dùng bên trong identity-service.
 
 ```mermaid
 flowchart LR
-    KC["Keycloak user<br/>sub = K"] -- "users.keycloak_id = K" --> U["users<br/>id = D"]
-    U -- "D" --> WM["workspace_members.user_id<br/>workspaces.created_by<br/>workspace_invitations.invitee_user_id"]
-    KC -- "K" --> WK["Mọi cột user của work-service:<br/>role_assignments.user_id, projects.lead_user_id,<br/>work_items.assignee_id/reporter_id, invitations.invitee_user_id..."]
+    KC["Keycloak user<br/>sub = K"] -- "users.keycloak_id = K" --> U["identity-service: users<br/>id = D (chỉ dùng nội bộ)"]
+    KC -- "K" --> WM["workspace-service:<br/>workspace_members.user_id, workspaces.created_by,<br/>workspace_invitations.invitee_user_id / invited_by"]
+    KC -- "K" --> WK["work-service:<br/>role_assignments.user_id, projects.lead_user_id,<br/>work_items.assignee_id/reporter_id, invitations.invitee_user_id..."]
+    KC -- "K" --> NT["notification-service:<br/>notifications.recipient_id / actor_id,<br/>notification_preferences.user_id, notification_project_mutes.user_id"]
 ```
 
-| Nơi lưu | Loại ID | Lý do (theo mã nguồn) |
-|---------|---------|------------------------|
-| `workspace_members.user_id`<br/>`workspace_invitations.invitee_user_id` | `users.id` (D) | `keycloak_id` có thể bị ghi lại khi email trùng → dùng ID nội bộ của identity-service để ổn định |
-| Mọi bảng `work-service` (`role_assignments`, `projects`, `work_items`, `invitations`) | Keycloak `sub` (K) | Lấy trực tiếp từ JWT Bearer token (`SecurityUtils.getCurrentUserId()`), tối ưu truy vấn không cần tra cứu danh tính |
+| Nơi lưu | Loại ID | Cách lấy (theo mã nguồn) |
+|---------|---------|---------------------------|
+| identity-service: `users.id`, `user_roles.user_id`, `verification_tokens.user_id` | `users.id` (D) | Khóa nội bộ, không đi ra ngoài identity-service; nối sang Keycloak qua `users.keycloak_id` |
+| workspace-service: `workspace_members`, `workspaces.created_by`, `workspace_invitations` | Keycloak `sub` (K) | `CurrentUserResolver` đọc `sub` của JWT. Trước Flyway V6 `unify_user_id_keycloak_sub` các cột này lưu `users.id`; V6 đã chuyển toàn bộ dữ liệu cũ sang `sub` |
+| work-service: mọi cột người dùng (`role_assignments`, `projects`, `work_items`, `invitations`…) | Keycloak `sub` (K) | `SecurityUtils.getCurrentUserId()` đọc `sub` của JWT |
+| notification-service: `notifications`, `notification_preferences`, `notification_project_mutes` | Keycloak `sub` (K) | `NotificationController` đọc `sub` của JWT; bên phát sự kiện outbox điền sẵn `sub` của người nhận |
 
-Hệ quả: khi work-service hỏi workspace-service "user X có trong workspace không", nó quy đổi K → D qua `CanonicalUserResolver` (gọi identity-service). Khi nhận ID từ client, work-service chuẩn hóa về K qua `ProjectMemberServiceImpl.canonicalUserId()`.
+Hệ quả:
+- Mỗi service lấy user id thẳng từ JWT, không phải gọi identity-service. Giữa các service (Feign `/internal/**`, sự kiện outbox) cũng truyền `sub`, nên work-service hỏi workspace-service "user X có trong workspace không" bằng chính `sub` của X mà không cần quy đổi.
+- API của identity-service trả `id` = `users.id` kèm `keycloakId`. ID nhận từ identity (tìm người dùng theo email / username, `/users/me`) phải đổi sang `keycloakId` trước khi lưu hoặc so sánh: `ProjectMemberServiceImpl.canonicalUserId()` (work), `WorkspaceMemberServiceImpl.resolveUserIdByIdentifier()` (workspace), `IdentityUsers.indexByAnyId()` khi tra tên hàng loạt; frontend dùng `currentUser.keycloakId`.
+- ⚠️ Khi đăng nhập Google và khi lấy hồ sơ (`/users/me`), identity-service (`UserService`) nối tài khoản theo email: nếu cùng một email đi vào bằng tài khoản Keycloak khác (ví dụ đã đăng ký bằng mật khẩu rồi đăng nhập bằng Google), `users.keycloak_id` bị ghi đè bằng `sub` mới trong khi dữ liệu nghiệp vụ vẫn gắn `sub` cũ.
 
 ---
 
@@ -123,22 +129,22 @@ erDiagram
         uuid id PK
         varchar name
         varchar slug UK
-        uuid created_by "users.id, chỉ audit"
+        uuid created_by "sub, chỉ audit"
         timestamp deleted_at "soft delete"
     }
     WORKSPACE_MEMBERS {
         uuid id PK
         uuid workspace_id FK
-        uuid user_id "users.id"
+        uuid user_id "sub"
         enum role "OWNER, ADMIN, MEMBER, GUEST"
-        uuid invited_by
+        uuid invited_by "sub"
         timestamp joined_at
     }
     WORKSPACE_INVITATIONS {
         uuid id PK
         uuid workspace_id FK
-        uuid invitee_user_id "users.id"
-        uuid invited_by "users.id"
+        uuid invitee_user_id "sub của người nhận"
+        uuid invited_by "sub của người gửi"
         varchar role "MEMBER, ADMIN, OWNER"
         varchar status "PENDING, ACCEPTED, DECLINED, CANCELLED"
         timestamp created_at

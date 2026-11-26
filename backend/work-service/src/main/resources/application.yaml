@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: work-service
+  # Bí mật cục bộ (KHÔNG commit, đã nằm trong .gitignore). Thiếu file thì bỏ qua, dùng biến môi trường.
+  config:
+    import: optional:classpath:github-secrets.yml
 
   # ─── PostgreSQL (datn_main_db) ───────────────────────────
   datasource:
@@ -66,6 +69,9 @@ minio:
 
 # ─── Microservices Internal Endpoints ───
 app:
+  cluster:
+    # Chạy từ 2 instance trở lên: khoá job theo lịch bằng Redis để chỉ một instance chạy (tài liệu thông báo 3 §10.2)
+    redis-enabled: ${APP_CLUSTER_REDIS_ENABLED:false}
   frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
   services:
     identity:
@@ -75,8 +81,24 @@ app:
     notification:
       url: ${APP_SERVICES_NOTIFICATION_URL:http://localhost:9994}
 
+# ─── GitHub OAuth & Integration Configuration ───
+# Bí mật KHÔNG ghi vào file: đặt biến môi trường GITHUB_CLIENT_SECRET (IntelliJ Run Config / compose / .env).
+github:
+  client-id: ${GITHUB_CLIENT_ID:Ov23ctW7dA1RgqhNY4Fo}
+  client-secret: ${GITHUB_CLIENT_SECRET:}
+  redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:5173/integrations/github/callback}
+  api-url: https://api.github.com
+  # Khoá mã hoá token GitHub lưu trong DB (để trống thì dẫn xuất từ client-secret)
+  token-encryption-key: ${GITHUB_TOKEN_ENCRYPTION_KEY:}
+  # Khoá ký OAuth state (để trống thì dùng client-secret)
+  state-secret: ${GITHUB_STATE_SECRET:}
+  # URL công khai đầy đủ GitHub gọi webhook, vd qua gateway + ngrok:
+  # https://xxxx.ngrok-free.app/work/api/v1/work/integrations/github/webhook  (để trống = không tự đăng ký webhook)
+  webhook-url: ${GITHUB_WEBHOOK_URL:}
+
 logging:
   level:
     root: INFO
     com.datn.workservice: DEBUG
     org.hibernate.SQL: DEBUG
+

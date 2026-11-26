@@ -41,7 +41,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/**", "/public/**").permitAll()
+                        .requestMatchers("/actuator/**", "/public/**", "/api/v1/work/integrations/github/webhook").permitAll()
                         // Nhóm /internal/ai-tools/** không dùng JWT: AiToolApiKeyFilter kiểm X-API-Key
                         // và đặt user = X-User-Id. Gateway không route /internal/** nên trình duyệt không gọi được.
                         .requestMatchers("/internal/ai-tools/**").permitAll()

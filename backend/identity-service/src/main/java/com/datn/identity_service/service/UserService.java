@@ -84,13 +84,12 @@ public class UserService {
                 .build();
 
         user = userRepository.save(user);
-        keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
         log.info("Registered new user (pending email verification): username='{}', keycloakId='{}', userId='{}'",
                 user.getUsername(), keycloakId, user.getId());
 
         // 5. Gửi email xác thực (fail-safe: lỗi gửi mail không chặn đăng ký, người dùng có thể gửi lại)
         accountVerificationService.sendEmailVerification(user);
-        workspaceClient.createDefaultWorkspace(user.getId());
+        workspaceClient.createDefaultWorkspace(user.getKeycloakId());
 
         return UserResponse.from(user);
     }
@@ -198,12 +197,11 @@ public class UserService {
                     newUser = userRepository.save(newUser);
                     log.info("Google login: created new user '{}' (keycloakId='{}', userId='{}')",
                             newUser.getUsername(), keycloakId, newUser.getId());
-                    workspaceClient.createDefaultWorkspace(newUser.getId());
+                    workspaceClient.createDefaultWorkspace(newUser.getKeycloakId());
                     return UserResponse.from(newUser);
                 });
 
         if (response != null && response.getId() != null) {
-            keycloakService.setUserAttribute(keycloakId, "user_id", response.getId().toString());
             keycloakService.assignRealmRoles(keycloakId, Set.of("USER"));
         }
 
@@ -232,10 +230,6 @@ public class UserService {
             log.info("Linking new Keycloak ID '{}' to existing user '{}' with email '{}'", keycloakId, user.getUsername(), email);
             user.setKeycloakId(keycloakId);
             user = userRepository.save(user);
-        }
-
-        if (user != null && user.getId() != null) {
-            keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
         }
 
         return UserResponse.from(user);
@@ -400,9 +394,8 @@ public class UserService {
                 .build();
  
         user = userRepository.save(user);
-        keycloakService.setUserAttribute(keycloakId, "user_id", user.getId().toString());
         log.info("Admin created user: username='{}', keycloakId='{}', userId='{}'", user.getUsername(), keycloakId, user.getId());
-        workspaceClient.createDefaultWorkspace(user.getId());
+        workspaceClient.createDefaultWorkspace(user.getKeycloakId());
 
         return UserResponse.from(user);
     }

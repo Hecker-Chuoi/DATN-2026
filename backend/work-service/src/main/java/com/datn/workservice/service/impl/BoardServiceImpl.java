@@ -369,6 +369,23 @@ public class BoardServiceImpl implements BoardService {
 
         // executeTransition nap lai entity theo id; lay dung instance no tra ve roi moi dat rank.
         WorkItem moved = workflowEngineService.executeTransition(itemId, chosen.getTransitionId(), execReq, userId);
+
+        // BR-W03: nguoi keo khong phai Admin du an -> chi tao yeu cau "Tam hoan thanh", the o lai cot cu.
+        if (moved.isCompletionApprovalRequested()) {
+            Status current = statusRepository.findById(moved.getStatusId()).orElse(null);
+            log.info("The {} keo vao cot '{}' -> gui yeu cau xac nhan hoan thanh", moved.getCode(), targetColumn.getName());
+            return MoveCardResponse.builder()
+                    .itemId(moved.getId()).code(moved.getCode()).newRank(moved.getRank())
+                    .statusId(moved.getStatusId())
+                    .statusName(current == null ? null : current.getName())
+                    .statusCategory(current == null ? null : current.getCategory())
+                    .version(moved.getVersion())
+                    .statusChanged(false)
+                    .completionPending(true)
+                    .warning("Đã gửi yêu cầu xác nhận hoàn thành. Công việc ở trạng thái Tạm hoàn thành cho tới khi Admin dự án duyệt.")
+                    .build();
+        }
+
         moved.setRank(newRank);
 
         // saveAndFlush chu khong save: Hibernate chi tang @Version luc flush. Neu khong flush,

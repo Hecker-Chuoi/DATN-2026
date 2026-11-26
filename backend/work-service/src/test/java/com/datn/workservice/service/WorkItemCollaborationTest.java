@@ -68,6 +68,10 @@ class WorkItemCollaborationTest {
     private io.minio.MinioClient minioClient;
     @Mock
     private ProjectAccessService projectAccessService;
+    @Mock
+    private WorkItemCompletionGate completionGate;
+    @Mock
+    private com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     private WorkItemAuditServiceImpl auditService;
     private WorkItemCommentServiceImpl commentService;
@@ -128,7 +132,8 @@ class WorkItemCollaborationTest {
                 commentRepository,
                 workItemRepository,
                 identityClient,
-                projectAccessService
+                projectAccessService,
+                workItemNotifier
         );
 
         cycleDetector = new DependencyCycleDetector(linkRepository, workItemRepository);
@@ -149,7 +154,10 @@ class WorkItemCollaborationTest {
                 statusRepository,
                 cycleDetector,
                 auditService,
-                identityClient
+                identityClient,
+                completionGate,
+                workItemNotifier,
+                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class)
         );
     }
 
@@ -253,6 +261,31 @@ class WorkItemCollaborationTest {
         assertThat(rootDto.getReplies()).hasSize(1);
         assertThat(rootDto.getReplies().get(0).getId()).isEqualTo(replyCommentId);
         assertThat(rootDto.getReplies().get(0).getBody()).isEqualTo("Nested reply text");
+    }
+
+    @Test
+    @DisplayName("Comments/Audit: tên tác giả tra được khi id của identity khác Keycloak sub (dữ liệu thật)")
+    void authorNameResolvedByKeycloakSubWhenIdentityIdDiffers() {
+        // Bảng của work-service lưu Keycloak sub (userId); identity trả id riêng của bảng users kèm keycloakId
+        UUID identityRowId = UUID.randomUUID();
+        UserResponse fromIdentity = UserResponse.builder()
+                .id(identityRowId).keycloakId(userId.toString())
+                .username("binh").firstName("Bình").lastName("Trần").build();
+        when(identityClient.getUsersByIds(any())).thenReturn(ApiResponse.success(List.of(fromIdentity)));
+        when(workItemRepository.findById(workItemId1)).thenReturn(Optional.of(item1));
+
+        WorkItemComment comment = WorkItemComment.builder()
+                .id(UUID.randomUUID()).workItemId(workItemId1).authorId(userId).body("Xin chào")
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build();
+        when(commentRepository.findByWorkItemIdAndDeletedAtIsNullOrderByCreatedAtAsc(workItemId1))
+                .thenReturn(List.of(comment));
+        assertThat(commentService.getCommentsTree(workItemId1).get(0).getAuthorName()).isEqualTo("Bình Trần");
+
+        WorkItemChangelog logEntry = WorkItemChangelog.builder()
+                .id(UUID.randomUUID()).workItemId(workItemId1).fieldName("STATUS")
+                .oldValue("To Do").newValue("In Progress").changedBy(userId).changedAt(LocalDateTime.now()).build();
+        when(changelogRepository.findByWorkItemIdOrderByChangedAtDesc(workItemId1)).thenReturn(List.of(logEntry));
+        assertThat(auditService.getChangelogs(workItemId1).get(0).getAuthorName()).isEqualTo("Bình Trần");
     }
 
     @Test

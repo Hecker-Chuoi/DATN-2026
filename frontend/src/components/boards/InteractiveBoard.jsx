@@ -118,6 +118,24 @@ export default function InteractiveBoard({
       // 2. Nhan su that tu server. Neu khong cap nhat version, lan keo ke tiep se gui
       //    version cu va bi 409.
       const d = res?.data || {};
+
+      // Khong phai Admin du an keo vao cot Hoan thanh: the KHONG doi cot, chi tao yeu cau
+      // "Tam hoan thanh" -> tra the ve cho cu, gan huy hieu cho duyet roi tai lai bang.
+      if (d.completionPending) {
+        onApplyColumns(
+          patchItem(revertMove(result.containers, result.snapshot, keyOf), active.id, {
+            completionPending: true,
+            version: d.version ?? dragged.version,
+          })
+        );
+        toast.success(
+          d.warning || 'Đã gửi yêu cầu xác nhận hoàn thành. Chờ Admin dự án duyệt.',
+          { duration: 5000 }
+        );
+        onReload?.({ silent: true });
+        return;
+      }
+
       onApplyColumns(
         patchItem(result.containers, active.id, {
           rank: d.newRank ?? result.newRank,

@@ -1048,6 +1048,21 @@ export default function ProjectWorkflowTab({ projectId, project, isAdmin, onType
                   {doneStatuses.length}
                 </span>
               </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  lineHeight: 1.45,
+                  color: '#92400E',
+                  backgroundColor: '#FFFBEB',
+                  border: '1px solid #FDE68A',
+                  borderRadius: 6,
+                  padding: '6px 8px',
+                  marginBottom: 10,
+                }}
+              >
+                Chỉ <strong>Admin dự án</strong> mới xác nhận Hoàn thành. Thành viên chuyển công việc vào đây sẽ tạo
+                yêu cầu <strong>Tạm hoàn thành</strong>, chờ Admin duyệt (điểm đóng góp chỉ ghi khi được xác nhận).
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
                 {doneStatuses.map((st) => {
                   const canDelete = doneStatuses.length > 1;

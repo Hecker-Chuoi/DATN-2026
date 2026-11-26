@@ -232,6 +232,37 @@ class BoardServiceTest {
                 .hasMessageContaining("không thuộc bảng này");
     }
 
+    @Test
+    @DisplayName("moveCard: thành viên kéo vào cột Hoàn thành → chỉ gửi yêu cầu Tạm hoàn thành, thẻ ở lại cột cũ")
+    void moveCard_memberIntoDoneColumn_onlyRequestsCompletion() {
+        UUID transitionId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+        stubColumn(doneColumn, doneStatus);
+        when(boardRepository.findById(boardId)).thenReturn(Optional.of(board));
+        when(workItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(workflowEngineService.getAvailableTransitions(itemId, memberId))
+                .thenReturn(List.of(AvailableTransitionResponse.builder()
+                        .transitionId(transitionId).name("Hoàn thành")
+                        .toStatusId(doneStatus.getId()).toStatusName("Done")
+                        .toStatusCategory(StatusCategory.DONE).requiresApproval(true).build()));
+
+        // Engine giữ nguyên trạng thái, chỉ bật cờ "đã gửi yêu cầu"
+        WorkItem unchanged = WorkItem.builder().id(itemId).projectId(projectId).code("TEST-1")
+                .statusId(todoStatus.getId()).rank("0|i00000:").version(3).build();
+        unchanged.setCompletionApprovalRequested(true);
+        when(workflowEngineService.executeTransition(eq(itemId), eq(transitionId), any(), eq(memberId)))
+                .thenReturn(unchanged);
+        when(statusRepository.findById(todoStatus.getId())).thenReturn(Optional.of(todoStatus));
+
+        var res = boardService.moveCard(boardId, itemId, req(doneColId, 3), memberId);
+
+        assertThat(res.getStatusChanged()).isFalse();
+        assertThat(res.getCompletionPending()).isTrue();
+        assertThat(res.getStatusId()).isEqualTo(todoStatus.getId());
+        assertThat(res.getNewRank()).isEqualTo("0|i00000:"); // không đổi vị trí ở cột cũ
+        verify(workItemRepository, never()).saveAndFlush(any());
+    }
+
     private void stubColumn(BoardColumn column, Status status) {
         when(boardColumnRepository.findById(column.getId())).thenReturn(Optional.of(column));
         when(boardColumnStatusRepository.findByColumnId(column.getId()))

@@ -1,4 +1,4 @@
-import { AlertTriangle, Lock, MoreHorizontal } from 'lucide-react';
+import { AlertTriangle, Lock, MoreHorizontal, Hourglass } from 'lucide-react';
 import { typeToken, priorityToken, statusToken, SURFACE } from '../../constants/jiraTokens.js';
 import { getAvatarColor, getInitials } from '../../utils/avatarColor.js';
 
@@ -127,6 +127,14 @@ export default function BacklogIssueRow({
       {item.isOverdue && (
         <span title="Đã quá hạn" style={{ flexShrink: 0, color: '#EA580C', display: 'inline-flex' }}>
           <AlertTriangle size={13} />
+        </span>
+      )}
+      {item.completionPending && (
+        <span
+          title="Tạm hoàn thành – đã báo xong, chờ Admin dự án xác nhận"
+          style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 3, color: '#B45309', fontSize: 11, fontWeight: 600 }}
+        >
+          <Hourglass size={12} /> Chờ duyệt HT
         </span>
       )}
 

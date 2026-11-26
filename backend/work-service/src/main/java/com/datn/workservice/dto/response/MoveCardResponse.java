@@ -32,4 +32,10 @@ public class MoveCardResponse {
 
     /** Canh bao khong chan (vi du da vuot WIP nhung nguoi dung chon bo qua). */
     private String warning;
+
+    /**
+     * true: nguoi keo khong phai Admin du an nen the KHONG doi cot; he thong chi tao yeu cau
+     * "Tam hoan thanh" cho Admin xac nhan (BR-W03). FE nen tai lai bang va bao cho nguoi dung.
+     */
+    private Boolean completionPending;
 }

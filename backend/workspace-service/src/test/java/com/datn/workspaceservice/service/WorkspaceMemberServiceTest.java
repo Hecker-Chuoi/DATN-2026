@@ -16,7 +16,6 @@ import com.datn.workspaceservice.enums.WorkspaceRole;
 import com.datn.workspaceservice.repository.WorkspaceInvitationRepository;
 import com.datn.workspaceservice.repository.WorkspaceMemberRepository;
 import com.datn.workspaceservice.repository.WorkspaceRepository;
-import com.datn.workspaceservice.service.InvitationMailer;
 import com.datn.workspaceservice.service.impl.WorkspaceMemberServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -55,7 +54,7 @@ class WorkspaceMemberServiceTest {
     @Mock
     private WorkspaceInvitationRepository invitationRepository;
     @Mock
-    private InvitationMailer mailer;
+    private com.datn.workspaceservice.notification.WorkspaceNotificationPublisher notifications;
     @Mock
     private IdentityClient identityClient;
 
@@ -89,9 +88,10 @@ class WorkspaceMemberServiceTest {
         return r;
     }
 
-    private void givenIdentityResolves(UUID newUserId) {
-        when(identityClient.getUserByIdentifier(anyString())).thenReturn(
-                ApiResponse.success(UserResponse.builder().id(newUserId).username("newbie").build()));
+    /** identity trả users.id riêng kèm keycloakId; workspace-service dùng keycloakId (sub). */
+    private void givenIdentityResolves(UUID newUserSub) {
+        when(identityClient.getUserByIdentifier(anyString())).thenReturn(ApiResponse.success(UserResponse.builder()
+                .id(UUID.randomUUID()).keycloakId(newUserSub.toString()).username("newbie").build()));
     }
 
     @Test
@@ -135,14 +135,15 @@ class WorkspaceMemberServiceTest {
     }
 
     @Test
-    @DisplayName("Mời thành viên lưu users.id do identity-service trả về, không lưu keycloakId")
-    void invite_storesCanonicalUserId() {
+    @DisplayName("Mời thành viên lưu Keycloak sub (keycloakId), không lưu users.id của identity")
+    void invite_storesKeycloakSub() {
         givenMember(ownerId, WorkspaceRole.OWNER);
-        UUID canonicalId = UUID.randomUUID();
+        UUID identityRowId = UUID.randomUUID();
+        UUID keycloakSub = UUID.randomUUID();
         when(identityClient.getUserByIdentifier(anyString())).thenReturn(
                 ApiResponse.success(UserResponse.builder()
-                        .id(canonicalId)
-                        .keycloakId(UUID.randomUUID().toString())
+                        .id(identityRowId)
+                        .keycloakId(keycloakSub.toString())
                         .username("newbie")
                         .build()));
         when(invitationRepository.save(any(WorkspaceInvitation.class))).thenAnswer(i -> {
@@ -154,7 +155,19 @@ class WorkspaceMemberServiceTest {
         WorkspaceInvitationResponse result =
                 service.invite(workspaceId, addRequest("newbie", WorkspaceRole.MEMBER), ownerId);
 
-        assertThat(result.getInviteeUserId()).isEqualTo(canonicalId);
+        assertThat(result.getInviteeUserId()).isEqualTo(keycloakSub).isNotEqualTo(identityRowId);
+    }
+
+    @Test
+    @DisplayName("Người dùng chưa liên kết Keycloak (không có keycloakId) -> 404, không tạo lời mời")
+    void invite_userWithoutKeycloakId_isNotFound() {
+        givenMember(ownerId, WorkspaceRole.OWNER);
+        when(identityClient.getUserByIdentifier(anyString())).thenReturn(
+                ApiResponse.success(UserResponse.builder().id(UUID.randomUUID()).username("legacy").build()));
+
+        assertThatThrownBy(() -> service.invite(workspaceId, addRequest("legacy", WorkspaceRole.MEMBER), ownerId))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(invitationRepository, never()).save(any());
     }
 
     @Test
@@ -197,6 +210,25 @@ class WorkspaceMemberServiceTest {
         // round-trip thay vì batching.
         verify(identityClient, times(1)).getUsersByIds(anyList());
         verify(identityClient, never()).getUserById(any());
+    }
+
+    @Test
+    @DisplayName("getMembers: thành viên lưu Keycloak sub, identity trả users.id khác -> vẫn hiện đúng tên")
+    void getMembers_resolvesNamesByKeycloakSub() {
+        givenMember(ownerId, WorkspaceRole.OWNER);
+        UUID binhSub = UUID.randomUUID();
+        when(memberRepository.findByWorkspaceId(workspaceId)).thenReturn(List.of(WorkspaceMember.builder()
+                .id(UUID.randomUUID()).workspaceId(workspaceId).userId(binhSub).role(WorkspaceRole.MEMBER).build()));
+        when(identityClient.getUsersByIds(anyList())).thenReturn(ApiResponse.success(List.of(UserResponse.builder()
+                .id(UUID.randomUUID()).keycloakId(binhSub.toString()).username("binh").email("binh@x.io").build())));
+
+        PageResponse<WorkspaceMemberResponse> page =
+                service.getMembers(workspaceId, ownerId, null, null, PageRequest.of(0, 20));
+
+        assertThat(page.getContent()).singleElement().satisfies(m -> {
+            assertThat(m.getUserId()).isEqualTo(binhSub);
+            assertThat(m.getUsername()).isEqualTo("binh");
+        });
     }
 
     @Test

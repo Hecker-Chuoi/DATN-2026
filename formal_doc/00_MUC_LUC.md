@@ -86,7 +86,7 @@ flowchart TD
 | ✅ | Đã có trong mã nguồn và hoạt động chính xác |
 | ⚠️ | Đang có nhưng cần lưu ý / cấu hình bổ sung |
 | 💡 / ❌ | Định hướng đề xuất / Chưa triển khai trong mã nguồn hiện tại |
-| `sub` | Keycloak subject UUID (ID người dùng trong JWT Bearer token) |
-| `users.id` | Khóa chính bảng `users` của `identity-service` |
+| `sub` | Keycloak subject UUID (ID người dùng trong JWT Bearer token); là user id dùng chung cho mọi bảng nghiệp vụ |
+| `users.id` | Khóa chính bảng `users` của `identity-service`, chỉ dùng bên trong `identity-service` |
 
 Tên bảng, tên lớp, tên thuộc tính và endpoint được giữ nguyên như trong mã nguồn Java/Spring Boot và React để tiện tra cứu trực tiếp.

@@ -12,15 +12,19 @@ CREATE SEQUENCE IF NOT EXISTS work_item_seq_tplagri START WITH 1 INCREMENT BY 1 
 DO $$
 DECLARE
     v_ws_id UUID := 'a0000000-0000-0000-0000-000000000001';
-    v_creator_id UUID;
+    v_creator_id UUID := 'd457bd54-287f-40a0-ab65-9a4f04dd3606'::uuid;
     v_start DATE := CURRENT_DATE;
+    v_has_workspaces BOOLEAN := to_regclass('public.workspaces') IS NOT NULL;
 BEGIN
-    -- Lấy creator_id thực tế của Default Workspace
-    SELECT COALESCE(created_by, 'd457bd54-287f-40a0-ab65-9a4f04dd3606'::uuid)
-    INTO v_creator_id
-    FROM workspaces WHERE id = v_ws_id LIMIT 1;
-    IF v_creator_id IS NULL THEN
-        v_creator_id := 'd457bd54-287f-40a0-ab65-9a4f04dd3606'::uuid;
+    -- Lấy creator_id thực tế của Default Workspace (nếu bảng workspaces đã tồn tại)
+    -- Dùng EXECUTE (Dynamic SQL) để an toàn cross-service, tránh lỗi parse khi workspaces chưa được tạo
+    IF v_has_workspaces THEN
+        EXECUTE 'SELECT COALESCE(created_by, ''d457bd54-287f-40a0-ab65-9a4f04dd3606''::uuid) FROM workspaces WHERE id = $1 LIMIT 1'
+        INTO v_creator_id
+        USING v_ws_id;
+        IF v_creator_id IS NULL THEN
+            v_creator_id := 'd457bd54-287f-40a0-ab65-9a4f04dd3606'::uuid;
+        END IF;
     END IF;
 
     -- =========================================================================

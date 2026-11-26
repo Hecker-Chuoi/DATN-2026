@@ -13,7 +13,12 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ENDPOINTS = {
             "/identity/api/v1/auth/**",
             "/actuator/health",
-            "/actuator/info"
+            "/actuator/info",
+            // Handshake WebSocket thông báo: trình duyệt không gửi được header Authorization khi mở
+            // WebSocket, nên notification-service xác thực JWT ở frame STOMP CONNECT.
+            "/notification/ws/**",
+            // GitHub gọi webhook không kèm JWT; work-service tự xác thực bằng chữ ký HMAC X-Hub-Signature-256
+            "/work/api/v1/work/integrations/github/webhook"
     };
 
     private final KeycloakJwtConverter keycloakJwtConverter;

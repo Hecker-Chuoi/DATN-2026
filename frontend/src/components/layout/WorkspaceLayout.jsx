@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Outlet, useParams, useNavigate, useMatch } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import { projectApi, invitationApi } from '../../api.js';
@@ -9,6 +9,11 @@ import { useWorkspace } from '../../context/WorkspaceContext.jsx';
 import { useWorkspaceRole } from '../../hooks/useWorkspaceRole.js';
 import { AiChatProvider } from '../../context/AiChatContext.jsx';
 import AiChatPanel, { AiLaunchButton } from '../ai/AiChatPanel.jsx';
+import { useNotifications } from '../../notifications/NotificationContext.jsx';
+
+// Thông báo kéo theo dữ liệu trên sidebar cần làm mới ngay (không đợi vòng hỏi 30 giây)
+const REFRESH_PROJECTS_ON = new Set(['PROJECT_MEMBER_ADDED', 'PROJECT_MEMBER_REMOVED', 'PROJECT_ARCHIVED', 'PROJECT_RESTORED']);
+const REFRESH_WORKSPACES_ON = new Set(['WORKSPACE_MEMBER_REMOVED', 'WORKSPACE_ROLE_CHANGED']);
 
 export default function WorkspaceLayout({ currentUser, onLogout }) {
   const { workspaceId } = useParams();
@@ -16,7 +21,8 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
   // Dự án đang mở (nếu có) để gửi làm ngữ cảnh cho trợ lý AI
   const projectMatch = useMatch('/w/:workspaceId/projects/:projectId/*');
   const currentProjectId = projectMatch?.params?.projectId || null;
-  const { loading: workspaceLoading } = useWorkspace();
+  const { loading: workspaceLoading, refreshWorkspaces } = useWorkspace();
+  const { subscribe: subscribeNotifications } = useNotifications();
   const { notMember, canCreateProject: canCreateProjectByRole } = useWorkspaceRole();
 
   const [projects, setProjects] = useState([]);
@@ -65,6 +71,20 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
     const timer = setInterval(fetchInvitations, 30000);
     return () => clearInterval(timer);
   }, []);
+
+  const refreshRef = useRef({});
+  useEffect(() => {
+    refreshRef.current = { fetchInvitations, fetchProjects, refreshWorkspaces };
+  });
+  useEffect(() => subscribeNotifications((m) => {
+    const type = m?.notification?.type;
+    if (!type || (m.kind !== 'CREATED' && m.kind !== 'UPDATED')) return;
+    const r = refreshRef.current;
+    if (type.includes('INVITATION')) r.fetchInvitations?.();
+    if (m.kind !== 'CREATED') return;
+    if (REFRESH_PROJECTS_ON.has(type)) r.fetchProjects?.();
+    if (REFRESH_WORKSPACES_ON.has(type)) r.refreshWorkspaces?.();
+  }), [subscribeNotifications]);
 
   const handleOpenCreateProject = () => {
     setIsCreateProjectModalOpen(true);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useOutletContext, NavLink, Outlet } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext, useSearchParams, NavLink, Outlet } from 'react-router-dom';
 import {
   FolderKanban,
   Kanban,
@@ -18,7 +18,6 @@ import {
   Plus,
   Trash2,
   BookmarkPlus,
-  Award,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { projectApi, sprintApi } from '../api.js';
@@ -32,6 +31,7 @@ import WorkItemDetailModal from '../components/items/WorkItemDetailModal.jsx';
 import DeleteProjectModal from '../components/project/DeleteProjectModal.jsx';
 import SaveAsTemplateModal from '../components/template/SaveAsTemplateModal.jsx';
 import AccessDenied from '../components/common/AccessDenied.jsx';
+import ProjectMuteButton from '../notifications/ProjectMuteButton.jsx';
 
 export default function ProjectDetailPage() {
   const { projectId, workspaceId } = useParams();
@@ -50,6 +50,13 @@ export default function ProjectDetailPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
 
+  // Link từ thông báo: ?item={id}[&comment={id}] mở sẵn chi tiết công việc (và cuộn tới bình luận)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedItemId = searchParams.get('item');
+  const linkedCommentId = searchParams.get('comment');
+  const modalItemId = linkedItemId || selectedItemId;
+  const modalOpen = Boolean(linkedItemId) || isDetailModalOpen;
+
   const outletContext = useOutletContext() || {};
   const currentUser = outletContext.currentUser;
 
@@ -62,8 +69,9 @@ export default function ProjectDetailPage() {
   const { isAdmin, canCreateIssue, canManageSprint, permissions, forbidden, notFound } = useProjectPermission(projectId);
 
   const isSystemAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN');
-  const isProjectLead = !!(currentUser && project?.leadUserId === currentUser.id);
-  const isProjectCreator = !!(currentUser && project?.createdBy === currentUser.id);
+  // leadUserId / createdBy là Keycloak sub; currentUser (từ /users/me) mang users.id riêng kèm keycloakId
+  const isProjectLead = !!(currentUser?.keycloakId && project?.leadUserId === currentUser.keycloakId);
+  const isProjectCreator = !!(currentUser?.keycloakId && project?.createdBy === currentUser.keycloakId);
   const canDelete = isAdmin || isSystemAdmin || isProjectLead || isProjectCreator;
 
   useEffect(() => {
@@ -254,6 +262,7 @@ export default function ProjectDetailPage() {
           >
             <Star size={15} fill={isStarred ? '#EAB308' : 'none'} />
           </button>
+          {project && <ProjectMuteButton projectId={projectId} projectName={project.name} />}
           {canDelete && (
             <div style={{ position: 'relative' }} ref={actionMenuRef}>
               <button
@@ -427,10 +436,12 @@ export default function ProjectDetailPage() {
           {[
             { to: 'board', label: 'Bảng tiến độ', icon: Kanban, visible: true },
             { to: 'backlog', label: 'Kho việc & Kế hoạch', icon: ListTodo, visible: isScrumProject(project) },
-            { to: 'contributions', label: 'Đóng góp', icon: Award, visible: true },
-            { to: 'reports', label: 'Báo cáo', icon: BarChart3, visible: true },
             { to: 'members', label: 'Thành viên & Vai trò', icon: Users, visible: true },
+            // "Báo cáo" gop ca Dong gop lan Tien do (2 tab ben trong ProjectReportsPage).
+            { to: 'reports', label: 'Báo cáo', icon: BarChart3, visible: true },
             { to: 'workflow', label: 'Cấu hình Dự án', icon: Settings, visible: true },
+            // Chỉ người quản trị dự án (Leader, Admin dự án/workspace) mới cấu hình GitHub: khớp PROJECT_ADMIN ở backend
+            { to: 'github', label: 'Tích hợp GitHub', icon: GitBranch, visible: isAdmin },
           ]
             .filter((tab) => tab.visible)
             .map((tab) => {
@@ -497,11 +508,20 @@ export default function ProjectDetailPage() {
 
       {/* ─── Work Item Detail Modal (2 Columns Jira Spec) ─── */}
       <WorkItemDetailModal
-        itemId={selectedItemId}
-        isOpen={isDetailModalOpen}
+        itemId={modalItemId}
+        isOpen={modalOpen}
+        focusCommentId={linkedItemId ? linkedCommentId : null}
         onClose={() => {
           setIsDetailModalOpen(false);
           setSelectedItemId(null);
+          if (linkedItemId || linkedCommentId) {
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.delete('item');
+              next.delete('comment');
+              return next;
+            }, { replace: true });
+          }
         }}
         onItemUpdated={handleItemUpdated}
         members={members}

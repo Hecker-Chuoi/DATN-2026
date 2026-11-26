@@ -397,7 +397,9 @@ export default function ProjectListPage() {
             {filteredProjects.map((project) => {
               const isScrum = project.projectType === 'SOFTWARE_SCRUM';
               const isSystemAdmin = currentUser?.roles?.includes('ADMIN') || currentUser?.roles?.includes('ROLE_ADMIN');
-              const canDeleteProject = isSystemAdmin || (currentUser && (project.leadUserId === currentUser.id || project.createdBy === currentUser.id));
+              // leadUserId / createdBy là Keycloak sub; currentUser.id là users.id của identity nên phải so với keycloakId
+              const mySub = currentUser?.keycloakId;
+              const canDeleteProject = isSystemAdmin || (mySub && (project.leadUserId === mySub || project.createdBy === mySub));
 
               return (
                 <div

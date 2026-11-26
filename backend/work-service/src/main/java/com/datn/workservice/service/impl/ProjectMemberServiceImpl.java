@@ -42,6 +42,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
     private final IdentityClient identityClient;
     private final WorkspaceAccessChecker workspaceAccessChecker;
     private final com.datn.workservice.client.WorkspaceClient workspaceClient;
+    private final com.datn.workservice.notification.ProjectNotifier projectNotifier;
 
     // ─── Permission evaluation ───────────────────────────────────────────────
 
@@ -246,6 +247,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
 
         RoleAssignment saved = roleAssignmentRepository.save(assignment);
         log.info("Member added to project: user={}, role={}, project={} by {}", targetUserId, role.getName(), projectId, currentUserId);
+        projectNotifier.memberAdded(project, targetUserId, role.getName(), currentUserId); // G5
 
         // Smart Auto-Cascade: Đảm bảo user có mặt trong Workspace của dự án
         if (project.getWorkspaceId() != null) {
@@ -293,6 +295,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
         }
 
         RoleAssignment assignment = assignments.get(0);
+        String oldRoleName = projectRoleRepository.findById(assignment.getRoleId()).map(ProjectRole::getName).orElse(null);
         boolean wasAdmin = isAdministratorRole(assignment.getRoleId());
         boolean willBeAdmin = ROLE_ADMINISTRATOR.equalsIgnoreCase(role.getName());
         if (wasAdmin && !willBeAdmin) {
@@ -303,6 +306,8 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
         RoleAssignment saved = roleAssignmentRepository.save(assignment);
 
         log.info("Member role updated: user={}, newRole={}, project={} by {}", targetUserId, role.getName(), projectId, currentUserId);
+        projectRepository.findById(projectId) // G6
+                .ifPresent(p -> projectNotifier.roleChanged(p, targetUserId, oldRoleName, role.getName(), currentUserId));
 
         return RoleAssignmentResponse.builder()
                 .id(saved.getId())
@@ -334,6 +339,7 @@ public class ProjectMemberServiceImpl implements ProjectMemberService {
 
         roleAssignmentRepository.deleteByProjectIdAndUserId(projectId, targetUserId);
         log.info("Member removed from project: user={}, project={} by {}", targetUserId, projectId, currentUserId);
+        projectNotifier.memberRemoved(project, targetUserId, currentUserId); // G2 (+ G3 nếu còn việc dở)
     }
 
     @Override

@@ -67,7 +67,18 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
     @Override
     @Transactional
-    public synchronized WorkspaceResponse createDefaultWorkspace(UUID userId) {
+    public synchronized WorkspaceResponse createDefaultWorkspace(UUID requestedUserId) {
+        // Quy ước toàn hệ thống: user id là Keycloak sub. Bên gọi (identity-service) có thể gửi users.id
+        // của nó, nên tra identity (nhận được cả hai loại id) rồi đổi sang sub trước khi đọc / ghi.
+        UserResponse user = null;
+        try {
+            ApiResponse<UserResponse> userRes = identityClient.getUserById(requestedUserId);
+            user = userRes == null ? null : userRes.getData();
+        } catch (Exception e) {
+            log.warn("Không lấy được thông tin user {} từ identity-service: {}", requestedUserId, e.getMessage());
+        }
+        UUID userId = keycloakSubOr(user, requestedUserId);
+
         List<WorkspaceMember> existingMemberships = memberRepository.findByUserId(userId);
         if (!existingMemberships.isEmpty()) {
             Workspace firstWs = workspaceRepository.findByIdAndDeletedAtIsNull(existingMemberships.get(0).getWorkspaceId())
@@ -79,21 +90,15 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
         String displayName = "Cá nhân";
         String username = "user";
-        try {
-            ApiResponse<UserResponse> userRes = identityClient.getUserById(userId);
-            if (userRes != null && userRes.getData() != null) {
-                UserResponse u = userRes.getData();
-                if (u.getFullName() != null && !u.getFullName().isBlank()) {
-                    displayName = u.getFullName().trim();
-                } else if (u.getUsername() != null && !u.getUsername().isBlank()) {
-                    displayName = u.getUsername().trim();
-                }
-                if (u.getUsername() != null && !u.getUsername().isBlank()) {
-                    username = u.getUsername().trim();
-                }
+        if (user != null) {
+            if (user.getFullName() != null && !user.getFullName().isBlank()) {
+                displayName = user.getFullName().trim();
+            } else if (user.getUsername() != null && !user.getUsername().isBlank()) {
+                displayName = user.getUsername().trim();
             }
-        } catch (Exception e) {
-            log.warn("Không lấy được thông tin user {} từ identity-service: {}", userId, e.getMessage());
+            if (user.getUsername() != null && !user.getUsername().isBlank()) {
+                username = user.getUsername().trim();
+            }
         }
 
         String wsName = "Không gian của " + displayName;
@@ -114,6 +119,16 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
         log.info("Đã tự động khởi tạo default workspace {} (slug={}) cho user {}", workspace.getId(), slug, userId);
         return toResponse(workspace, WorkspaceRole.OWNER, 1L, 1L);
+    }
+
+    /** Keycloak sub của user (lấy từ identity-service); không có thì giữ nguyên id được gửi tới. */
+    private static UUID keycloakSubOr(UserResponse user, UUID fallback) {
+        if (user == null || user.getKeycloakId() == null || user.getKeycloakId().isBlank()) return fallback;
+        try {
+            return UUID.fromString(user.getKeycloakId());
+        } catch (IllegalArgumentException e) {
+            return fallback;
+        }
     }
 
     @Override

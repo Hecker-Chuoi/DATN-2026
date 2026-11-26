@@ -79,7 +79,7 @@ public class AccountVerificationService {
         keycloakService.activateVerifiedUser(user.getKeycloakId());
         user.setStatus(User.UserStatus.ACTIVE);
         userRepository.save(user);
-        workspaceClient.createDefaultWorkspace(user.getId());
+        workspaceClient.createDefaultWorkspace(user.getKeycloakId());
     }
 
     /** identifier = email hoặc username. Chỉ gửi khi tài khoản đang chờ xác thực. */

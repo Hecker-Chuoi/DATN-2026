@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Plus, Calendar, Bookmark, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Calendar, Bookmark, Pencil, Trash2, CheckCircle2, BarChart3 } from 'lucide-react';
 import SprintStateBadge from '../sprints/SprintStateBadge.jsx';
 import BacklogIssueRow from './BacklogIssueRow.jsx';
 import InlineCreateIssueRow from './InlineCreateIssueRow.jsx';
@@ -9,6 +9,9 @@ import { SURFACE } from '../../constants/jiraTokens.js';
  * Một khối gập/mở trên màn hình Backlog (Sprint hoặc Backlog chung).
  * Hỗ trợ hiển thị dạng cây phân cấp:
  * Hạng mục lớn (Epic Header) -> Các công việc con thụt lề (Indented child rows).
+ *
+ * readOnly: khối chu kỳ / giai đoạn đã hoàn tất (CLOSED) - chỉ xem lại, không tạo việc mới;
+ * hiện ngày hoàn tất, số liệu chốt lúc đóng và nút "Xem báo cáo" (onOpenReport).
  */
 export default function SprintAccordion({
   group,
@@ -22,12 +25,17 @@ export default function SprintAccordion({
   onDelete,
   onComplete,
   onQuickCreate,
+  onOpenReport,
+  readOnly = false,
+  defaultOpen = true,
   droppableProps = {},
   isOver = false,
   renderRow,
 }) {
   const isBacklog = group.sprintId == null;
-  const [open, setOpen] = useState(true);
+  const isClosed = group.state === 'CLOSED';
+  const term = group.name?.toLowerCase()?.includes('giai đoạn') ? 'giai đoạn' : 'chu kỳ';
+  const [open, setOpen] = useState(defaultOpen);
   const [creating, setCreating] = useState(false);
   const [collapsedEpics, setCollapsedEpics] = useState({});
 
@@ -124,6 +132,27 @@ export default function SprintAccordion({
           </span>
         )}
 
+        {isClosed && group.completedDate && (
+          <span
+            title="Ngày bấm hoàn tất"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#00875A', fontWeight: 600 }}
+          >
+            <CheckCircle2 size={12} />
+            Hoàn tất {formatDate(group.completedDate)}
+          </span>
+        )}
+
+        {isClosed && group.itemsAtClose != null && (
+          <span
+            title="Số liệu chốt lúc hoàn tất — trùng với Báo cáo tiến độ và Năng suất"
+            style={{ fontSize: 12, color: SURFACE.textMuted }}
+          >
+            · Xong {group.completedItemsAtClose ?? 0}/{group.itemsAtClose} việc
+            {Number(group.storyPointsAtClose) > 0 &&
+              ` · ${num(group.completedStoryPointsAtClose)}/${num(group.storyPointsAtClose)} điểm`}
+          </span>
+        )}
+
         {/* Phân bổ điểm theo 3 nhóm trạng thái */}
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 'auto' }}>
           <PointChip value={group.todoStoryPoints} bg="#DFE1E6" color="#42526E" title="Cần làm" />
@@ -164,6 +193,15 @@ export default function SprintAccordion({
         {!isBacklog && canManageSprint && group.state === 'ACTIVE' && (
           <button disabled={busy} onClick={() => onComplete?.(group)} style={primaryBtn(busy)}>
             {group.name?.toLowerCase()?.includes('giai đoạn') ? 'Hoàn tất giai đoạn' : 'Hoàn tất chu kỳ'}
+          </button>
+        )}
+        {isClosed && onOpenReport && (
+          <button
+            onClick={() => onOpenReport(group)}
+            title={`Mở báo cáo tiến độ của ${term} này`}
+            style={secondaryBtn}
+          >
+            <BarChart3 size={13} /> Xem báo cáo
           </button>
         )}
       </div>
@@ -319,12 +357,14 @@ export default function SprintAccordion({
             >
               {isBacklog
                 ? 'Kho công việc hiện đang trống. Hãy tạo công việc mới.'
-                : 'Kéo công việc từ kho việc vào chu kỳ này.'}
+                : isClosed
+                  ? `Không còn công việc nào trong ${term} này (việc chưa xong đã được chuyển đi khi hoàn tất).`
+                  : 'Kéo công việc từ kho việc vào chu kỳ này.'}
             </div>
           )}
 
-          {/* Tạo nhanh inline */}
-          {creating ? (
+          {/* Tạo nhanh inline - khối đã hoàn tất chỉ để xem lại */}
+          {readOnly ? null : creating ? (
             <InlineCreateIssueRow
               types={types}
               onCancel={() => setCreating(false)}
@@ -409,6 +449,31 @@ function iconBtn(disabled) {
     cursor: disabled ? 'not-allowed' : 'pointer',
     padding: 0,
   };
+}
+
+const secondaryBtn = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  padding: '4px 10px',
+  borderRadius: 6,
+  border: `1px solid ${SURFACE.border}`,
+  backgroundColor: '#FFFFFF',
+  color: '#2563EB',
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+function num(v) {
+  const n = Number(v || 0);
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function formatDate(d) {
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return '';
+  return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
 }
 
 function formatRange(start, end) {

@@ -24,6 +24,83 @@ spring:
       mail.smtp.timeout: 5000
       mail.smtp.writetimeout: 5000
 
+  # Bảng notifications nằm chung DB datn_main_db, Flyway riêng (giống workspace-service)
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/datn_main_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    table: flyway_notification_schema_history
+    locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8088/realms/datn-realm/protocol/openid-connect/certs}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8088/realms/datn-realm}
+
+  # Nhận sự kiện từ work-service / workspace-service (Transactional Outbox → Kafka)
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: notification-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        # Service bị tắt đột ngột (kill, nút Stop của IDE) không kịp rời consumer group: Kafka phải chờ hết
+        # session timeout (mặc định 45 giây) mới giao partition cho instance mới, thông báo đến trễ chừng ấy.
+        # 10 giây là đủ an toàn: heartbeat chạy ở luồng riêng, không phụ thuộc thời gian xử lý message.
+        session.timeout.ms: 10000
+        heartbeat.interval.ms: 3000
+    producer:
+      # Chỉ dùng để chuyển sự kiện lỗi sang notification-events.DLT
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+  # Chỉ dùng khi app.cluster.redis-enabled=true (chạy nhiều instance). Kết nối lười: tắt chế độ cụm thì không cần Redis.
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6380}
+      timeout: 2000ms
+      repositories:
+        enabled: false
+
 app:
   mail:
     from: ${MAIL_FROM:DATN-2026 <no-reply@datn.local>}
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
+  services:
+    identity:
+      url: ${APP_SERVICES_IDENTITY_URL:http://localhost:8082}
+  notifications:
+    # Gộp thông báo chưa đọc cùng group_key trong khoảng này (quy tắc R4)
+    group-window-minutes: 10
+    # Dọn hẳn thông báo đã xoá mềm / đã đọc quá lâu
+    purge-deleted-after-days: 30
+    purge-read-after-days: 90
+    # Tắt để chạy không cần Kafka (chỉ dùng REST + WebSocket)
+    kafka-enabled: ${APP_NOTIFICATIONS_KAFKA_ENABLED:true}
+    # Giờ dọn dẹp (múi giờ Asia/Ho_Chi_Minh)
+    cleanup-cron: "0 0 3 * * *"
+  cluster:
+    # Chạy từ 2 instance trở lên: đẩy WebSocket qua Redis Pub/Sub và khoá job theo lịch (tài liệu 3 §10.2)
+    redis-enabled: ${APP_CLUSTER_REDIS_ENABLED:false}
+
+logging:
+  level:
+    com.datn.notification: DEBUG

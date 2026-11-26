@@ -179,15 +179,16 @@ Cả hai đều đi qua hàm dùng chung `moveItemsToSprint()`:
 Mục đích: trả mọi thứ màn hình cần trong **một lần gọi** để không bị nháy khi tải.
 
 Các bước:
-1. Lấy Sprint `ACTIVE` + `FUTURE` (**không lấy CLOSED** — chúng thuộc màn hình Báo cáo), sắp theo `SprintSequence.DISPLAY_ORDER`: ACTIVE trước, rồi FUTURE theo thứ tự kế hoạch (`startDate` tăng dần, `null` cuối, rồi `createdAt`).
-2. Hai truy vấn: item của các Sprint đó, và item Backlog (`sprint_id IS NULL`, theo rank).
+1. Lấy Sprint `ACTIVE` + `FUTURE`, sắp theo `SprintSequence.DISPLAY_ORDER`: ACTIVE trước, rồi FUTURE theo thứ tự kế hoạch (`startDate` tăng dần, `null` cuối, rồi `createdAt`). Riêng Sprint `CLOSED` lấy vào danh sách `closedSprints` (BR-B08), sắp `completedDate` giảm dần — tách riêng để không ảnh hưởng `canStart` / thứ tự kế hoạch.
+2. Hai truy vấn: item của mọi Sprint trên (kể cả CLOSED — chỉ còn item DONE vì việc dở đã bị chuyển đi lúc đóng), và item Backlog (`sprint_id IS NULL`, theo rank).
 3. Ánh xạ sang `BoardCardResponse` bằng `WorkItemCardMapper` (dùng chung với Board).
 4. **Loại Sub-task khỏi danh sách hàng** (chúng đi theo cha), áp bộ lọc, sắp theo rank.
 5. Nhóm theo Sprint, tính cho mỗi nhóm: số item và story point theo 3 nhóm trạng thái TODO / IN_PROGRESS / DONE.
 6. Cờ UI:
    - `canStart` = Sprint FUTURE **và** có item **và** dự án chưa có Sprint ACTIVE **và** là Sprint FUTURE đứng đầu kế hoạch (`SprintSequence.startableSprintId`). Hệ quả: nút *Bắt đầu* chỉ sáng ở khối FUTURE trên cùng; frontend (`ProjectBacklogPage.startBlockedReason`) chỉ diễn giải lý do khoá thành tooltip, không tự quyết định.
    - `canComplete` = Sprint ACTIVE.
-7. Trả kèm `activeSprint`, danh sách `epics` (suy ra từ chính các thẻ, kèm tiến độ điểm), `statuses` của dự án, `totalBacklogItems`.
+7. Khối CLOSED kèm `completedDate` và số liệu chốt từ `sprint_report_snapshots` (một truy vấn `findBySprintIdIn`): `itemsAtClose`, `completedItemsAtClose`, `storyPointsAtClose`, `completedStoryPointsAtClose`; snapshot thiếu (dữ liệu cũ) thì để `null`.
+8. Trả kèm `activeSprint`, danh sách `epics` (suy ra từ chính các thẻ, kèm tiến độ điểm), `statuses` của dự án, `totalBacklogItems`.
 
 Cấu trúc `BacklogResponse`:
 
@@ -196,6 +197,7 @@ BacklogResponse
 ├── projectId, projectKey, generatedAt
 ├── activeSprint: SprintResponse | null
 ├── sprints: BacklogGroupResponse[]    (ACTIVE trước, rồi FUTURE)
+├── closedSprints: BacklogGroupResponse[]  (CLOSED, đóng gần nhất trước; chỉ xem)
 ├── backlog: BacklogGroupResponse      (sprintId = null, name = "Backlog")
 ├── epics: EpicOptionResponse[]
 ├── statuses: StatusResponse[]
@@ -208,7 +210,7 @@ BacklogResponse
 |---|---|
 | `frontend/src/pages/ProjectBacklogPage.jsx` | Trang chính, kéo thả bằng `@dnd-kit`, mở các modal. |
 | `frontend/src/hooks/useProjectBacklog.js` | Nạp dữ liệu, bọc các thao tác ghi (`run` = khoá nút + reload im lặng). |
-| `frontend/src/components/backlog/SprintAccordion.jsx` | Một khối Sprint/Backlog có thể thu gọn, nút Sửa (bút chì) / Xoá (thùng rác) / Bắt đầu / Hoàn tất; tooltip nêu lý do khi nút Bắt đầu bị khoá. |
+| `frontend/src/components/backlog/SprintAccordion.jsx` | Một khối Sprint/Backlog có thể thu gọn, nút Sửa (bút chì) / Xoá (thùng rác) / Bắt đầu / Hoàn tất; tooltip nêu lý do khi nút Bắt đầu bị khoá. Chế độ `readOnly` cho khối đã hoàn tất: ngày hoàn tất, số liệu chốt, nút *Xem báo cáo* (`reports?tab=progress&sprint=<id>`). |
 | `frontend/src/components/backlog/BacklogIssueRow.jsx`, `InlineCreateIssueRow.jsx`, `BacklogToolbar.jsx` | Hàng công việc, tạo nhanh, thanh lọc. |
 | `frontend/src/components/sprints/SprintFormModal.jsx` | Dùng cho `mode="create"`, `mode="edit"` và `mode="start"`. |
 | `frontend/src/components/sprints/CompleteSprintModal.jsx` | Chọn đích cho việc chưa xong (`BACKLOG` hoặc một Sprint FUTURE). |

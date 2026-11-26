@@ -7,7 +7,7 @@ Phạm vi: `backend/workspace-service` và phần work-service gọi sang nó. C
 - Thang vai trò `WorkspaceRole`: OWNER > ADMIN > MEMBER > GUEST, so sánh bằng `atLeast()` theo ordinal.
 - Nguồn sự thật duy nhất là hàng `workspace_members` (không có `owner_id` trên `workspaces`).
 - Enforce bằng annotation `@RequireWorkspaceRole` + aspect `security/WorkspaceRoleGuard`: resolve `workspaceId` chỉ theo tên `@PathVariable`, không resolve được thì từ chối, người ngoài nhận 404. Service kiểm tra lại qua `requireAtLeast()`.
-- `userId` luôn là `users.id` (`security/CurrentUserResolver`), không bao giờ là Keycloak `sub`. Đúng, tránh được bẫy của work-service.
+- ~~`userId` luôn là `users.id`~~ → **Đã đổi (V6, 15/11/2026):** user id thống nhất toàn hệ thống là Keycloak `sub`, `CurrentUserResolver` lấy thẳng `sub` từ JWT (xem `docs/AUTHORIZATION.md` §5).
 - work-service hỏi role qua `client/WorkspaceClient` (3 endpoint `/internal/workspaces/**`), cache Redis `wsRole` 10 phút.
 
 ## Đã làm đúng, đừng phá
@@ -17,8 +17,7 @@ Phạm vi: `backend/workspace-service` và phần work-service gọi sang nó. C
 | Aspect fail-closed, không heuristic resolve id | `security/WorkspaceRoleGuard.java` |
 | 404 thay 403 cho người ngoài tenant | `WorkspaceMemberServiceImpl.requireMembership` |
 | `lockOwners()` SELECT FOR UPDATE chống race mất OWNER cuối | `WorkspaceMemberRepository`, `assertNotLastOwner` |
-| `users.id` làm id chuẩn, cache Redis có serializer UUID riêng | `CurrentUserResolver`, `IdentityUserLookup`, `RedisConfig` |
-| Lookup identity lỗi trả 403 chứ không 401 (tránh vòng lặp refresh ở FE) | `IdentityUserLookup` |
+| User id = Keycloak `sub` lấy thẳng từ JWT (V6 bỏ `IdentityUserLookup` và cache `wsUserId`) | `CurrentUserResolver` |
 | Hydrate tên/email bằng 1 batch call | `WorkspaceMemberServiceImpl.hydrateUsers` |
 
 ## Lỗ hổng
@@ -29,7 +28,7 @@ Phạm vi: `backend/workspace-service` và phần work-service gọi sang nó. C
 | 2 | Cao | Cache `wsRole` 10 phút ở work-service không evict: bị xóa khỏi workspace vẫn vào được project tới 10 phút | `work-service/security/WorkspaceAccessChecker.java` (`@Cacheable("wsRole")`), `work-service/config/RedisConfig.java` | Giảm TTL xuống 60s, hoặc workspace-service xóa key khi đổi/xóa member |
 | 3 | Cao | Thêm thành viên không cần đồng thuận, không thông báo | `WorkspaceMemberServiceImpl.addMember` (cũ) | **Đã thay bằng lời mời** (`workspace_invitations` V4, email) |
 | 4 | TB | ADMIN xóa/hạ cấp được ADMIN khác và tự tạo thêm ADMIN; hai ADMIN có thể loại nhau | `updateMemberRole`, `removeMember` (chỉ bảo vệ OWNER) | Chỉ OWNER được đụng tới hàng có role ADMIN hoặc cấp role ADMIN |
-| 5 | TB | Fast path tin claim `user_id` trong JWT, không cross-check với `sub`; mapper chưa có trong realm nên hiện luôn đi slow path, nhưng khi ai đó thêm mapper từ user attribute editable thì user tự đặt `user_id` người khác | `security/SecurityUtils.getUserIdClaim`, `CurrentUserResolver` | Bỏ fast path, hoặc kiểm tra `users.keycloak_id == sub` khi dùng claim |
+| 5 | ~~TB~~ Đã hết | Fast path tin claim `user_id` trong JWT, không cross-check với `sub`; mapper chưa có trong realm nên hiện luôn đi slow path, nhưng khi ai đó thêm mapper từ user attribute editable thì user tự đặt `user_id` người khác | `security/SecurityUtils.getUserIdClaim`, `CurrentUserResolver` | Bỏ fast path, hoặc kiểm tra `users.keycloak_id == sub` khi dùng claim  — V6 không còn đọc claim `user_id` |
 | 6 | TB | GUEST đọc được toàn bộ danh sách thành viên kèm email | `getMembers` chỉ `requireMembership` | GUEST chỉ thấy tên, ẩn email, hoặc yêu cầu MEMBER+ |
 | 7 | TB | Migration V2 nhét mọi `users` vào Default Workspace làm MEMBER (= quyền tạo project) | `db/migration/V2__seed_default_workspace_and_backfill.sql` | Chấp nhận cho dữ liệu cũ; user mới không bị ảnh hưởng vì identity không tự thêm vào workspace |
 | 8 | TB | Không có global ADMIN bypass: realm ADMIN không xem/khôi phục được workspace mình không là member, trong khi work-service cho ADMIN thấy mọi project | không có `isGlobalAdmin` nào trong workspace-service | Thêm bypass trong `WorkspaceRoleGuard` + `requireAtLeast` giống `SecurityUtils.isGlobalAdmin()` của work-service |

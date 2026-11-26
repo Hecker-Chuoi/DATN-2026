@@ -16,12 +16,10 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.GenericToStringSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
-import java.util.UUID;
 
 @Slf4j
 @Configuration
@@ -98,28 +96,8 @@ public class RedisConfig implements CachingConfigurer {
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer));
 
-        // Cache ánh xạ Keycloak sub -> users.id của IdentityUserLookup.
-        //
-        // PHẢI dùng serializer riêng, KHÔNG dùng cacheConfig chung ở trên: bộ
-        // GenericJackson2JsonRedisSerializer kia bật activateDefaultTyping với
-        // NON_FINAL, mà UUID là class FINAL nên Jackson không ghi kèm type info.
-        // Kết quả là giá trị đọc lại từ Redis về dưới dạng String và gây
-        // ClassCastException ngay lần cache hit đầu tiên (lần miss thì vẫn chạy,
-        // nên lỗi này chỉ hiện ra ở request thứ hai).
-        //
-        // GenericToStringSerializer đi qua DefaultConversionService, vốn đã có sẵn
-        // converter String <-> UUID, nên round-trip đúng kiểu.
-        //
-        // TTL dài hơn default vì ánh xạ này gần như bất biến trong một phiên; mỗi
-        // lần miss là một lời gọi Feign sang identity-service.
-        RedisCacheConfiguration userIdCacheConfig = cacheConfig
-                .entryTtl(Duration.ofMinutes(30))
-                .serializeValuesWith(RedisSerializationContext.SerializationPair
-                        .fromSerializer(new GenericToStringSerializer<>(UUID.class)));
-
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(cacheConfig)
-                .withCacheConfiguration("wsUserId", userIdCacheConfig)
                 .build();
     }
 }
