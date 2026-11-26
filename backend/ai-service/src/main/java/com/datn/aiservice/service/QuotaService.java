@@ -16,7 +16,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
-/** Giới hạn lượt gọi Gemini theo ngày (Redis) và ghi ai_usage_logs. Cả hai đều fail-safe. */
+/** Giới hạn lượt gọi model theo ngày (Redis) và ghi ai_usage_logs. Cả hai đều fail-safe. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -52,7 +52,7 @@ public class QuotaService {
             usageRepo.save(AiUsageLog.builder()
                     .userId(userId).conversationId(conversationId).model(model)
                     .inputTokens(u.inputTokens()).outputTokens(u.outputTokens())
-                    .thinkingTokens(u.thinkingTokens()).cachedTokens(u.cachedTokens())
+                    .thinkingTokens(0).cachedTokens(u.cachedTokens()) // Claude tính thinking vào output
                     .build());
         } catch (Exception e) {
             log.warn("Không ghi được ai_usage_logs: {}", e.getMessage());

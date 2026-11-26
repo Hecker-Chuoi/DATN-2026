@@ -7,7 +7,7 @@ public interface AgentTool {
     /** snake_case, duy nhất trong registry. */
     String name();
 
-    /** Khi nào dùng, trả về gì (tiếng Việt) – Gemini đọc để chọn tool. */
+    /** Khi nào dùng, trả về gì (tiếng Việt) – model đọc để chọn tool. */
     String description();
 
     /** JSON Schema: {"type":"object","properties":{…},"required":[…]}. */

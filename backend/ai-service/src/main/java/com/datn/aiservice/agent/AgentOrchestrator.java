@@ -1,7 +1,9 @@
 package com.datn.aiservice.agent;
 
-import com.datn.aiservice.agent.llm.GeminiLlmClient;
+import com.anthropic.models.beta.messages.BetaTool;
+import com.datn.aiservice.agent.llm.ClaudeLlmClient;
 import com.datn.aiservice.agent.llm.LlmTurn;
+import com.datn.aiservice.agent.llm.MessageJson;
 import com.datn.aiservice.agent.prompt.SystemPromptBuilder;
 import com.datn.aiservice.agent.store.ConversationStore;
 import com.datn.aiservice.agent.store.ConversationSummarizer;
@@ -23,7 +25,7 @@ import com.datn.aiservice.repository.AiPendingInteractionRepository;
 import com.datn.aiservice.service.QuotaService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.genai.types.*;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,8 +37,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Vòng lặp agent (Phụ lục F của kế hoạch): gọi Gemini → chạy tool READ ngay → tool WRITE/INTERRUPT tạo
- * bản ghi chờ và dừng (WAITING_INPUT) → người dùng duyệt/trả lời → gửi đủ FunctionResponse → tiếp tục.
+ * Vòng lặp agent (Phụ lục F của kế hoạch): gọi Claude → chạy tool READ ngay → tool WRITE/INTERRUPT tạo
+ * bản ghi chờ và dừng (WAITING_INPUT) → người dùng duyệt/trả lời → gửi đủ tool_result → tiếp tục.
  */
 @Slf4j
 @Service
@@ -44,7 +46,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class AgentOrchestrator {
 
     private final ToolRegistry registry;
-    private final GeminiLlmClient llm;
+    private final ClaudeLlmClient llm;
     private final SystemPromptBuilder promptBuilder;
     private final ConversationStore store;
     private final HistoryWindow historyWindow;
@@ -58,11 +60,11 @@ public class AgentOrchestrator {
     // ponytail: khóa trong bộ nhớ theo hội thoại, đủ cho một instance; chuyển sang Redis lock nếu chạy nhiều bản.
     private final ConcurrentHashMap<UUID, ReentrantLock> locks = new ConcurrentHashMap<>();
 
-    /** Người dùng gửi tin mới. Tương tác đang chờ (nếu có) bị bỏ qua và trả lời cho Gemini là "Người dùng bỏ qua". */
+    /** Người dùng gửi tin mới. Tương tác đang chờ (nếu có) bị bỏ qua và trả lời cho model là "Người dùng bỏ qua". */
     public void chat(ToolContext ctx, String userText, AgentEventSink sink) {
         runLocked(ctx.conversationId(), sink, () -> {
             UUID convId = ctx.conversationId();
-            List<Part> parts = new ArrayList<>();
+            List<ObjectNode> blocks = new ArrayList<>();
             List<AiPendingInteraction> pending = pendingRepo.findByConversationIdAndStatus(convId, InteractionStatus.PENDING);
             if (!pending.isEmpty()) {
                 Instant now = Instant.now();
@@ -72,10 +74,12 @@ public class AgentOrchestrator {
                     p.setResolvedAt(now);
                 }
                 pendingRepo.saveAll(pending);
-                parts.addAll(responsePartsFor(pending.get(0).getMessageId()));
+                // tool_result phải đứng trước text trong tin USER
+                blocks.addAll(toolResultsFor(pending.get(0).getMessageId()));
             }
-            parts.add(Part.fromText(userText));
-            store.append(convId, MessageRole.USER, Content.builder().role("user").parts(parts).build(), null, null);
+            blocks.add(MessageJson.text(promptBuilder.context(ctx)));
+            blocks.add(MessageJson.text(userText));
+            store.append(convId, MessageRole.USER, MessageJson.user(blocks), null, null);
             store.setStatus(convId, ConversationStatus.ACTIVE);
             ensureTitle(convId, userText);
             runLoop(ctx, sink);
@@ -133,8 +137,7 @@ public class AgentOrchestrator {
                 sink.onDone("WAITING_INPUT");
                 return;
             }
-            store.append(convId, MessageRole.USER,
-                    Content.builder().role("user").parts(responsePartsFor(pi.getMessageId())).build(), null, null);
+            store.append(convId, MessageRole.USER, MessageJson.user(toolResultsFor(pi.getMessageId())), null, null);
             store.setStatus(convId, ConversationStatus.ACTIVE);
             runLoop(ctx, sink);
         });
@@ -145,7 +148,8 @@ public class AgentOrchestrator {
     private void runLoop(ToolContext ctx, AgentEventSink sink) {
         UUID convId = ctx.conversationId();
         List<AgentTool> tools = registry.availableFor(ctx);
-        Tool geminiTool = tools.isEmpty() ? null : ToolRegistry.toGeminiTool(tools);
+        List<BetaTool> claudeTools = ToolRegistry.toClaudeTools(tools);
+        String system = promptBuilder.system();
 
         for (int iteration = 0; iteration < props.maxIterations(); iteration++) {
             if (sink.isCancelled()) {
@@ -159,46 +163,50 @@ public class AgentOrchestrator {
 
             AiConversation conv = store.getOwned(convId, ctx.userId());
             List<AiMessage> all = store.messages(convId);
-            List<Content> history = all.stream().map(ConversationStore::toContent).toList();
+            List<ObjectNode> history = all.stream().map(ConversationStore::toNode).toList();
             HistoryWindow.Result window = historyWindow.apply(history);
             String summary = summarizer.summaryFor(conv, all, window.cutIndex());
-            Content system = promptBuilder.build(ctx, summary);
+            List<ObjectNode> messages = window.cutIndex() > 0 && summary != null && !summary.isBlank()
+                    ? withSummary(window.window(), summary) : window.window();
 
             LlmTurn turn;
             try {
-                turn = llm.generate(props.model(), window.window(), system, geminiTool);
+                turn = llm.generate(props.model(), system, messages, claudeTools);
             } catch (Exception e) {
-                log.warn("Gọi Gemini thất bại (conversation {}): {}", convId, e.toString());
-                sink.onError(GeminiLlmClient.friendlyMessage(e));
+                log.warn("Gọi Claude thất bại (conversation {}): {}", convId, e.toString());
+                sink.onError(ClaudeLlmClient.friendlyMessage(e));
                 return;
             }
 
-            AiMessage modelMsg = store.append(convId, MessageRole.MODEL, turn.modelContent(),
+            AiMessage modelMsg = store.append(convId, MessageRole.MODEL, turn.modelMessage(),
                     turn.usage().inputTokens(), turn.usage().outputTokens());
-            quota.record(ctx.userId(), convId, props.model(), turn.usage());
+            quota.record(ctx.userId(), convId, turn.model(), turn.usage());
 
             if (!turn.text().isBlank()) {
                 sink.onTextDelta(turn.text());
+            }
+            if (turn.truncated()) {
+                sink.onNotice("Câu trả lời bị cắt vì vượt giới hạn độ dài. Hãy hỏi tiếp để tôi trả lời nốt.");
             }
             if (turn.calls().isEmpty()) {
                 sink.onDone("COMPLETED");
                 return;
             }
 
-            List<Part> responses = new ArrayList<>();
+            List<ObjectNode> responses = new ArrayList<>();
             List<AiPendingInteraction> rows = new ArrayList<>();
             boolean hasPending = false;
 
             for (int idx = 0; idx < turn.calls().size(); idx++) {
-                FunctionCall call = turn.calls().get(idx);
-                String callId = call.id().orElse(UUID.randomUUID().toString());
-                String name = call.name().orElse("");
-                Map<String, Object> args = call.args().orElse(Map.of());
+                LlmTurn.ToolCall call = turn.calls().get(idx);
+                String callId = call.id();
+                String name = call.name();
+                Map<String, Object> args = call.args();
                 AgentTool tool = tools.stream().filter(t -> t.name().equals(name)).findFirst().orElse(null);
 
                 if (tool == null) {
                     Map<String, Object> resp = Map.of("error", "Không có công cụ tên " + name + " trong ngữ cảnh hiện tại");
-                    responses.add(functionResponsePart(call, name, resp));
+                    responses.add(toolResult(callId, resp));
                     rows.add(row(convId, modelMsg, callId, idx, name, InteractionType.READ_RESULT,
                             InteractionStatus.ANSWERED, json(args), json(resp)));
                     continue;
@@ -210,7 +218,7 @@ public class AgentOrchestrator {
                         sink.onToolFinished(callId, name, !r.error());
                         if (r.notice() != null) sink.onNotice(r.notice());
                         Map<String, Object> resp = toResponse(r);
-                        responses.add(functionResponsePart(call, name, resp));
+                        responses.add(toolResult(callId, resp));
                         rows.add(row(convId, modelMsg, callId, idx, name, InteractionType.READ_RESULT,
                                 InteractionStatus.ANSWERED, json(args), json(resp)));
                     }
@@ -245,7 +253,7 @@ public class AgentOrchestrator {
                 return;
             }
 
-            store.append(convId, MessageRole.USER, Content.builder().role("user").parts(responses).build(), null, null);
+            store.append(convId, MessageRole.USER, MessageJson.user(responses), null, null);
         }
 
         sink.onNotice("Đã đạt giới hạn " + props.maxIterations() + " vòng xử lý, tạm dừng. Hãy hỏi tiếp để tôi làm tiếp.");
@@ -293,26 +301,30 @@ public class AgentOrchestrator {
         return Map.of("result", c);
     }
 
-    /** Dựng đủ FunctionResponse cho mọi lời gọi của tin MODEL, đúng thứ tự call_index. */
-    private List<Part> responsePartsFor(UUID messageId) {
-        AiMessage msg = store.message(messageId);
-        List<FunctionCall> calls = ConversationStore.toContent(msg).parts().orElse(List.of()).stream()
-                .filter(p -> p.functionCall().isPresent()).map(p -> p.functionCall().get()).toList();
-        List<Part> parts = new ArrayList<>();
+    /** Dựng đủ tool_result cho mọi tool_use của tin MODEL, đúng thứ tự call_index (callId = id của tool_use). */
+    private List<ObjectNode> toolResultsFor(UUID messageId) {
+        List<ObjectNode> out = new ArrayList<>();
         for (AiPendingInteraction row : pendingRepo.findByMessageIdOrderByCallIndexAsc(messageId)) {
-            FunctionCall original = row.getCallIndex() < calls.size() ? calls.get(row.getCallIndex()) : null;
             Map<String, Object> response = row.getResponse() == null
                     ? Map.of("result", "Người dùng bỏ qua, không thực hiện") : readMap(row.getResponse());
-            parts.add(functionResponsePart(original, row.getToolName(), response));
+            out.add(toolResult(row.getCallId(), response));
         }
-        return parts;
+        return out;
     }
 
-    /** Gemini có thể không trả id cho FunctionCall: chỉ đặt id khi có, luôn giữ đúng name. */
-    private static Part functionResponsePart(FunctionCall original, String name, Map<String, Object> response) {
-        FunctionResponse.Builder b = FunctionResponse.builder().name(name).response(response);
-        if (original != null) original.id().ifPresent(b::id);
-        return Part.builder().functionResponse(b.build()).build();
+    private ObjectNode toolResult(String toolUseId, Map<String, Object> response) {
+        return MessageJson.toolResult(toolUseId, json(response), response.containsKey("error"));
+    }
+
+    /** Lịch sử vừa bị cắt: chèn tóm tắt phần bị cắt vào tin đầu tiên của cửa sổ (sau các tool_result nếu có). */
+    private static List<ObjectNode> withSummary(List<ObjectNode> window, String summary) {
+        if (window.isEmpty()) return window;
+        List<ObjectNode> out = new ArrayList<>(window);
+        List<ObjectNode> blocks = new ArrayList<>(MessageJson.blocks(window.get(0)));
+        int at = (int) blocks.stream().filter(b -> "tool_result".equals(MessageJson.type(b))).count();
+        blocks.add(at, MessageJson.text(SystemPromptBuilder.summaryBlock(summary)));
+        out.set(0, MessageJson.user(blocks));
+        return out;
     }
 
     private static AiPendingInteraction row(UUID convId, AiMessage msg, String callId, int idx, String tool,

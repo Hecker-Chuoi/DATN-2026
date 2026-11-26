@@ -1,5 +1,6 @@
 package com.datn.aiservice.service;
 
+import com.datn.aiservice.agent.llm.MessageJson;
 import com.datn.aiservice.agent.store.ConversationStore;
 import com.datn.aiservice.agent.tool.ToolRegistry;
 import com.datn.aiservice.dto.MessageView;
@@ -10,17 +11,14 @@ import com.datn.aiservice.enums.MessageRole;
 import com.datn.aiservice.repository.AiPendingInteractionRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.genai.types.Content;
-import com.google.genai.types.FunctionCall;
-import com.google.genai.types.FunctionResponse;
-import com.google.genai.types.Part;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-/** Chuyển lịch sử Gemini Content + bản ghi tương tác thành dạng hiển thị cho frontend. */
+/** Chuyển lịch sử (JSON Messages API) + bản ghi tương tác thành dạng hiển thị cho frontend. */
 @Service
 @RequiredArgsConstructor
 public class ChatViewService {
@@ -39,41 +37,36 @@ public class ChatViewService {
         List<MessageView.ToolCallView> lastTools = null;
 
         for (AiMessage m : msgs) {
-            Content c = ConversationStore.toContent(m);
-            List<Part> parts = c.parts().orElse(List.of());
+            ObjectNode msg = ConversationStore.toNode(m);
 
             if (m.getRole() == MessageRole.USER) {
-                // FunctionResponse → đánh dấu ok/lỗi cho các tool của tin MODEL trước đó (cùng thứ tự)
-                List<FunctionResponse> frs = parts.stream().filter(p -> p.functionResponse().isPresent())
-                        .map(p -> p.functionResponse().get()).toList();
+                // tool_result → đánh dấu ok/lỗi cho tool cùng id của tin MODEL trước đó
                 if (lastTools != null) {
-                    for (int i = 0; i < frs.size() && i < lastTools.size(); i++) {
-                        boolean ok = !frs.get(i).response().orElse(Map.of()).containsKey("error");
-                        MessageView.ToolCallView t = lastTools.get(i);
-                        lastTools.set(i, new MessageView.ToolCallView(t.id(), t.name(), t.summary(), ok));
+                    for (ObjectNode tr : MessageJson.blocksOfType(msg, "tool_result")) {
+                        String id = tr.path("tool_use_id").asText();
+                        boolean ok = !tr.path("is_error").asBoolean(false);
+                        for (int i = 0; i < lastTools.size(); i++) {
+                            MessageView.ToolCallView t = lastTools.get(i);
+                            if (t.id().equals(id)) {
+                                lastTools.set(i, new MessageView.ToolCallView(t.id(), t.name(), t.summary(), ok));
+                            }
+                        }
                     }
                 }
-                String text = parts.stream().filter(p -> p.text().isPresent()).map(p -> p.text().get())
-                        .collect(Collectors.joining()).trim();
+                String text = MessageJson.visibleText(msg);
                 if (!text.isEmpty()) {
                     out.add(new MessageView(m.getId(), "user", text, List.of(), List.of(), m.getCreatedAt()));
                 }
                 continue;
             }
 
-            String text = parts.stream()
-                    .filter(p -> p.text().isPresent() && !p.thought().orElse(false))
-                    .map(p -> p.text().get()).collect(Collectors.joining()).trim();
+            String text = MessageJson.visibleText(msg);
             List<MessageView.ToolCallView> tools = new ArrayList<>();
-            int idx = 0;
-            for (Part p : parts) {
-                if (p.functionCall().isEmpty()) continue;
-                FunctionCall fc = p.functionCall().get();
-                String name = fc.name().orElse("");
-                Map<String, Object> args = fc.args().orElse(Map.of());
+            for (ObjectNode tu : MessageJson.blocksOfType(msg, "tool_use")) {
+                String name = tu.path("name").asText("");
+                Map<String, Object> args = MessageJson.toolInput(tu);
                 String summary = registry.find(name).map(t -> t.summarize(args)).orElse(name);
-                tools.add(new MessageView.ToolCallView(fc.id().orElse(m.getId() + ":" + idx), name, summary, null));
-                idx++;
+                tools.add(new MessageView.ToolCallView(tu.path("id").asText(), name, summary, null));
             }
 
             List<MessageView.InteractionView> interactions = new ArrayList<>();

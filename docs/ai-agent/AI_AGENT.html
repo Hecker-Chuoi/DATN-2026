@@ -94,13 +94,13 @@ ol.steps li { margin: 6px 0; }
 
 <p class="meta">DATN-2026 · docs/ai-agent · cập nhật 13/11/2026 · nhánh <code>feat/agent-intergration-v1</code></p>
 <h1>Trợ lý AI cho hệ thống quản lý công việc</h1>
-<p class="lead">Khung chat trong giao diện, dùng <strong>Gemini API (bản miễn phí)</strong> với function calling. Trợ lý đọc dữ liệu dự án qua 19 endpoint nội bộ của <code>work-service</code>, mọi thao tác ghi đều phải được người dùng <strong>duyệt</strong> trước khi chạy, và luôn bị giới hạn bởi quyền của chính người đang chat.</p>
+<p class="lead">Khung chat trong giao diện, dùng <strong>Claude API</strong> (mặc định <code>claude-opus-5-5</code>) với tool use. Trợ lý đọc dữ liệu dự án qua 19 endpoint nội bộ của <code>work-service</code>, mọi thao tác ghi đều phải được người dùng <strong>duyệt</strong> trước khi chạy, và luôn bị giới hạn bởi quyền của chính người đang chat.</p>
 
 <div class="grid">
   <div class="card"><h4>Module mới</h4><code>backend/ai-service</code> · cổng 8084 (profile <code>tuananh</code>: 9995) · route gateway <code>/ai/**</code></div>
   <div class="card"><h4>Tool</h4>23 tool: 11 đọc + 8 ghi ở work-service, 4 tool trong ai-service (<code>ask_user</code>, bộ nhớ, tìm hội thoại cũ)</div>
   <div class="card"><h4>Bảo mật</h4>API key chỉ chứng minh "đây là ai-service"; quyền project vẫn kiểm bằng <code>hasPermission(projectId, userId, key)</code> của người dùng</div>
-  <div class="card"><h4>Dữ liệu</h4>6 bảng <code>ai_*</code> trong <code>datn_main_db</code>, Flyway riêng <code>flyway_ai_schema_history</code>, lưu nguyên <code>Content</code> của Gemini</div>
+  <div class="card"><h4>Dữ liệu</h4>6 bảng <code>ai_*</code> trong <code>datn_main_db</code>, Flyway riêng <code>flyway_ai_schema_history</code>, lưu mỗi tin dạng JSON của Messages API (giữ nguyên thinking + signature)</div>
 </div>
 
 <div class="toc">
@@ -124,7 +124,7 @@ ol.steps li { margin: 6px 0; }
   <div class="arrow">→</div>
   <div class="box"><b>API Gateway</b>Route <code>/ai/api/**</code> → ai-service (<code>StripPrefix=1</code>). JWT từ header hoặc cookie, relay Bearer. Không buffer SSE.</div>
   <div class="arrow">→</div>
-  <div class="box"><b>ai-service</b><code>AgentOrchestrator</code> gọi Gemini (không stream, tắt automatic function calling), chạy tool READ ngay, tool WRITE/ask_user tạo bản ghi chờ.</div>
+  <div class="box"><b>ai-service</b><code>AgentOrchestrator</code> gọi Claude Messages API (không stream, agent tự điều khiển vòng lặp tool), chạy tool READ ngay, tool WRITE/ask_user tạo bản ghi chờ.</div>
   <div class="arrow">→</div>
   <div class="box"><b>work-service</b><code>/internal/ai-tools/{tool}</code> + <code>X-API-Key</code> + <code>X-User-Id</code> → <code>AiToolApiKeyFilter</code> → <code>AiToolService</code> kiểm quyền rồi gọi service sẵn có.</div>
 </div>
@@ -134,8 +134,9 @@ ol.steps li { margin: 6px 0; }
 <h3>Gói chính của ai-service (<code>com.datn.aiservice</code>)</h3>
 <div class="tbl"><table>
 <tr><th>Gói / lớp</th><th>Vai trò</th></tr>
-<tr><td><code>agent/AgentOrchestrator</code></td><td>Vòng lặp agent (Phụ lục F của kế hoạch): <code>chat()</code>, <code>resume()</code>, <code>runLoop()</code>; khóa theo hội thoại; gán id cho FunctionCall nếu Gemini không trả.</td></tr>
-<tr><td><code>agent/llm/GeminiLlmClient</code></td><td>Gọi <code>client.models.generateContent</code> (SDK <code>google-genai</code> 1.57.0), thử lại 429/503 tối đa <code>retry-429</code> lần, đổi lỗi thành câu thân thiện.</td></tr>
+<tr><td><code>agent/AgentOrchestrator</code></td><td>Vòng lặp agent (Phụ lục F của kế hoạch): <code>chat()</code>, <code>resume()</code>, <code>runLoop()</code>; khóa theo hội thoại; kết quả tool gửi lại dạng <code>tool_result</code> theo id của <code>tool_use</code>.</td></tr>
+<tr><td><code>agent/llm/ClaudeLlmClient</code></td><td>Gọi <code>client.beta().messages().create</code> (SDK <code>anthropic-java</code> 3.3.0): system cố định + cache, adaptive thinking với <code>prefix_mismatch_behavior = drop_block</code>, <code>effort</code> theo cấu hình, server-side fallback khi bị từ chối; SDK tự thử lại 429/5xx/529; đổi lỗi thành câu thân thiện.</td></tr>
+<tr><td><code>agent/llm/MessageJson</code></td><td>Tin nhắn ở dạng JSON đúng Messages API; chỉ đổi sang <code>BetaMessageParam</code> lúc gửi, nên tin của model được gửi lại nguyên vẹn.</td></tr>
 <tr><td><code>agent/tool/*</code></td><td><code>AgentTool</code>, <code>ToolRegistry</code> (gom tool Java + tool từ <code>agent-tools.yml</code>, báo lỗi trùng tên, <code>availableFor(ctx)</code>), <code>remote/RemoteAgentTool</code> (một lớp chung cho 19 tool work-service), <code>builtin/*</code> (4 tool nội bộ).</td></tr>
 <tr><td><code>agent/prompt/SystemPromptBuilder</code></td><td>Phần cố định (Phụ lục E) + ngữ cảnh động: thời gian theo múi giờ, workspace/project/work item, tóm tắt hội thoại, khối <code>&lt;user_memory&gt;</code>.</td></tr>
 <tr><td><code>agent/store/*</code></td><td><code>ConversationStore</code> (lưu <code>Content.toJson()</code>), <code>HistoryWindow</code> (cắt theo ngân sách ký tự, không tách cặp call/response, rút gọn functionResponse cũ), <code>ConversationSummarizer</code> (tóm tắt dồn bằng light-model).</td></tr>
@@ -148,7 +149,7 @@ ol.steps li { margin: 6px 0; }
 <h2 id="vong-lap">2. Vòng lặp agent &amp; cơ chế tạm dừng</h2>
 <ol class="steps">
   <li>Người dùng gửi tin → lưu <code>Content</code> role <code>user</code>. Nếu còn thẻ đang chờ, chúng chuyển <code>EXPIRED</code> và <code>FunctionResponse</code> "Người dùng bỏ qua" được gộp vào cùng tin.</li>
-  <li>Mỗi vòng (tối đa <code>max-iterations</code> = 8): kiểm hạn mức ngày → cắt lịch sử (<code>HistoryWindow</code>) → tóm tắt phần bị cắt nếu có → dựng system prompt → gọi Gemini → lưu nguyên <code>Content</code> của model (giữ <code>thoughtSignature</code>) → ghi usage.</li>
+  <li>Mỗi vòng (tối đa <code>max-iterations</code> = 8): kiểm hạn mức ngày → cắt lịch sử (<code>HistoryWindow</code>) → tóm tắt phần bị cắt nếu có → gọi Claude (system prompt cố định; thời gian, dự án đang mở, bộ nhớ nằm trong khối <code>&lt;context&gt;</code> đầu mỗi tin người dùng) → lưu nguyên tin của model (giữ thinking + signature) → ghi usage.</li>
   <li>Không có lời gọi hàm → gửi <code>text_delta</code> + <code>done(COMPLETED)</code>.</li>
   <li>Có lời gọi hàm: tool <span class="tag read">READ</span> chạy ngay (<code>tool_started</code>/<code>tool_finished</code>); tool <span class="tag write">WRITE</span> tạo bản ghi <code>APPROVE_ACTION</code>; <span class="tag int">ask_user</span> tạo <code>ASK_USER</code>. Kết quả READ cùng lượt được lưu dạng <code>READ_RESULT</code> để sau này gửi đủ FunctionResponse đúng thứ tự.</li>
   <li>Có bản ghi chờ → hội thoại <code>WAITING_INPUT</code>, phát <code>interaction_required</code> cho từng thẻ, <code>done(WAITING_INPUT)</code>.</li>
@@ -222,7 +223,7 @@ ol.steps li { margin: 6px 0; }
 <tr><td><code>interaction_required</code></td><td><code>{ "interactionId", "type": "APPROVE_ACTION"|"ASK_USER", "toolName", "summary", "payload" }</code> – payload thẻ duyệt: <code>{summary, args}</code>; payload câu hỏi: input của <code>ask_user</code></td></tr>
 <tr><td><code>notice</code></td><td><code>{ "message" }</code> (vd. "Đã ghi nhớ: …", chạm giới hạn vòng)</td></tr>
 <tr><td><code>done</code></td><td><code>{ "status": "COMPLETED" | "WAITING_INPUT" | "ITERATION_LIMIT" | "CANCELLED" }</code></td></tr>
-<tr><td><code>error</code></td><td><code>{ "message" }</code> – hết lượt ngày, Gemini 429, không nối được work-service…</td></tr>
+<tr><td><code>error</code></td><td><code>{ "message" }</code> – hết lượt ngày, Claude 429/529, hết credit, không nối được work-service…</td></tr>
 </table></div>
 
 <!-- ───────────────────────────── 5 ───────────────────────────── -->
@@ -252,7 +253,7 @@ ol.steps li { margin: 6px 0; }
 <h2 id="chay">7. Cài đặt &amp; chạy</h2>
 <h3>Khóa</h3>
 <ol class="steps">
-  <li><strong>GEMINI_API_KEY</strong>: tạo tại <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a> (không cần bật thanh toán với model có hạn mức miễn phí). Kiểm tra model miễn phí hiện hành và đặt <code>ai.agent.model</code> / <code>light-model</code> cho khớp (mặc định <code>gemini-3.5-flash</code> / <code>gemini-3.5-flash-lite</code>; dòng 2.5 đã đóng với tài khoản mới, <code>gemini-3.8-flash</code> mới hơn nhưng hay quá tải 503).</li>
+  <li><strong>ANTHROPIC_API_KEY</strong>: tạo tại <a href="https://platform.claude.com">platform.claude.com</a> → Settings → API Keys (cần nạp credit, tối thiểu khoảng $5). Đặt vào <code>ai-service/src/main/resources/ai-secrets.yml</code> (<code>ai.agent.anthropic-api-key</code>, gitignored) hoặc biến môi trường. Model mặc định <code>claude-opus-5-5</code>, việc nhẹ dùng <code>claude-haiku-5-5</code>; đổi <code>ai.agent.model</code> sang <code>claude-sonnet-5-5</code> / <code>claude-haiku-5-5</code> để giảm chi phí.</li>
   <li><strong>AI_TOOLS_API_KEY</strong>: chuỗi ngẫu nhiên (<code>openssl rand -hex 32</code>), đặt <strong>cùng giá trị</strong> cho ai-service và work-service.</li>
   <li>Không ghi hai khóa vào file commit. IntelliJ: Run/Debug Configuration → Environment variables. Docker: để trong <code>infrastructure/.env</code> (gitignored).</li>
 </ol>
@@ -264,7 +265,7 @@ cd infrastructure &amp;&amp; docker compose -f docker-compose.tuananh.yml up -d
 # 2. Chạy lần lượt từ IDE với VM option  -Dspring.profiles.active=tuananh
 #    api-gateway (9991), identity-service (9992), workspace-service (9997),
 #    work-service (9993)  ← env AI_TOOLS_API_KEY
-#    ai-service   (9995)  ← env GEMINI_API_KEY, AI_TOOLS_API_KEY
+#    ai-service   (9995)  ← env ANTHROPIC_API_KEY, AI_TOOLS_API_KEY
 #    ai-service chạy Flyway V1 (tạo 6 bảng ai_*) rồi boot với ddl-auto=validate.
 
 # 3. Frontend
@@ -315,7 +316,7 @@ curl -N -X POST localhost:9991/ai/api/v1/ai/agent/conversations/$CID/messages \
 
 <!-- ───────────────────────────── 9 ───────────────────────────── -->
 <h2 id="eval">9. Bộ đánh giá 30 câu (M8)</h2>
-<p>Câu hỏi ở <code>ai-service/src/main/resources/eval/questions.yaml</code> (16 đọc, 7 ghi, 2 mơ hồ, 2 bộ nhớ, 3 ngoài phạm vi). Runner chạy orchestrator với Gemini thật trên một dự án mẫu (khuyến nghị dự án demo <em>Mộc Coffee</em>), gặp thẻ duyệt thì dừng ở đó và ghi nhận tool đã chọn.</p>
+<p>Câu hỏi ở <code>ai-service/src/main/resources/eval/questions.yaml</code> (16 đọc, 7 ghi, 2 mơ hồ, 2 bộ nhớ, 3 ngoài phạm vi). Runner chạy orchestrator với Claude thật trên một dự án mẫu (khuyến nghị dự án demo <em>Mộc Coffee</em>), gặp thẻ duyệt thì dừng ở đó và ghi nhận tool đã chọn.</p>
 <pre><code># VM options của ai-service trong IntelliJ (hoặc java -jar ... với các -D tương ứng)
 -Dspring.profiles.active=tuananh,eval
 -Deval.user-id=&lt;Keycloak sub của người chạy&gt;
@@ -345,11 +346,11 @@ curl -N -X POST localhost:9991/ai/api/v1/ai/agent/conversations/$CID/messages \
 <!-- ───────────────────────────── 11 ───────────────────────────── -->
 <h2 id="han-che">11. Hạn chế &amp; việc tiếp theo</h2>
 <ul>
-  <li>Chưa stream từng chữ (mỗi vòng một <code>text_delta</code>); nâng cấp sau khi xác nhận <code>generateContentStream</code> + function calling chạy trên Gemini Developer API.</li>
+  <li>Chưa stream từng chữ (mỗi vòng một <code>text_delta</code>); có thể nâng cấp bằng <code>client.beta().messages().createStreaming</code>.</li>
   <li>Khóa hội thoại trong bộ nhớ → chỉ đúng khi chạy một instance ai-service.</li>
   <li>Bỏ giao việc ("none") chưa hỗ trợ vì <code>UpdateWorkItemRequest</code> bỏ qua <code>assigneeId = null</code>; trợ lý sẽ hướng dẫn làm trên giao diện.</li>
   <li><code>search_past_conversations</code> dùng ILIKE trên JSON – đủ cho demo, không phải tìm kiếm ngữ nghĩa (giai đoạn 3: embedding).</li>
-  <li>Cần chạy toàn bộ kịch bản mục 8 và bộ đánh giá mục 9 khi có khóa Gemini và hạ tầng; ghi kết quả vào <code>PLAN.md</code> (Nhật ký thay đổi).</li>
+  <li>Cần chạy toàn bộ kịch bản mục 8 và bộ đánh giá mục 9 khi có khóa Claude và hạ tầng; ghi kết quả vào <code>PLAN.md</code> (Nhật ký thay đổi).</li>
 </ul>
 
 <p class="meta">Tài liệu liên quan: <code>docs/ai-agent/PLAN.md</code> (kế hoạch gốc, checklist, nhật ký thực thi), <code>backend/ai-service/src/main/resources/agent-tools.yml</code> (định nghĩa 19 tool), <code>CLAUDE.md</code> (ghi chú cho người phát triển).</p>

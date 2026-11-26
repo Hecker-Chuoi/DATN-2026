@@ -16,7 +16,7 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <google-genai.version>1.57.0</google-genai.version>
+        <anthropic-java.version>3.3.0</anthropic-java.version>
     </properties>
 
     <dependencies>
@@ -55,7 +55,7 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- ─── Spring Data Redis (đếm lượt gọi Gemini theo ngày) ─── -->
+        <!-- ─── Spring Data Redis (đếm lượt gọi AI theo ngày) ─── -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
@@ -78,11 +78,18 @@
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
-        <!-- ─── Gemini Developer API SDK ─── -->
+        <!-- ─── Claude API (Anthropic Java SDK) ─── -->
         <dependency>
-            <groupId>com.google.genai</groupId>
-            <artifactId>google-genai</artifactId>
-            <version>${google-genai.version}</version>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>${anthropic-java.version}</version>
+        </dependency>
+
+        <!-- ─── Test ─── -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <!-- ─── Lombok ─── -->

@@ -1,12 +1,12 @@
 package com.datn.aiservice.agent.store;
 
-import com.datn.aiservice.agent.llm.GeminiLlmClient;
+import com.datn.aiservice.agent.llm.ClaudeLlmClient;
+import com.datn.aiservice.agent.llm.MessageJson;
 import com.datn.aiservice.config.AgentProperties;
 import com.datn.aiservice.entity.AiConversation;
 import com.datn.aiservice.entity.AiMessage;
 import com.datn.aiservice.enums.MessageRole;
-import com.google.genai.types.Content;
-import com.google.genai.types.Part;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -22,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ConversationSummarizer {
 
-    private final GeminiLlmClient llm;
+    private final ClaudeLlmClient llm;
     private final ConversationStore store;
     private final AgentProperties props;
 
@@ -36,7 +36,7 @@ public class ConversationSummarizer {
         StringBuilder transcript = new StringBuilder();
         for (AiMessage m : all.subList(0, cutIndex)) {
             if (done != null && m.getSeq() <= done) continue;
-            String text = textOf(ConversationStore.toContent(m));
+            String text = textOf(ConversationStore.toNode(m));
             if (!text.isBlank()) {
                 transcript.append(m.getRole() == MessageRole.MODEL ? "Trợ lý: " : "Người dùng: ").append(text).append('\n');
             }
@@ -60,15 +60,12 @@ public class ConversationSummarizer {
         }
     }
 
-    /** Text của một Content: text thường + tên tool đã gọi; bỏ qua functionResponse và thought. */
-    public static String textOf(Content c) {
-        StringBuilder sb = new StringBuilder();
-        for (Part p : c.parts().orElse(List.of())) {
-            if (p.text().isPresent() && !p.thought().orElse(false)) {
-                sb.append(p.text().get());
-            } else if (p.functionCall().isPresent()) {
-                sb.append("[gọi ").append(p.functionCall().get().name().orElse("tool")).append("] ");
-            }
+    /** Text của một tin: text thường (bỏ khối ngữ cảnh) + tên tool đã gọi; bỏ qua tool_result và thinking. */
+    public static String textOf(ObjectNode message) {
+        StringBuilder sb = new StringBuilder(MessageJson.visibleText(message));
+        for (ObjectNode tu : MessageJson.blocksOfType(message, "tool_use")) {
+            if (!sb.isEmpty()) sb.append(' ');
+            sb.append("[gọi ").append(tu.path("name").asText("tool")).append(']');
         }
         return sb.toString().trim();
     }

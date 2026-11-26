@@ -29,7 +29,7 @@ import java.time.ZoneId;
 import java.util.*;
 
 /**
- * Bộ đánh giá 30 câu hỏi mẫu (M8). Chạy tay với Gemini thật trên một dự án mẫu:
+ * Bộ đánh giá 30 câu hỏi mẫu (M8). Chạy tay với Claude thật trên một dự án mẫu:
  * <pre>
  *   -Dspring.profiles.active=tuananh,eval -Deval.user-id=&lt;sub&gt; -Deval.project-id=&lt;uuid&gt; -Deval.workspace-id=&lt;uuid&gt; -Deval.sample-code=MOC-1
  * </pre>
@@ -147,7 +147,7 @@ public class EvalRunner implements CommandLineRunner {
                 Chọn đúng tool      : %d/%d (%.1f%%)
                 Hỏi lại hợp lý      : %d/%d (%.1f%%)
                 Lỗi                 : %d
-                Số vòng gọi Gemini  : trung bình %.2f, lớn nhất %d
+                Số vòng gọi model   : trung bình %.2f, lớn nhất %d
                 Thời gian trung bình: %.0f ms
                 Tổng token vào+ra   : %d
                 %n""", n, toolOk, n, 100.0 * toolOk / Math.max(1, n), askOk, n, 100.0 * askOk / Math.max(1, n),

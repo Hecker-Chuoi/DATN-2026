@@ -8,7 +8,8 @@ import com.datn.aiservice.repository.AiConversationRepository;
 import com.datn.aiservice.repository.AiMessageRepository;
 import com.datn.common.exception.ForbiddenException;
 import com.datn.common.exception.ResourceNotFoundException;
-import com.google.genai.types.Content;
+import com.datn.aiservice.agent.llm.MessageJson;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,7 +18,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** Đọc/ghi ai_conversations + ai_messages. Lưu nguyên {@code Content.toJson()} của Gemini. */
+/** Đọc/ghi ai_conversations + ai_messages. {@code content} là JSON một tin theo Messages API của Claude (xem {@link MessageJson}). */
 @Service
 @RequiredArgsConstructor
 public class ConversationStore {
@@ -54,8 +55,8 @@ public class ConversationStore {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tin nhắn"));
     }
 
-    public static Content toContent(AiMessage m) {
-        return Content.fromJson(m.getContent());
+    public static ObjectNode toNode(AiMessage m) {
+        return MessageJson.parse(m.getContent());
     }
 
     @Transactional
@@ -67,12 +68,12 @@ public class ConversationStore {
     }
 
     @Transactional
-    public AiMessage append(UUID conversationId, MessageRole role, Content content, Integer inputTokens, Integer outputTokens) {
+    public AiMessage append(UUID conversationId, MessageRole role, ObjectNode content, Integer inputTokens, Integer outputTokens) {
         int seq = messageRepo.findTopByConversationIdOrderBySeqDesc(conversationId)
                 .map(m -> m.getSeq() + 1).orElse(1);
         AiMessage saved = messageRepo.save(AiMessage.builder()
                 .conversationId(conversationId).seq(seq).role(role)
-                .content(content.toJson()).inputTokens(inputTokens).outputTokens(outputTokens)
+                .content(content.toString()).inputTokens(inputTokens).outputTokens(outputTokens)
                 .build());
         conversationRepo.findById(conversationId).ifPresent(c -> {
             c.setUpdatedAt(Instant.now());

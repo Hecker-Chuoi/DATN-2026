@@ -57,7 +57,7 @@ public class SearchPastConversationsTool implements AgentTool {
         List<Map<String, Object>> out = new ArrayList<>();
         for (AiMessage m : messageRepo.searchByUser(ctx.userId(), "%" + q + "%")) {
             if (m.getConversationId().equals(ctx.conversationId())) continue;
-            String text = ConversationSummarizer.textOf(ConversationStore.toContent(m));
+            String text = ConversationSummarizer.textOf(ConversationStore.toNode(m));
             if (text.isBlank()) continue;
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("conversationId", m.getConversationId());

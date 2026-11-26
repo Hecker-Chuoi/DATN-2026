@@ -132,7 +132,7 @@ services:
       - app-net
 
   # ─────────────────────────────────────────────
-  # AI Service (Spring Boot 9995) – trợ lý AI; cần GEMINI_API_KEY và AI_TOOLS_API_KEY trong .env (không commit)
+  # AI Service (Spring Boot 9995) – trợ lý AI; cần ANTHROPIC_API_KEY và AI_TOOLS_API_KEY trong .env (không commit)
   # ─────────────────────────────────────────────
   ai-service:
     build:
@@ -154,7 +154,7 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://localhost:9998/realms/datn-realm
       # work-service mặc định chạy từ IntelliJ trên máy host (9993)
       AI_AGENT_WORK-SERVICE-URL: http://host.docker.internal:9993
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AI_TOOLS_API_KEY: ${AI_TOOLS_API_KEY:-}
     extra_hosts:
       - "localhost:host-gateway"

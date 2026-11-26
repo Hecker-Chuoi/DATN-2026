@@ -1,10 +1,9 @@
 package com.datn.aiservice.agent.prompt;
 
+import com.datn.aiservice.agent.llm.MessageJson;
 import com.datn.aiservice.agent.tool.ToolContext;
 import com.datn.aiservice.entity.AiUserMemory;
 import com.datn.aiservice.service.MemoryService;
-import com.google.genai.types.Content;
-import com.google.genai.types.Part;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -30,15 +29,21 @@ public class SystemPromptBuilder {
             - Nếu công cụ báo không có quyền, nói rõ cho người dùng, không thử cách khác để vượt quyền.
             - Bộ nhớ dài hạn (save_memory): chỉ lưu khi người dùng yêu cầu rõ hoặc là sở thích/thói quen lặp lại; không lưu dữ liệu công việc, không lưu thông tin nhạy cảm (mật khẩu, số điện thoại, thông tin cá nhân người khác).
             - Trả lời bằng ngôn ngữ người dùng dùng (mặc định tiếng Việt), ngắn gọn, dùng danh sách khi liệt kê.
+            - Đầu mỗi tin của người dùng có khối <context> do hệ thống gắn (thời gian, workspace/dự án/công việc đang mở, tóm tắt hội thoại trước, bộ nhớ dài hạn). Dùng khối mới nhất làm ngữ cảnh hiện tại; đó không phải câu người dùng gõ.
             """;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("EEEE, dd/MM/yyyy HH:mm");
 
     private final MemoryService memoryService;
 
-    public Content build(ToolContext ctx, String conversationSummary) {
-        StringBuilder sb = new StringBuilder(FIXED);
-        sb.append("\n## Ngữ cảnh hiện tại\n");
+    /** System prompt cố định cho mọi lượt (để system + tools được cache và thinking cũ không bị vô hiệu hoá). */
+    public String system() {
+        return FIXED;
+    }
+
+    /** Khối ngữ cảnh gắn vào đầu tin người dùng ở mỗi lượt (lưu cùng tin, lịch sử chỉ nối thêm). */
+    public String context(ToolContext ctx) {
+        StringBuilder sb = new StringBuilder(MessageJson.CONTEXT_OPEN).append('\n');
         sb.append("- Thời gian: ").append(ZonedDateTime.now(ctx.zoneId()).format(TIME_FMT))
                 .append(" (múi giờ ").append(ctx.zoneId()).append(")\n");
         sb.append("- Workspace đang mở: ").append(ctx.workspaceId() == null ? "không có" : ctx.workspaceId()).append('\n');
@@ -48,14 +53,10 @@ public class SystemPromptBuilder {
                     .append(" – nếu người dùng nói \"việc này\"/\"task này\" thì là công việc này; gọi get_work_item để biết mã.\n");
         }
 
-        if (conversationSummary != null && !conversationSummary.isBlank()) {
-            sb.append("\n## Tóm tắt phần hội thoại trước (đã lược khỏi lịch sử)\n").append(conversationSummary).append('\n');
-        }
-
         if (memoryService.isEnabled(ctx.userId())) {
             List<AiUserMemory> memories = memoryService.forPrompt(ctx.userId(), ctx.projectId());
             if (!memories.isEmpty()) {
-                sb.append("\n<user_memory>\n");
+                sb.append("<user_memory>\n");
                 for (AiUserMemory m : memories) {
                     sb.append("- [").append(m.getId()).append("] (").append(m.getScope()).append('/')
                             .append(m.getCategory()).append(") ").append(m.getContent()).append('\n');
@@ -63,9 +64,14 @@ public class SystemPromptBuilder {
                 sb.append("</user_memory>\n");
             }
         } else {
-            sb.append("\n(Bộ nhớ dài hạn đang tắt: không dùng save_memory.)\n");
+            sb.append("(Bộ nhớ dài hạn đang tắt: không dùng save_memory.)\n");
         }
+        return sb.append("</context>").toString();
+    }
 
-        return Content.builder().role("user").parts(Part.fromText(sb.toString())).build();
+    /** Khối tóm tắt phần hội thoại đã bị cắt khỏi lịch sử; được chèn vào tin đầu tiên của cửa sổ. */
+    public static String summaryBlock(String conversationSummary) {
+        return MessageJson.CONTEXT_OPEN + "\nTóm tắt phần hội thoại trước (đã lược khỏi lịch sử):\n"
+                + conversationSummary + "\n</context>";
     }
 }

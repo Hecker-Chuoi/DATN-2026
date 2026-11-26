@@ -1,5 +1,5 @@
 # Tool của work-service: mỗi mục = một endpoint POST /internal/ai-tools/{path}.
-# ai-service tự gửi kèm projectId/workItemId từ ngữ cảnh trang, Gemini không cần truyền.
+# ai-service tự gửi kèm projectId/workItemId từ ngữ cảnh trang, model không cần truyền.
 # summary: mẫu câu hiện trên chip/thẻ duyệt; {field} = tham số, {count} = số phần tử mảng đầu tiên.
 tools:
 

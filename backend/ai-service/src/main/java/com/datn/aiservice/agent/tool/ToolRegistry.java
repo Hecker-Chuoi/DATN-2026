@@ -1,8 +1,8 @@
 package com.datn.aiservice.agent.tool;
 
 import com.datn.aiservice.agent.tool.remote.RemoteToolLoader;
-import com.google.genai.types.FunctionDeclaration;
-import com.google.genai.types.Tool;
+import com.anthropic.core.JsonValue;
+import com.anthropic.models.beta.messages.BetaTool;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -38,14 +38,36 @@ public class ToolRegistry {
         return tools.values();
     }
 
-    public static Tool toGeminiTool(List<AgentTool> tools) {
-        List<FunctionDeclaration> decls = tools.stream()
-                .map(t -> FunctionDeclaration.builder()
-                        .name(t.name())
-                        .description(t.description())
-                        .parametersJsonSchema(t.parameters())
-                        .build())
+    private static final Set<String> SCHEMA_CORE_KEYS = Set.of("type", "properties", "required");
+
+    /**
+     * Tool → định nghĩa tool của Claude. Sắp theo tên để mảng {@code tools} giữ nguyên giữa các vòng
+     * (cache và thinking cũ phụ thuộc vào việc system + tools không đổi).
+     */
+    public static List<BetaTool> toClaudeTools(List<AgentTool> tools) {
+        return tools.stream()
+                .sorted(Comparator.comparing(AgentTool::name))
+                .map(ToolRegistry::toClaudeTool)
                 .toList();
-        return Tool.builder().functionDeclarations(decls).build();
+    }
+
+    static BetaTool toClaudeTool(AgentTool t) {
+        Map<String, Object> schema = t.parameters() == null ? Map.of() : t.parameters();
+        BetaTool.InputSchema.Properties.Builder props = BetaTool.InputSchema.Properties.builder();
+        if (schema.get("properties") instanceof Map<?, ?> m) {
+            m.forEach((k, v) -> props.putAdditionalProperty(String.valueOf(k), JsonValue.from(v)));
+        }
+        BetaTool.InputSchema.Builder input = BetaTool.InputSchema.builder().properties(props.build());
+        if (schema.get("required") instanceof List<?> req && !req.isEmpty()) {
+            input.required(req.stream().map(String::valueOf).toList());
+        }
+        schema.forEach((k, v) -> {
+            if (!SCHEMA_CORE_KEYS.contains(k)) input.putAdditionalProperty(k, JsonValue.from(v));
+        });
+        return BetaTool.builder()
+                .name(t.name())
+                .description(t.description())
+                .inputSchema(input.build())
+                .build();
     }
 }
