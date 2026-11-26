@@ -57,6 +57,8 @@ class WorkflowEngineServiceTest {
     @Mock
     private ProjectMemberService projectMemberService;
     @Mock
+    private org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
+    @Mock
     private ContributionReportService contributionReportService;
     @Mock
     private SprintRepository sprintRepository;

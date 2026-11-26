@@ -406,6 +406,44 @@ export const workItemTypeApi = {
   delete: (projectId, typeId) => apiClient.delete(`${WORK_BASE}/projects/${projectId}/types/${typeId}`),
 };
 
+// ─── 2.2. GitHub Integration API ──────────────────────────────────────────────
+export const githubIntegrationApi = {
+  getAuthUrl: (projectId, config = {}) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/integrations/github/auth-url`, config),
+  handleCallback: (projectId, code, state, config = {}) =>
+    apiClient.post(`${WORK_BASE}/projects/${projectId}/integrations/github/oauth-callback`, null, {
+      ...config,
+      params: { ...(config.params || {}), code, state },
+    }),
+  getStatus: (projectId, config = {}) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/integrations/github/status`, config),
+  getRepositories: (projectId, config = {}) =>
+    apiClient.get(`${WORK_BASE}/projects/${projectId}/integrations/github/repos`, config),
+  getBranches: (projectId, repoFullName, config = {}) => {
+    const [owner, repo] = String(repoFullName || '').split('/');
+    return apiClient.get(
+      `${WORK_BASE}/projects/${projectId}/integrations/github/repos/${encodeURIComponent(owner || '')}/${encodeURIComponent(repo || '')}/branches`,
+      config
+    );
+  },
+  connect: (projectId, data, config = {}) =>
+    apiClient.post(`${WORK_BASE}/projects/${projectId}/integrations/github/connect`, data, config),
+  disconnect: (projectId, config = {}) =>
+    apiClient.delete(`${WORK_BASE}/projects/${projectId}/integrations/github/disconnect`, config),
+  updateConfig: (projectId, data, config = {}) =>
+    apiClient.put(`${WORK_BASE}/projects/${projectId}/integrations/github/config`, data, config),
+  syncIssues: (projectId, config = {}) =>
+    apiClient.post(`${WORK_BASE}/projects/${projectId}/integrations/github/sync-issues`, null, config),
+  unlinkAccount: (projectId, config = {}) =>
+    apiClient.delete(`${WORK_BASE}/projects/${projectId}/integrations/github/user-account`, config),
+  // Khung "Phát triển" trong chi tiết Task
+  getDevelopment: (itemId, config = {}) =>
+    apiClient.get(`${WORK_BASE}/items/${itemId}/github/development`, config),
+  createIssue: (itemId, config = {}) =>
+    apiClient.post(`${WORK_BASE}/items/${itemId}/github/issue`, null, config),
+};
+
+
 // ─── 3. Work Items API (Jira-grade) ───────────────────────────────────────────
 export const workItemApi = {
   listAll: (params) => {

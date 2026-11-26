@@ -12,6 +12,8 @@ import ProjectBacklogPage from './pages/ProjectBacklogPage.jsx';
 import ProjectReportsPage from './pages/ProjectReportsPage.jsx';
 import ProjectMembersPage from './pages/ProjectMembersPage.jsx';
 import ProjectWorkflowPage from './pages/ProjectWorkflowPage.jsx';
+import ProjectGitHubPage from './pages/ProjectGitHubPage.jsx';
+import GitHubCallback from './pages/GitHubCallback.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import UserLoginPage from './pages/UserLoginPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -230,6 +232,7 @@ function App() {
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/integrations/github/callback" element={<GitHubCallback />} />
 
         {/* ─── 2. User Work Management Portal (`/w/:workspaceId/**`) ─── */}
         <Route element={isUserAuth ? <AuthedShell /> : <LoginRedirect />}>
@@ -264,6 +267,7 @@ function App() {
               <Route path="reports" element={<ProjectReportsPage />} />
               <Route path="members" element={<ProjectMembersPage />} />
               <Route path="workflow" element={<ProjectWorkflowPage />} />
+              <Route path="github" element={<ProjectGitHubPage />} />
             </Route>
             <Route path="members" element={<WorkspaceMembersPage />} />
             <Route path="settings" element={<WorkspaceSettingsPage />} />

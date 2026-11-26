@@ -31,3 +31,6 @@ docs/deployment
 
 .antigravity
 !.env.example
+
+# Bí mật GitHub cục bộ của work-service
+**/github-secrets.yml

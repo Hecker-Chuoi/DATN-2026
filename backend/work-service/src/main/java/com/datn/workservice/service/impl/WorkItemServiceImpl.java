@@ -54,11 +54,13 @@ public class WorkItemServiceImpl implements WorkItemService {
     private final StrictHierarchyValidator strictHierarchyValidator;
     private final com.datn.workservice.service.WorkItemAuditService workItemAuditService;
     private final com.datn.workservice.service.ProjectAccessService projectAccessService;
+    private final WorkItemGitHubLinkRepository workItemGitHubLinkRepository;
     private final com.datn.workservice.service.ContributionReportService contributionReportService;
     private final com.datn.workservice.service.ProjectMemberService projectMemberService;
     private final com.datn.workservice.service.WorkItemCompletionGate completionGate;
     private final com.datn.workservice.service.WorkItemCompletionService completionService;
     private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
+    private final org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @Transactional
@@ -302,7 +304,10 @@ public class WorkItemServiceImpl implements WorkItemService {
         if (request.getAssigneeId() != null && !request.getAssigneeId().equals(item.getAssigneeId())) {
             // Đổi người thực hiện cần quyền ISSUE_ASSIGN (tách khỏi ISSUE_EDIT giống Jira "Assign Issues")
             projectAccessService.assertProjectPermission(item.getProjectId(), com.datn.workservice.enums.PermissionKey.ISSUE_ASSIGN);
+            UUID previousAssignee = item.getAssigneeId();
             item.setAssigneeId(request.getAssigneeId());
+            applicationEventPublisher.publishEvent(new com.datn.workservice.event.WorkItemAssigneeChangedEvent(
+                    item.getId(), previousAssignee, request.getAssigneeId(), userId));
         }
         if (request.getParentId() != null) {
             item.setParentId(request.getParentId());
@@ -406,6 +411,9 @@ public class WorkItemServiceImpl implements WorkItemService {
         // BR-W02: giao / hủy giao đều phải để lại dấu vết
         workItemAuditService.recordAssigneeChange(itemId, oldAssignee, newAssignee, userId);
         workItemNotifier.assigneeChanged(item, oldAssignee, newAssignee, userId);
+        // GitHub Issue đã liên kết đổi assignee theo (listener chạy sau commit)
+        applicationEventPublisher.publishEvent(new com.datn.workservice.event.WorkItemAssigneeChangedEvent(
+                itemId, oldAssignee, newAssignee, userId));
         log.info("WorkItem '{}': người thực hiện {} -> {} (bởi {})", item.getCode(), oldAssignee, newAssignee, userId);
 
         return getWorkItemDetail(itemId);
@@ -744,6 +752,22 @@ public class WorkItemServiceImpl implements WorkItemService {
                 })
                 .collect(Collectors.toList());
 
+        List<com.datn.workservice.dto.github.WorkItemGitHubLinkDto> githubLinks = Collections.emptyList();
+        if (workItemGitHubLinkRepository != null) {
+            githubLinks = workItemGitHubLinkRepository.findByWorkItemIdOrderByCreatedAtDesc(item.getId())
+                    .stream()
+                    .map(l -> com.datn.workservice.dto.github.WorkItemGitHubLinkDto.builder()
+                            .id(l.getId())
+                            .linkType(l.getLinkType())
+                            .githubNumber(l.getGithubNumber())
+                            .title(l.getTitle())
+                            .url(l.getUrl())
+                            .status(l.getStatus())
+                            .authorName(l.getAuthorName())
+                            .authorAvatarUrl(l.getAuthorAvatarUrl())
+                            .build())
+                    .collect(Collectors.toList());
+        }
         com.datn.workservice.dto.response.CompletionRequestResponse pendingCompletion =
                 completionService.getPending(item.getId()).orElse(null);
 
@@ -807,6 +831,7 @@ public class WorkItemServiceImpl implements WorkItemService {
                 .version(summary.getVersion())
                 .createdAt(summary.getCreatedAt())
                 .updatedAt(summary.getUpdatedAt())
+                .githubLinks(githubLinks)
                 .build();
     }
 }

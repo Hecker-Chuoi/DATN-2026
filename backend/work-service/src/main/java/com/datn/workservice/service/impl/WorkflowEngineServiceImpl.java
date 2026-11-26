@@ -21,10 +21,12 @@ import com.datn.workservice.service.ProjectMemberService;
 import com.datn.workservice.service.WorkItemAuditService;
 import com.datn.workservice.service.WorkItemCompletionGate;
 import com.datn.workservice.service.WorkflowEngineService;
+import com.datn.workservice.event.WorkItemStatusChangedEvent;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,6 +55,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
     private final WorkItemCompletionGate completionGate;
     private final WorkItemAuditService workItemAuditService;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher applicationEventPublisher;
     private final com.datn.workservice.notification.WorkItemNotifier workItemNotifier;
 
     @Override
@@ -274,6 +277,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                             desc.setResolvedAt(LocalDateTime.now());
                             workItemRepository.save(desc);
                             completionGate.onStatusChanged(desc, defaultDone, true, currentUserId);
+                            publishStatusChanged(desc, oldDescStatus, defaultDone, currentUserId);
                             if (currentUserId != null) {
                                 WorkItemChangelog descChangelog = WorkItemChangelog.builder()
                                         .workItemId(desc.getId())
@@ -385,7 +389,27 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
             log.warn("Không thể ghi nhận Sổ ghi công cho WorkItem '{}': {}", saved.getCode(), e.getMessage());
         }
 
+        // 10. Publish Status Change Event (for GitHub 2-Way Sync & Other Integrations)
+        publishStatusChanged(saved, oldStatus, toStatus, currentUserId);
+
         return saved;
+    }
+
+    /**
+     * Phát {@link WorkItemStatusChangedEvent} cho MỌI đường đổi trạng thái (bước chuyển chính, tự hoàn thành
+     * việc con, Task cha tự mở lại / tự bắt đầu) để tích hợp như GitHub đồng bộ được. Listener chạy sau commit.
+     */
+    private void publishStatusChanged(WorkItem item, Status oldStatus, Status newStatus, UUID actorId) {
+        if (applicationEventPublisher == null || item == null || newStatus == null) {
+            return;
+        }
+        applicationEventPublisher.publishEvent(new WorkItemStatusChangedEvent(
+                item.getId(),
+                item.getProjectId(),
+                oldStatus != null ? oldStatus.getCategory() : null,
+                newStatus.getCategory(),
+                actorId
+        ));
     }
 
     // ─── Pipeline Helpers ────────────────────────────────────────────────────────
@@ -591,6 +615,10 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                 workItem.setAssigneeId(newAssignee);
                 workItemAuditService.recordAssigneeChange(workItem.getId(), oldAssignee, newAssignee, currentUserId);
                 workItemNotifier.assigneeChanged(workItem, oldAssignee, newAssignee, currentUserId);
+                if (applicationEventPublisher != null) {
+                    applicationEventPublisher.publishEvent(new com.datn.workservice.event.WorkItemAssigneeChangedEvent(
+                            workItem.getId(), oldAssignee, newAssignee, currentUserId));
+                }
             }
         }
         if (fields.containsKey("fixVersionId")) {
@@ -648,6 +676,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                         parent.setResolvedAt(null);
                         workItemRepository.save(parent);
                         completionGate.onStatusChanged(parent, targetReopenStatus, false, currentUserId);
+                        publishStatusChanged(parent, parentStatus, targetReopenStatus, currentUserId);
 
                         if (currentUserId != null) {
                             WorkItemChangelog statusChangelog = WorkItemChangelog.builder()
@@ -686,6 +715,7 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                         parent.setStatusId(targetStartStatus.getId());
                         workItemRepository.save(parent);
                         completionGate.onStatusChanged(parent, targetStartStatus, false, currentUserId);
+                        publishStatusChanged(parent, parentStatus, targetStartStatus, currentUserId);
 
                         if (currentUserId != null) {
                             WorkItemChangelog statusChangelog = WorkItemChangelog.builder()

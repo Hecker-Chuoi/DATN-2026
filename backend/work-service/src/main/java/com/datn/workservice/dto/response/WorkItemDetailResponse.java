@@ -119,4 +119,7 @@ public class WorkItemDetailResponse {
     private Integer version;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // GitHub Integration Links
+    private List<com.datn.workservice.dto.github.WorkItemGitHubLinkDto> githubLinks;
 }
