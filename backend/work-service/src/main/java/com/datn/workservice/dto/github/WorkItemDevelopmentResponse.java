@@ -5,8 +5,8 @@ import lombok.*;
 import java.util.List;
 
 /**
- * Khung "Phát triển" trong chi tiết Task: nhánh gợi ý / đã tạo và các đường dẫn mở PR trên GitHub.
- * URL được dựng sẵn ở server để frontend không phải lặp lại quy tắc đặt tên nhánh và từ khoá hoàn thành.
+ * Bảng "Phát triển" trong chi tiết Task, dành cho người quản lý: tiến độ PR / Issue và quy ước gửi cho dev.
+ * Tên nhánh và từ khoá được dựng ở server để frontend không lặp lại quy tắc đặt tên.
  */
 @Data
 @Builder
@@ -21,27 +21,22 @@ public class WorkItemDevelopmentResponse {
 
     private String repoUrl;
 
-    /** Nhánh đích của dự án, nhánh mới được tách từ đây. */
+    /** Nhánh đích của dự án: PR merge vào đây mới làm Task đổi trạng thái. */
     private String baseBranch;
 
-    /** Nhánh đã gắn với Task, hoặc tên gợi ý {@code feat/KEY-n-slug} nếu chưa tạo. */
+    /** Tên nhánh gợi ý cho dev: {@code feat/KEY-n-slug}. */
     private String branchName;
 
-    private boolean branchCreated;
+    /** Cách ghi trong tiêu đề PR để merge là Task hoàn thành, VD {@code FINAL FRONE-10}. */
+    private String closeExample;
 
-    private String branchUrl;
+    /** Người được giao của Task (null = chưa giao). */
+    private java.util.UUID assigneeId;
 
-    /** Tiêu đề PR chỉ nhắc mã: mở PR thì Task sang Review, merge không hoàn thành. */
-    private String prTitle;
+    private String assigneeName;
 
-    /** Tiêu đề PR có từ khoá hoàn thành: merge vào nhánh đích thì Task hoàn thành. */
-    private String closePrTitle;
-
-    private String compareUrl;
-
-    private String closeCompareUrl;
-
-    private String checkoutCommand;
+    /** Tài khoản GitHub của người được giao; null = người đó chưa liên kết GitHub. */
+    private String assigneeGithubLogin;
 
     /** Issue / PR đã gắn với Task (mới nhất trước). */
     private List<WorkItemGitHubLinkDto> links;

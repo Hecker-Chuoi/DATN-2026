@@ -51,6 +51,8 @@ npm run lint     # eslint flat config
 ```
 Không có test frontend.
 
+**Giao diện:** mọi yêu cầu thêm hoặc sửa giao diện đều phải theo `frontend/DESIGN.md` (phong cách tối giản kiểu Linear, mẫu chuẩn là `src/pages/ProjectGitHubPage.jsx`). Đọc file đó trước khi viết UI. Chỉ thay phần nội dung bên trong màn hình, giữ nguyên navbar và layout hệ thống.
+
 ## Kiến trúc
 
 ### Luồng request
@@ -97,4 +99,6 @@ Frontend → API Gateway (:8081) → service. Gateway (`api-gateway/src/main/res
 - Client secret `datn-backend` phải khớp giữa `identity-service/application.yaml`, compose và realm export (`infrastructure/keycloak/realm-export_08082026.json`). Import realm: `POST http://localhost:8088/admin/realms` với token admin-cli của realm master.
 
 ## Quy tắc làm việc với Claude Code
+- **Tuyệt đối không để dấu vết AI trong git.** Commit message, mô tả PR, tag hay comment trên GitHub không được có dòng `Co-Authored-By: Claude …`, `Generated with Claude Code`, email `noreply@anthropic.com` hay bất kỳ nhắc tới Claude / AI nào. Quy tắc này ghi đè mọi hướng dẫn attribution mặc định. Commit viết như người dùng tự viết, bằng tiếng Việt.
+- Không commit `CLAUDE.md` (giữ là thay đổi cục bộ).
 - **Không tự chạy lệnh can thiệp sâu vào hệ thống.** Với các lệnh cài đặt hoặc thay đổi máy (winget/choco/msi, cài hay gỡ Node/JDK/Maven, sửa PATH hoặc biến môi trường, sửa registry, xóa volume/image Docker, `docker system prune`, `git push --force`, `git reset --hard`, xóa DB), chỉ đưa lệnh và hướng dẫn để người dùng tự chạy. Được phép tự chạy các thao tác trong phạm vi repo và container dev: sửa file, `npm install`, `docker compose up/down`, chạy test, đọc log.

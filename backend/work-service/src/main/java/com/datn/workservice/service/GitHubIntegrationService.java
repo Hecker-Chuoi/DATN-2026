@@ -65,15 +65,18 @@ public interface GitHubIntegrationService {
                                     com.datn.workservice.enums.StatusCategory newCategory, UUID changedByUserId);
 
     /**
+     * Đổi assignee của GitHub Issue đã liên kết theo người được giao mới của Task
+     * ({@code newAssigneeId} null hoặc chưa liên kết GitHub thì gỡ assignee).
+     */
+    void syncAssigneeToGitHub(UUID workItemId, UUID newAssigneeId, UUID changedByUserId);
+
+    /**
      * Hủy liên kết tài khoản GitHub của người dùng (xóa token)
      */
     void unlinkUserAccount(UUID currentUserId);
 
-    /** Khung "Phát triển" của Task: nhánh gợi ý / đã tạo và link mở PR. */
+    /** Bảng "Phát triển" của Task cho người quản lý: PR / Issue đã liên kết và quy ước đặt tên cho dev. */
     com.datn.workservice.dto.github.WorkItemDevelopmentResponse getDevelopmentInfo(UUID workItemId);
-
-    /** Tạo nhánh cho Task trên GitHub (tách từ nhánh đích của dự án) và gắn link BRANCH. */
-    com.datn.workservice.dto.github.WorkItemDevelopmentResponse createBranch(UUID workItemId, UUID currentUserId);
 
     /** Tạo GitHub Issue cho Task (bấm tay) và gắn liên kết ISSUE hai chiều. */
     com.datn.workservice.dto.github.WorkItemDevelopmentResponse createIssue(UUID workItemId, UUID currentUserId);

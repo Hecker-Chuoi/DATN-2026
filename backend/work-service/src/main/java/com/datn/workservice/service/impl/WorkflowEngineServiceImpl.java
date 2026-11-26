@@ -615,6 +615,10 @@ public class WorkflowEngineServiceImpl implements WorkflowEngineService {
                 workItem.setAssigneeId(newAssignee);
                 workItemAuditService.recordAssigneeChange(workItem.getId(), oldAssignee, newAssignee, currentUserId);
                 workItemNotifier.assigneeChanged(workItem, oldAssignee, newAssignee, currentUserId);
+                if (applicationEventPublisher != null) {
+                    applicationEventPublisher.publishEvent(new com.datn.workservice.event.WorkItemAssigneeChangedEvent(
+                            workItem.getId(), oldAssignee, newAssignee, currentUserId));
+                }
             }
         }
         if (fields.containsKey("fixVersionId")) {

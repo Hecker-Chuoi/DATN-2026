@@ -439,8 +439,6 @@ export const githubIntegrationApi = {
   // Khung "Phát triển" trong chi tiết Task
   getDevelopment: (itemId, config = {}) =>
     apiClient.get(`${WORK_BASE}/items/${itemId}/github/development`, config),
-  createBranch: (itemId, config = {}) =>
-    apiClient.post(`${WORK_BASE}/items/${itemId}/github/branch`, null, config),
   createIssue: (itemId, config = {}) =>
     apiClient.post(`${WORK_BASE}/items/${itemId}/github/issue`, null, config),
 };
