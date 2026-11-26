@@ -1,6 +1,8 @@
 package com.datn.aiservice.config;
 
 import com.google.genai.Client;
+import com.google.genai.types.HttpOptions;
+import com.google.genai.types.HttpRetryOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,7 +21,13 @@ public class GeminiConfig {
             log.warn("GEMINI_API_KEY chưa được cấu hình – mọi lượt chat sẽ báo lỗi cho tới khi đặt biến môi trường này");
             return Client.builder().apiKey("MISSING_GEMINI_API_KEY").build();
         }
-        return Client.builder().apiKey(props.geminiApiKey()).build();
+        // Không có timeout thì khi Gemini quá tải (không trả header) lượt chat treo vô hạn.
+        // Tắt retry nội bộ của SDK: GeminiLlmClient tự thử lại và chuyển sang light-model.
+        HttpOptions http = HttpOptions.builder()
+                .timeout(props.requestTimeoutMs())
+                .retryOptions(HttpRetryOptions.builder().attempts(1).build())
+                .build();
+        return Client.builder().apiKey(props.geminiApiKey()).httpOptions(http).build();
     }
 
     /** Vòng lặp agent chạy trên virtual thread, controller trả SseEmitter ngay. */

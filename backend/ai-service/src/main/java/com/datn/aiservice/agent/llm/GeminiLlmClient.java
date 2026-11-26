@@ -3,6 +3,7 @@ package com.datn.aiservice.agent.llm;
 import com.datn.aiservice.config.AgentProperties;
 import com.google.genai.Client;
 import com.google.genai.errors.ApiException;
+import com.google.genai.errors.GenAiIOException;
 import com.google.genai.types.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,8 +35,27 @@ public class GeminiLlmClient {
             cfg.tools(List.of(tools));
         }
         GenerateContentConfig config = cfg.build();
-        GenerateContentResponse res = withRetry(() -> client.models.generateContent(model, history, config));
+        GenerateContentResponse res;
+        try {
+            res = withRetry(() -> client.models.generateContent(model, history, config));
+        } catch (RuntimeException e) {
+            String fallback = props.lightModel();
+            if (!isOverloaded(e) || fallback == null || fallback.equals(model)) {
+                throw e;
+            }
+            // Model chính quá tải / không phản hồi: chuyển sang light-model thay vì để người dùng chờ hoặc báo lỗi.
+            log.warn("Model {} không dùng được ({}), chuyển sang {}", model, e.toString(), fallback);
+            res = withRetry(() -> client.models.generateContent(fallback, history, config));
+        }
         return toTurn(res);
+    }
+
+    /** 429/503 sau khi đã thử lại, hoặc hết thời gian chờ / lỗi mạng. */
+    private static boolean isOverloaded(RuntimeException e) {
+        if (e instanceof ApiException api) {
+            return api.code() == 429 || api.code() == 503;
+        }
+        return e instanceof GenAiIOException;
     }
 
     /** Việc nhẹ (đặt tiêu đề, tóm tắt): không tool, không system prompt. */
@@ -117,6 +137,9 @@ public class GeminiLlmClient {
                 case 400, 401, 403 -> "Gemini từ chối yêu cầu (" + api.code() + "): " + Optional.ofNullable(api.message()).orElse("");
                 default -> "Lỗi từ Gemini (" + api.code() + "): " + Optional.ofNullable(api.message()).orElse("");
             };
+        }
+        if (e instanceof GenAiIOException) {
+            return "AI không phản hồi kịp (có thể đang quá tải), vui lòng thử lại sau ít phút.";
         }
         if (e instanceof IllegalStateException) {
             return e.getMessage();

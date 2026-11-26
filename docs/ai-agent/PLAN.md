@@ -88,8 +88,8 @@ Ngoài phạm vi (giai đoạn 3, **không làm**): lập lịch, nhắc việc,
 ```yaml
 ai:
   agent:
-    model: gemini-2.5-flash            # đổi sang model có hạn mức miễn phí trong AI Studio (Phụ lục H)
-    light-model: gemini-2.5-flash-lite # việc nhẹ: đặt tiêu đề, tóm tắt
+    model: gemini-3.5-flash            # đổi sang model có hạn mức miễn phí trong AI Studio (Phụ lục H)
+    light-model: gemini-3.5-flash-lite # việc nhẹ: đặt tiêu đề, tóm tắt
     max-output-tokens: 4096
     max-iterations: 8
     max-tool-result-chars: 20000

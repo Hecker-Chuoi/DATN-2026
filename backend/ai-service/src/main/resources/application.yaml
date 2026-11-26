@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: ai-service
+  # Bí mật cục bộ (KHÔNG commit, đã nằm trong .gitignore). Thiếu file thì bỏ qua, dùng biến môi trường GEMINI_API_KEY.
+  config:
+    import: optional:classpath:ai-secrets.yml
 
   # ─── PostgreSQL (datn_main_db, dùng chung với identity/work/workspace) ───
   datasource:
@@ -48,8 +51,9 @@ spring:
 # ─── Cấu hình agent ───
 ai:
   agent:
-    model: gemini-2.5-flash
-    light-model: gemini-2.5-flash-lite
+    # gemini-2.5-* đã đóng với tài khoản mới (404). gemini-3.8-flash mới hơn nhưng hay quá tải (503).
+    model: gemini-3.5-flash
+    light-model: gemini-3.5-flash-lite
     gemini-api-key: ${GEMINI_API_KEY:}
     max-output-tokens: 4096
     max-iterations: 8
@@ -57,6 +61,7 @@ ai:
     history-char-budget: 120000
     daily-request-limit-per-user: 40
     retry-429: 2
+    request-timeout-ms: 60000    # mỗi lần gọi Gemini; quá hạn hoặc 429/503 thì chuyển sang light-model
     title-with-llm: false        # bật = đặt tiêu đề bằng light-model (tốn thêm 1 request mỗi hội thoại)
     work-service-url: http://localhost:8083
     tools-api-key: ${AI_TOOLS_API_KEY:AQ.Ab8RN6JfFDjF2P7tFiAEMa3-nXm33NwG-vglDh9wnZSAUN0Dew}

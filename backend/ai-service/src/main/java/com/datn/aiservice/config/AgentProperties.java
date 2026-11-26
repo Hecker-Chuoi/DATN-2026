@@ -14,12 +14,13 @@ public record AgentProperties(
         int historyCharBudget,
         int dailyRequestLimitPerUser,
         int retry429,
+        int requestTimeoutMs,
         boolean titleWithLlm,
         String workServiceUrl,
         String toolsApiKey
 ) {
     public AgentProperties {
-        if (model == null || model.isBlank()) model = "gemini-2.5-flash";
+        if (model == null || model.isBlank()) model = "gemini-3.5-flash";
         if (lightModel == null || lightModel.isBlank()) lightModel = model;
         if (maxOutputTokens <= 0) maxOutputTokens = 4096;
         if (maxIterations <= 0) maxIterations = 8;
@@ -27,6 +28,7 @@ public record AgentProperties(
         if (historyCharBudget <= 0) historyCharBudget = 120000;
         if (dailyRequestLimitPerUser <= 0) dailyRequestLimitPerUser = 40;
         if (retry429 < 0) retry429 = 2;
+        if (requestTimeoutMs <= 0) requestTimeoutMs = 60000;
         if (workServiceUrl == null || workServiceUrl.isBlank()) workServiceUrl = "http://localhost:8083";
     }
 

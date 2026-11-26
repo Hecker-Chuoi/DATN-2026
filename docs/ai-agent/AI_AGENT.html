@@ -252,7 +252,7 @@ ol.steps li { margin: 6px 0; }
 <h2 id="chay">7. Cài đặt &amp; chạy</h2>
 <h3>Khóa</h3>
 <ol class="steps">
-  <li><strong>GEMINI_API_KEY</strong>: tạo tại <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a> (không cần bật thanh toán với model có hạn mức miễn phí). Kiểm tra model miễn phí hiện hành và đặt <code>ai.agent.model</code> / <code>light-model</code> cho khớp (mặc định <code>gemini-2.5-flash</code> / <code>gemini-2.5-flash-lite</code>).</li>
+  <li><strong>GEMINI_API_KEY</strong>: tạo tại <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a> (không cần bật thanh toán với model có hạn mức miễn phí). Kiểm tra model miễn phí hiện hành và đặt <code>ai.agent.model</code> / <code>light-model</code> cho khớp (mặc định <code>gemini-3.5-flash</code> / <code>gemini-3.5-flash-lite</code>; dòng 2.5 đã đóng với tài khoản mới, <code>gemini-3.8-flash</code> mới hơn nhưng hay quá tải 503).</li>
   <li><strong>AI_TOOLS_API_KEY</strong>: chuỗi ngẫu nhiên (<code>openssl rand -hex 32</code>), đặt <strong>cùng giá trị</strong> cho ai-service và work-service.</li>
   <li>Không ghi hai khóa vào file commit. IntelliJ: Run/Debug Configuration → Environment variables. Docker: để trong <code>infrastructure/.env</code> (gitignored).</li>
 </ol>
