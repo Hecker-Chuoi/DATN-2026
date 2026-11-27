@@ -22,6 +22,8 @@
 #   SKIP_PULL=1 (dùng image có sẵn trên máy, để thử với image build local)
 set -euo pipefail
 
+# `sudo -u deployer` giữ thư mục hiện tại của người gọi (vd /home/ubuntu, deployer không vào được): find / compose báo lỗi rồi set -e thoát im lặng
+cd /
 DATN_HOME="${DATN_HOME:-/home/deployer/datn}"
 TIMEOUT="${DEPLOY_TIMEOUT:-1200}"
 SMOKE_BASE="${SMOKE_BASE:-http://127.0.0.1:3000}"

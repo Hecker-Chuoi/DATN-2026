@@ -309,7 +309,7 @@ Thói quen an toàn:
 
 | Loại | Name (Jenkinsfile dùng đúng tên) | Cấu hình |
 |---|---|---|
-| JDK | `jdk-21` | Bỏ tick *Install automatically*; `JAVA_HOME` = `/usr/lib/jvm/java-21-openjdk-amd64` |
+| JDK | `jdk-21` | Bỏ tick *Install automatically*; `JAVA_HOME` = `/usr/lib/jvm/java-21-openjdk-amd64`. **Dễ bị bỏ sót**: Maven / Node tự cài nên thường được khai, còn JDK không (đã gặp trên máy dựng thật: Jenkinsfile lỗi `jdk-21`). Kiểm tra: `sudo grep -A3 '<jdks>' /var/lib/jenkins/config.xml` phải có `jdk-21` |
 | Maven | `maven-3.9` | *Install automatically* → *Install from Apache* → `3.9.9` |
 | NodeJS | `node-22` | *Install automatically* → bản `22.x` mới nhất (≥ 22.12, Vite 8 yêu cầu) |
 | Git | `Default` | `git` |

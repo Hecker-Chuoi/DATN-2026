@@ -39,10 +39,21 @@
 - [x] Credential `github-token`, `dockerhub`.
 - [x] Cặp khoá `/var/lib/jenkins/.ssh/id_deploy` (+ `.pub`) trên `datn-jenkins` — **giữ lại**, dùng ở bước 5.
 - [x] Trong repo: `docker-compose.prod.yml`, `infrastructure/prod/*`, `Jenkinsfile`, `build-push.sh` (04). **Chỉ còn việc điền tên miền + Docker Hub user** (04 §7).
-- [ ] **Dọn** (làm khi tạo lại `datn-app`):
-  - EC2 `datn-minikube` cũ: terminate (hoặc dựng lại hệ điều hành) và dùng lại Elastic IP cho `datn-app`; đổi tên Security Group `datn-minikube-sg` → `datn-app-sg` (hoặc tạo mới, mở 22 / 80 / 443).
-  - Jenkins: đổi tên credential `minikube-ssh` → `app-server-ssh` (hoặc tạo mới); xoá dòng host cũ trong `known_hosts`: `sudo -u jenkins ssh-keygen -R <IP private cũ>`.
-  - Nếu từng tạo user `deployer` nhầm trên `datn-jenkins`: `sudo deluser --remove-home deployer`.
+- [x] **Dọn** (đã làm khi dựng lại `datn-app` trên máy cũ `datn-minikube`, 27/11/2026): cụm Minikube lúc đó rỗng (chỉ có kube-system) nên xoá an toàn:
+  - 🐧 trên máy cũ: `sudo systemctl disable --now minikube.service && minikube delete --all && sudo rm /etc/systemd/system/minikube.service && sudo systemctl daemon-reload`; `sudo hostnamectl set-hostname datn-app` (Docker, swap, `vm.swappiness`, `ufw`, giới hạn log đã có sẵn từ lần cài trước nên không phải làm lại).
+  - EC2 mới thay vì dùng lại máy cũ: terminate máy cũ, dùng lại Elastic IP cho `datn-app`; Security Group `datn-minikube-sg` → `datn-app-sg` (22 / 80 / 443).
+  - Jenkins: credential `minikube-ssh` → `app-server-ssh` (tạo mới bằng UI hoặc `infrastructure/ci/jenkins-init.groovy`, xoá cái cũ); `known_hosts` có IP private mới: `sudo -u jenkins ssh-keyscan -H <IP private> >> /var/lib/jenkins/.ssh/known_hosts`.
+
+## Môi trường đã dựng thật (27/11/2026)
+
+| | Giá trị |
+|---|---|
+| `datn-app` | `t3.large`, Ubuntu 24.04, IP private `172.31.34.47`, public `16.179.211.188`, hostname `datn-app` |
+| Tên miền | `app.16-179-211-188.sslip.io`, `sso.16-179-211-188.sslip.io` (HTTPS Let's Encrypt, `https`) |
+| Registry | `docker.io/yamaaaaaaaa` (6 repo `datn-*`, public), tag đang chạy: `47a74a1` |
+| `datn-jenkins` | `t3.large`, IP private `172.31.45.0`, `https://jenkins.52-62-135-59.sslip.io/` |
+| Đã làm | bước 0–4 (ứng dụng chạy, đăng ký → đăng nhập → tạo workspace qua HTTPS), bước 5 (khoá `deployer`, `known_hosts`, credential `app-server-ssh`), bước 6 một phần (job `smoke-test` và Multibranch `DATN/datn` đã tạo; chưa bấm chạy / chưa webhook), bước 7 đã kiểm chứng kịch bản 4 và 6 + đường deploy từ `datn-jenkins` |
+| Việc tay còn lại | Đăng nhập Jenkins: **Scan Repository Now** + **Build Now** `smoke-test`; webhook GitHub; (tuỳ chọn) đổi `github-token` / `dockerhub` nếu hết hạn. Xem [06 §6](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md#6-job-smoke-test-multibranch-webhook) |
 
 ## Các bước
 
@@ -60,18 +71,18 @@
 
 ## Ngân sách tài nguyên `datn-app` (2 vCPU / ~7,6 GB)
 
-Tài khoản chỉ được cấp tối đa `t3.large` (2 vCPU / 7,6 GB). Hạ tầng + 5 JVM + Keycloak ở cấu hình mặc định cần ~7–8 GB → phải giới hạn. Cột `mem_limit` là giá trị **đã viết trong `docker-compose.prod.yml`**, cột "Đo thử" là RAM thật khi 12 container đã lên và rảnh trên máy dev (04 §4) — **chưa đo trên EC2**:
+Tài khoản chỉ được cấp tối đa `t3.large` (2 vCPU / 7,6 GB). Hạ tầng + 5 JVM + Keycloak ở cấu hình mặc định cần ~7–8 GB → phải giới hạn. Cột `mem_limit` là giá trị **đã viết trong `docker-compose.prod.yml`**, cột "Đo thử" là RAM thật khi 12 container đã lên và rảnh: máy dev (04 §4) và **EC2 thật** (đo ngay sau khi deploy xong; `free -m` cho `available` ≈ 4,9 GB; **chưa đo sau 30 phút dùng thử**, mục R7):
 
 | Thành phần | `mem_limit` | Đo thử | Ghi chú |
 |---|---|---|---|
 | Ubuntu + Docker + Nginx (ngoài container) | — | ~0,8 GB (ước tính) | |
-| keycloak | 1280m | ~893 MiB | heap 40%, `KC_CACHE=local`, `start` (không `start-dev`) |
-| kafka | 768m | ~313 MiB | KRaft 1 nút, heap 384m, giữ log 72 giờ |
-| work-service | 768m | ~415 MiB | |
-| notification / workspace / identity / api-gateway | 640m mỗi cái | 330 / 320 / 257 / 236 MiB | |
-| postgres (**1 instance**, 2 DB) | 512m | ~106 MiB | |
-| minio / redis / mailpit / frontend | 256m / 96m / 64m / 64m | 89 / 8 / 16 / 15 MiB | |
-| **Cộng 12 container** | 6,3 GB (giới hạn) | **≈ 3,0 GiB** | |
+| keycloak | 1280m | ~893 MiB (dev) / 364 MiB (EC2) | heap 40%, `KC_CACHE=local`, `start` (không `start-dev`) |
+| kafka | 768m | ~313 / 350 MiB | KRaft 1 nút, heap 384m, giữ log 72 giờ |
+| work-service | 768m | ~415 / 338 MiB | |
+| notification / workspace / identity / api-gateway | 640m mỗi cái | dev 330 / 320 / 257 / 236; EC2 295 / 271 / 237 / 160 MiB | |
+| postgres (**1 instance**, 2 DB) | 512m | ~106 / 90 MiB | |
+| minio / redis / mailpit / frontend | 256m / 96m / 64m / 64m | dev 89 / 8 / 16 / 15; EC2 49 / 3 / 8 / 3 MiB | |
+| **Cộng 12 container** | 6,3 GB (giới hạn) | **≈ 3,0 GiB** (dev) / **≈ 2,2 GiB** (EC2, ngay sau deploy) | |
 
 Mục tiêu: `free -h` → `available` ≥ 1 GB khi chạy ổn định, không container nào `OOMKilled`.
 

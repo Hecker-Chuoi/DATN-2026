@@ -109,7 +109,7 @@ Máy `t3.large` có ~7,6 GB; HĐH + Docker + Nginx chiếm ~0,8 GB. Cột "Đo t
 | redis (`maxmemory 64mb`, `allkeys-lru`) | 96m | ~8 MiB |
 | mailpit (giữ tối đa 200 thư) | 64m | ~16 MiB |
 | frontend (nginx) | 64m | ~15 MiB |
-| **Tổng** | **6,3 GB (giới hạn, không ai dùng hết cùng lúc)** | **≈ 3,0 GiB** |
+| **Tổng** | **6,3 GB (giới hạn, không ai dùng hết cùng lúc)** | **≈ 3,0 GiB** (máy dev) / **≈ 2,2 GiB** (EC2, đo ngay sau khi deploy xong, xem 00) |
 
 So với Minikube cũ (~2,6 GiB pod + ~1,2 GiB lõi Kubernetes): dư thêm ~1 GB. Lúc khởi động nhiều JVM chạy cùng lúc nên đỉnh RAM và CPU cao hơn mức rảnh, chuỗi `depends_on` giúp dàn ra.
 
@@ -124,13 +124,14 @@ So với Minikube cũ (~2,6 GiB pod + ~1,2 GiB lõi Kubernetes): dư thêm ~1 GB
 - Postgres: 2 database đúng owner (`datn`, `kc_user`), extension `pgcrypto`. Keycloak import realm; `issuer` = `https://sso.<domain>/realms/datn-realm` dù gọi qua `localhost`.
 - Qua `127.0.0.1:3000` (frontend → gateway): `/identity|work|workspace/actuator/health` đều 200; route SPA `/w/1/notifications` ra `index.html`; `POST` đăng nhập kèm `Origin: https://…` + `X-Forwarded-Proto: https` **không** bị 403 CORS; `/notification/internal/**` không được chuyển tiếp (401); file 5 MB qua được nginx, file 60 MB bị chặn 413; work-service tự tạo bucket `work-attachments`.
 
-**Chưa chạy** (không làm được ngoài EC2 / Jenkins thật):
+**Đã chạy thật trên EC2 `t3.large`** (27/11/2026, domain `sslip.io`, image push Docker Hub, deploy bằng `deploy.sh`):
 
-- `deploy.sh` end-to-end (giải nén gói, `--wait`, smoke test, **rollback**), `make-realm.sh` (máy dev không có `jq`; realm thử được sinh bằng một đoạn Python tương đương — file `jq` trong script là bản đã dùng ở cấu hình Minikube cũ), khoá SSH `command="…"`.
-- Nginx máy chủ + certbot, WebSocket `101` qua cả hai lớp nginx, đăng nhập Google, gửi mail thật.
-- RAM thật trên `t3.large` và thời gian deploy lần đầu (ước tính 10–15 phút, **chưa đo**).
+- `deploy.sh deploy <sha>` từ đầu đến cuối: giải nén gói, `make-realm.sh` (có `jq`), `pull`, `up -d --wait`, smoke test, ghi `current_tag`; chạy lại cùng tag (idempotent); deploy SHA **không tồn tại** → `pull` lỗi → chẩn đoán → **tự rollback** về bản trước, thoát mã 1, 12 container vẫn `healthy`.
+- Đường SSH của Jenkins: user `jenkins` trên `datn-jenkins` → `deployer@<IP private>` với khoá `command="…deploy.sh",no-pty`: `check`, `deploy` (gói qua stdin) chạy được, lệnh lạ bị từ chối.
+- Nginx máy chủ + certbot (cấp được chứng chỉ sslip.io cho cả `app.` và `sso.`), `https://…/` 200, WebSocket `/notification/ws` **101**, upload 3 MB không bị 413, đăng ký → thư trong Mailpit → xác thực → đăng nhập → tạo workspace (POST không 403).
+- **Hai lỗi thật đã tìm ra và đã sửa** khi chạy lần đầu (ghi ở [05 §10](05_TRIEN_KHAI_LAN_DAU.md#10-xử-lý-sự-cố)): `deploy.sh` thoát im lặng vì thư mục hiện tại của `sudo -u deployer` (đã thêm `cd /`), và Keycloak `AccessDeniedException` vì `realm.json` quyền 600 (đã thêm `chmod 644` trong `make-realm.sh`).
 
-Những mục trên có checklist kiểm tra ở [05](05_TRIEN_KHAI_LAN_DAU.md) và [06](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md).
+**Chưa chạy:** các stage chạy **bên trong Jenkins UI** (cần đăng nhập admin: Test, Build & push, kích hoạt bằng webhook), đăng nhập Google, gửi mail thật qua SMTP. Danh sách kiểm tra ở [06 §7](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md#7-kịch-bản-kiểm-tra).
 
 ---
 

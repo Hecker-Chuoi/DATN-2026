@@ -147,6 +147,24 @@ sudo -u deployer /home/deployer/deploy.sh check      # 12 container (healthy), t
 | Upload đính kèm | đính kèm file ~5 MB vào công việc | mục 10: "413 / upload lỗi" |
 | Link trong thư đúng tên miền | link xác thực bắt đầu bằng `https://<APP_HOST>` | sai `APP_PUBLIC_URL`: `docker exec <identity> printenv APP_PUBLIC_URL` |
 
+### 5.3b. Kiểm tra nhanh bằng dòng lệnh (không cần trình duyệt)
+
+Đã chạy thật khi dựng. 🪟 Git Bash (đổi `<APP_HOST>` / `<SSO_HOST>`; đăng ký dùng email giả, Mailpit giữ thư):
+
+```bash
+A=https://<APP_HOST>; H="Origin: $A"; J="Content-Type: application/json"
+curl -s -o /dev/null -w "%{http_code}\n" $A/                                             # 200
+curl -s https://<SSO_HOST>/realms/datn-realm/.well-known/openid-configuration | grep -o '"issuer":"[^"]*"'   # issuer = https://<SSO_HOST>/realms/datn-realm
+curl -s -X POST $A/identity/api/v1/auth/register -H "$H" -H "$J" -d '{"username":"e2etest","password":"E2eTest#2026","email":"e2e@example.com","firstName":"E2E","lastName":"Test"}'   # success:true
+# lấy link xác thực từ Mailpit trên server (🐧: curl -s http://127.0.0.1:8025/api/v1/messages ; .../message/<ID>), rồi:
+curl -s "$A/identity/api/v1/auth/verify-email?token=<TOKEN>" -H "$H"                      # "Xác thực email thành công"
+curl -s -X POST $A/identity/api/v1/auth/login -H "$H" -H "$J" -c cj.txt -d '{"username":"e2etest","password":"E2eTest#2026"}'   # "Login successful"
+curl -s -X POST $A/workspace/api/v1/workspaces -H "$H" -H "$J" -b cj.txt -d '{"name":"E2E"}'      # "Đã tạo workspace" (POST không bị 403)
+curl -s -i -H "$H" -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" -b cj.txt $A/notification/ws | head -1   # 101 Switching Protocols
+```
+
+Danh sách workspace của người dùng là `GET /workspace/api/v1/workspaces/my` (gọi `GET /workspaces` trơn trả 500 do code chưa xử lý 405, không phải lỗi deploy). Xoá tài khoản thử sau khi xong (Admin Console → Users).
+
 ### 5.4. Gán quyền ADMIN (nếu cần trang quản trị)
 
 Realm không có user nào, tài khoản đầu tiên chỉ là `USER`. Muốn thử chức năng quản trị: Admin Console → realm `datn-realm` → **Users** → chọn user → **Role mapping** → **Assign role** → `ADMIN`. Đăng xuất / đăng nhập lại để token có role mới.
@@ -223,6 +241,8 @@ Google Cloud Console → Credentials → OAuth client đang dùng → thêm **Au
 
 | Triệu chứng | Nguyên nhân / cách xử lý |
 |---|---|
+| `deploy.sh` chạy chỉ in `find: Failed to change directory: /home/ubuntu: Permission denied` rồi thoát im lặng | **Lỗi đã gặp và đã sửa** (`cd /` ở đầu `deploy.sh`): `sudo -u deployer` giữ thư mục hiện tại của người gọi (`/home/ubuntu`), `deployer` không vào được. Cài lại bản `deploy.sh` mới ở mục 3 |
+| Keycloak `Restarting`, log `AccessDeniedException: /opt/keycloak/bin/../data/import/realm.json` | **Lỗi đã gặp và đã sửa** (`chmod 644` trong `make-realm.sh`): `realm.json` sinh với quyền 600 của `deployer`, Keycloak chạy uid 1000 trong container không đọc được. Sửa tay trên server: `sudo chmod 644 /home/deployer/datn/realm.json` (container tự khởi động lại), rồi deploy lại |
 | `deploy.sh`: "Thiếu /home/deployer/datn/secrets.env" | Chưa làm [03](03_SECRET_VA_CAU_HINH.md), hoặc gọi bằng user khác `deployer` (`sudo -u deployer`) |
 | `deploy.sh`: "public.env chưa đặt APP_HOST / REGISTRY" | Chưa chạy `set-public-host.sh` hoặc quên commit trước khi tạo gói (04 §7) |
 | `pull access denied` / `manifest unknown` | Chưa push image với đúng `<TAG>` (mục 2), tên `REGISTRY` sai, hoặc repo Docker Hub đang private (cần `docker login` bằng `deployer` với token Read-only) |

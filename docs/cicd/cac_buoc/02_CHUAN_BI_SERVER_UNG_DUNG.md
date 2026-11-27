@@ -71,6 +71,8 @@ EC2 → **Elastic IPs → Allocate** → **Associate** vào `datn-app`. DNS `app
 | **IP private** `172.31.x.x` | EC2 → `datn-app` → Private IPv4 | Jenkins SSH sang deploy: `<APP_HOST_IP>` trong 01 / 06 |
 | **Elastic IP** | mục này | DNS `app.` / `sso.`, bạn SSH từ máy cá nhân |
 
+> ⚠️ Dùng `sslip.io` mà **chưa gắn Elastic IP** thì IP public đổi mỗi lần stop/start máy: tên miền, chứng chỉ, `public.env` và image frontend (nhúng URL Keycloak) đều hỏng theo. Gắn Elastic IP **trước** khi đặt tên miền ở mục 5.
+
 ### 1.5. Kiểm tra hai máy thấy nhau
 
 🐧 Từ **`datn-jenkins`**:
@@ -223,10 +225,10 @@ sudo nginx -t && sudo systemctl reload nginx      # "syntax is ok" + "test is su
 sudo certbot --nginx -d "$APP_HOST" -d "$SSO_HOST" --redirect
 ```
 
-Lần đầu certbot hỏi email và đồng ý điều khoản; certbot tự thêm khối 443, chứng chỉ và chuyển hướng 80 → 443. Kiểm tra:
+Không tương tác (đã dùng khi dựng thật; `--register-unsafely-without-email` = không gửi email của bạn cho Let's Encrypt, đổi lại không nhận cảnh báo hết hạn): `sudo certbot --nginx -d "$APP_HOST" -d "$SSO_HOST" --redirect --non-interactive --agree-tos --register-unsafely-without-email`. Lần đầu certbot hỏi email và đồng ý điều khoản; certbot tự thêm khối 443, chứng chỉ và chuyển hướng 80 → 443. Kiểm tra:
 
 ```bash
-sudo certbot renew --dry-run                       # "all simulated renewals succeeded"
+sudo certbot renew --dry-run                       # "all simulated renewals succeeded" (có thể mất vài phút)
 systemctl list-timers | grep -i certbot            # có timer tự gia hạn
 curl -sI "https://$APP_HOST/" | head -1            # HTTP/2 502 là ĐÚNG lúc này (chưa có ứng dụng sau Nginx)
 ```

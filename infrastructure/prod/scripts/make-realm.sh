@@ -40,4 +40,7 @@ jq -e --arg app "$APP_URL" '
   | $c.redirectUris[0] == ($app + "/*") and $c.webOrigins == [$app] and ($c.secret | length) > 0' "$OUT.tmp" >/dev/null \
   || { rm -f "$OUT.tmp"; echo "Realm sau khi sửa không đúng kỳ vọng"; exit 1; }
 mv "$OUT.tmp" "$OUT"
+# Keycloak chạy uid 1000 trong container: file bind-mount mode 600 (umask 077 ở trên) → AccessDeniedException, Keycloak không khởi động.
+# An toàn vì thư mục chứa file ($DATN_HOME) là 700 của deployer.
+chmod 644 "$OUT"
 echo "== Đã sinh $OUT: client datn-backend → $APP_URL"

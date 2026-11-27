@@ -151,7 +151,7 @@ Chi tiết và lệnh: [cac_buoc/06](cac_buoc/06_NOI_JENKINS_VOI_SERVER_UNG_DUNG
 11. **Docker Hub**: luôn `docker login` trước khi build (image nền `maven`, `eclipse-temurin`, `node`, `nginx` cũng kéo từ Docker Hub) để tránh `toomanyrequests`.
 12. **Line ending**: script `.sh`, Dockerfile, `infrastructure/prod/**`, `Jenkinsfile` phải là LF (đã khai trong `.gitattributes`). `deploy.sh` còn tự bỏ `\r` khỏi file `.sh/.env/.yml/.yaml` trong gói, phòng gói tạo trên Windows.
 13. **Image MinIO**: `minio/minio` đã bị gỡ khỏi Docker Hub → dùng `cgr.dev/chainguard/minio:latest` (giống compose dev của nhóm); healthcheck `mc ready local`.
-
+14. **CI trên Jenkins chạy test không có DB**: `mvn verify` trần đỏ ở `IdentityServiceApplicationTests.contextLoads` (cần Postgres); `Jenkinsfile` bỏ `*ApplicationTests` (còn 148 unit test, xanh với JDK 21). `npm run lint` có ~190 lỗi sẵn nên chỉ đánh dấu UNSTABLE; `npm run build` xanh. Đã chạy thử cả hai trong container `maven:3.9.9-eclipse-temurin-21-alpine` / `node:22-alpine` trước khi đưa vào pipeline.
 ---
 
 ## 7. Vì sao compose thay vì Kubernetes
