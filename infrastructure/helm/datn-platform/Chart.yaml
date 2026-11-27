@@ -1,6 +1,0 @@
-apiVersion: v2
-name: datn-platform
-description: Hạ tầng có trạng thái của DATN-2026 (Postgres, Keycloak, Kafka, Redis, MinIO, Mailpit). Quản trị viên cài tay một lần, CI không đụng tới.
-type: application
-version: 0.1.0
-appVersion: "1.0.0"

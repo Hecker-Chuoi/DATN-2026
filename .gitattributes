@@ -3,6 +3,6 @@
 Dockerfile      text eol=lf
 *.Dockerfile    text eol=lf
 .dockerignore   text eol=lf
-infrastructure/helm/**      text eol=lf
-infrastructure/k8s/**       text eol=lf
 frontend/nginx.conf         text eol=lf
+infrastructure/prod/**      text eol=lf
+Jenkinsfile                 text eol=lf
