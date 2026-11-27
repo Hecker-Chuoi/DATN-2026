@@ -1,0 +1,72 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: ai-service
+  # Bí mật cục bộ (KHÔNG commit, đã nằm trong .gitignore). Thiếu file thì bỏ qua, dùng biến môi trường GEMINI_API_KEY.
+  config:
+    import: optional:classpath:ai-secrets.yml
+
+  # ─── PostgreSQL (datn_main_db, dùng chung với identity/work/workspace) ───
+  datasource:
+    url: jdbc:postgresql://localhost:5433/datn_main_db
+    username: postgres
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+
+  # ─── Flyway: history table riêng để không đụng flyway_work_schema_history ───
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    table: flyway_ai_schema_history
+    locations: classpath:db/migration
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+
+  # ─── OAuth2 Resource Server (Keycloak) ───
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:8088/realms/datn-realm/protocol/openid-connect/certs
+          issuer-uri: http://localhost:8088/realms/datn-realm
+
+  # ─── Redis: đếm lượt gọi AI theo ngày ───
+  data:
+    redis:
+      host: localhost
+      port: 6380
+      timeout: 2000ms
+
+  mvc:
+    async:
+      request-timeout: 300000   # SSE tối đa 5 phút
+
+# ─── Cấu hình agent ───
+ai:
+  agent:
+    # Claude API (platform.claude.com). Đổi model: claude-sonnet-5-5 (rẻ hơn) hoặc claude-haiku-5-5 (rẻ nhất).
+    model: claude-opus-5-5
+    light-model: claude-haiku-5-5   # tóm tắt lịch sử, đặt tiêu đề
+    anthropic-api-key: ${ANTHROPIC_API_KEY:}
+    effort: medium               # low | medium | high | xhigh | max – mức suy nghĩ, ảnh hưởng chi phí và độ trễ
+    max-output-tokens: 16000     # gồm cả token thinking
+    max-iterations: 8
+    max-tool-result-chars: 20000
+    history-char-budget: 120000
+    daily-request-limit-per-user: 40
+    request-timeout-ms: 120000   # mỗi lần gọi; SDK tự thử lại 429/5xx/529 tối đa 2 lần
+    title-with-llm: false        # bật = đặt tiêu đề bằng light-model (tốn thêm 1 request mỗi hội thoại)
+    work-service-url: http://localhost:8083
+    tools-api-key: ${AI_TOOLS_API_KEY:AQ.Ab8RN6JfFDjF2P7tFiAEMa3-nXm33NwG-vglDh9wnZSAUN0Dew}
+
+logging:
+  level:
+    root: INFO
+    com.datn.aiservice: DEBUG

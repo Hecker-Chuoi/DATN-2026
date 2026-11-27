@@ -5,7 +5,7 @@ WORKDIR /app
 # Build trên máy chủ dùng chung với cluster: giới hạn heap Maven
 ENV MAVEN_OPTS="-Xmx768m"
 
-# Parent pom liệt kê mọi module nên phải COPY đủ 6 pom
+# Parent pom liệt kê mọi module nên phải COPY đủ 7 pom
 COPY pom.xml ./
 COPY common/pom.xml ./common/
 COPY identity-service/pom.xml ./identity-service/
@@ -13,6 +13,7 @@ COPY api-gateway/pom.xml ./api-gateway/
 COPY work-service/pom.xml ./work-service/
 COPY workspace-service/pom.xml ./workspace-service/
 COPY notification-service/pom.xml ./notification-service/
+COPY ai-service/pom.xml ./ai-service/
 
 # Source của common và identity-service
 COPY common/src ./common/src

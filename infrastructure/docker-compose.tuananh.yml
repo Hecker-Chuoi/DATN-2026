@@ -132,6 +132,42 @@ services:
       - app-net
 
   # ─────────────────────────────────────────────
+  # AI Service (Spring Boot 9995) – trợ lý AI; cần ANTHROPIC_API_KEY và AI_TOOLS_API_KEY trong .env (không commit)
+  # ─────────────────────────────────────────────
+  ai-service:
+    build:
+      context: ../backend
+      dockerfile: ai-service/Dockerfile
+    container_name: ai-service
+    profiles: ["app"]   # chỉ chạy khi: docker compose --profile app ...; mặc định chạy từ IntelliJ
+    restart: unless-stopped
+    ports:
+      - "9995:9995"
+    environment:
+      SPRING_PROFILES_ACTIVE: tuananh
+      SPRING_DATASOURCE_URL: jdbc:postgresql://app-db:5432/datn_main_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: http://keycloak:8080/realms/datn-realm/protocol/openid-connect/certs
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://localhost:9998/realms/datn-realm
+      # work-service mặc định chạy từ IntelliJ trên máy host (9993)
+      AI_AGENT_WORK-SERVICE-URL: http://host.docker.internal:9993
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_TOOLS_API_KEY: ${AI_TOOLS_API_KEY:-}
+    extra_hosts:
+      - "localhost:host-gateway"
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      app-db:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks:
+      - app-net
+
+  # ─────────────────────────────────────────────
   # ─────────────────────────────────────────────
   # Notification Service (Spring Boot 9994) – gửi email qua SMTP, chỉ nội bộ (không qua gateway)
   # ─────────────────────────────────────────────

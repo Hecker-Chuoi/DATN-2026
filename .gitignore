@@ -34,4 +34,5 @@ docs/deployment
 
 # Bí mật GitHub cục bộ của work-service
 **/github-secrets.yml
+**/ai-secrets.yml
 secret/

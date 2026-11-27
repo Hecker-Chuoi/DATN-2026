@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Outlet, useParams, useNavigate } from 'react-router-dom';
+import { Outlet, useParams, useNavigate, useMatch } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import { projectApi, invitationApi } from '../../api.js';
 import { workspaceInvitationApi } from '../../api/workspaceServiceApi';
@@ -7,6 +7,8 @@ import CreateProjectModal from '../project/CreateProjectModal.jsx';
 import ErrorBoundary from '../common/ErrorBoundary.jsx';
 import { useWorkspace } from '../../context/WorkspaceContext.jsx';
 import { useWorkspaceRole } from '../../hooks/useWorkspaceRole.js';
+import { AiChatProvider } from '../../context/AiChatContext.jsx';
+import AiChatPanel, { AiLaunchButton } from '../ai/AiChatPanel.jsx';
 import { useNotifications } from '../../notifications/NotificationContext.jsx';
 
 // Thông báo kéo theo dữ liệu trên sidebar cần làm mới ngay (không đợi vòng hỏi 30 giây)
@@ -16,6 +18,9 @@ const REFRESH_WORKSPACES_ON = new Set(['WORKSPACE_MEMBER_REMOVED', 'WORKSPACE_RO
 export default function WorkspaceLayout({ currentUser, onLogout }) {
   const { workspaceId } = useParams();
   const navigate = useNavigate();
+  // Dự án đang mở (nếu có) để gửi làm ngữ cảnh cho trợ lý AI
+  const projectMatch = useMatch('/w/:workspaceId/projects/:projectId/*');
+  const currentProjectId = projectMatch?.params?.projectId || null;
   const { loading: workspaceLoading, refreshWorkspaces } = useWorkspace();
   const { subscribe: subscribeNotifications } = useNotifications();
   const { notMember, canCreateProject: canCreateProjectByRole } = useWorkspaceRole();
@@ -133,6 +138,7 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
   }
 
   return (
+    <AiChatProvider>
     <div
       style={{
         display: 'flex',
@@ -192,6 +198,14 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
         </main>
       </div>
 
+      {/* ─── Trợ lý AI: panel bên phải + nút nổi ─── */}
+      <AiChatPanel
+        workspaceId={workspaceId}
+        projectId={currentProjectId}
+        projectName={projects.find((p) => p.id === currentProjectId)?.name}
+      />
+      <AiLaunchButton />
+
       {/* ─── Global Create Project Modal ─── */}
       <CreateProjectModal
         isOpen={isCreateProjectModalOpen}
@@ -201,5 +215,6 @@ export default function WorkspaceLayout({ currentUser, onLogout }) {
         }}
       />
     </div>
+    </AiChatProvider>
   );
 }
