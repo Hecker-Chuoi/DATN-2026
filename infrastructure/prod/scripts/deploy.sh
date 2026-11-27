@@ -46,11 +46,11 @@ compose() {
 
 public_get() { sed -n "s/^$2=//p" "$1/prod/public.env" | head -1 | sed -e 's/^"//' -e 's/"$//'; }
 
-smoke() {   # 3 service qua frontend → gateway, và trang chủ
+smoke() {   # 4 service qua frontend → gateway, và trang chủ
   [ "${SKIP_SMOKE:-0}" = 1 ] && { echo "== Bỏ qua smoke test (SKIP_SMOKE=1)"; return 0; }
   local url deadline=$((SECONDS + 180))
   for url in "$SMOKE_BASE/identity/actuator/health" "$SMOKE_BASE/work/actuator/health" \
-             "$SMOKE_BASE/workspace/actuator/health" "$SMOKE_BASE/"; do
+             "$SMOKE_BASE/workspace/actuator/health" "$SMOKE_BASE/ai/actuator/health" "$SMOKE_BASE/"; do
     until curl -fsS -o /dev/null --max-time 10 "$url"; do
       [ $SECONDS -lt $deadline ] || { echo "Smoke test lỗi: $url"; return 1; }
       sleep 5

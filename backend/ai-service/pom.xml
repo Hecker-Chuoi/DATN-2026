@@ -49,6 +49,12 @@
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
 
+        <!-- /actuator/health/liveness|readiness cho healthcheck của docker compose (các service khác đã có) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- ─── Validation ─── -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

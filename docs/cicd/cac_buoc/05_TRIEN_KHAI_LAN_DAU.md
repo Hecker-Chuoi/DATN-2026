@@ -11,7 +11,7 @@
 ## Mục lục
 
 1. [Điều kiện](#1-điều-kiện)
-2. [Build và push 6 image (🪟 Windows)](#2-build-và-push-6-image--windows)
+2. [Build và push 7 image (🪟 Windows)](#2-build-và-push-7-image--windows)
 3. [Cài `deploy.sh` lên server](#3-cài-deploysh-lên-server)
 4. [Deploy lần đầu](#4-deploy-lần-đầu)
 5. [Mở trình duyệt thử](#5-mở-trình-duyệt-thử)
@@ -27,18 +27,18 @@
 ## 1. Điều kiện
 
 - [ ] 02: `docker run --rm hello-world` chạy bằng `ubuntu`; HTTPS cho `app.` và `sso.` đã cấp (502 là bình thường lúc này).
-- [ ] 03: `/home/deployer/datn/secrets.env` có 15 khoá.
+- [ ] 03: `/home/deployer/datn/secrets.env` có 17 khoá.
 - [ ] 04 §7: `infrastructure/prod/public.env` có `APP_HOST`, `SSO_HOST`, `REGISTRY` thật và **đã commit** (`git status --short infrastructure/prod/public.env` rỗng).
 
 ---
 
-## 2. Build và push 6 image (🪟 Windows)
+## 2. Build và push 7 image (🪟 Windows)
 
 Làm trên máy Windows (có Docker Desktop, Git Bash, repo), không cần server. Ba điều kiện:
 
 1. Repo đang ở **commit có `public.env` đã điền**. `build-push.sh` đọc registry và URL Keycloak từ file đó (frontend **nhúng** `VITE_KEYCLOAK_URL` lúc build, không đổi được khi chạy).
 2. Có **Access Token Docker Hub quyền Read & Write** (cùng loại với secret `DOCKERHUB_TOKEN` của Actions, [01 §2](01_CHUAN_BI_TAI_KHOAN.md#2-docker-hub-tài-khoản-và-access-token)).
-3. 6 repo Docker Hub sẽ **public** (gói miễn phí chỉ cho 1 repo private): `datn-api-gateway`, `datn-identity-service`, `datn-work-service`, `datn-workspace-service`, `datn-notification-service`, `datn-frontend`. Docker Hub tự tạo repo ở lần push đầu; vào kiểm tra đều `Public`.
+3. 7 repo Docker Hub sẽ **public** (gói miễn phí chỉ cho 1 repo private): `datn-api-gateway`, `datn-identity-service`, `datn-work-service`, `datn-workspace-service`, `datn-notification-service`, `datn-ai-service`, `datn-frontend`. Docker Hub tự tạo repo ở lần push đầu; vào kiểm tra đều `Public`.
 
 🪟 **PowerShell** (đăng nhập tương tác ở đây vì Git Bash dễ treo ở bước nhập mật khẩu):
 
@@ -54,7 +54,7 @@ TAG=$(git rev-parse --short=7 HEAD); echo "$TAG"               # ghi lại: dùn
 bash infrastructure/ci/build-push.sh "$TAG"
 ```
 
-Script build tuần tự 6 image (5 backend build Maven bên trong Docker, rồi frontend), push từng cái, kết thúc bằng `✅ Đã push 6 image với tag <TAG> lên docker.io/<user>`. **Ước tính** lần đầu 15–30 phút (tải thư viện Maven, `npm ci`); các lần sau nhanh hơn nhờ cache BuildKit. Chưa cài `trivy` thì script in "Bỏ qua quét" — không sao.
+Script build tuần tự 7 image (6 backend build Maven bên trong Docker, rồi frontend), push từng cái, kết thúc bằng `✅ Đã push 7 image với tag <TAG> lên docker.io/<user>`. **Ước tính** lần đầu 15–30 phút (tải thư viện Maven, `npm ci`); các lần sau nhanh hơn nhờ cache BuildKit. Chưa cài `trivy` thì script in "Bỏ qua quét" — không sao.
 
 Xong, 🪟 PowerShell:
 
@@ -116,7 +116,7 @@ Log lỗi `DataSeeder ... seed các dự án mẫu` của work-service ở lần
 Cài xong, 🐧:
 
 ```bash
-sudo -u deployer /home/deployer/deploy.sh check      # 12 container (healthy), tag đang chạy: <TAG>
+sudo -u deployer /home/deployer/deploy.sh check      # 13 container (healthy), tag đang chạy: <TAG>
 ```
 
 ---
@@ -263,8 +263,8 @@ Google Cloud Console → Credentials → OAuth client đang dùng → thêm **Au
 
 ## 11. Checklist
 
-- [ ] 6 image `datn-*` đã push với tag `<TAG>`, repo Docker Hub **public**; đã `docker logout`
-- [ ] `deploy.sh deploy <TAG>` chạy tới `✅`, kể cả smoke test; `check` báo 12 container `healthy`
+- [ ] 7 image `datn-*` đã push với tag `<TAG>`, repo Docker Hub **public**; đã `docker logout`
+- [ ] `deploy.sh deploy <TAG>` chạy tới `✅`, kể cả smoke test; `check` báo 13 container `healthy`
 - [ ] `https://<SSO_HOST>/admin/` vào được Admin Console, thấy client `datn-backend`
 - [ ] **Mở trình duyệt, đăng ký, xác thực email, đăng nhập, tạo dự án và công việc được**; WebSocket `101`; upload file được
 - [ ] Dùng thử 30 phút: không container nào `restarts` tăng / `oom=true`; `free -h` available ≥ 1 Gi; đã điền bảng mục 6 và cập nhật số "Đo thử" ở [04 §4](04_DOCKER_COMPOSE_PRODUCTION.md#4-ngân-sách-ram)

@@ -2,7 +2,7 @@
 
 > Thuộc [00 — Danh sách các bước](00_DANH_SACH_CAC_BUOC.md) (**bước 2**). Làm **sau** [02](02_CHUAN_BI_SERVER_UNG_DUNG.md): `datn-app` đã có Docker, Nginx, HTTPS.
 >
-> Kết quả: trên `datn-app` có user `deployer` (nhóm `docker`), thư mục `/home/deployer/datn/` và file **`secrets.env`** (15 khoá, quyền 600) chứa mọi mật khẩu. File này **chỉ nằm trên server + bản sao lưu cá nhân của bạn, không commit**.
+> Kết quả: trên `datn-app` có user `deployer` (nhóm `docker`), thư mục `/home/deployer/datn/` và file **`secrets.env`** (17 khoá, quyền 600) chứa mọi mật khẩu. File này **chỉ nằm trên server + bản sao lưu cá nhân của bạn, không commit**.
 >
 > Quy ước: 🪟 = PowerShell / Git Bash trên **máy Windows**; 🐧 = phiên **SSH vào `datn-app`** (`ubuntu@datn-app:~$`). **Đừng dán lệnh Linux vào PowerShell và ngược lại.**
 
@@ -14,6 +14,7 @@
 4. [Sao lưu `secrets.env` về máy cá nhân](#4-sao-lưu-secretsenv-về-máy-cá-nhân)
 5. [Gửi mail thật (Gmail) thay cho Mailpit](#5-gửi-mail-thật-gmail-thay-cho-mailpit)
    - [5b. Tích hợp GitHub (OAuth App)](#5b-tích-hợp-github-oauth-app)
+   - [5c. Trợ lý AI (ai-service, Claude API)](#5c-trợ-lý-ai-ai-service-claude-api)
 6. [Đổi mật khẩu về sau](#6-đổi-mật-khẩu-về-sau)
 7. [Không được làm](#7-không-được-làm)
 8. [Xử lý sự cố](#8-xử-lý-sự-cố)
@@ -42,6 +43,7 @@ Hiện mật khẩu đang **viết cứng** trong repo (chỉ hợp cho máy dev
 | `KEYCLOAK_CLIENT_SECRET` | Client `datn-backend` | identity `KEYCLOAK_CLIENT_SECRET`; `make-realm.sh` ghi vào realm trước khi Keycloak import |
 | `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | MinIO; work-service (bucket `work-attachments`) | MinIO `MINIO_ROOT_*`; work `MINIO_ACCESS_KEY/SECRET_KEY` |
 | `MAIL_USERNAME`, `MAIL_PASSWORD` | notification-service gửi email | `MAIL_USERNAME`, `MAIL_PASSWORD` (để **trống** nếu dùng Mailpit) |
+| `AI_TOOLS_API_KEY`, `ANTHROPIC_API_KEY` | Trợ lý AI ([5c](#5c-trợ-lý-ai-ai-service-claude-api)): khoá nội bộ ai-service ↔ work-service (bắt buộc) và API key Claude (trống = tắt chat) | ai-service `AI_TOOLS_API_KEY`, `ANTHROPIC_API_KEY`; work-service `AI_TOOLS_API_KEY` |
 | `GITHUB_CLIENT_SECRET`, `GITHUB_TOKEN_ENCRYPTION_KEY`, `GITHUB_STATE_SECRET` | Tích hợp GitHub của work-service ([5b](#5b-tích-hợp-github-oauth-app)); `GITHUB_CLIENT_SECRET` để trống tới khi có OAuth App | work-service `GITHUB_*` |
 
 Redis và Kafka **không có mật khẩu** (giống dev) vì chỉ truy cập được trong mạng Docker nội bộ `app-net`, không publish cổng ra ngoài.
@@ -97,11 +99,13 @@ MAIL_PASSWORD=
 GITHUB_CLIENT_SECRET=
 GITHUB_TOKEN_ENCRYPTION_KEY=$(openssl rand -hex 32)
 GITHUB_STATE_SECRET=$(openssl rand -hex 32)
+AI_TOOLS_API_KEY=$(openssl rand -hex 32)
+ANTHROPIC_API_KEY=
 EOF
 sudo install -o deployer -g deployer -m 600 /tmp/secrets.env /home/deployer/datn/secrets.env
 shred -u /tmp/secrets.env
 sudo ls -l /home/deployer/datn/secrets.env           # -rw------- deployer deployer
-sudo grep -c '=' /home/deployer/datn/secrets.env     # 15
+sudo grep -c '=' /home/deployer/datn/secrets.env     # 17
 ```
 
 Mật khẩu admin Keycloak (cần khi đăng nhập Admin Console ở 05): `sudo grep '^KEYCLOAK_ADMIN' /home/deployer/datn/secrets.env`.
@@ -117,7 +121,7 @@ Mất file này **và** volume Postgres thì không còn cách nào biết mật
 ```bash
 mkdir -p secret
 ssh -i <KEY>.pem ubuntu@<ELASTIC_IP> "sudo cat /home/deployer/datn/secrets.env" > secret/datn-secrets.env
-grep -c '=' secret/datn-secrets.env            # 15
+grep -c '=' secret/datn-secrets.env            # 17
 git status --short secret                      # rỗng = đã bị gitignore
 ```
 
@@ -174,6 +178,27 @@ Webhook của từng repo do chính ứng dụng tự đăng ký khi kết nối
 
 ---
 
+## 5c. Trợ lý AI (`ai-service`, Claude API)
+
+Nhánh `develop` có thêm service **`ai-service`** (trợ lý AI trong giao diện, gọi Claude API; lịch sử hội thoại và bộ nhớ lưu trong `datn_main_db` qua Flyway riêng `flyway_ai_schema_history`). Nó đã nằm trong compose production (container thứ 13), có route `/ai/**` ở gateway, và Nginx (máy chủ lẫn container frontend) đã tắt bộ đệm cho `/ai/` để luồng SSE về ngay. Thiếu khoá Claude thì **service vẫn chạy** và các API không cần model (lịch sử, bộ nhớ, cài đặt) vẫn dùng được; chỉ lượt chat trả sự kiện lỗi `ANTHROPIC_API_KEY chưa được cấu hình` (đã thử).
+
+| Biến (`secrets.env`) | Ý nghĩa |
+|---|---|
+| `AI_TOOLS_API_KEY` | Khoá nội bộ **ai-service → work-service** (`/internal/ai-tools/**`, gateway không route đường này). **Bắt buộc**: compose từ chối deploy nếu thiếu. Sinh ngẫu nhiên ở mục 3 |
+| `ANTHROPIC_API_KEY` | API key Claude (🌐 https://platform.claude.com → API keys; cần nạp credit). Để trống = tắt chat |
+
+> ⚠️ **Khoá mặc định viết cứng trong repo.** `backend/ai-service/.../application.yaml` và `backend/work-service/.../application.yaml` đều có `AI_TOOLS_API_KEY:AQ.Ab8RN6...` làm giá trị mặc định, nên ai đọc repo cũng biết. Production **không** dùng nó: `application-prod.yaml` của hai service ghi đè `${AI_TOOLS_API_KEY}` **không kèm mặc định** (đã thử: khoá mặc định bị work-service từ chối `401`, khoá thật được nhận). Nếu chuỗi đó là khoá thật của một dịch vụ khác (định dạng `AQ.` giống khoá API của Google) thì hãy thu hồi / tạo lại ở nơi cấp, và nên xoá giá trị mặc định khỏi hai file `application.yaml` trong code.
+
+Bật chat AI:
+
+1. 🌐 Tạo API key Claude, nạp credit.
+2. 🐧 Điền vào `secrets.env`: `sudo -u deployer nano /home/deployer/datn/secrets.env` → `ANTHROPIC_API_KEY=<key>`.
+3. Deploy lại (đẩy commit lên `main`, hoặc [05 §4](05_TRIEN_KHAI_LAN_DAU.md#4-deploy-lần-đầu)) để container `ai-service` nạp biến mới. Kiểm tra `docker logs datn-ai-service-1 2>&1 | grep -i ANTHROPIC` không còn dòng cảnh báo.
+
+Chi phí và hạn mức: model mặc định `claude-opus-5-5` (đắt nhất) ghi trong `application.yaml` (`ai.agent.model`); hạn mức `daily-request-limit-per-user: 40` lượt / người / ngày (đếm bằng Redis). Muốn đổi model mà không sửa code, thêm vào `environment` của `ai-service` trong `docker-compose.prod.yml`: `AI_AGENT_MODEL: claude-sonnet-5-5` (Spring tự map biến môi trường sang `ai.agent.model`).
+
+---
+
 ## 6. Đổi mật khẩu về sau
 
 - **Mật khẩu DB (`APP_DB_PASSWORD`, `KC_DB_PASSWORD`, `POSTGRES_PASSWORD`)**: script khởi tạo Postgres chỉ chạy lúc volume còn trống, nên sửa file **không** đổi mật khẩu trong DB. Làm hai việc: `docker exec -it $(docker ps -qf label=com.docker.compose.service=postgres) psql -U postgres -c "ALTER USER datn PASSWORD '<mới>'"` rồi sửa `secrets.env` và deploy lại (container nạp biến mới khi được tạo lại).
@@ -206,7 +231,7 @@ Webhook của từng repo do chính ứng dụng tự đăng ký khi kết nối
 ## 9. Checklist
 
 - [ ] `id deployer` có nhóm `docker`; `/home/deployer/datn` quyền 700
-- [ ] `sudo ls -l /home/deployer/datn/secrets.env` → `-rw------- deployer`, `grep -c '='` = 15
+- [ ] `sudo ls -l /home/deployer/datn/secrets.env` → `-rw------- deployer`, `grep -c '='` = 17
 - [ ] Đã chép bản sao về `secret/datn-secrets.env` trên Windows (không bị git thấy)
 
 Xong → [04 — Docker compose production](04_DOCKER_COMPOSE_PRODUCTION.md) (giải thích những gì có trong repo) rồi [05 — Triển khai lần đầu](05_TRIEN_KHAI_LAN_DAU.md).

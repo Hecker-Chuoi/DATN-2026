@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════════════════════════════
-# DATN-2026 — PRODUCTION trên MỘT máy chủ (docker compose): 6 hạ tầng + 5 service Spring Boot + frontend.
+# DATN-2026 — PRODUCTION trên MỘT máy chủ (docker compose): 6 hạ tầng + 6 service Spring Boot + frontend.
 #
 # KHÔNG chạy trực tiếp bằng tay trong lúc vận hành: dùng infrastructure/prod/scripts/deploy.sh (GitHub Actions gọi qua SSH),
 # script đặt đủ biến DATN_HOME, IMAGE_TAG và hai file env. Chạy tay để thử:
@@ -18,7 +18,7 @@
 
 name: datn            # cố định để volume (postgres_data, kafka_data...) không đổi tên giữa các lần deploy
 
-# Biến môi trường KHÔNG bí mật dùng chung cho 5 service Spring Boot.
+# Biến môi trường KHÔNG bí mật dùng chung cho 6 service Spring Boot.
 x-spring-env: &spring-env
   SPRING_PROFILES_ACTIVE: prod
   SPRING_CONFIG_ADDITIONAL_LOCATION: "optional:file:/config/"
@@ -259,6 +259,8 @@ services:
       GITHUB_STATE_SECRET: "${GITHUB_STATE_SECRET:-}"
       GITHUB_REDIRECT_URI: "${SCHEME}://${APP_HOST}/integrations/github/callback"
       GITHUB_WEBHOOK_URL: "${SCHEME}://${APP_HOST}/work/api/v1/work/integrations/github/webhook"
+      # Khoá nội bộ ai-service -> work-service (/internal/ai-tools/**, gateway không route). BẮT BUỘC: tránh dùng khoá mặc định trong repo.
+      AI_TOOLS_API_KEY: "${AI_TOOLS_API_KEY:?thiếu AI_TOOLS_API_KEY trong secrets.env}"
     volumes:
       - ./prod/spring/work-service/application-prod.yaml:/config/application-prod.yaml:ro
     healthcheck:
@@ -304,6 +306,29 @@ services:
     healthcheck:
       <<: *spring-health
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9994/actuator/health/readiness"]
+    mem_limit: 640m
+    networks: [app-net]
+
+  # Trợ lý AI (Claude API): lịch sử hội thoại / bộ nhớ lưu trong datn_main_db (Flyway riêng flyway_ai_schema_history), đếm lượt
+  # gọi theo ngày bằng Redis, gọi work-service qua /internal/ai-tools/** bằng AI_TOOLS_API_KEY. Không có ANTHROPIC_API_KEY thì
+  # service vẫn chạy, chỉ lượt chat báo lỗi (docs/cicd/cac_buoc/03 mục 5c).
+  ai-service:
+    image: "${REGISTRY}/datn-ai-service:${IMAGE_TAG}"
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      <<: *spring-env
+      SPRING_DATASOURCE_USERNAME: "${APP_DB_USERNAME}"
+      SPRING_DATASOURCE_PASSWORD: "${APP_DB_PASSWORD}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      AI_TOOLS_API_KEY: "${AI_TOOLS_API_KEY:?thiếu AI_TOOLS_API_KEY trong secrets.env}"
+    volumes:
+      - ./prod/spring/ai-service/application-prod.yaml:/config/application-prod.yaml:ro
+    healthcheck:
+      <<: *spring-health
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8084/actuator/health/readiness"]
     mem_limit: 640m
     networks: [app-net]
 
