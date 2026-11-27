@@ -1,14 +1,14 @@
 # 01 — Hướng dẫn setup Jenkins trên một server riêng
 
-> Jenkins chạy trên **server riêng** (gọi là **server Jenkins**), tách khỏi **server Minikube** đang chạy ứng dụng.
-> Jenkins làm: chạy test → build Docker image → push lên **Docker Hub** → SSH sang server Minikube chạy `helm upgrade` (đổi tag image) → Minikube kéo image mới từ Docker Hub.
+> Jenkins chạy trên **server riêng** (gọi là **server Jenkins**), tách khỏi **server ứng dụng** đang chạy `docker compose`.
+> Jenkins làm: chạy test → build Docker image → push lên **Docker Hub** → SSH sang server ứng dụng chạy `deploy.sh` (`docker compose pull && up -d`) → server ứng dụng kéo image mới từ Docker Hub.
 > Đọc kèm: [02 — Nghiên cứu CI/CD trên source code](../02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md), [03 — Tổng quan các bước](../03_TONG_QUAN_CAC_BUOC_TRIEN_KHAI.md).
 >
 > Tài liệu chia 2 phần:
-> - **Phần A (mục 1–8)**: cài Jenkins. Chỉ cần một máy Ubuntu có SSH + `sudo`, chưa cần repo hay Minikube.
-> - **Phần B (mục 9–12)**: nối Jenkins với Docker Hub, GitHub và server Minikube. Làm khi đã có `Jenkinsfile` trong repo và server Minikube đã chạy.
+> - **Phần A (mục 1–8)**: cài Jenkins. Chỉ cần một máy Ubuntu có SSH + `sudo`, chưa cần repo hay server ứng dụng.
+> - **Phần B (mục 9–12)**: nối Jenkins với Docker Hub, GitHub và server ứng dụng. Làm khi đã có `Jenkinsfile` trong repo và server ứng dụng đã chạy (mục SSH: [06](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md)).
 >
-> Ký hiệu dùng trong tài liệu: `<JENKINS_HOST>` (tên miền/IP server Jenkins), `<MINIKUBE_HOST>` (IP server Minikube), `<DOCKERHUB_USER>` (tài khoản Docker Hub).
+> Ký hiệu dùng trong tài liệu: `<JENKINS_HOST>` (tên miền/IP server Jenkins), `<APP_HOST_IP>` (IP **private** của server ứng dụng), `<DOCKERHUB_USER>` (tài khoản Docker Hub).
 
 ## Mục lục
 
@@ -46,12 +46,12 @@
                                 │  Docker Engine (build image)     │
                                 │  JDK 21, Maven, Node 22          │
                                 └──────┬─────────────────┬─────────┘
-                          docker push  │                 │ ssh deployer@<MINIKUBE_HOST>
+                          docker push  │                 │ ssh deployer@<APP_HOST_IP>
                                        ▼                 ▼   "deploy <tag>"
                                 ┌────────────┐   ┌──────────────────────────┐
-                                │ Docker Hub │◄──│ SERVER MINIKUBE          │
-                                └────────────┘   │  minikube (k8s) pull image│
-                                     pull image  │  helm/kubectl            │
+                                │ Docker Hub │◄──│ SERVER ỨNG DỤNG          │
+                                └────────────┘   │  Docker + docker compose │
+                                     pull image  │  Nginx :443              │
                                                  └──────────────────────────┘
 ```
 
@@ -63,7 +63,7 @@
 | HĐH | Ubuntu 22.04 / 24.04 LTS | | |
 | Cổng mở | 22 (SSH), 80, 443 | | **Không** mở 8080 ra Internet |
 
-> Server Jenkins **không** chạy Minikube, nên cho user `jenkins` vào nhóm `docker` là chấp nhận được (Docker này chỉ để build). Cần nhớ: ai có quyền `docker` ≈ có quyền root **trên server Jenkins**, vì vậy chỉ cho người tin cậy quyền sửa `Jenkinsfile`/cấu hình job.
+> Server Jenkins **không** chạy ứng dụng, nên cho user `jenkins` vào nhóm `docker` là chấp nhận được (Docker này chỉ để build). Cần nhớ: ai có quyền `docker` ≈ có quyền root **trên server Jenkins**, vì vậy chỉ cho người tin cậy quyền sửa `Jenkinsfile`/cấu hình job.
 
 ---
 
@@ -154,8 +154,7 @@ echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.
   | sudo tee /etc/apt/sources.list.d/trivy.list
 sudo apt-get update && sudo apt-get install -y trivy
 
-# kubectl + helm — CHỈ cần nếu chọn cách deploy "Jenkins tự chạy helm qua đường hầm SSH" (xem 02 §5).
-# Cách khuyến nghị (SSH sang server Minikube chạy script) thì KHÔNG cần cài ở đây.
+# Server Jenkins KHÔNG cần cài docker compose hay kubectl: deploy bằng SSH sang server ứng dụng chạy deploy.sh (06).
 ```
 
 ---
@@ -263,7 +262,7 @@ sudo certbot --nginx -d "$DOMAIN"
 | `github-branch-source` | Multibranch từ GitHub, báo trạng thái commit/PR, nhận webhook |
 | `cloudbees-folder` | Folder, credential theo folder |
 | `credentials-binding` | `withCredentials` (Docker Hub token) |
-| `ssh-agent` | `sshagent([...])` để SSH sang server Minikube |
+| `ssh-agent` | `sshagent([...])` để SSH sang server ứng dụng |
 | `matrix-auth` | Phân quyền theo user |
 | `nodejs` | Tool Node 22 (build frontend) |
 | `junit` | Báo cáo test Maven Surefire |
@@ -335,34 +334,22 @@ curl -sI https://<JENKINS_HOST>/login | head -1   # HTTP/2 200
 |---|---|---|---|
 | `github-token` | Username with password | Username = tài khoản GitHub, Password = **Fine-grained PAT** (repo DATN-2026: *Contents: Read*, *Commit statuses: Read & Write*, *Pull requests: Read*, *Metadata: Read*) | GitHub → Settings → Developer settings → Personal access tokens |
 | `dockerhub` | Username with password | Username = `<DOCKERHUB_USER>`, Password = **Access Token** (quyền *Read & Write*), **không** dùng mật khẩu tài khoản | Docker Hub → Account settings → Personal access tokens |
-| `minikube-ssh` | SSH Username with private key | Username = `deployer`, Private key = khoá riêng (xem dưới) | Tự sinh |
+| `app-server-ssh` | SSH Username with private key | Username = `deployer`, Private key = khoá riêng (xem dưới) | Tự sinh |
 
-**Sinh khoá SSH cho bước deploy** (chạy trên server Jenkins):
+**Sinh khoá SSH cho bước deploy** (🐧 chạy trên **server Jenkins**; nếu đã có khoá `id_deploy` từ trước thì dùng lại, không sinh lại):
 
 ```bash
 sudo -u jenkins ssh-keygen -t ed25519 -N "" -f /var/lib/jenkins/.ssh/id_deploy -C "jenkins-deploy"
-sudo cat /var/lib/jenkins/.ssh/id_deploy        # dán vào credential minikube-ssh
-sudo cat /var/lib/jenkins/.ssh/id_deploy.pub    # đưa sang server Minikube (dưới)
+sudo cat /var/lib/jenkins/.ssh/id_deploy        # dán vào credential app-server-ssh
+sudo cat /var/lib/jenkins/.ssh/id_deploy.pub    # đưa sang server ứng dụng: 06 §2 (tạo user deployer + authorized_keys)
 
-# Ghi known_hosts để SSH không hỏi "yes/no" khi chạy pipeline
-sudo -u jenkins bash -c 'ssh-keyscan -H <MINIKUBE_HOST> >> /var/lib/jenkins/.ssh/known_hosts'
+# Ghi known_hosts để SSH không hỏi "yes/no" khi chạy pipeline (làm SAU khi server ứng dụng đã có, dùng IP private)
+sudo -u jenkins bash -c 'ssh-keyscan -H <APP_HOST_IP> >> /var/lib/jenkins/.ssh/known_hosts'
 ```
 
-Trên **server Minikube**, tạo user `deployer` chỉ dùng cho deploy:
+Phía **server ứng dụng** (tạo user `deployer`, nhóm `docker`, khoá chỉ chạy được `deploy.sh`, cài `deploy.sh`): làm theo [06](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md). Kiểm tra từ server Jenkins sau khi xong 06: `sudo -u jenkins ssh -i /var/lib/jenkins/.ssh/id_deploy deployer@<APP_HOST_IP> check`.
 
-```bash
-sudo adduser --disabled-password --gecos "" deployer
-sudo mkdir -p /home/deployer/.ssh
-echo "<nội dung id_deploy.pub>" | sudo tee /home/deployer/.ssh/authorized_keys
-sudo chown -R deployer:deployer /home/deployer/.ssh && sudo chmod 700 /home/deployer/.ssh && sudo chmod 600 /home/deployer/.ssh/authorized_keys
-```
-
-> `deployer` cần `kubectl` + `helm` (cài trên server Minikube) và một kubeconfig **chỉ có quyền trong namespace của ứng dụng** (ServiceAccount + Role), không dùng kubeconfig admin của minikube. Chi tiết ở [02 §5](../02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md#5-deploy-từ-jenkins-sang-minikube).
-> Có thể khoá thêm: trong `authorized_keys` thêm tiền tố `command="/home/deployer/deploy.sh",no-port-forwarding,no-pty ` để khoá này chỉ chạy được đúng script deploy.
-
-Kiểm tra từ server Jenkins: `sudo -u jenkins ssh -i /var/lib/jenkins/.ssh/id_deploy deployer@<MINIKUBE_HOST> 'echo ok'`.
-
-**Docker Hub — chuẩn bị repository:** tạo sẵn 6 repo (hoặc để lần push đầu tự tạo): `datn-api-gateway`, `datn-identity-service`, `datn-work-service`, `datn-workspace-service`, `datn-notification-service`, `datn-frontend`. Repo **public** thì Minikube kéo về không cần đăng nhập; repo **private** thì phải tạo `imagePullSecret` trong cluster (02 §4). Gói miễn phí giới hạn số repo private và số lần pull — kiểm tra gói hiện tại của tài khoản.
+**Docker Hub — chuẩn bị repository:** tạo sẵn 6 repo (hoặc để lần push đầu tự tạo): `datn-api-gateway`, `datn-identity-service`, `datn-work-service`, `datn-workspace-service`, `datn-notification-service`, `datn-frontend`. Repo **public** thì server ứng dụng kéo về không cần đăng nhập; repo **private** thì phải `docker login` bằng token **Read-only** trên server ứng dụng (bằng user `deployer`). Gói miễn phí giới hạn số repo private và số lần pull — kiểm tra gói hiện tại của tài khoản.
 
 ---
 
@@ -417,10 +404,10 @@ pipeline {
         }
       }
     }
-    stage('SSH Minikube') {
+    stage('SSH server ứng dụng') {
       steps {
-        sshagent(['minikube-ssh']) {
-          sh 'ssh -o BatchMode=yes deployer@<MINIKUBE_HOST> "hostname && kubectl get pods -n datn && helm version"'
+        sshagent(['app-server-ssh']) {
+          sh 'ssh -o BatchMode=yes deployer@<APP_HOST_IP> check'
         }
       }
     }
@@ -428,7 +415,9 @@ pipeline {
 }
 ```
 
-Cả 3 stage xanh là Jenkins sẵn sàng. `Jenkinsfile` thật của dự án: xem khung mẫu ở [02 §6](../02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md#6-jenkinsfile).
+> Khoá của `deployer` bị khoá chặt ở [06 §3](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md#3-khoá-ssh-chỉ-chạy-được-deploysh): chỉ chạy được `deploy <sha>`, `rollback` và `check`, nên stage này dùng `check` (in phiên bản Docker, trạng thái container, tag đang chạy), không phải lệnh shell tuỳ ý.
+
+Cả 3 stage xanh là Jenkins sẵn sàng. `Jenkinsfile` thật của dự án nằm ở **gốc repo** (`Jenkinsfile`), giải thích ở [06 §5](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md#5-jenkinsfile-trong-repo).
 
 ---
 

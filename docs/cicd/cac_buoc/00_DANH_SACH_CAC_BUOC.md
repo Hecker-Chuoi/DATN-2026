@@ -1,12 +1,14 @@
-# Danh sách các bước triển khai CI/CD (2 server: Jenkins + Minikube)
+# Danh sách các bước triển khai CI/CD (2 server: Jenkins + ứng dụng bằng docker compose)
 
-> Hướng đã chốt: **Jenkins + Docker Hub + Minikube (driver docker) + Helm 4**, chạy trên **2 EC2**:
+> Hướng đã chốt: **Jenkins + Docker Hub + docker compose**, chạy trên **2 EC2**:
 > - **`datn-jenkins`** (đã có, cài theo [01](01_HUONG_DAN_SETUP_JENKINS.md)): chỉ chạy Jenkins — test, build, push image.
-> - **`datn-minikube`** (tạo mới, theo [02](02_CAI_MINIKUBE_KUBECTL_HELM.md)): chỉ chạy Minikube + Nginx — chạy ứng dụng.
+> - **`datn-app`** (tạo mới, theo [02](02_CHUAN_BI_SERVER_UNG_DUNG.md)): chỉ chạy Docker + Nginx — chạy ứng dụng (6 hạ tầng + 5 service Spring + frontend = 12 container).
 >
-> Jenkins deploy bằng **SSH** sang `datn-minikube` (user `deployer`, credential `minikube-ssh`) rồi chạy `deploy.sh` → `helm upgrade`. Đây đúng là mô hình gốc của [01 §1](01_HUONG_DAN_SETUP_JENKINS.md#1-kiến-trúc-và-yêu-cầu-server) và [02 nghiên cứu §5 (cách A)](../02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md#5-deploy-từ-jenkins-sang-minikube).
+> Jenkins deploy bằng **SSH** sang `datn-app` (user `deployer`, credential `app-server-ssh`) rồi chạy `deploy.sh` → `docker compose pull && up -d --wait`.
 >
-> Nguyên tắc: **deploy tay thành công trước, rồi mới tự động hoá** (bước 0–5 tay, bước 6–8 tự động).
+> Nguyên tắc: **deploy tay thành công trước, rồi mới tự động hoá** (bước 0–4 tay, bước 5–7 tự động).
+>
+> **Thay đổi so với bản trước:** bỏ Minikube + Helm (đã xoá khỏi nhánh, còn trong lịch sử git: `git show e93a83d:infrastructure/helm/...`). Lý do: ứng dụng chạy trên **một** máy, không cần điều phối container; bỏ được Kubernetes, Ingress, RBAC, Helm chart, ~1,2 GB RAM của lõi Kubernetes và hơn nửa số tài liệu. Đánh đổi: deploy có gián đoạn ngắn từng service (04 §3, mục 10), không tự co giãn.
 
 ## Kiến trúc
 
@@ -18,97 +20,81 @@
                      │  Nginx :443 ─► Jenkins 127.0.0.1:8080│
                      │  Docker (build image), JDK, Maven, Node
                      └──────┬──────────────────┬───────────┘
-                docker push │                  │ ssh deployer@<IP private datn-minikube>
-                            ▼                  ▼   "deploy.sh <tag>"  (cổng 22, trong VPC)
-                     ┌────────────┐   ┌──────────────────────────────────────────┐
-                     │ Docker Hub │◄──│ EC2 datn-minikube  (2 vCPU / 8 GB)       │
-                     └────────────┘   │  Nginx :443                              │
-                       pull image     │   ├─ app.<domain> ─► 192.168.49.2:80     │
-                                      │   └─ sso.<domain> ─► 192.168.49.2:80     │
-                                      │  container "minikube" (Kubernetes)       │
-                                      │   ns datn: datn-platform (Postgres,      │
-                                      │            Keycloak, Kafka, Redis, MinIO)│
-                                      │            datn-app (5 service + FE)     │
-                                      └──────────────────────────────────────────┘
+                docker push │                  │ ssh deployer@<IP private datn-app>
+                            ▼                  ▼   "deploy <tag>" + gói tar.gz (compose, cấu hình)
+                     ┌────────────┐   ┌───────────────────────────────────────────┐
+                     │ Docker Hub │◄──│ EC2 datn-app  (2 vCPU / 8 GB)             │
+                     └────────────┘   │  Nginx :443                               │
+                       pull image     │   ├─ app.<domain> ─► 127.0.0.1:3000 (frontend → api-gateway)
+                                      │   └─ sso.<domain> ─► 127.0.0.1:8080 (keycloak)
+                                      │  docker compose (project "datn"):         │
+                                      │   postgres, keycloak, kafka, redis, minio, mailpit
+                                      │   api-gateway, identity, work, workspace, notification, frontend
+                                      └───────────────────────────────────────────┘
 ```
 
 ## Đã xong / cần dọn
 
 - [x] Phần A của [01](01_HUONG_DAN_SETUP_JENKINS.md) (mục 1–8) trên `datn-jenkins`: Jenkins, Docker, Nginx, plugin, Global Tools.
 - [x] Credential `github-token`, `dockerhub`.
-- [x] Cặp khoá `/var/lib/jenkins/.ssh/id_deploy` (+ `.pub`) trên `datn-jenkins` — **giữ lại**, dùng ở bước 6.
-- [ ] Credential `minikube-ssh` (Username `deployer`, Private Key = `id_deploy`) — tạo được ngay, chưa test được tới bước 6.
-- [ ] **Dọn trên `datn-jenkins`** (nếu chưa làm): `sudo deluser --remove-home deployer` (user tạo nhầm), `sudo -u jenkins ssh-keygen -R 172.31.45.0` (known_hosts trỏ nhầm vào chính máy Jenkins).
+- [x] Cặp khoá `/var/lib/jenkins/.ssh/id_deploy` (+ `.pub`) trên `datn-jenkins` — **giữ lại**, dùng ở bước 5.
+- [x] Trong repo: `docker-compose.prod.yml`, `infrastructure/prod/*`, `Jenkinsfile`, `build-push.sh` (04). **Chỉ còn việc điền tên miền + Docker Hub user** (04 §7).
+- [ ] **Dọn** (làm khi tạo lại `datn-app`):
+  - EC2 `datn-minikube` cũ: terminate (hoặc dựng lại hệ điều hành) và dùng lại Elastic IP cho `datn-app`; đổi tên Security Group `datn-minikube-sg` → `datn-app-sg` (hoặc tạo mới, mở 22 / 80 / 443).
+  - Jenkins: đổi tên credential `minikube-ssh` → `app-server-ssh` (hoặc tạo mới); xoá dòng host cũ trong `known_hosts`: `sudo -u jenkins ssh-keygen -R <IP private cũ>`.
+  - Nếu từng tạo user `deployer` nhầm trên `datn-jenkins`: `sudo deluser --remove-home deployer`.
 
 ## Các bước
 
 | # | Việc | Server / nơi làm | Xong khi |
 |---|---|---|---|
-| 0 | **[Chi tiết: 02 §1–2](02_CAI_MINIKUBE_KUBECTL_HELM.md#1-tạo-ec2-datn-minikube)** — Tạo EC2 `datn-minikube` (**2 vCPU / 8 GB `t3.large`**, credit Unlimited, **cùng VPC** với `datn-jenkins`, Elastic IP, Security Group cho 22 từ máy bạn + từ `datn-jenkins`, 80/443 công khai). Chuẩn bị máy giống 01 §2, §4: timezone, hostname, swap, ufw, Docker + **R1** (swappiness, tắt snapd) | `datn-minikube` | SSH được vào; `docker run --rm hello-world` chạy bằng `ubuntu` |
-| 1 | **[Chi tiết: 02 §3–9](02_CAI_MINIKUBE_KUBECTL_HELM.md#3-cài-kubectl)** — Cài `kubectl`, `helm` (Helm 4), `minikube`. `minikube start --driver=docker --cpus=2 --memory=6g --disk-size=50g` bằng user `ubuntu` (**R1**). Bật addon `ingress`, `metrics-server`. Tạo **systemd unit** để Minikube tự khởi động sau reboot | `datn-minikube` | `kubectl get nodes` → `Ready`; reboot xong Minikube tự lên |
-| 2 | **[Chi tiết: 03](03_TAO_NAMESPACE_VA_SECRET.md)** — Tạo namespace `datn`, Secret `app-secrets` (12 key: mật khẩu Postgres / user `datn` / user `keycloak`, Keycloak admin + client secret, MinIO, SMTP — sinh ngẫu nhiên vào `~/datn-secrets/app-secrets.env`), Secret `dockerhub-pull` (token **Read-only**) gắn vào ServiceAccount `default`, LimitRange `default-limits` | `datn-minikube`, **không commit** | `kubectl -n datn get secrets` thấy `app-secrets` (12) + `dockerhub-pull` (1) |
-| 3 | ✅ **[Chi tiết: 04](04_VIET_HELM_CHART_VA_SCRIPT.md) — ĐÃ LÀM trong repo.** Helm chart `datn-platform` + `datn-app` (`infrastructure/helm/`), profile Spring `k8s` (`files/config/*/application-k8s.yaml`), `ARG VITE_KEYCLOAK_URL` trong Dockerfile frontend, `infrastructure/ci/build-push.sh`, `infrastructure/k8s/` (`deploy.sh`, `rbac-deployer.yaml`, `make-ci-kubeconfig.sh`, `make-realm-secret.sh`, `namespace-limits.yaml`, `set-public-host.sh`). Viết theo **R2–R6** (`values-minikube.yaml`). **Việc còn lại của bạn:** chạy `set-public-host.sh` với tên miền thật rồi commit (04 §8) | repo | `helm lint --strict` sạch, kubeconform 33/33, đã chạy thử thật 5 service + Keycloak + Kafka (04 §6); `requests.memory` = **2,9 Gi** ≤ 4,5 Gi |
-| 4 | `kubectl apply -f infrastructure/k8s/namespace-limits.yaml`; `bash infrastructure/k8s/make-realm-secret.sh` (sửa realm: secret + redirect URI của client `datn-backend`); `helm install datn-platform` (`-f values-minikube.yaml -f ../env-minikube.yaml`). Kiểm tra **R2, R4** chạy đúng. Chi tiết: 04 §9 | `datn-minikube`, một lần | Pod hạ tầng `Running`, vào được Keycloak admin; `kubectl top pods -n datn` khớp bảng ngân sách |
-| 5 | Build + push image bằng tay một lần (trên `datn-jenkins` hoặc máy cá nhân), `helm install datn-app --set image.tag=<sha>`; DNS `app.` / `sso.` → Elastic IP `datn-minikube`; Nginx + certbot trên `datn-minikube`. Đo và chỉnh theo **R7** | cả hai | **Mở trình duyệt đăng nhập được** vào ứng dụng; không pod nào `OOMKilled` sau 30 phút dùng thử |
-| 6 | Nối Jenkins → Minikube ([01 §9](01_HUONG_DAN_SETUP_JENKINS.md#9-credentials)): trên `datn-minikube` tạo user `deployer` + `authorized_keys` (= `id_deploy.pub`), `kubectl apply -f infrastructure/k8s/rbac-deployer.yaml` + `bash infrastructure/k8s/make-ci-kubeconfig.sh` (kubeconfig giới hạn quyền cho `deployer`), chép `infrastructure/k8s/deploy.sh` vào `/home/deployer/`; trên `datn-jenkins` chạy `ssh-keyscan` **IP private** của `datn-minikube` | cả hai | `sudo -u jenkins ssh -i /var/lib/jenkins/.ssh/id_deploy deployer@<IP private> 'kubectl -n datn get pods && helm version'` chạy được |
-| 7 | Viết `Jenkinsfile` ([02 nghiên cứu §6](../02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md#6-jenkinsfile)): test → `bash infrastructure/ci/build-push.sh $TAG` (chỉ nhánh `main`) → `tar cz -C infrastructure helm \| ssh deployer@... ./deploy.sh $TAG`. `deploy.sh` (đã có) tự dò `--rollback-on-failure` (Helm 4) / `--atomic` (Helm 3), timeout 15 phút vì **R5, R6** | repo | Commit lên nhánh, cú pháp hợp lệ |
-| 8 | Làm [01](01_HUONG_DAN_SETUP_JENKINS.md) §10–12: Multibranch, webhook, smoke-test (đủ 3 stage, kể cả `SSH Minikube`) | Jenkins | Push code → pipeline xanh → app chạy bản mới |
-| 9 | Vận hành: `datn-jenkins` theo 01 §13 (cron dọn image, 1 executor); `datn-minikube`: `pg_dump` Postgres định kỳ, **không** `docker system prune` (02 §10), theo dõi **R8** | cả hai | Có cron chạy, có file backup |
+| 0 | **[02 §1–3](02_CHUAN_BI_SERVER_UNG_DUNG.md#1-tạo-ec2-datn-app)** — Tạo EC2 `datn-app` (**`t3.large`**, credit Unlimited, **cùng VPC** với `datn-jenkins`, Elastic IP, Security Group: 22 từ máy bạn + SG Jenkins, 80/443 công khai). Chuẩn bị máy: timezone, swap, ufw, cài Docker + Compose, giới hạn log container | `datn-app` | `docker run --rm hello-world` chạy bằng `ubuntu`; `docker compose version` ≥ 2.20 |
+| 1 | **[02 §4–6](02_CHUAN_BI_SERVER_UNG_DUNG.md#4-cài-nginx-certbot-jq)** — Cài Nginx + certbot + jq; DNS `app.` / `sso.` → Elastic IP; Nginx proxy vào `127.0.0.1:3000` / `:8080`; HTTPS bằng certbot; đặt tên miền vào `public.env` rồi commit | `datn-app` + repo | `certbot renew --dry-run` thành công; `https://app.<domain>/` có phản hồi (502 là đúng lúc này) |
+| 2 | **[03](03_SECRET_VA_CAU_HINH.md)** — Tạo user `deployer` (nhóm `docker`, không `sudo`), `/home/deployer/datn/`, sinh `secrets.env` (12 khoá, quyền 600), sao lưu về máy cá nhân (`secret/`, đã gitignore) | `datn-app`, **không commit** | `secrets.env` có 12 khoá; bản sao lưu có trên Windows |
+| 3 | ✅ **[04](04_DOCKER_COMPOSE_PRODUCTION.md) — ĐÃ LÀM trong repo.** `docker-compose.prod.yml` (12 container, healthcheck, `depends_on` theo chuỗi, `mem_limit`), `prod/` (`public.env`, profile Spring `prod`, init Postgres, Nginx mẫu, `deploy.sh`, `make-realm.sh`, `backup-postgres.sh`), `Jenkinsfile`. Đã chạy thử thật 12/12 container `healthy` từ DB trống (04 §5) | repo | `docker compose config` hợp lệ; việc còn lại của bạn: 04 §7 |
+| 4 | **[05](05_TRIEN_KHAI_LAN_DAU.md)** — `build-push.sh` trên Windows (6 image, tag = git SHA); cài `deploy.sh` lên server; `tar \| ssh ... deploy.sh deploy <tag>`; mở trình duyệt thử; đo RAM; thử `rollback`; cron sao lưu | cả hai | **Mở trình duyệt đăng nhập được**; WebSocket `101`; upload file; không container nào `OOMKilled` sau 30 phút dùng thử |
+| 5 | **[06 §1–4](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md)** — `authorized_keys` của `deployer` (= `id_deploy.pub`) **kèm** `command="/home/deployer/deploy.sh",no-pty` (khoá chỉ chạy được `deploy` / `rollback` / `check`); trên `datn-jenkins` `ssh-keyscan` **IP private** + credential `app-server-ssh` | cả hai | 🐧J `ssh -i id_deploy deployer@<IP private> check` chạy được; lệnh `ls /` bị từ chối |
+| 6 | **[06 §5–6](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md#5-jenkinsfile-trong-repo)** + [01 §10–12](01_HUONG_DAN_SETUP_JENKINS.md#10-tạo-job-multibranch-pipeline) — Sửa `APP_SERVER` trong `Jenkinsfile`; job `smoke-test` (3 stage); Multibranch `DATN/datn`; webhook GitHub | Jenkins + repo | Job `smoke-test` xanh cả 3 stage; push một nhánh thì job tự chạy |
+| 7 | **[06 §7](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md#7-kịch-bản-kiểm-tra)** — 6 kịch bản: PR hỏng test, merge `main`, sửa giao diện, deploy lỗi (tự rollback), rollback tay, khoá SSH chặn lệnh lạ | Jenkins + `datn-app` | Push code → pipeline xanh → ứng dụng chạy bản mới |
+| 8 | Vận hành: `datn-jenkins` theo [01 §13](01_HUONG_DAN_SETUP_JENKINS.md#13-bảo-trì) (cron dọn image, 1 executor); `datn-app`: cron `backup-postgres.sh` (05 §8), **không** `docker compose down -v` / `docker volume prune` (02 §7), theo dõi **R8** | cả hai | Có cron chạy, có file backup |
 
-## Ngân sách tài nguyên `datn-minikube` (2 vCPU / 8 GB)
+## Ngân sách tài nguyên `datn-app` (2 vCPU / ~7,6 GB)
 
-Tài khoản chỉ được cấp tối đa `t3.large` (2 vCPU / 7,6 GB). Để mặc định thì cả hệ thống cần ~8–9 GB → OOM. Mục tiêu: **pod ứng dụng ~5 GB** trong 6 GB cấp cho Minikube. Cột `requests / limits` là giá trị **đã viết trong chart** (`values-minikube.yaml` của hai chart), cột "Đo thử" là RAM thật khi chạy thử trên máy dev (04 §6):
+Tài khoản chỉ được cấp tối đa `t3.large` (2 vCPU / 7,6 GB). Hạ tầng + 5 JVM + Keycloak ở cấu hình mặc định cần ~7–8 GB → phải giới hạn. Cột `mem_limit` là giá trị **đã viết trong `docker-compose.prod.yml`**, cột "Đo thử" là RAM thật khi 12 container đã lên và rảnh trên máy dev (04 §4) — **chưa đo trên EC2**:
 
-| Thành phần | Mặc định | `requests` / `limits` memory (chart) | `requests` CPU | Đo thử |
-|---|---|---|---|---|
-| Ubuntu + Docker + Nginx (ngoài Minikube) | ~0,8 GB | — (phần 1,6 GB không cấp cho Minikube) | — | — |
-| Lõi Kubernetes + ingress + metrics-server | ~1,2 GB | — (đo bằng `docker stats` lúc cụm rỗng, 02 §6) | ~0,95 CPU | — |
-| Postgres (**1 instance**, 2 DB) | 2 instance ~0,4 GB | 256Mi / 512Mi | 50m | 78 MiB |
-| Keycloak | 1,2+ GB | 640Mi / **1280Mi**, heap 40% | 100m | 764 MiB |
-| Kafka (KRaft 1 node) | ~1 GB | 512Mi / 768Mi, heap 384m | 100m | 308 MiB |
-| Redis | ~0,05 GB | 32Mi / 96Mi | 10m | 4 MiB |
-| MinIO | ~0,3 GB | 128Mi / 256Mi | 25m | (chưa đo) |
-| Mailpit | ~0,05 GB | 16Mi / 64Mi | 5m | (chưa đo) |
-| api-gateway | ~0,6 GB | 256Mi / 512Mi | 50m | 198 MiB |
-| identity / workspace / notification | ~0,6–0,8 GB mỗi cái | 256Mi / 512Mi | 50m | 243 / 245 / 280 MiB |
-| work-service | ~0,8 GB | 320Mi / 640Mi | 50m | 347 MiB |
-| Frontend (nginx) | ~0,03 GB | 16Mi / 64Mi | 5m | 12 MiB |
-| **Cộng (datn-platform + datn-app)** | **~7–8 GB** ❌ | **requests 2,9 Gi** ✅ / limits 5,6 Gi | **0,55 CPU** ✅ | ≈ 2,6 GiB |
+| Thành phần | `mem_limit` | Đo thử | Ghi chú |
+|---|---|---|---|
+| Ubuntu + Docker + Nginx (ngoài container) | — | ~0,8 GB (ước tính) | |
+| keycloak | 1280m | ~893 MiB | heap 40%, `KC_CACHE=local`, `start` (không `start-dev`) |
+| kafka | 768m | ~313 MiB | KRaft 1 nút, heap 384m, giữ log 72 giờ |
+| work-service | 768m | ~415 MiB | |
+| notification / workspace / identity / api-gateway | 640m mỗi cái | 330 / 320 / 257 / 236 MiB | |
+| postgres (**1 instance**, 2 DB) | 512m | ~106 MiB | |
+| minio / redis / mailpit / frontend | 256m / 96m / 64m / 64m | 89 / 8 / 16 / 15 MiB | |
+| **Cộng 12 container** | 6,3 GB (giới hạn) | **≈ 3,0 GiB** | |
 
-Hai con số cần nhớ: **`requests.memory` ≤ 4,5 Gi** (đạt: 2,9 Gi) và **`requests.cpu` ≤ 1** (đạt: 0,55). CPU là bẫy: nút Minikube chỉ có 2 CPU mà kube-system đã chiếm ~0,95, nên `requests.cpu` của ứng dụng đặt thấp (5–100m); đặt như bản cũ (200–250m mỗi service, tổng ~1,5 CPU) thì pod kẹt `Pending`. `infrastructure/k8s/namespace-limits.yaml` có ResourceQuota (`requests.cpu: 1`, `requests.memory: 4608Mi`) để vượt ngân sách là bị từ chối ngay.
+Mục tiêu: `free -h` → `available` ≥ 1 GB khi chạy ổn định, không container nào `OOMKilled`.
 
 Các việc tối ưu — **đã làm** thì đánh dấu, mỗi mục ghi nơi nó nằm trong repo:
 
-- [x] **R1 — Tầng máy + Minikube** (bước 0–1, [02 §2.2, §6](02_CAI_MINIKUBE_KUBECTL_HELM.md#22-tối-ưu-bộ-nhớ-ở-tầng-máy-vì-chỉ-có-8-gb)): `minikube start --cpus=2 --memory=6g`; swap 4 GB + `vm.swappiness=10`; tắt `snapd`; chỉ bật addon `ingress` + `metrics-server`.
-- [x] **R2 — Gộp Postgres** (`datn-platform/templates/postgres.yaml`): **một** StatefulSet `postgres:15-alpine` chứa 2 database `datn_main_db` (owner `datn`) + `keycloak` (owner `kc_user`), tạo bằng script trong `/docker-entrypoint-initdb.d` (ConfigMap `postgres-init`, đọc mật khẩu từ `app-secrets`); script chạy `CREATE EXTENSION IF NOT EXISTS pgcrypto` bằng superuser (migration V1 của work / workspace cần) và thu hồi `CONNECT` để mỗi user chỉ vào DB của mình. `shared_buffers=128MB`, `max_connections=100`. **Đã chạy thử thật** trên PG 15: user `datn` không phải superuser vẫn chạy được 10 migration Flyway của work-service và 6 của workspace-service. Lệch với [02 nghiên cứu §4.2](../02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md#42-chart-datn-platform) (đã sửa).
-- [x] **R3 — Giới hạn JVM 5 service** (`datn-app/values-minikube.yaml`):
-  - `requests.memory` 256Mi, `limits.memory` 512Mi (work-service 320Mi / 640Mi); `requests.cpu: 50m`, **không đặt `limits.cpu`** (giới hạn CPU làm Spring khởi động bị bóp).
-  - `JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=65 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError"`. **65% chứ không phải 70%** vì metaspace, code cache và luồng nằm ngoài heap mà limit chỉ 512–640Mi; `TieredStopAtLevel=1` (chỉ JIT C1) giảm tải CPU khi 5 JVM khởi động cùng lúc trên 2 vCPU.
-  - `replicas: 1`; `spring.datasource.hikari.maximum-pool-size: 5` trong từng profile `k8s` (không bật `lazy-initialization`, dễ lỗi lúc chạy).
-- [x] **R4 — Hạ tầng có giới hạn** (`datn-platform/values-minikube.yaml`):
-  - Kafka: `KAFKA_HEAP_OPTS=-Xms384m -Xmx384m`, `KAFKA_LOG_RETENTION_HOURS=72` (đã xác nhận trong file cấu hình broker thật), listener quảng bá `kafka:9092`.
-  - **Keycloak: limit 1280Mi (không phải 1Gi)**, heap `MaxRAMPercentage=40`, `KC_CACHE=local`, chạy `start` (không `start-dev`). Repo từng gặp OOMKilled ở 1Gi ([02 nghiên cứu §8.9](../02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md)); đo thật: heap 50% → 1,06 GiB (85% limit), **heap 40% → 0,76 GiB (60%)** cùng tải. Không thêm `-XX:+UseSerialGC` được vì `kc.sh` đã tự chọn ParallelGC.
-  - Redis: `--maxmemory 64mb --maxmemory-policy allkeys-lru`. Mailpit: `MP_MAX_MESSAGES=200`, không có Ingress; dùng SMTP thật thì đặt `mailpit.enabled: false`.
-- [x] **R5 — Probe cho máy 2 vCPU** (`datn-app/values-minikube.yaml`, `templates/backend.yaml`): `startupProbe` `/actuator/health/liveness` 10 giây × 36 lần (tối đa 6 phút); `livenessProbe` `timeoutSeconds: 5`, `failureThreshold: 5`; `readinessProbe` `/actuator/health/readiness`. `initContainers` chờ theo **chuỗi** `identity → work → workspace` (đúng thứ tự migration trên DB trống: FK `fk_projects_workspace` chỉ được tạo khi bảng `projects` đã có) và Postgres / Redis / Kafka / MinIO / Keycloak sẵn sàng. notification-service **không khởi động được nếu không phân giải được `kafka`** (đã thử), nên init container chờ Kafka là bắt buộc.
-- [x] **R6 — Deploy kiểu thay thế, không song song** (`rollout:` trong `datn-app/values-minikube.yaml`): `maxSurge: 0`, `maxUnavailable: 1` (tắt pod cũ rồi mới bật pod mới); Keycloak / Redis / Mailpit `Recreate`. Mặc định `maxSurge: 1` sẽ bật thêm pod mới của cả 5 service (cần thêm ~2 GB) → OOM. **Đánh đổi:** mỗi lần deploy các service gián đoạn **lần lượt** (do chuỗi init ở R5), ước tính 5–8 phút cả đợt, **chưa đo trên Minikube thật** (đo ở bước 5) → ghi trong báo cáo là hạn chế do tài nguyên; có máy 16 GB thì đổi về `maxSurge: 1, maxUnavailable: 0`. `helm upgrade --timeout 15m` (trong `deploy.sh`).
-- [ ] **R7 — Đo thực tế rồi chỉnh** (bước 4–5): cột "Đo thử" ở bảng trên là số đo trên **máy dev** (JVM giống hệt, nhưng CPU và nền tảng khác Minikube), chỉ là mốc để so.
-  - `kubectl top pods -n datn` (sau khi đăng nhập, tạo dự án, kéo thả vài công việc) → đặt `limits` ≈ mức dùng cao nhất × 1,3.
-  - `kubectl describe node minikube | grep -A8 "Allocated resources"` → tổng `requests` memory < 80 %.
-  - `free -h` trên host: `available` ≥ 1 GB.
-- [ ] **R8 — Theo dõi khi vận hành** (bước 9):
-  - `kubectl get pods -n datn` → cột `RESTARTS` không tăng; `kubectl get events -n datn --field-selector reason=OOMKilling`.
-  - `dmesg -T | grep -i oom` trên host (OOM ở tầng host = nguy hiểm, có thể sập cả cụm).
-  - Vẫn OOM thường xuyên dù đã làm R2–R6 → phương án cuối: thay Minikube bằng **k3s** (không lồng Kubernetes trong container, tiết kiệm ~0,5–1 GB), hoặc xin cấp `t3.xlarge`.
+- [x] **R1 — Tầng máy** (02 §2): swap 4 GB + `vm.swappiness=10`; tắt `snapd`; giới hạn log container 10 MB × 3 (`daemon.json`) để log không ăn đầy đĩa.
+- [x] **R2 — Gộp Postgres** (`prod/postgres/10-init-databases.sh`): **một** `postgres:15-alpine` chứa `datn_main_db` (owner `datn`) + `keycloak` (owner `kc_user`); script chạy `CREATE EXTENSION pgcrypto` bằng superuser (migration V1 của work / workspace cần) và thu hồi `CONNECT` để mỗi user chỉ vào DB của mình. **Đã chạy thử thật** (owner, extension đúng; 5 service chạy được Flyway).
+- [x] **R3 — Giới hạn JVM 5 service** (`x-spring-env` trong compose): `-XX:MaxRAMPercentage=65 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError`; **không đặt giới hạn CPU** (bị bóp thì Spring khởi động lâu gấp mấy lần); `hikari.maximum-pool-size: 5` trong từng `application-prod.yaml`.
+- [x] **R4 — Hạ tầng có giới hạn**: Kafka `-Xms384m -Xmx384m` + giữ log 72 giờ; **Keycloak limit 1280m (không phải 1 GB)**, heap 40% (repo từng gặp OOMKilled ở 1 GB; không thêm `-XX:+UseSerialGC`); Redis `--maxmemory 64mb --maxmemory-policy allkeys-lru` (không lưu đĩa); Mailpit `MP_MAX_MESSAGES=200`, giao diện chỉ nghe `127.0.0.1`.
+- [x] **R5 — Healthcheck + khởi động theo chuỗi** (compose): `start_period: 120s`, `retries: 10` cho Spring; `depends_on … service_healthy` theo chuỗi `identity → work → workspace` (đúng thứ tự migration trên DB trống) và Postgres / Redis / Kafka / MinIO / Keycloak sẵn sàng; notification chờ Kafka (không khởi động được nếu không phân giải được `kafka`).
+- [x] **R6 — Deploy kiểu thay thế, không song song**: `docker compose up -d` chỉ tạo lại container có image mới, từng cái một theo chuỗi `depends_on`; hạ tầng giữ nguyên. **Đánh đổi:** mỗi service gián đoạn vài chục giây lúc được thay; cả đợt deploy ước tính 5–8 phút (**chưa đo**) → ghi trong báo cáo là hạn chế do tài nguyên. Có máy 16 GB thì chạy hai bản song song được.
+- [ ] **R7 — Đo thực tế rồi chỉnh** (bước 4, [05 §6](05_TRIEN_KHAI_LAN_DAU.md#6-đo-ram-và-chỉnh)): `docker stats --no-stream`, `free -h`, `docker inspect ... OOMKilled`; đặt `mem_limit` ≈ mức dùng cao nhất × 1,3.
+- [ ] **R8 — Theo dõi khi vận hành** (bước 8): cột `RestartCount` không tăng; `dmesg -T | grep -i oom` trên host (OOM ở tầng host nguy hiểm hơn OOM của container); `docker system df` cho đĩa. Vẫn OOM thường xuyên dù đã làm R2–R6 → phương án cuối: xin cấp `t3.xlarge`, hoặc tách Keycloak + Kafka sang máy thứ ba.
 
 ## Vì sao tách 2 server
 
-- Tài khoản chỉ được cấp tối đa **2 vCPU / 7,6 GB mỗi EC2** (`t3.large`). Một máy không đủ chạy cả Jenkins (build ~4–5 GB lúc cao điểm) lẫn Minikube (~6 GB) → tách 2 máy để có tổng ~15 GB.
-- Build nặng (Maven, `docker build`) không làm chậm / OOM ứng dụng; Jenkins lỗi hay đang nâng cấp thì app vẫn chạy.
-- Đúng mô hình đã viết trong 01 / 02 nghiên cứu / 03 → **không phải sửa** các tài liệu đó (trừ chỗ ghi cấu hình 16 GB và 2 Postgres, xem R2).
+- Tài khoản chỉ được cấp tối đa **2 vCPU / 7,6 GB mỗi EC2** (`t3.large`). Một máy không đủ chạy cả Jenkins (build ~4–5 GB lúc cao điểm) lẫn ứng dụng (~3 GB + đỉnh lúc khởi động) → tách 2 máy.
+- Build nặng (Maven, `docker build`) không làm chậm / OOM ứng dụng; Jenkins lỗi hay đang nâng cấp thì ứng dụng vẫn chạy.
 
 ## Lưu ý
 
-- Jenkins SSH sang Minikube bằng **IP private** (`172.31.x.x`, không đổi khi stop/start, không tốn băng thông Internet). IP public / Elastic IP chỉ dùng cho DNS `app.` / `sso.` và để bạn SSH vào quản trị.
+- Jenkins SSH sang `datn-app` bằng **IP private** (`172.31.x.x`, không đổi khi stop/start). IP public / Elastic IP chỉ dùng cho DNS `app.` / `sso.` và để bạn SSH vào quản trị.
 - Hai EC2 phải **cùng VPC** (thường là VPC mặc định) thì mới thấy nhau qua IP private.
-- `deployer` **không** vào nhóm `docker` / `sudo`, và dùng kubeconfig của ServiceAccount `ci-deployer` (chỉ quyền trong ns `datn`), **không** dùng `~/.kube/config` admin của `ubuntu`.
-- Muốn tiết kiệm: stop `datn-minikube` khi không dùng; systemd unit (02 §9) tự bật lại cụm khi start.
+- `deployer` thuộc nhóm `docker` (≈ quyền root trên máy `datn-app`) nhưng **không có `sudo`**, và khoá SSH của Jenkins bị khoá chặt bằng `command="…deploy.sh"`; `deploy.sh` thuộc root nên Jenkins không tự sửa được.
+- Muốn tiết kiệm: stop `datn-app` khi không dùng; Docker + `restart: unless-stopped` tự bật lại các container khi máy start (chờ vài phút vì chuỗi khởi động).
+- Bản cũ (Minikube + Helm) còn trong lịch sử git tại commit `e93a83d`.
