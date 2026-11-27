@@ -34,34 +34,134 @@ Hệ thống phục vụ nhiều nhóm người dùng với mức quyền khác 
 
 ## 1.2. Tìm hiểu về công nghệ sử dụng
 
-### 1.2.1. Kiến trúc Microservice và API Gateway
+Các công nghệ dưới đây được lựa chọn dựa trên yêu cầu của hệ thống: nhiều người dùng thao tác cùng lúc, dữ liệu có quan hệ chặt chẽ, quyền hạn phải được kiểm soát nghiêm ngặt, thông báo phải đến kịp thời và việc triển khai phải tự động. Danh sách được lấy trực tiếp từ mã nguồn của dự án.
 
-Hệ thống được chia thành các dịch vụ độc lập, mỗi dịch vụ phụ trách một mảng nghiệp vụ và được triển khai riêng. Dịch vụ định danh (`identity-service`) quản lý người dùng, đăng ký và xác thực email. Dịch vụ công việc (`work-service`) là phần lớn nhất, chứa dự án, công việc, workflow, sprint, board, báo cáo và đóng góp. Dịch vụ không gian làm việc (`workspace-service`) quản lý Workspace, thành viên và lời mời, còn dịch vụ thông báo (`notification-service`) phụ trách thông báo trong ứng dụng và email. Phần mã dùng chung như hợp đồng sự kiện được tách thành module `common`.
+### 1.2.1. Kiến trúc Microservice và cổng giao tiếp API
 
-Toàn bộ yêu cầu từ trình duyệt đi qua một cổng duy nhất là API Gateway, xây dựng bằng Spring Cloud Gateway. Gateway nhận JWT từ header hoặc cookie, định tuyến đến dịch vụ phù hợp và chuyển token xuống dịch vụ phía sau. Khi một dịch vụ cần dữ liệu của dịch vụ khác, chẳng hạn work-service tra thông tin người dùng từ identity-service, hai bên giao tiếp đồng bộ qua OpenFeign.
+Kiến trúc Microservice là một phong cách kiến trúc phần mềm [1], trong đó một ứng dụng lớn được chia thành tập hợp các dịch vụ nhỏ, độc lập, mỗi dịch vụ chạy trong tiến trình riêng và giao tiếp với nhau qua giao diện lập trình hoặc hàng đợi thông điệp. Đối lập với kiến trúc nguyên khối, nơi toàn bộ chức năng nằm trong một chương trình duy nhất, cách chia này cho phép mỗi phần được phát triển, kiểm thử và triển khai riêng mà không ảnh hưởng đến phần còn lại.
 
-### 1.2.2. Frontend
+Hệ thống được tách thành năm thành phần chạy riêng: cổng giao tiếp (api-gateway), dịch vụ định danh (identity-service), dịch vụ công việc (work-service), dịch vụ không gian làm việc (workspace-service) và dịch vụ thông báo (notification-service), cùng một module dùng chung (common) chứa các định nghĩa mà các dịch vụ cùng sử dụng. Các đặc điểm được tận dụng gồm:
 
-Giao diện được xây dựng bằng React 19 và công cụ build Vite 8, viết bằng JavaScript thuần. Việc điều hướng giữa các trang do React Router 7 đảm nhiệm, còn Axios được dùng để gọi API và tự động làm mới token khi nhận phản hồi 401. Chức năng kéo thả công việc trên Board và Backlog dùng thư viện dnd-kit, các biểu đồ báo cáo tiến độ dùng Recharts. Thông báo thời gian thực được nhận qua `@stomp/stompjs`, bên cạnh đó là react-hot-toast để hiển thị cảnh báo ngắn và lucide-react cho bộ biểu tượng.
+Độc lập: mỗi dịch vụ phụ trách một mảng nghiệp vụ riêng và có thể được sửa, khởi động lại mà không dừng cả hệ thống. Chẳng hạn khi cần chỉnh phần thông báo, nhóm chỉ cần triển khai lại dịch vụ thông báo.
 
-### 1.2.3. Backend
+Phân tán: các dịch vụ có thể đặt trên những máy chủ khác nhau, nhờ đó phần nào chịu tải lớn (như dịch vụ công việc) có thể được mở rộng riêng.
 
-Phía máy chủ được viết bằng Java 21 trên nền Spring Boot 3.5 và Spring Cloud 2025.0, quản lý bằng Maven theo cấu trúc nhiều module. Các dịch vụ cung cấp REST API qua Spring Web, truy cập dữ liệu bằng Spring Data JPA với Hibernate và kiểm tra dữ liệu đầu vào bằng Spring Validation. Spring AOP được dùng để kiểm tra quyền thông qua annotation, Spring Boot Actuator cung cấp điểm kiểm tra sức khỏe cho dịch vụ khi triển khai. Logic nghiệp vụ được kiểm thử đơn vị bằng JUnit 5, Mockito và AssertJ.
+Giao tiếp đồng bộ và bất đồng bộ: khi cần kết quả ngay, dịch vụ gọi nhau trực tiếp qua giao diện REST (dùng OpenFeign); khi chỉ cần báo tin như gửi thông báo, dịch vụ phát sự kiện lên hàng đợi để bên nhận xử lý sau. Cách này giảm sự phụ thuộc giữa các dịch vụ và giúp hệ thống chịu lỗi tốt hơn.
 
-### 1.2.4. Xác thực và ủy quyền
+Cổng giao tiếp API: toàn bộ yêu cầu từ trình duyệt đi qua một điểm vào duy nhất, được xây dựng bằng Spring Cloud Gateway [2]. Cổng này định tuyến yêu cầu đến đúng dịch vụ, đọc mã xác thực từ tiêu đề hoặc cookie rồi chuyển xuống dịch vụ phía sau, đồng thời giới hạn nguồn truy cập (CORS). Nhờ đó các dịch vụ bên trong không phải lộ trực tiếp ra bên ngoài và không phải lặp lại cùng một đoạn xử lý chung.
 
-Việc xác thực được giao cho Keycloak 24, một máy chủ định danh mã nguồn mở, với giao thức OAuth2 và OpenID Connect; token trao đổi giữa các thành phần là JWT. Đăng nhập bằng Google cũng đi qua Keycloak. Mỗi dịch vụ đóng vai trò OAuth2 Resource Server của Spring Security và cùng kiểm tra một issuer, còn mã định danh người dùng thống nhất toàn hệ thống là trường `sub` trong token.
+### 1.2.2. Spring Boot
 
-Phần ủy quyền được tự xây dựng theo từng dự án. Quyền được định nghĩa bằng `PermissionKey`, gắn với các `ProjectRole` thông qua `PermissionScheme` và được gán cho người dùng bằng `RoleAssignment`. Mỗi lần gọi API, quyền được kiểm tra bằng annotation kết hợp AOP theo nguyên tắc mặc định từ chối.
+Spring Boot [3] là khung phát triển ứng dụng Java giúp dựng nhanh dịch vụ chạy độc lập, với cấu hình mặc định hợp lý và máy chủ web được nhúng sẵn. Đây là nền tảng cho toàn bộ phần phía máy chủ của hệ thống, sử dụng ngôn ngữ Java 21 cùng phiên bản Spring Boot 3.5 và Spring Cloud 2025.0, các module được quản lý bằng công cụ Maven.
 
-### 1.2.5. Lưu trữ dữ liệu
+Java được chọn vì là ngôn ngữ ổn định, có hệ sinh thái phong phú và kiểm soát kiểu dữ liệu chặt chẽ, phù hợp với phần nghiệp vụ nhiều quy tắc như phân quyền hay quy trình duyệt công việc. Trong dự án, một số thành phần của Spring được dùng cụ thể như sau:
 
-Dữ liệu nghiệp vụ lưu trong PostgreSQL 15, các dịch vụ dùng chung một database nhưng mỗi dịch vụ quản lý bảng của riêng mình. Lược đồ của work-service, workspace-service và notification-service được quản lý phiên bản bằng Flyway để các thay đổi cấu trúc có thể theo dõi và áp dụng nhất quán. Redis 7 đóng vai trò bộ nhớ đệm, đồng thời hỗ trợ Pub/Sub và khóa công việc định kỳ khi hệ thống chạy nhiều instance. Tệp đính kèm của công việc được lưu trên MinIO, một kho đối tượng tương thích S3. Riêng với tài khoản người dùng, identity-service đồng bộ với Keycloak thông qua Keycloak Admin Client.
+Spring Web: xây dựng các giao diện REST mà giao diện người dùng gọi tới.
 
-### 1.2.6. Xử lý bất đồng bộ và thời gian thực
+Spring Data JPA và Hibernate: ánh xạ các bảng trong cơ sở dữ liệu thành các đối tượng Java, giúp truy vấn và lưu dữ liệu mà không phải viết thủ công từng câu lệnh. Với các bộ lọc công việc có điều kiện thay đổi, hệ thống dùng thêm cơ chế Specification để ghép điều kiện linh hoạt.
 
-Thông báo được xử lý theo mô hình hướng sự kiện. Khi nghiệp vụ phát sinh, sự kiện được ghi vào bảng outbox trong cùng transaction với dữ liệu nghiệp vụ, sau đó một tiến trình chuyển tiếp định kỳ đẩy sự kiện lên Apache Kafka 3.8 thông qua Spring Kafka. Cách làm này đảm bảo sự kiện không bị mất khi dịch vụ gặp sự cố, và những sự kiện xử lý lỗi nhiều lần sẽ được chuyển sang Dead Letter Topic. Notification-service nhận sự kiện từ Kafka, lưu vào cơ sở dữ liệu rồi đẩy đến trình duyệt qua WebSocket với giao thức STOMP, đồng thời gửi email qua SMTP bằng Spring Mail. Ở môi trường phát triển, email được hứng bởi Mailpit nên không gửi ra ngoài. Ngoài ra, hệ thống gọi GitHub REST API để liên kết công việc với repository.
+Spring Security: bảo vệ các giao diện, phối hợp với máy chủ định danh để kiểm tra mã xác thực của từng yêu cầu.
 
-### 1.2.7. Container hóa và CI/CD
+Spring AOP: cho phép đặt chú thích lên phương thức để tự động kiểm tra quyền trước khi chạy, tránh phải viết lặp đoạn kiểm tra ở từng nơi.
 
-Mỗi dịch vụ và frontend được đóng gói thành một image Docker, tổng cộng sáu image, cùng với các thành phần hạ tầng nói trên và được điều phối bằng Docker Compose; frontend được phục vụ qua Nginx. Quy trình tích hợp và triển khai liên tục chạy trên GitHub Actions. Khi có thay đổi được đẩy vào nhánh `main`, quy trình chạy kiểm thử, build và đẩy các image lên Docker Hub, sau đó kết nối SSH tới máy chủ AWS EC2 để chạy `docker compose` triển khai phiên bản mới, và cuối cùng kiểm tra lại dịch vụ qua HTTPS.
+Spring Validation và Actuator: kiểm tra dữ liệu đầu vào và cung cấp điểm kiểm tra tình trạng của dịch vụ khi triển khai.
+
+### 1.2.3. React và Vite
+
+React [4] là thư viện JavaScript do Meta phát triển để xây dựng giao diện người dùng theo hướng thành phần. Mỗi phần của giao diện như thẻ công việc, cột trên bảng hay khung bình luận là một thành phần độc lập, có thể tái sử dụng và tự cập nhật khi dữ liệu thay đổi. Điều này đặc biệt phù hợp với giao diện quản lý công việc, nơi trạng thái thay đổi liên tục. Hệ thống dùng React 19 và công cụ đóng gói Vite 8 [5], vốn khởi động nhanh và cập nhật tức thì khi sửa mã trong lúc phát triển.
+
+Giao diện được viết bằng JavaScript thuần và tự thiết kế phần trình bày, không dùng thư viện giao diện dựng sẵn, nhằm giữ phong cách đơn giản, nhẹ và thống nhất. Một số thư viện nhỏ được dùng cho các nhu cầu cụ thể: React Router để chuyển trang, Axios để gọi giao diện máy chủ và tự làm mới mã xác thực khi hết hạn, dnd-kit để kéo thả công việc giữa các cột và trong danh sách tồn đọng, Recharts để vẽ biểu đồ báo cáo tiến độ, và stompjs để nhận thông báo theo thời gian thực.
+
+### 1.2.4. Keycloak, OAuth2, OpenID Connect và JWT
+
+**Giới thiệu về Keycloak**
+
+Keycloak [6] là phần mềm mã nguồn mở chuyên quản lý định danh và quyền truy cập, do Red Hat khởi xướng và hiện thuộc quỹ Cloud Native Computing Foundation. Phần mềm này đóng vai trò một máy chủ xác thực tập trung: người dùng đăng nhập một lần tại Keycloak, các ứng dụng phía sau tin vào kết quả đó thay vì tự kiểm tra mật khẩu. Thay vì tự viết phần đăng nhập, lưu mật khẩu và cấp mã xác thực, vốn là những việc dễ sai sót và rủi ro về bảo mật, hệ thống giao toàn bộ việc này cho Keycloak 24, một giải pháp đã được kiểm chứng rộng rãi trong thực tế.
+
+Trong Keycloak, dữ liệu được tổ chức theo từng miền quản lý riêng gọi là realm. Hệ thống dùng một realm tên `datn-realm`, bên trong có người dùng, các vai trò và ứng dụng khách `datn-backend` đại diện cho phần máy chủ của hệ thống. Ba vai trò toàn cục được định nghĩa là ADMIN (quản trị toàn hệ thống), USER (người dùng thông thường) và USER_CREATE (người dùng được phép tạo mới ở một số chức năng).
+
+**Tính năng chính của Keycloak được sử dụng**
+
+Quản lý người dùng và mật khẩu: Keycloak lưu tài khoản, băm mật khẩu bằng thuật toán an toàn và cung cấp sẵn cơ chế chính sách mật khẩu, khóa tài khoản khi đăng nhập sai nhiều lần. Dịch vụ định danh của hệ thống tạo và cập nhật tài khoản trong Keycloak thông qua thư viện Keycloak Admin Client, do đó không phải tự lưu mật khẩu trong cơ sở dữ liệu của mình.
+
+Đăng nhập một lần và đăng nhập bằng bên thứ ba: Keycloak hỗ trợ sẵn việc liên kết với nhà cung cấp danh tính bên ngoài. Hệ thống tận dụng tính năng này để cho phép người dùng đăng nhập bằng tài khoản Google, không cần tạo thêm mật khẩu mới.
+
+Cấp và làm mới mã xác thực: sau khi đăng nhập, Keycloak cấp mã truy cập có thời hạn ngắn và mã làm mới có thời hạn dài hơn. Khi mã truy cập hết hạn, giao diện người dùng dùng mã làm mới để xin mã mới mà người dùng không phải đăng nhập lại.
+
+Quản lý vai trò: vai trò được gắn vào người dùng và được ghi thẳng vào mã xác thực, để mỗi dịch vụ biết ngay người gọi có phải quản trị hệ thống hay không mà không cần tra cứu thêm.
+
+Trang quản trị: Keycloak có sẵn giao diện web để quản trị viên xem, khóa hoặc sửa người dùng, đổi cấu hình và xuất toàn bộ cấu hình realm ra tệp để cài lại trên máy khác. Hệ thống tận dụng điều này: cấu hình realm được lưu thành tệp trong kho mã và nạp lại khi dựng môi trường mới.
+
+**Các chuẩn xác thực**
+
+Việc xác thực dựa trên các chuẩn mở. OAuth2 [7] là chuẩn ủy quyền, cho phép một ứng dụng truy cập tài nguyên thay mặt người dùng mà không cần biết mật khẩu của họ. OpenID Connect [8] là lớp mở rộng đặt trên OAuth2 để xác định danh tính người dùng, cho biết người đang đăng nhập là ai. Hai chuẩn này được nhiều hệ thống lớn như Google, Microsoft sử dụng, nên việc tích hợp thêm nhà cung cấp mới về sau rất thuận lợi.
+
+Kết quả của quá trình đăng nhập là mã xác thực dạng JWT (JSON Web Token) [9]. Đây là một chuỗi gồm ba phần: phần đầu mô tả thuật toán ký, phần nội dung chứa các thông tin như mã người dùng, vai trò, nơi cấp và thời điểm hết hạn, và phần chữ ký số do Keycloak tạo ra. Vì có chữ ký nên nội dung mã không thể bị sửa đổi mà không bị phát hiện. Mỗi dịch vụ chỉ cần kiểm tra chữ ký và thời hạn là biết yêu cầu có hợp lệ hay không, không cần hỏi lại máy chủ định danh ở mỗi lần gọi, nhờ đó giảm tải và tăng tốc độ xử lý.
+
+**Cách hệ thống sử dụng**
+
+Khi người dùng đăng nhập, mã xác thực được trả về và lưu ở trình duyệt, đồng thời có thể được đặt trong cookie chỉ gửi qua giao thức web (httpOnly) để mã độc trên trang không đọc được. Cổng giao tiếp API đọc mã từ tiêu đề Authorization hoặc từ cookie, sau đó chuyển tiếp xuống các dịch vụ phía sau. Cả bốn dịch vụ nghiệp vụ đều đóng vai trò máy chủ tài nguyên theo chuẩn OAuth2 của Spring Security và cùng tin cậy một nơi cấp mã duy nhất.
+
+Mã người dùng trong mã xác thực (trường sub) được chọn làm định danh duy nhất của người dùng ở mọi bảng dữ liệu của toàn hệ thống. Nhờ vậy các dịch vụ thống nhất cách gọi tên một người, và dịch vụ nào cũng biết người đang gọi là ai chỉ bằng cách đọc mã xác thực, không cần gọi sang dịch vụ định danh.
+
+Bên cạnh vai trò toàn cục do Keycloak quản lý, phần phân quyền theo từng dự án được hệ thống tự xây dựng, vì mỗi dự án cần bộ vai trò và quyền riêng mà Keycloak không thể biết trước. Mỗi dự án có các vai trò như quản trị viên, thành viên và người xem, mỗi vai trò gắn với tập quyền cụ thể, và mọi thao tác đều bị từ chối nếu người dùng chưa được cấp quyền. Riêng người có vai trò ADMIN toàn cục được vượt qua các kiểm tra này.
+
+**Lợi ích khi sử dụng**
+
+Về bảo mật, mật khẩu và việc cấp mã được giao cho một phần mềm chuyên biệt, được cộng đồng kiểm tra và vá lỗi thường xuyên, thay vì mã tự viết của nhóm. Về phát triển, nhóm không mất công xây dựng lại đăng nhập, quên mật khẩu, khóa tài khoản hay đăng nhập Google, và có thể tập trung vào nghiệp vụ quản lý công việc. Về vận hành, nhiều dịch vụ dùng chung một nguồn xác thực nên người dùng chỉ đăng nhập một lần, và khi cần thu hồi quyền chỉ phải xử lý tại một nơi. Về mở rộng, việc thêm dịch vụ mới chỉ cần cấu hình tin cậy cùng nơi cấp mã mà không phải viết lại phần xác thực.
+
+### 1.2.5. PostgreSQL và Flyway
+
+PostgreSQL [10] là hệ quản trị cơ sở dữ liệu quan hệ mã nguồn mở, nổi tiếng về độ tin cậy, hỗ trợ giao dịch đầy đủ và nhiều kiểu dữ liệu nâng cao. Dữ liệu của hệ thống như dự án, công việc, trạng thái, người được giao hay lịch sử thay đổi có quan hệ chặt chẽ với nhau, nên mô hình quan hệ và các ràng buộc khóa ngoại là lựa chọn tự nhiên. Hệ thống dùng PostgreSQL 15, các dịch vụ dùng chung một cơ sở dữ liệu nhưng mỗi dịch vụ chỉ quản lý các bảng của mình.
+
+Flyway [11] là công cụ quản lý phiên bản cấu trúc cơ sở dữ liệu. Mỗi thay đổi về bảng, cột được viết thành một tệp lệnh đánh số thứ tự và được áp dụng tự động theo đúng thứ tự khi dịch vụ khởi động. Nhờ vậy cấu trúc dữ liệu ở máy phát triển và máy chủ thật luôn khớp nhau, và mọi thay đổi đều có lịch sử để truy vết. Flyway được dùng ở dịch vụ công việc, dịch vụ không gian làm việc và dịch vụ thông báo.
+
+### 1.2.6. Redis
+
+Redis [12] là kho dữ liệu lưu trong bộ nhớ, truy xuất rất nhanh, thường dùng làm bộ nhớ đệm và kênh truyền tin. Hệ thống dùng Redis 7 cho hai mục đích. Thứ nhất là lưu tạm các dữ liệu đọc nhiều để giảm tải cho cơ sở dữ liệu. Thứ hai là hỗ trợ chạy nhiều bản sao của cùng một dịch vụ: khi đó thông báo cần được đẩy tới người dùng đang kết nối ở bản sao khác thông qua cơ chế phát và nhận tin của Redis, và các công việc chạy định kỳ như nhắc hạn được khóa lại để chỉ một bản sao thực hiện, tránh gửi trùng.
+
+### 1.2.7. MinIO
+
+MinIO [13] là hệ thống lưu trữ đối tượng mã nguồn mở, tương thích với giao diện S3 của Amazon. Các tệp đính kèm của công việc như hình ảnh, tài liệu có dung lượng lớn và không phù hợp để lưu trong cơ sở dữ liệu, vì làm cơ sở dữ liệu phình to và chậm. Hệ thống lưu các tệp này trong MinIO, còn cơ sở dữ liệu chỉ giữ thông tin mô tả và đường dẫn tới tệp. Vì tương thích S3, về sau có thể chuyển sang dịch vụ lưu trữ đám mây mà ít phải sửa mã.
+
+### 1.2.8. Apache Kafka và mẫu thiết kế Outbox
+
+Apache Kafka [14] là nền tảng truyền sự kiện phân tán, cho phép một bên ghi sự kiện vào các chủ đề và nhiều bên khác đọc lại theo nhu cầu, với khả năng lưu trữ bền vững và chịu tải cao. Hệ thống dùng Kafka 3.8 qua thư viện Spring Kafka để truyền sự kiện thông báo từ các dịch vụ nghiệp vụ sang dịch vụ thông báo. Bên phát chỉ cần ghi sự kiện, không phải chờ hay biết bên nhận là ai, nên hai phía hoàn toàn tách biệt.
+
+Một vấn đề là nếu dịch vụ lưu dữ liệu xong nhưng gặp sự cố trước khi gửi sự kiện thì thông báo sẽ bị mất. Để tránh điều này, hệ thống áp dụng mẫu thiết kế Outbox [15]: sự kiện được ghi vào một bảng riêng trong cùng giao dịch với dữ liệu nghiệp vụ, sau đó một tiến trình chạy nền đọc bảng này và đẩy lên Kafka. Do cùng một giao dịch nên dữ liệu và sự kiện hoặc cùng thành công, hoặc cùng thất bại. Những sự kiện xử lý lỗi nhiều lần được chuyển sang một chủ đề riêng để xem xét sau, không làm nghẽn luồng chính.
+
+### 1.2.9. WebSocket, STOMP và thư điện tử
+
+WebSocket [16] là giao thức cho phép trình duyệt và máy chủ giữ một kết nối hai chiều liên tục, để máy chủ chủ động gửi dữ liệu mà không cần trình duyệt hỏi liên tục. STOMP [17] là giao thức nhắn tin đơn giản chạy trên WebSocket, cho phép đăng ký nhận tin theo từng kênh, ở đây là kênh riêng của từng người dùng. Nhờ đó khi được giao việc hoặc bị nhắc tên, người dùng thấy thông báo hiện ngay trên chuông mà không cần tải lại trang.
+
+Với người không mở ứng dụng, thông báo còn được gửi qua thư điện tử theo giao thức SMTP bằng Spring Mail. Cách này cũng được dùng cho thư xác thực tài khoản và đặt lại mật khẩu. Trong môi trường phát triển, thư được chuyển tới Mailpit, một máy chủ thư giả lập, nên có thể xem nội dung thư mà không gửi ra ngoài.
+
+### 1.2.10. Docker và quy trình triển khai tự động
+
+Docker [18] là nền tảng đóng gói ứng dụng cùng toàn bộ môi trường chạy của nó vào một ảnh (image), từ đó chạy giống hệt nhau trên mọi máy, khắc phục tình trạng "chạy được trên máy tôi nhưng lỗi trên máy chủ". Mỗi dịch vụ và giao diện người dùng của hệ thống được đóng thành một ảnh riêng, tổng cộng sáu ảnh. Docker Compose được dùng để khai báo và khởi động đồng thời các ảnh này cùng các thành phần hạ tầng như cơ sở dữ liệu, Keycloak, Redis, Kafka và MinIO, còn giao diện người dùng được phục vụ qua máy chủ web Nginx.
+
+GitHub Actions [19] là dịch vụ tự động hóa quy trình ngay trên kho mã GitHub. Mỗi khi có mã mới được đưa vào nhánh chính, quy trình tự động chạy kiểm thử, dựng các ảnh Docker và đưa lên Docker Hub, sau đó kết nối tới máy chủ AWS EC2 để kéo ảnh mới về và khởi động lại, cuối cùng kiểm tra dịch vụ còn hoạt động qua đường truyền bảo mật HTTPS. Nhờ vậy việc phát hành phiên bản mới diễn ra nhanh, nhất quán và giảm sai sót do thao tác tay.
+
+---
+
+### Gợi ý tài liệu tham khảo (đánh số theo các mục [n] ở trên, hãy chuyển sang danh mục TLTK của báo cáo)
+
+[1] Martin Fowler, "Microservices", martinfowler.com/articles/microservices.html
+[2] Spring Cloud Gateway, docs.spring.io/spring-cloud-gateway
+[3] Spring Boot Reference Documentation, docs.spring.io/spring-boot
+[4] React, react.dev
+[5] Vite, vite.dev
+[6] Keycloak Documentation, keycloak.org/documentation
+[7] RFC 6749, The OAuth 2.0 Authorization Framework
+[8] OpenID Connect Core 1.0, openid.net/specs/openid-connect-core-1_0.html
+[9] RFC 7519, JSON Web Token (JWT)
+[10] PostgreSQL Documentation, postgresql.org/docs
+[11] Flyway Documentation, documentation.red-gate.com/flyway
+[12] Redis Documentation, redis.io/docs
+[13] MinIO Documentation, min.io/docs
+[14] Apache Kafka Documentation, kafka.apache.org/documentation
+[15] Chris Richardson, "Transactional outbox", microservices.io/patterns/data/transactional-outbox.html
+[16] RFC 6455, The WebSocket Protocol
+[17] STOMP Protocol Specification, stomp.github.io
+[18] Docker Documentation, docs.docker.com
+[19] GitHub Actions Documentation, docs.github.com/actions
