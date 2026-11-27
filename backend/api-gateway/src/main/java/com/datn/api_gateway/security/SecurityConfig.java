@@ -13,6 +13,11 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ENDPOINTS = {
             "/identity/api/v1/auth/**",
             "/actuator/health",
+            "/actuator/health/**",            // probe liveness/readiness của Kubernetes
+            // Health của service phía sau qua gateway (/identity/actuator/health...): smoke test sau deploy.
+            // Chỉ health, không mở các endpoint actuator khác.
+            "/*/actuator/health",
+            "/*/actuator/health/**",
             "/actuator/info",
             // Handshake WebSocket thông báo: trình duyệt không gửi được header Authorization khi mở
             // WebSocket, nên notification-service xác thực JWT ở frame STOMP CONNECT.

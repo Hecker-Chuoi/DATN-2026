@@ -1,0 +1,51 @@
+# Profile "prod" (docker compose): nạp đè lên application.yaml trong image. ${...} lấy từ biến môi trường của docker-compose.prod.yml.
+# Tài khoản DB (SPRING_DATASOURCE_*) và MINIO_ACCESS_KEY / MINIO_SECRET_KEY do biến môi trường cung cấp.
+server:
+  shutdown: graceful
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  datasource:
+    url: jdbc:postgresql://postgres:5432/datn_main_db
+    hikari:
+      maximum-pool-size: 5       # 5 service dùng chung một Postgres, max_connections=100
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+  data:
+    redis:
+      host: redis
+      port: 6379
+  kafka:
+    bootstrap-servers: kafka:9092
+minio:
+  endpoint: http://minio:9000
+  # access-key / secret-key đọc từ MINIO_ACCESS_KEY / MINIO_SECRET_KEY (secrets.env), bucket tự tạo khi khởi động
+app:
+  cluster:
+    redis-enabled: true            # job nhắc hạn 08:00 và OutboxRelay chạy một nơi (docs/cicd/02, bẫy 4)
+  frontend-url: ${APP_PUBLIC_URL}
+  services:
+    identity:
+      url: http://identity-service:8082
+    workspace:
+      url: http://workspace-service:8087
+    notification:
+      url: http://notification-service:9994
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+logging:
+  level:
+    com.datn.workservice: INFO
+    org.hibernate.SQL: WARN

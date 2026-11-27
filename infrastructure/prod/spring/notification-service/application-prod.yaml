@@ -1,0 +1,39 @@
+# Profile "prod" (docker compose): nạp đè lên application.yaml trong image. ${...} lấy từ biến môi trường của docker-compose.prod.yml.
+# MAIL_HOST / PORT / SMTP_AUTH / STARTTLS / FROM lấy từ public.env; MAIL_USERNAME / MAIL_PASSWORD và tài khoản DB
+# (SPRING_DATASOURCE_USERNAME / _PASSWORD) lấy từ secrets.env. File gốc đọc các biến này trực tiếp từ môi trường.
+server:
+  shutdown: graceful
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  datasource:
+    url: jdbc:postgresql://postgres:5432/datn_main_db
+    hikari:
+      maximum-pool-size: 5       # 5 service dùng chung một Postgres, max_connections=100
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+  kafka:
+    bootstrap-servers: kafka:9092
+  data:
+    redis:
+      host: redis
+      port: 6379
+app:
+  frontend-url: ${APP_PUBLIC_URL}           # link trong thông báo / email; cũng là origin được phép của WebSocket
+  cluster:
+    redis-enabled: true            # WebSocket đẩy qua Redis Pub/Sub, khoá job theo lịch
+  services:
+    identity:
+      url: http://identity-service:8082
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+logging:
+  level:
+    com.datn.notification: INFO

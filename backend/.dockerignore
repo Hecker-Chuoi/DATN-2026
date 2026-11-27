@@ -1,0 +1,10 @@
+# Build context của mọi Dockerfile backend là thư mục backend/
+**/target
+**/.env
+**/.env.*
+**/uploads
+**/*.iml
+**/.idea
+**/.mvn
+**/mvnw
+**/mvnw.cmd
