@@ -93,7 +93,7 @@ Cây thư mục: xem [cac_buoc/04 §1](cac_buoc/04_DOCKER_COMPOSE_PRODUCTION.md#
 `infrastructure/ci/build-push.sh <tag>` lặp qua 6 service: `docker build` → (tuỳ chọn) `trivy image` chỉ báo cáo → `docker push`. Để trong script thay vì viết thẳng trong workflow: chạy tay được khi Actions hỏng, dễ test. Ý cần nhớ:
 - `DOCKER_BUILDKIT=1` (Dockerfile backend dùng `RUN --mount=type=cache`).
 - `docker login` bằng **Access Token** (secret `DOCKERHUB_TOKEN`), `docker logout` khi xong.
-- Runner của GitHub là máy mới mỗi lần nên **không có cache layer**: 5 image backend build lại Maven mỗi lần (15–25 phút). Tối ưu sau: `docker/build-push-action` + `cache-from: type=gha`, hoặc chỉ build service có thay đổi.
+- Runner của GitHub là máy mới mỗi lần nên **không có cache layer**: 5 image backend build lại Maven mỗi lần (đo thực tế trên runner: cả 6 image 134 giây). Tối ưu sau: `docker/build-push-action` + `cache-from: type=gha`, hoặc chỉ build service có thay đổi.
 
 ### 3.5. Docker Hub
 
@@ -153,7 +153,7 @@ Chi tiết và lệnh: [cac_buoc/06](cac_buoc/06_GITHUB_ACTIONS_CICD.md).
 11. **Docker Hub**: luôn `docker login` trước khi build (image nền `maven`, `eclipse-temurin`, `node`, `nginx` cũng kéo từ Docker Hub) để tránh `toomanyrequests`.
 12. **Line ending**: script `.sh`, Dockerfile, `infrastructure/prod/**` phải là LF (đã khai trong `.gitattributes`). `deploy.sh` còn tự bỏ `\r` khỏi file `.sh/.env/.yml/.yaml` trong gói, phòng gói tạo trên Windows.
 13. **Image MinIO**: `minio/minio` đã bị gỡ khỏi Docker Hub → dùng `cgr.dev/chainguard/minio:latest` (giống compose dev của nhóm); healthcheck `mc ready local`.
-14. **CI chạy test không có DB**: `mvn verify` trần đỏ ở `IdentityServiceApplicationTests.contextLoads` (cần Postgres); workflow bỏ `*ApplicationTests` (còn 148 unit test, xanh với JDK 21). `npm run lint` có ~190 lỗi sẵn nên chạy với `continue-on-error`; `npm run build` xanh. Đã chạy thử cả hai trong container `maven:3.9.9-eclipse-temurin-21-alpine` / `node:22-alpine` trước khi đưa vào workflow.
+14. **CI chạy test không có DB**: `mvn verify` trần đỏ ở `IdentityServiceApplicationTests.contextLoads` (cần Postgres); workflow bỏ `*ApplicationTests` (còn 540 unit test (work 344, workspace 48, notification 148), xanh với JDK 21). `npm run lint` có ~190 lỗi sẵn nên chạy với `continue-on-error`; `npm run build` xanh. Đã chạy thử cả hai trong container `maven:3.9.9-eclipse-temurin-21-alpine` / `node:22-alpine` trước khi đưa vào workflow.
 15. **`sudo -u deployer` giữ thư mục hiện tại của người gọi** (`/home/ubuntu`, deployer không vào được): `deploy.sh` có `cd /` ở đầu, nếu không `find` / `docker compose` lỗi rồi `set -e` thoát im lặng.
 16. **File bind-mount cho container chạy user khác root phải đọc được**: `realm.json` sinh với quyền 600 thì Keycloak (uid 1000 trong container) báo `AccessDeniedException`; `make-realm.sh` đặt `chmod 644` (thư mục `~/datn` vẫn 700).
 

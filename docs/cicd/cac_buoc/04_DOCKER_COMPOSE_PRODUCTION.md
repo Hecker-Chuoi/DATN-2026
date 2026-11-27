@@ -89,6 +89,8 @@ Dữ liệu bền nằm ở **3 volume có tên**: `datn_postgres_data`, `datn_k
 11. **`app.cluster.redis-enabled: true`** giữ nguyên trong profile `prod` của work / notification: một instance vẫn chạy bình thường, Redis có sẵn nên không cần tắt.
 12. **JVM**: `-XX:MaxRAMPercentage=65 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError`; heap tính theo `mem_limit` của container. `ExitOnOutOfMemoryError` + `restart: unless-stopped` = hết bộ nhớ thì container tự khởi động lại thay vì treo. Keycloak **không** thêm `-XX:+UseSerialGC` (`kc.sh` đã chọn ParallelGC, hai cờ cùng lúc làm JVM không khởi động) và heap 40% (50% từng bị OOMKilled / sát limit).
 
+13. **Tích hợp GitHub của work-service** (đến từ `develop`, migration V11–V16): `work-service` đọc `github.*`; compose truyền `GITHUB_CLIENT_ID` (từ `public.env`), `GITHUB_CLIENT_SECRET` / `GITHUB_TOKEN_ENCRYPTION_KEY` / `GITHUB_STATE_SECRET` (từ `secrets.env`), `GITHUB_REDIRECT_URI` và `GITHUB_WEBHOOK_URL` (tự sinh từ `APP_HOST`). Mọi biến đều có thể trống: service vẫn chạy (đã thử nâng cấp DB từ V10 lên V16, `healthy`), chỉ chưa dùng được GitHub. Endpoint webhook `/work/api/v1/work/integrations/github/webhook` được gateway và work-service cho qua không JWT (xác thực bằng chữ ký HMAC), Nginx / frontend nginx không cần sửa. Cách bật: [03 §5b](03_SECRET_VA_CAU_HINH.md#5b-tích-hợp-github-oauth-app).
+
 ---
 
 ## 4. Ngân sách RAM
