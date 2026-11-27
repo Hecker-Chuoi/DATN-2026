@@ -32,6 +32,7 @@ public class SecurityConfig {
                         "/api/v1/auth/**",
                         "/internal/**",
                         "/actuator/health",
+                        "/actuator/health/**",
                         "/actuator/info"
         };
 

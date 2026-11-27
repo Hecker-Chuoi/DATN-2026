@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trợ lý AI · Tổng quan</title>
+<meta name="description" content="Tổng quan đề xuất Trợ lý AI cho hệ thống DATN-2026: khả năng, kiến trúc, công cụ, bộ nhớ, an toàn, lộ trình và kết quả phản biện.">
+<style>
+:root{
+  --bg:#f7f7f5;--surface:#ffffff;--surface-2:#f0efec;--text:#1d1d1b;--muted:#5f5e5a;--line:#dddbd5;
+  --accent:#2f6fde;--accent-soft:#e6eefc;--ok:#1f8a4c;--ok-soft:#e3f4ea;--warn:#b26a00;--warn-soft:#fbf0dc;--bad:#c23b32;--bad-soft:#fbe6e4;
+  --radius:12px;--mono:ui-monospace,SFMono-Regular,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151514;--surface:#1e1e1c;--surface-2:#272725;--text:#ecebe7;--muted:#a3a19b;--line:#363532;
+    --accent:#7aa7ff;--accent-soft:#1d2a44;--ok:#5cc98a;--ok-soft:#173326;--warn:#f0b357;--warn-soft:#3a2c14;--bad:#f07b72;--bad-soft:#3d1d1a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151514;--surface:#1e1e1c;--surface-2:#272725;--text:#ecebe7;--muted:#a3a19b;--line:#363532;
+  --accent:#7aa7ff;--accent-soft:#1d2a44;--ok:#5cc98a;--ok-soft:#173326;--warn:#f0b357;--warn-soft:#3a2c14;--bad:#f07b72;--bad-soft:#3d1d1a;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}
+.layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:32px;max-width:1180px;margin:0 auto;padding:24px 16px 80px}
+nav.toc{position:sticky;top:16px;align-self:start;font-size:14px}
+nav.toc b{display:block;margin-bottom:8px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+nav.toc a{display:block;padding:5px 10px;border-radius:8px;color:var(--text);text-decoration:none}
+nav.toc a:hover,nav.toc a.active{background:var(--accent-soft);color:var(--accent)}
+main{min-width:0}
+header.hero{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:28px}
+.eyebrow{color:var(--muted);font-size:13px}
+h1{font-size:28px;line-height:1.25;margin:6px 0 10px}
+h2{font-size:21px;margin:44px 0 12px;scroll-margin-top:16px}
+h3{font-size:16px;margin:22px 0 8px}
+.lead{font-size:16px;color:var(--muted);margin:0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}
+.stat{background:var(--surface-2);border-radius:10px;padding:12px 14px}
+.stat .n{font-size:24px;font-weight:700}
+.stat .l{font-size:13px;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.grid{display:grid;gap:12px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.cap .say{font-style:italic;background:var(--surface-2);padding:6px 10px;border-radius:8px;margin:8px 0;font-size:14px}
+.cap h3{margin:0}
+.cap p{margin:0;font-size:14px;color:var(--muted)}
+.num{display:inline-flex;width:24px;height:24px;border-radius:50%;background:var(--accent-soft);color:var(--accent);align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-right:6px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--surface-2);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+code{font-family:var(--mono);font-size:13px;background:var(--surface-2);padding:1px 5px;border-radius:5px}
+.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;font-weight:600;white-space:nowrap}
+.r{background:var(--ok-soft);color:var(--ok)}
+.w{background:var(--warn-soft);color:var(--warn)}
+.i{background:var(--accent-soft);color:var(--accent)}
+.s{background:var(--surface-2);color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:5px 12px;font:inherit;font-size:13px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;background:none;text-align:center;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:10px 14px;border-radius:0 8px 8px 0;font-size:14px;margin:14px 0}
+.note.warn{border-color:var(--warn);background:var(--warn-soft)}
+.mock{font-family:var(--mono);font-size:12.5px;line-height:1.5;background:var(--surface-2);border-radius:10px;padding:14px;white-space:pre;overflow-x:auto}
+.layer{position:relative;padding-left:18px}
+.layer:before{content:"";position:absolute;left:0;top:4px;bottom:4px;width:4px;border-radius:4px;background:var(--accent)}
+.phase{border-top:4px solid var(--accent)}
+.phase.ext{border-top-style:dashed;border-top-color:var(--muted)}
+.phase ul{margin:8px 0 0;padding-left:18px;font-size:14px}
+.score{display:grid;grid-template-columns:1fr 60px;gap:6px 12px;align-items:center;font-size:14px}
+.bar{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-top:3px}
+.bar span{display:block;height:100%;background:var(--accent)}
+.bar span.lo{background:var(--bad)}.bar span.mid{background:var(--warn)}
+.verdict{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.big{font-size:42px;font-weight:800;line-height:1}
+ol.p0{padding-left:20px;margin:8px 0 0}
+ol.p0 li{margin:4px 0}
+footer{margin-top:48px;color:var(--muted);font-size:13px}
+.themebtn{float:right;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:8px;padding:4px 10px;font:inherit;font-size:13px;cursor:pointer}
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr;gap:16px}
+  nav.toc{position:static;display:flex;flex-wrap:wrap;gap:4px}
+  nav.toc b{width:100%}
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:560px){
+  .stats,.g2,.g4{grid-template-columns:1fr 1fr}
+  .g2{grid-template-columns:1fr}
+  h1{font-size:23px}
+  header.hero{padding:18px}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Mục lục">
+  <b>Mục lục</b>
+  <a href="#van-de">1 · Vấn đề</a>
+  <a href="#kha-nang">2 · Khả năng</a>
+  <a href="#kien-truc">3 · Kiến trúc</a>
+  <a href="#vong-lap">4 · Vòng lặp</a>
+  <a href="#cong-cu">5 · Công cụ</a>
+  <a href="#bo-nho">6 · Bộ nhớ &amp; dữ liệu</a>
+  <a href="#an-toan">7 · An toàn</a>
+  <a href="#lo-trinh">8 · Lộ trình</a>
+  <a href="#danh-gia">9 · Đo kết quả</a>
+  <a href="#phan-bien">10 · Kết quả phản biện</a>
+</nav>
+
+<main>
+<header class="hero">
+  <button class="themebtn" id="themeBtn" type="button">Đổi giao diện</button>
+  <div class="eyebrow">DATN-2026 · ai-service · Tổng quan đề xuất</div>
+  <h1>Trợ lý AI trong khung chat: hỏi bằng tiếng Việt, AI tra cứu và soạn sẵn thao tác</h1>
+  <p class="lead">Mọi thay đổi dữ liệu phải được người dùng bấm <b>Duyệt</b>. Trợ lý gọi API bằng chính token của người đang chat, nên không bao giờ vượt quá quyền của họ.</p>
+  <div class="stats">
+    <div class="stat"><div class="n">4</div><div class="l">khả năng chính</div></div>
+    <div class="stat"><div class="n">23 + 7</div><div class="l">công cụ (GĐ1–2 + GĐ3)</div></div>
+    <div class="stat"><div class="n">8</div><div class="l">bảng dữ liệu mới</div></div>
+    <div class="stat"><div class="n">2 + 1</div><div class="l">giai đoạn cam kết + mở rộng</div></div>
+  </div>
+</header>
+
+<h2 id="van-de">1 · Vấn đề và mục tiêu</h2>
+<div class="tablewrap"><table>
+  <tr><th>Tình huống</th><th>Hiện phải làm tay</th></tr>
+  <tr><td>"Sprint này còn bao nhiêu việc chưa xong, của ai?"</td><td>Mở Board → lọc sprint → đếm từng cột</td></tr>
+  <tr><td>Chia một story thành 3 subtask</td><td>Mở form tạo item 3 lần, điền lại các trường giống nhau</td></tr>
+  <tr><td>Thành viên mới</td><td>Không biết chức năng nằm ở đâu</td></tr>
+</table></div>
+<div class="note"><b>Mục tiêu:</b> giảm số thao tác — người dùng nói điều mình muốn thay vì phải biết bấm vào đâu.</div>
+
+<h2 id="kha-nang">2 · Trợ lý làm được gì</h2>
+<div class="grid g2">
+  <div class="card cap"><h3><span class="num">1</span>Hỏi đáp, tra cứu</h3><div class="say">"Bug nào của tôi sắp quá hạn?"</div><p>Tìm và trả danh sách kèm mã công việc, hạn chót.</p></div>
+  <div class="card cap"><h3><span class="num">2</span>Thực hiện hành động</h3><div class="say">"Tạo 3 subtask cho AUTH-12"</div><p>Soạn sẵn, hiện thẻ xác nhận; chỉ tạo khi bấm Duyệt.</p></div>
+  <div class="card cap"><h3><span class="num">3</span>Hỏi lại khi chưa rõ</h3><div class="say">"Sửa item login"</div><p>Thấy 3 item khớp → hỏi lại kèm nút lựa chọn.</p></div>
+  <div class="card cap"><h3><span class="num">4</span>Ghi nhớ</h3><div class="say">"Luôn trả lời ngắn gọn giúp tôi"</div><p>Lưu sở thích, áp dụng cho các lần chat sau.</p></div>
+</div>
+<h3>Minh họa khung chat</h3>
+<div class="mock">┌ Trợ lý AI ─────────────────────────────── ✕ ┐
+│ Bạn: Tạo 3 subtask cho AUTH-12              │
+│ ┌ Xác nhận tạo 3 subtask ─────────────────┐ │
+│ │ • Thiết kế form đăng nhập               │ │
+│ │ • Gọi API xác thực                      │ │
+│ │ • Viết test                             │ │
+│ │              [ Từ chối ]  [ Duyệt ]     │ │
+│ └─────────────────────────────────────────┘ │
+│ Bạn: Sửa item login                         │
+│ AI : Có 3 công việc khớp, bạn chọn:         │
+│ [AUTH-3 Trang login] [AUTH-7 Login Google]  │
+│ [AUTH-9 Lỗi login]                          │
+└─────────────────────────────────────────────┘</div>
+
+<h2 id="kien-truc">3 · Kiến trúc</h2>
+<p>AI không chạm cơ sở dữ liệu. Nó làm việc như một nhân viên dùng phần mềm: được giao một bộ <b>công cụ</b>, mỗi công cụ là một lời gọi tới API sẵn có.</p>
+<div class="diagram"><pre class="mermaid">
+flowchart TB
+    UI["Khung chat React<br/>streaming, thẻ duyệt, nút chọn"]
+    GW["API Gateway<br/>xác thực đăng nhập"]
+    subgraph AIS["ai-service"]
+        ORC["Bộ điều phối<br/>vòng lặp AI ↔ công cụ, tối đa 8 vòng"]
+        TOOLS["Bộ công cụ<br/>đọc / ghi / hỏi lại"]
+        INT["Duyệt và hỏi lại"]
+        MEM["Bộ nhớ"]
+        LLM["Kết nối AI<br/>hạn mức token"]
+        ORC --> TOOLS & INT & MEM & LLM
+    end
+    WS["work-service<br/>kiểm quyền rồi trả dữ liệu"]
+    PG[("PostgreSQL")]
+    CL["Claude API"]
+    UI --> GW --> ORC
+    TOOLS -- "kèm token người dùng" --> WS
+    INT --> PG
+    MEM --> PG
+    LLM --> CL
+</pre></div>
+
+<h2 id="vong-lap">4 · Vòng lặp xử lý một câu hỏi</h2>
+<div class="grid g2">
+  <div class="diagram"><pre class="mermaid">
+flowchart TB
+    Q([Người dùng hỏi]) --> CTX["Dựng ngữ cảnh"]
+    CTX --> C{{"Gọi Claude"}}
+    C -->|xong| DONE["Hiện câu trả lời"]
+    C -->|công cụ ĐỌC| R["Chạy ngay"]
+    C -->|GHI / HỎI LẠI| P["Tạm dừng, hiện thẻ"]
+    R -->|"lặp, tối đa 8 vòng"| C
+    P --> U["Người dùng duyệt / chọn"]
+    U --> C
+</pre></div>
+  <div class="grid">
+    <div class="card"><span class="pill r">Đọc</span> Chạy ngay, gửi kết quả lại cho Claude.</div>
+    <div class="card"><span class="pill w">Ghi</span> Dừng, hiện thẻ xác nhận. Chỉ chạy khi bấm Duyệt.</div>
+    <div class="card"><span class="pill i">Hỏi lại</span> Dừng, hiện 2–5 lựa chọn. Lựa chọn của người dùng là kết quả công cụ.</div>
+  </div>
+</div>
+
+<h2 id="cong-cu">5 · Danh mục công cụ</h2>
+<div class="chips" role="group" aria-label="Lọc công cụ">
+  <button class="chip" data-f="all" aria-pressed="true">Tất cả</button>
+  <button class="chip" data-f="R" aria-pressed="false">Đọc</button>
+  <button class="chip" data-f="W" aria-pressed="false">Ghi</button>
+  <button class="chip" data-f="I" aria-pressed="false">Tương tác</button>
+  <button class="chip" data-f="S" aria-pressed="false">GĐ3 · lập lịch</button>
+</div>
+<div class="tablewrap"><table id="tools">
+  <thead><tr><th>Công cụ</th><th>Loại</th><th>Chức năng</th><th>GĐ</th></tr></thead>
+  <tbody></tbody>
+</table></div>
+<div class="note warn">Cố ý <b>không có công cụ xóa</b>. Thao tác khó hoàn tác luôn do người dùng tự làm trên giao diện.</div>
+
+<h2 id="bo-nho">6 · Bộ nhớ và dữ liệu</h2>
+<div class="grid g2">
+  <div class="card"><h3 style="margin-top:0">Ngắn hạn · trong một đoạn chat</h3><p style="margin:0;font-size:14px">Mỗi lượt đọc lại lịch sử trong <code>ai_messages</code> và gửi kèm cho AI.</p></div>
+  <div class="card"><h3 style="margin-top:0">Dài hạn · theo người dùng</h3><p style="margin:0;font-size:14px"><code>ai_user_memories</code>: sở thích, bối cảnh, thói quen. Dữ liệu công việc luôn lấy mới qua công cụ.</p></div>
+</div>
+<div class="diagram" style="margin-top:12px"><pre class="mermaid">
+erDiagram
+    ai_conversations ||--o{ ai_messages : "có"
+    ai_conversations ||--o{ ai_pending_interactions : "có"
+    ai_messages ||--o{ ai_pending_interactions : "chứa tool_use"
+    ai_conversations |o..o{ ai_user_memories : "sinh ra"
+    ai_conversations {
+        UUID id PK
+        VARCHAR user_id
+        UUID project_id
+        VARCHAR status
+    }
+    ai_messages {
+        UUID id PK
+        UUID conversation_id FK
+        INT seq
+        VARCHAR role
+        JSONB content
+    }
+    ai_pending_interactions {
+        UUID id PK
+        VARCHAR tool_use_id
+        VARCHAR type
+        JSONB payload
+        VARCHAR status
+    }
+    ai_user_memories {
+        UUID id PK
+        VARCHAR user_id
+        VARCHAR scope
+        TEXT content
+    }
+</pre></div>
+<p style="font-size:14px;color:var(--muted)">Ngoài ra: <code>ai_user_settings</code>, <code>ai_usage_logs</code> (GĐ1), <code>ai_chat_files</code> (GĐ2), <code>ai_scheduled_tasks</code> (GĐ3). Bộ đếm token ngày ở Redis. Mọi <code>user_id</code> là Keycloak <code>sub</code>.</p>
+
+<h2 id="an-toan">7 · Bốn lớp an toàn</h2>
+<div class="grid g4">
+  <div class="card layer"><b>Phân quyền theo người dùng</b><p style="font-size:14px;margin:6px 0 0">Gọi API bằng token người đang chat. Chỉ có quyền xem thì AI cũng chỉ xem.</p></div>
+  <div class="card layer"><b>Con người quyết định</b><p style="font-size:14px;margin:6px 0 0">Mọi thao tác ghi phải Duyệt. Không có công cụ xóa.</p></div>
+  <div class="card layer"><b>Kiểm soát chi phí</b><p style="font-size:14px;margin:6px 0 0">Hạn mức token theo ngày, log từng lần gọi, prompt caching.</p></div>
+  <div class="card layer"><b>Bảo vệ dữ liệu</b><p style="font-size:14px;margin:6px 0 0">Xem / sửa / xóa / tắt bộ nhớ. API key chỉ ở biến môi trường.</p></div>
+</div>
+
+<h2 id="lo-trinh">8 · Lộ trình</h2>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+  <div class="card phase"><b>GĐ1 · Hỏi đáp</b> <span class="pill s">2–3 tuần</span><ul><li>Khung chat streaming</li><li>Công cụ chỉ đọc</li><li>Bộ nhớ trong đoạn chat</li></ul></div>
+  <div class="card phase"><b>GĐ2 · Hành động</b> <span class="pill s">~2 tuần</span><ul><li>Công cụ tạo, sửa công việc</li><li>Thẻ duyệt, câu hỏi ngược</li><li>Đọc tệp, bộ nhớ dài hạn</li></ul></div>
+  <div class="card phase ext"><b>GĐ3 · Tự động hóa</b> <span class="pill s">≥ 3 tuần · mở rộng</span><ul><li>Nhắc việc, báo cáo định kỳ</li><li>Gợi ý phân loại bug mới</li><li>Tìm công việc trùng lặp</li></ul></div>
+</div>
+
+<h2 id="danh-gia">9 · Cách đo kết quả</h2>
+<div class="tablewrap"><table>
+  <tr><th>Tiêu chí</th><th>Cách đo</th></tr>
+  <tr><td>Chọn đúng công cụ</td><td>So với công cụ mong đợi của từng câu</td></tr>
+  <tr><td>Trả lời đúng</td><td>So với dữ liệu thật trong hệ thống</td></tr>
+  <tr><td>Hỏi lại hợp lý</td><td>Câu mơ hồ có được hỏi lại thay vì đoán</td></tr>
+  <tr><td>Thời gian phản hồi</td><td>Tới chữ đầu tiên và tới khi xong</td></tr>
+  <tr><td>Chi phí mỗi câu</td><td>Tính từ token đã log</td></tr>
+  <tr><td>Thao tác tiết kiệm</td><td>Số lần bấm làm tay vs. dùng trợ lý, 5 tác vụ tiêu biểu</td></tr>
+</table></div>
+
+<h2 id="phan-bien">10 · Kết quả phản biện</h2>
+<div class="card">
+  <div class="verdict">
+    <div><div class="big">4,8<span style="font-size:18px;color:var(--muted)">/10</span></div><div style="font-size:13px;color:var(--muted)">điểm trung bình 10 hạng mục</div></div>
+    <p style="flex:1;min-width:240px;margin:0">Ý tưởng tốt, định hướng an toàn đúng. Tài liệu <b>chưa đủ để triển khai</b>: có lỗi thiết kế với cách Claude hiện hành quản lý ngữ cảnh, và sai lệch với code thật. Sửa các mục P0 là đạt 7+.</p>
+  </div>
+  <div class="score" style="margin-top:18px" id="scores"></div>
+</div>
+<h3>6 việc P0 phải sửa</h3>
+<div class="card"><ol class="p0">
+  <li><code>ai-service</code> là service <b>xây mới</b>, không "sẵn có"; thống nhất với tài liệu kiến trúc.</li>
+  <li>Bỏ chọn công cụ theo trang và bỏ rút gọn lịch sử: lịch sử phải <b>append-only</b>, nếu không mất cache và request bị từ chối.</li>
+  <li>Xử lý <b>nhiều lời gọi công cụ song song</b> và nhóm thẻ duyệt.</li>
+  <li>Sửa bảng công cụ: <code>move_to_sprint</code> ở SprintController (quyền SPRINT_MANAGE); chuyển trạng thái cần 2 bước và cổng "Tạm hoàn thành"; <code>get_my_issues</code> cần endpoint mới.</li>
+  <li><code>save_memory</code> phải có xác nhận — chống đầu độc bộ nhớ qua prompt injection.</li>
+  <li>Không lưu token; thực thi bằng token của request Duyệt; kiểm tra lại dữ liệu; chống bấm Duyệt hai lần.</li>
+</ol></div>
+<p style="font-size:14px">Chi tiết: <a href="02_DANH_GIA_DE_XUAT_TRO_LY_AI.md">02 · Đánh giá</a> · Thiết kế: <a href="05_TRIEN_KHAI_TRO_LY_AI.html">05 · Triển khai (HTML)</a> · <a href="03_TAI_LIEU_TRIEN_KHAI_TRO_LY_AI.md">03 · Triển khai (MD)</a></p>
+
+<footer>Nguồn: De-xuat-chuc-nang-Tro-ly-AI-DATN-2026.docx (12/11/2026). Bản tổng hợp: 01_TONG_HOP_DE_XUAT_TRO_LY_AI.md. Sơ đồ cần mạng để tải Mermaid; khi offline sẽ hiện mã sơ đồ.</footer>
+</main>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  try{var t=localStorage.getItem('ai-doc-theme');if(t)root.setAttribute('data-theme',t);}catch(e){}
+  document.getElementById('themeBtn').addEventListener('click',function(){
+    var dark=root.getAttribute('data-theme')==='dark'||(!root.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme: dark)').matches);
+    var next=dark?'light':'dark';root.setAttribute('data-theme',next);
+    try{localStorage.setItem('ai-doc-theme',next);}catch(e){}
+    location.reload();
+  });
+
+  var tools=[
+    ['search_work_items','R','Tìm theo từ khóa, loại, trạng thái, người được giao, sprint, ưu tiên',1],
+    ['get_work_item','R','Chi tiết theo mã: mô tả, subtask, bình luận gần nhất',1],
+    ['get_my_issues','R','Công việc giao cho người đang chat',1],
+    ['get_project_metadata','R','Loại công việc, trạng thái workflow, mức ưu tiên',1],
+    ['list_project_members','R','Thành viên và vai trò (đổi tên → userId)',1],
+    ['list_sprints','R','Sprint đang chạy, sắp tới, đã xong',1],
+    ['get_sprint_progress','R','Point đã xong / còn lại, số việc theo trạng thái',1],
+    ['get_agile_report','R','Velocity, burndown',1],
+    ['get_contribution_report','R','Đóng góp từng thành viên trong sprint',2],
+    ['list_attachments','R','Tệp đính kèm của công việc',2],
+    ['read_attachment','R','Đọc nội dung tệp, có giới hạn dung lượng',2],
+    ['create_work_item','W','Tạo Epic / Story / Task / Bug',2],
+    ['create_subtasks','W','Tạo nhiều subtask trong một lần duyệt',2],
+    ['update_work_item','W','Sửa tóm tắt, mô tả, ưu tiên, point, ngày',2],
+    ['transition_work_item','W','Chuyển trạng thái theo workflow',2],
+    ['assign_work_item','W','Giao việc cho thành viên',2],
+    ['move_to_sprint','W','Đưa vào / ra khỏi sprint',2],
+    ['add_comment','W','Thêm bình luận',2],
+    ['link_work_items','W','Liên kết hai công việc',2],
+    ['ask_user','I','Hỏi lại kèm 2–5 lựa chọn',2],
+    ['save_memory','I','Ghi nhớ sở thích / bối cảnh',2],
+    ['delete_memory','I','Xóa một mục ghi nhớ',2],
+    ['search_past_conversations','I','Tìm trong các đoạn chat cũ của chính mình',2],
+    ['create_reminder','S','Nhắc việc vào một thời điểm',3],
+    ['create_scheduled_task','S','Tác vụ định kỳ (vd. tóm tắt sprint gửi email)',3],
+    ['list_scheduled_tasks','S','Xem lời nhắc / tác vụ định kỳ',3],
+    ['cancel_scheduled_task','S','Hủy lời nhắc / tác vụ',3],
+    ['send_notification','S','Gửi email cho thành viên',3],
+    ['suggest_sprint_plan','S','Đề xuất việc cho sprint theo velocity',3],
+    ['find_similar_work_items','S','Tìm công việc gần giống (trùng lặp)',3]
+  ];
+  var label={R:['Đọc','r'],W:['Ghi','w'],I:['Tương tác','i'],S:['Lập lịch','s']};
+  var tbody=document.querySelector('#tools tbody');
+  function render(f){
+    tbody.innerHTML='';
+    tools.filter(function(t){return f==='all'||t[1]===f;}).forEach(function(t){
+      var tr=document.createElement('tr');
+      tr.innerHTML='<td><code>'+t[0]+'</code></td><td><span class="pill '+label[t[1]][1]+'">'+label[t[1]][0]+'</span></td><td>'+t[2]+'</td><td>'+t[3]+'</td>';
+      tbody.appendChild(tr);
+    });
+  }
+  render('all');
+  document.querySelectorAll('.chip').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('.chip').forEach(function(x){x.setAttribute('aria-pressed','false');});
+      b.setAttribute('aria-pressed','true');render(b.dataset.f);
+    });
+  });
+
+  var scores=[['Giá trị bài toán',7],['Kiến trúc tổng thể',7],['Khớp với code hiện có',4],['Thiết kế vòng lặp agent',4],['Quản lý ngữ cảnh / bộ nhớ',3],['An toàn, bảo mật',5],['Trải nghiệm người dùng',5],['Chi phí, vận hành',4],['Kế hoạch, phạm vi',4],['Phương pháp đánh giá',5]];
+  var box=document.getElementById('scores');
+  scores.forEach(function(s){
+    var cls=s[1]<=4?'lo':(s[1]<=5?'mid':'');
+    box.insertAdjacentHTML('beforeend','<div>'+s[0]+'<div class="bar"><span class="'+cls+'" style="width:'+(s[1]*10)+'%"></span></div></div><div style="text-align:right;font-weight:700">'+s[1]+'</div>');
+  });
+
+  var links=[].slice.call(document.querySelectorAll('nav.toc a'));
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){links.forEach(function(l){l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id);});}});},{rootMargin:'0px 0px -70% 0px'});
+    document.querySelectorAll('h2[id]').forEach(function(h){io.observe(h);});
+  }
+})();
+</script>
+<script type="module">
+try{
+  const { default: mermaid } = await import('https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs');
+  const root=document.documentElement.getAttribute('data-theme');
+  const dark=root==='dark'||(!root&&matchMedia('(prefers-color-scheme: dark)').matches);
+  mermaid.initialize({startOnLoad:false,theme:dark?'dark':'neutral',securityLevel:'loose',fontFamily:'system-ui, sans-serif'});
+  await mermaid.run({querySelector:'pre.mermaid'});
+}catch(e){console.warn('Không tải được Mermaid, hiển thị mã sơ đồ.',e);}
+</script>
+</body>
+</html>

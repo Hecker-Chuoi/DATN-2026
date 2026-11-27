@@ -12,6 +12,7 @@ import com.datn.identity_service.service.UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -31,6 +32,10 @@ public class AuthController {
     private final UserService     userService;
     private final KeycloakService keycloakService;
     private final AccountVerificationService accountVerificationService;
+
+    /** Cookie access_token chỉ gửi qua HTTPS. Bật khi deploy sau TLS (APP_COOKIE_SECURE=true). */
+    @Value("${app.cookie.secure:false}")
+    private boolean cookieSecure;
 
 
     // ─── Xác thực email & quên mật khẩu (public, email gửi qua notification-service) ───
@@ -196,12 +201,12 @@ public class AuthController {
      * Builds the {@code access_token} httpOnly cookie.
      * HttpOnly=true  → not readable by JavaScript (XSS protection)
      * SameSite=Lax   → sent on top-level navigations (needed for Google OAuth redirect)
-     * Secure=false   → set to true in production (HTTPS)
+     * Secure         → theo app.cookie.secure (true khi chạy sau HTTPS)
      */
     private ResponseCookie buildAccessTokenCookie(String token, long maxAgeSeconds) {
         return ResponseCookie.from(COOKIE_NAME, token)
                 .httpOnly(true)
-                .secure(false)
+                .secure(cookieSecure)
                 .path("/")
                 .maxAge(maxAgeSeconds)
                 .sameSite("Lax")
@@ -212,7 +217,7 @@ public class AuthController {
     private ResponseCookie buildClearCookie() {
         return ResponseCookie.from(COOKIE_NAME, "")
                 .httpOnly(true)
-                .secure(false)
+                .secure(cookieSecure)
                 .path("/")
                 .maxAge(0)
                 .sameSite("Lax")

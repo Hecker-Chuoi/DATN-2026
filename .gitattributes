@@ -1,0 +1,7 @@
+# File chạy trên máy chủ Linux / trong container: luôn LF, kể cả khi checkout trên Windows (core.autocrlf=true)
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.Dockerfile    text eol=lf
+.dockerignore   text eol=lf
+frontend/nginx.conf         text eol=lf
+infrastructure/prod/**      text eol=lf
