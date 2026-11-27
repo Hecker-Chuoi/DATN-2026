@@ -8,6 +8,9 @@ const STATUS_LABEL = {
   EXPIRED: 'Đã bỏ qua (bạn gửi tin khác)',
 };
 
+// Tạm ẩn nút "Sửa tham số" (bắt người dùng sửa JSON khá khó dùng). Đặt true để bật lại.
+const SHOW_EDIT_PARAMS = false;
+
 const btn = (bg, color, border) => ({
   background: bg,
   color,
@@ -75,9 +78,11 @@ export default function AiApprovalCard({ interaction, disabled, onDecide }) {
           <button type="button" onClick={() => decide(false)} disabled={disabled} style={btn('#F1F5F9', '#0F172A')}>
             Bỏ qua
           </button>
-          <button type="button" onClick={() => setEditing((v) => !v)} disabled={disabled} style={btn('transparent', '#2563EB', '1px solid #BFDBFE')}>
-            {editing ? 'Xem lại' : 'Sửa tham số'}
-          </button>
+          {SHOW_EDIT_PARAMS && (
+            <button type="button" onClick={() => setEditing((v) => !v)} disabled={disabled} style={btn('transparent', '#2563EB', '1px solid #BFDBFE')}>
+              {editing ? 'Xem lại' : 'Sửa tham số'}
+            </button>
+          )}
         </div>
       ) : (
         <div style={{ marginTop: 8, fontSize: 12, color: interaction.status === 'APPROVED' ? '#059669' : '#64748B' }}>

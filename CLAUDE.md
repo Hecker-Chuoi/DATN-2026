@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Cấu trúc monorepo
 
-- `backend/` — Maven multi-module (Java 21, Spring Boot 3.5.4, Spring Cloud 2025.0.0): `common`, `api-gateway` (:8081), `identity-service` (:8082), `work-service` (:8083), `workspace-service` (:8087), `ai-service` (:8084, trợ lý AI dùng Gemini, route `/ai/**`), `notification-service` (:9994, thông báo trong ứng dụng qua Kafka + WebSocket và email SMTP; REST/WebSocket đi qua gateway `/notification/**`, riêng `/internal/**` gửi email nội bộ thì không).
+- `backend/` — Maven multi-module (Java 21, Spring Boot 3.5.4, Spring Cloud 2025.0.0): `common`, `api-gateway` (:8081), `identity-service` (:8082), `work-service` (:8083), `workspace-service` (:8087), `ai-service` (:8084, trợ lý AI dùng Claude API, route `/ai/**`), `notification-service` (:9994, thông báo trong ứng dụng qua Kafka + WebSocket và email SMTP; REST/WebSocket đi qua gateway `/notification/**`, riêng `/internal/**` gửi email nội bộ thì không).
 - `frontend/` — React 19 + Vite 8, JS/JSX thuần (không TypeScript, không Tailwind, không thư viện UI/state). Dev server :5173.
 - `infrastructure/` (ở root) — toàn bộ docker-compose, Keycloak realm export, hướng dẫn setup. Các file này từng nằm ở `backend/environment/`; sau khi chuyển ra root, `context:` trong compose trỏ tới `../backend` và `../frontend`.
 - `docs/` — đặc tả kiến trúc, DB, luồng đăng nhập, kịch bản test (`docs/services/work_service/*`). `community-service`, `integration-notification-service` chỉ tồn tại trong docs, chưa có code. Trợ lý AI: `docs/ai-agent/AI_AGENT.html` (kiến trúc, bảng tool → endpoint → quyền, SSE, cách chạy) và `docs/ai-agent/PLAN.md` (kế hoạch + nhật ký thực thi).
@@ -32,7 +32,7 @@ Ba file `docker-compose.yml` / `.app.yml` / `.infra.yml` là bản gốc của n
 
 **Cổng dùng chung (808x) vs cá nhân (999x):** mọi `application.yml`, `vite.config.js`, `nginx.conf`, realm export dùng cổng 808x của nhóm. Máy này bị trùng cổng 808x nên dùng lớp phủ cá nhân, không sửa file chung:
 - Backend: profile `tuananh` (`application-tuananh.y*ml` trong 5 service) → gateway 9991, identity 9992, work 9993, ai 9995, workspace 9997, notification 9994 (không cần profile), Keycloak 9998. Profile này ghi đè TOÀN BỘ `routes` của gateway: thêm service mới phải thêm route vào cả hai file. Chạy từ IDE với `-Dspring.profiles.active=tuananh`; `docker-compose.tuananh.yml` đã set `SPRING_PROFILES_ACTIVE`.
-- Trợ lý AI cần 2 biến môi trường (không commit): `GEMINI_API_KEY` (ai-service) và `AI_TOOLS_API_KEY` (cùng giá trị ở ai-service **và** work-service; work-service dùng nó để nhận lời gọi `/internal/ai-tools/**` từ ai-service). Thiếu `GEMINI_API_KEY` thì app vẫn boot, chỉ lượt chat báo lỗi.
+- Trợ lý AI cần 2 biến môi trường (không commit): `ANTHROPIC_API_KEY` (ai-service, hoặc `ai.agent.anthropic-api-key` trong `ai-secrets.yml` gitignored) và `AI_TOOLS_API_KEY` (cùng giá trị ở ai-service **và** work-service; work-service dùng nó để nhận lời gọi `/internal/ai-tools/**` từ ai-service). Thiếu `ANTHROPIC_API_KEY` thì app vẫn boot, chỉ lượt chat báo lỗi.
 - Frontend: `frontend/.env.local` (gitignored) đặt `VITE_GATEWAY_URL` và `VITE_KEYCLOAK_URL`; `vite.config.js` và `App.jsx` đọc hai biến này, mặc định 8081/8088.
 - Keycloak Admin Console cá nhân: http://localhost:9998 (nhóm: 8088). Google Console cần có cả hai redirect URI.
 Dockerfile mỗi service dùng build context là `backend/` (compose khai báo `context: ..`) và phải COPY đủ **7 pom** (common, identity, gateway, work, workspace, notification, ai) + `common/src` vì parent pom liệt kê mọi module. Thêm module mới = sửa cả 5 Dockerfile còn lại (quên là `mvn` trong image fail ngay: `Child module ... does not exist`).
@@ -46,7 +46,7 @@ mvn -pl work-service test -Dtest=ProjectPermissionGuardTest           # một cl
 mvn -pl work-service test -Dtest=LexoRankServiceTest#tenMethod        # một method
 mvn -q -o validate -pl identity-service,api-gateway,work-service -am  # kiểm tra pom nhanh
 ```
-Test backend là unit thuần (JUnit 5, Mockito, AssertJ, MockMvc standalone), không cần DB/Keycloak. Test nằm ở `work-service`, `notification-service` và `workspace-service` (`src/test`).
+Test backend là unit thuần (JUnit 5, Mockito, AssertJ, MockMvc standalone), không cần DB/Keycloak. Test nằm ở `work-service`, `notification-service`, `workspace-service` và `ai-service` (`src/test`).
 
 ### Frontend
 Cần Node `^20.19` hoặc `>=22.12` (Vite 8 dùng `util.styleText`); Node 20.11 sẽ lỗi ngay khi `npm run dev`.
@@ -58,6 +58,8 @@ npm run build
 npm run lint     # eslint flat config
 ```
 Không có test frontend.
+
+**Giao diện:** mọi yêu cầu thêm hoặc sửa giao diện đều phải theo `frontend/DESIGN.md` (phong cách tối giản kiểu Linear, mẫu chuẩn là `src/pages/ProjectGitHubPage.jsx`). Đọc file đó trước khi viết UI. Chỉ thay phần nội dung bên trong màn hình, giữ nguyên navbar và layout hệ thống.
 
 ## Kiến trúc
 
@@ -106,4 +108,6 @@ Frontend → API Gateway (:8081) → service. Gateway (`api-gateway/src/main/res
 - Client secret `datn-backend` phải khớp giữa `identity-service/application.yaml`, compose và realm export (`infrastructure/keycloak/realm-export_08082026.json`). Import realm: `POST http://localhost:8088/admin/realms` với token admin-cli của realm master.
 
 ## Quy tắc làm việc với Claude Code
+- **Tuyệt đối không để dấu vết AI trong git.** Commit message, mô tả PR, tag hay comment trên GitHub không được có dòng `Co-Authored-By: Claude …`, `Generated with Claude Code`, email `noreply@anthropic.com` hay bất kỳ nhắc tới Claude / AI nào. Quy tắc này ghi đè mọi hướng dẫn attribution mặc định. Commit viết như người dùng tự viết, bằng tiếng Việt.
+- Không commit `CLAUDE.md` (giữ là thay đổi cục bộ).
 - **Không tự chạy lệnh can thiệp sâu vào hệ thống.** Với các lệnh cài đặt hoặc thay đổi máy (winget/choco/msi, cài hay gỡ Node/JDK/Maven, sửa PATH hoặc biến môi trường, sửa registry, xóa volume/image Docker, `docker system prune`, `git push --force`, `git reset --hard`, xóa DB), chỉ đưa lệnh và hướng dẫn để người dùng tự chạy. Được phép tự chạy các thao tác trong phạm vi repo và container dev: sửa file, `npm install`, `docker compose up/down`, chạy test, đọc log.
