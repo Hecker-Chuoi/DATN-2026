@@ -51,7 +51,7 @@
 - Tạo **secret** cần quyền **admin** (Settings → Secrets and variables → Actions → *New repository secret*). Người chỉ có quyền Write đẩy được workflow nhưng không thêm được secret. Thấy tab **Settings** của repo là dấu hiệu bạn có quyền admin.
 - Settings → **Actions → General**: *Actions permissions* = **Allow all actions and reusable workflows** (hoặc cho phép `actions/*`, bản workflow chỉ dùng `actions/checkout`, `setup-java`, `setup-node`, `upload-artifact`); *Workflow permissions* = **Read repository contents** (workflow tự khai `permissions: contents: read`).
 - Không cần webhook, không cần PAT.
-- Actions của repo **private** có hạn mức phút miễn phí hằng tháng (gói Free: 2.000 phút / tháng), mỗi lần deploy tốn khoảng 20–30 phút ([06 §6](06_GITHUB_ACTIONS_CICD.md#6-thời-gian-và-hạn-mức)).
+- Actions của repo **private** có hạn mức phút miễn phí hằng tháng (gói Free: 2.000 phút / tháng), mỗi lượt chạy tốn khoảng 7–12 phút (đo thực tế: test 75 s, build + push 134 s) ([06 §6](06_GITHUB_ACTIONS_CICD.md#6-thời-gian-và-hạn-mức)).
 
 ---
 

@@ -42,8 +42,9 @@
 | `datn-app` | `t3.large`, Ubuntu 24.04, public `16.179.211.188`, hostname `datn-app` (máy cũ `datn-minikube`: đã gỡ Minikube và dùng lại) |
 | Tên miền | `app.16-179-211-188.sslip.io`, `sso.16-179-211-188.sslip.io` (HTTPS Let's Encrypt) |
 | Registry | `docker.io/yamaaaaaaaa` (6 repo `datn-*`, public), tag đang chạy: `47a74a1` |
-| Đã làm | bước 0–4: ứng dụng chạy, đăng ký → xác thực email → đăng nhập → tạo workspace qua HTTPS; khoá SSH riêng của Actions đã cài (`authorized_keys` 1 dòng, `command=` khoá chặt) và kiểm chứng từ máy ngoài; workflow đã qua `actionlint`; test backend (148) và build frontend đã chạy xanh |
-| Còn lại | bước 5–6: tạo secret + mở cổng 22, rồi lượt chạy Actions đầu tiên ([06](06_GITHUB_ACTIONS_CICD.md)) |
+| Đã làm | bước 0–4: ứng dụng chạy, đăng ký → xác thực email → đăng nhập → tạo workspace qua HTTPS; khoá SSH riêng của Actions đã cài (`authorized_keys` 1 dòng, `command=` khoá chặt) và kiểm chứng từ máy ngoài; workflow đã qua `actionlint`; test backend (540) và build frontend đã chạy xanh |
+| Lượt Actions đầu (commit `0678483` trên `main`) | test + build + push 6 image **xanh** (tổng ~2,5 phút); **Deploy đỏ `Host key verification failed`** (xem [06 §9](06_GITHUB_ACTIONS_CICD.md#9-kịch-bản-kiểm-tra)); đã sửa workflow, chờ chạy lại. Server vẫn chạy bản `47a74a1` |
+| Còn lại | đẩy bản sửa workflow lên `main` để chạy lại; (tuỳ chọn) bật tích hợp GitHub của ứng dụng: [03 §5b](03_SECRET_VA_CAU_HINH.md#5b-tích-hợp-github-oauth-app) |
 
 ## Các bước
 
@@ -51,7 +52,7 @@
 |---|---|---|---|
 | 0 | **[01](01_CHUAN_BI_TAI_KHOAN.md)** — Tài khoản Docker Hub + Access Token (Read & Write), quyền admin GitHub, Elastic IP, tên miền. **[02 §1–3](02_CHUAN_BI_SERVER_UNG_DUNG.md#1-tạo-ec2-datn-app)** — Tạo EC2 `datn-app` (`t3.large`, Elastic IP, Security Group 22 từ máy bạn + 80/443), chuẩn bị máy (timezone, swap, ufw, giới hạn log), cài Docker + Compose | web + `datn-app` | `docker run --rm hello-world` chạy bằng `ubuntu`; `docker compose version` ≥ 2.20 |
 | 1 | **[02 §4–6](02_CHUAN_BI_SERVER_UNG_DUNG.md#4-cài-nginx-certbot-jq)** — Cài Nginx + certbot + jq; DNS `app.` / `sso.` → Elastic IP; Nginx proxy vào `127.0.0.1:3000` / `:8080`; HTTPS bằng certbot; đặt tên miền vào `public.env` rồi commit | `datn-app` + repo | `certbot renew --dry-run` thành công; `https://app.<domain>/` có phản hồi (502 là đúng lúc này) |
-| 2 | **[03](03_SECRET_VA_CAU_HINH.md)** — Tạo user `deployer` (nhóm `docker`, không `sudo`), `/home/deployer/datn/`, sinh `secrets.env` (12 khoá, quyền 600), sao lưu về máy cá nhân (`secret/`, đã gitignore) | `datn-app`, **không commit** | `secrets.env` có 12 khoá; bản sao lưu có trên Windows |
+| 2 | **[03](03_SECRET_VA_CAU_HINH.md)** — Tạo user `deployer` (nhóm `docker`, không `sudo`), `/home/deployer/datn/`, sinh `secrets.env` (15 khoá, quyền 600), sao lưu về máy cá nhân (`secret/`, đã gitignore) | `datn-app`, **không commit** | `secrets.env` có 15 khoá; bản sao lưu có trên Windows |
 | 3 | ✅ **[04](04_DOCKER_COMPOSE_PRODUCTION.md) — ĐÃ LÀM trong repo.** `docker-compose.prod.yml` (12 container, healthcheck, `depends_on` theo chuỗi, `mem_limit`), `prod/` (`public.env`, profile Spring `prod`, init Postgres, Nginx mẫu, `deploy.sh`, `make-realm.sh`, `backup-postgres.sh`), workflow Actions | repo | `docker compose config` hợp lệ; việc còn lại của bạn: 04 §7 |
 | 4 | **[05](05_TRIEN_KHAI_LAN_DAU.md)** — `build-push.sh` trên Windows (6 image, tag = git SHA); cài `deploy.sh` lên server; `tar \| ssh ... deploy.sh deploy <tag>`; mở trình duyệt thử; đo RAM; thử `rollback`; cron sao lưu | cả hai | **Mở trình duyệt đăng nhập được**; WebSocket `101`; upload file; không container nào `OOMKilled` sau 30 phút dùng thử |
 | 5 | **[06 §2–5](06_GITHUB_ACTIONS_CICD.md#2-khoá-ssh-riêng-cho-actions)** — Sinh khoá SSH riêng cho Actions; `authorized_keys` của `deployer` kèm `command="/home/deployer/deploy.sh",no-pty`; mở cổng 22 `0.0.0.0/0`; tạo secret `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `DEPLOY_SSH_KEY`, `DEPLOY_HOST` (+ `DEPLOY_KNOWN_HOSTS`) | Windows + `datn-app` + GitHub + AWS | 🪟 `ssh -i secret/actions-deploy-key deployer@<IP> check` chạy được, lệnh `ls` bị từ chối; secret đã có trên GitHub |

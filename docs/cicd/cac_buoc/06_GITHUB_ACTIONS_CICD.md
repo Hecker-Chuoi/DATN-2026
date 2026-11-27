@@ -111,7 +111,7 @@ Rủi ro chấp nhận được vì: Ubuntu EC2 **chỉ cho khoá** (tắt đăn
 | `DOCKERHUB_TOKEN` | Access Token Read & Write ([01 §2](01_CHUAN_BI_TAI_KHOAN.md#2-docker-hub-tài-khoản-và-access-token)) |
 | `DEPLOY_SSH_KEY` | **toàn bộ** nội dung file `secret/actions-deploy-key`, gồm cả dòng `-----BEGIN OPENSSH PRIVATE KEY-----` và `-----END OPENSSH PRIVATE KEY-----` |
 | `DEPLOY_HOST` | Elastic IP (**public**) của server ứng dụng. Không bí mật nên đặt ở tab **Variables** cũng được: workflow đọc `secrets.DEPLOY_HOST` rồi `vars.DEPLOY_HOST` |
-| `DEPLOY_KNOWN_HOSTS` (nên có) | toàn bộ nội dung `secret/deploy-known-hosts.txt`. Thiếu thì workflow vẫn chạy nhưng tin dấu vân tay lấy lúc chạy (có cảnh báo vàng) |
+| `DEPLOY_KNOWN_HOSTS` (nên có) | toàn bộ nội dung `secret/deploy-known-hosts.txt`. Workflow chỉ lấy phần `<kiểu khoá> <khoá>` của mỗi dòng rồi gắn đúng `DEPLOY_HOST`, nên dán dòng ghi IP hay tên máy đều được. Thiếu thì workflow vẫn chạy nhưng tin dấu vân tay lấy lúc chạy (có cảnh báo vàng) |
 
 Mở file để chép nội dung (🪟 Git Bash): `cat secret/actions-deploy-key`, `cat secret/deploy-known-hosts.txt`. Dán thẳng vào ô *Secret*, không sửa dấu xuống dòng.
 
@@ -121,8 +121,8 @@ Workflow tự **kiểm tra đủ secret** ở đầu job deploy và báo `Thiế
 
 ## 6. Thời gian và hạn mức
 
-- Job `backend` ~5–8 phút, `frontend` ~2 phút (chạy song song). Job `deploy`: build 6 image **không có cache giữa các lượt** (runner mới mỗi lần) ~15–25 phút, rồi deploy 3–8 phút. Cả lượt **~25–40 phút** (**ước tính, chưa đo trên GitHub**). Job `deploy` có `timeout-minutes: 75`.
-- Repo **public**: Actions miễn phí không giới hạn phút. Repo **private** gói Free: 2.000 phút Linux / tháng, mỗi lần deploy ~30 phút ⇒ khoảng 60 lần / tháng.
+- **Đo thực tế** (lượt chạy đầu trên `main`, 27/11/2026): job `backend` **75 giây** (`mvn verify` 63 s), `frontend` **31 giây** (chạy song song), job `deploy`: build + push 6 image **134 giây** (nhanh hơn dự kiến nhiều: runner GitHub mạnh, mạng tới Maven Central / Docker Hub tốt). Cộng thêm deploy lên server (kéo image + `up -d --wait`, 3–8 phút, ước tính) thì cả lượt khoảng **7–12 phút**. Job `deploy` đặt `timeout-minutes: 75` cho chắc.
+- Repo **public**: Actions miễn phí không giới hạn phút. Repo **private** gói Free: 2.000 phút Linux / tháng, mỗi lượt ~10 phút ⇒ khoảng 200 lượt / tháng.
 - Muốn nhanh hơn: chỉ build service có thay đổi, hoặc dùng cache layer của BuildKit (`docker/build-push-action` + `cache-from: type=gha`); chưa làm vì `build-push.sh` dùng `docker build` thường.
 
 ---
@@ -137,9 +137,9 @@ Workflow tự **kiểm tra đủ secret** ở đầu job deploy và báo `Thiế
 
 | Job | Việc |
 |---|---|
-| `backend` | JDK 21 (Temurin), `mvn -B -ntp verify '-Dtest=!*ApplicationTests'` (148 unit test; bỏ các `*ApplicationTests` vì cần DB thật), tải báo cáo surefire |
+| `backend` | JDK 21 (Temurin), `mvn -B -ntp verify '-Dtest=!*ApplicationTests'` (540 unit test; bỏ các `*ApplicationTests` vì cần DB thật), tải báo cáo surefire |
 | `frontend` | Node 22, `npm ci`, `npm run lint` (**chỉ cảnh báo**: code còn ~190 lỗi lint sẵn), `npm run build` (chặn nếu lỗi) |
-| `deploy` | kiểm tra secret → `TAG = git rev-parse --short=7 HEAD` → `docker login` → `build-push.sh $TAG` → cấu hình SSH → `tar | ssh ... "deploy $TAG"` → `curl https://<APP_HOST>/identity/actuator/health` (tối đa 2 phút) → `docker logout` |
+| `deploy` | kiểm tra secret → `TAG = git rev-parse --short=7 HEAD` → **cấu hình SSH + thử `ssh ... check` ngay** (sai khoá / IP / cổng 22 thì dừng **trước** khi build, in lý do) → `docker login` → `build-push.sh $TAG` → `tar | ssh ... "deploy $TAG"` → `curl https://<APP_HOST>/identity/actuator/health` (tối đa 2 phút) → `docker logout` |
 
 Hành vi cần biết:
 - Tag image = **git SHA 7 ký tự**; rollback = deploy lại SHA cũ. `deploy.sh` luôn chạy theo SHA, không theo `latest`.
@@ -170,7 +170,7 @@ Hành vi cần biết:
 | 6 | Khoá chặt | 🪟 `ssh -i secret/actions-deploy-key deployer@<IP> "ls /"` bị từ chối (mục 3) |
 | 7 | Chạy tay nhánh khác | Actions → CI/CD → Run workflow, chọn nhánh, tick `deploy` → deploy nhánh đó |
 
-**Đã kiểm chứng thật** (27/11/2026): file workflow qua `actionlint` (không lỗi); `mvn verify` (148 test) và `npm run build` chạy xanh trong container JDK 21 / Node 22; khoá SSH riêng của Actions đăng nhập được vào `deployer@<IP public>` từ máy ngoài mạng AWS với `StrictHostKeyChecking=yes`, `check` chạy được, lệnh `ls` bị từ chối, khoá cũ của Jenkins bị từ chối; cơ chế `deploy` qua SSH (gói stdin, `no-pty`), tự rollback khi SHA không tồn tại, smoke test, tất cả ở [04 §5](04_DOCKER_COMPOSE_PRODUCTION.md#5-đã-kiểm-chứng-gì-chưa-kiểm-chứng-gì). **Chưa chạy**: lượt chạy thật trên GitHub (cần bạn tạo secret ở mục 5 và mở cổng 22 ở mục 4).
+**Đã kiểm chứng thật** (27/11/2026): file workflow qua `actionlint` (không lỗi); `mvn verify` (540 test) và `npm run build` chạy xanh trong container JDK 21 / Node 22; khoá SSH riêng của Actions đăng nhập được vào `deployer@<IP public>` từ máy ngoài mạng AWS với `StrictHostKeyChecking=yes`, `check` chạy được, lệnh `ls` bị từ chối, khoá cũ của Jenkins bị từ chối; cơ chế `deploy` qua SSH (gói stdin, `no-pty`), tự rollback khi SHA không tồn tại, smoke test, tất cả ở [04 §5](04_DOCKER_COMPOSE_PRODUCTION.md#5-đã-kiểm-chứng-gì-chưa-kiểm-chứng-gì). **Lượt chạy thật đầu tiên trên GitHub** (27/11/2026, commit `0678483` trên `main`): `Test backend` xanh (75 s), `Lint + build frontend` xanh (31 s), `Build + push 6 image` xanh (134 s, 6 image `0678483` có trên Docker Hub), nhưng bước **Deploy đỏ: `Host key verification failed.` (exit 255)**. Phía server log chỉ có một dòng `Connection closed by <IP runner> [preauth]` (client tự ngắt trước khi xác thực): ứng dụng **không bị đụng tới**, vẫn chạy bản cũ. Nguyên nhân: runner không tìm thấy dấu vân tay của server ứng với đúng giá trị `DEPLOY_HOST` trong `known_hosts` (secret `DEPLOY_KNOWN_HOSTS` ghi theo IP, còn `DEPLOY_HOST` được nhập kiểu khác hoặc có ký tự thừa; hoặc dán sai nội dung). Đã sửa trong workflow: (1) bỏ khoảng trắng thừa của `DEPLOY_HOST`; (2) dựng lại `known_hosts` bằng cách gắn **đúng `DEPLOY_HOST`** vào phần `<kiểu khoá> <khoá>` của secret, nên không phụ thuộc secret ghi IP hay tên máy (đã thử: host dạng tên DNS vẫn qua bước kiểm tra dấu vân tay); (3) thêm bước **Kiểm tra kết nối SSH** chạy **trước** khi build, in lý do thất bại. **Chưa kiểm chứng lại trên GitHub** sau bản sửa này.
 
 ---
 
@@ -183,6 +183,7 @@ Hành vi cần biết:
 | `denied: requested access to the resource is denied` khi push | Sai `REGISTRY` trong `public.env` (phải là `docker.io/<user>` viết thường), hoặc token không có quyền Write |
 | `toomanyrequests` khi build | Giới hạn pull của Docker Hub: bước `docker login` đã giảm; nếu vẫn gặp thì chạy lại sau ít phút |
 | `ssh: connect to host ... Connection timed out` | Cổng 22 chưa mở cho `0.0.0.0/0` (mục 4), hoặc `DEPLOY_HOST` sai / IP đổi |
+| Job đỏ ở bước **Kiểm tra kết nối SSH** | Đọc phần "Chi tiết" workflow in ra (các dòng `debug1`). Lỗi này dừng job **trước** khi build nên không tốn 20 phút. Phân biệt: `Connection timed out` = cổng 22 / IP; `Host key verification failed` = `DEPLOY_KNOWN_HOSTS`; `Permission denied (publickey)` = `DEPLOY_SSH_KEY` / `authorized_keys`. Muốn thấy phía server: 🐧 `sudo journalctl -u ssh --since "15 min ago" | grep -E "deployer|preauth|Accepted"` (một dòng `Connection closed by <IP runner> [preauth]` nghĩa là client tự ngắt **trước** khi xác thực, thường do kiểm tra dấu vân tay thất bại) |
 | `Host key verification failed` | `DEPLOY_KNOWN_HOSTS` không khớp server (máy được dựng lại / IP đổi): chạy lại `ssh-keyscan` (mục 2) và cập nhật secret |
 | `Permission denied (publickey)` | `authorized_keys` sai (mục 3: quyền `700` cho `.ssh`, `600` cho file, chủ là `deployer`), hoặc `DEPLOY_SSH_KEY` dán thiếu dòng BEGIN / END, hoặc thừa khoảng trắng |
 | `Lệnh không hợp lệ: ''` | Lệnh SSH không có đối số: phải là `deploy <sha>` / `rollback` / `check` |
