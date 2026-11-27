@@ -27,7 +27,7 @@
 ## 1. Điều kiện
 
 - [ ] 02: `docker run --rm hello-world` chạy bằng `ubuntu`; HTTPS cho `app.` và `sso.` đã cấp (502 là bình thường lúc này).
-- [ ] 03: `/home/deployer/datn/secrets.env` có 12 khoá.
+- [ ] 03: `/home/deployer/datn/secrets.env` có 15 khoá.
 - [ ] 04 §7: `infrastructure/prod/public.env` có `APP_HOST`, `SSO_HOST`, `REGISTRY` thật và **đã commit** (`git status --short infrastructure/prod/public.env` rỗng).
 
 ---

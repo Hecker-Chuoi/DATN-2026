@@ -41,9 +41,9 @@
 
 1. Cài Docker + Compose (giới hạn log container), Nginx, certbot, jq ([cac_buoc/02](cac_buoc/02_CHUAN_BI_SERVER_UNG_DUNG.md)).
 2. DNS `app.` / `sso.` → Elastic IP; Nginx proxy vào `127.0.0.1:3000` (frontend) và `127.0.0.1:8080` (Keycloak); HTTPS bằng certbot.
-3. Tạo user `deployer` (nhóm `docker`), `~/datn/secrets.env` (12 mật khẩu ngẫu nhiên), sao lưu về máy cá nhân ([cac_buoc/03](cac_buoc/03_SECRET_VA_CAU_HINH.md)).
+3. Tạo user `deployer` (nhóm `docker`), `~/datn/secrets.env` (15 khoá ngẫu nhiên), sao lưu về máy cá nhân ([cac_buoc/03](cac_buoc/03_SECRET_VA_CAU_HINH.md)).
 
-**Xong khi:** `certbot renew --dry-run` thành công; `secrets.env` có 12 khoá.
+**Xong khi:** `certbot renew --dry-run` thành công; `secrets.env` có 15 khoá.
 
 ---
 

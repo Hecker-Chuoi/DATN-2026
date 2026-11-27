@@ -41,7 +41,7 @@ jobs:
           java-version: "21"
           cache: maven
       # Bỏ các *ApplicationTests (@SpringBootTest contextLoads): chúng cần Postgres / Keycloak thật.
-      # Còn lại là unit test thuần (148 test, đã chạy xanh với JDK 21).
+      # Còn lại là unit test thuần (540 test: work 344, workspace 48, notification 148; xanh với JDK 21).
       - name: mvn verify
         working-directory: backend
         run: mvn -B -ntp verify '-Dtest=!*ApplicationTests' -Dsurefire.failIfNoSpecifiedTests=false
@@ -103,10 +103,40 @@ jobs:
           [ -n "$DH_TOKEN" ]      || { echo "::error::Thiếu secret DOCKERHUB_TOKEN"; miss=1; }
           [ -n "$SSH_KEY" ]       || { echo "::error::Thiếu secret DEPLOY_SSH_KEY"; miss=1; }
           [ -n "$DEPLOY_HOST" ]   || { echo "::error::Thiếu secret / variable DEPLOY_HOST (IP public của server ứng dụng)"; miss=1; }
-          exit $miss
+          [ "$miss" = 0 ] || exit 1
+          # Bỏ khoảng trắng / xuống dòng dán thừa vào DEPLOY_HOST (hay gặp khi copy từ trình duyệt)
+          echo "DEPLOY_HOST=$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')" >> "$GITHUB_ENV"
 
       - name: Tag = git SHA 7 ký tự
         run: echo "TAG=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_ENV"
+
+      - name: Cấu hình SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null || { echo "::error::DEPLOY_SSH_KEY không phải khoá riêng hợp lệ (thiếu dòng BEGIN/END hoặc dán sai)"; exit 1; }
+          if [ -n "$KNOWN_HOSTS" ]; then
+            # Chỉ lấy "<kiểu khoá> <khoá>" của từng dòng rồi gắn đúng DEPLOY_HOST: không phụ thuộc secret ghi IP hay tên máy
+            printf '%s\n' "$KNOWN_HOSTS" | awk -v h="$DEPLOY_HOST" '!/^#/ && NF>=3 {print h, $(NF-1), $NF}' > ~/.ssh/known_hosts
+          fi
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            echo "::warning::DEPLOY_KNOWN_HOSTS trống hoặc không đọc được: tin dấu vân tay lấy lúc chạy (kém an toàn hơn)"
+            ssh-keyscan -T 15 "$DEPLOY_HOST" > ~/.ssh/known_hosts
+          fi
+
+      # Thử SSH NGAY (trước khi mất 15–25 phút build): sai khoá / sai IP / cổng 22 chưa mở thì dừng sớm và in lý do
+      - name: Kiểm tra kết nối SSH
+        run: |
+          SSH_OPTS=(-i "$HOME/.ssh/deploy_key" -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes)
+          if ! ssh "${SSH_OPTS[@]}" "deployer@$DEPLOY_HOST" check; then
+            echo "::error::Không SSH được vào deployer@$DEPLOY_HOST (xem docs/cicd/cac_buoc/06 §10). Chi tiết:"
+            ssh -v "${SSH_OPTS[@]}" "deployer@$DEPLOY_HOST" check 2>&1 | grep -E "debug1: (Connecting|Connection|Host key|Server host key|Offering|Authentications|Trying|No more|Authenticated)|Permission denied|Host key verification|Connection (timed out|refused|closed|reset)|known_hosts" | tail -20
+            exit 1
+          fi
 
       - name: Đăng nhập Docker Hub
         env:
@@ -117,21 +147,6 @@ jobs:
       # build-push.sh đọc REGISTRY và SSO_HOST từ infrastructure/prod/public.env (frontend nhúng URL Keycloak lúc build)
       - name: Build + push 6 image
         run: bash infrastructure/ci/build-push.sh "$TAG"
-
-      - name: Cấu hình SSH
-        env:
-          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          if [ -n "$KNOWN_HOSTS" ]; then
-            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          else
-            echo "::warning::Chưa đặt DEPLOY_KNOWN_HOSTS: tin dấu vân tay lấy lúc chạy (kém an toàn hơn)"
-            ssh-keyscan -T 15 "$DEPLOY_HOST" > ~/.ssh/known_hosts
-          fi
 
       # Khoá SSH trên server bị khoá chặt bằng command="/home/deployer/deploy.sh": chỉ chạy được deploy | rollback | check.
       # deploy.sh giải nén gói, pull, up -d --wait, smoke test; lỗi thì tự về bản trước và thoát mã khác 0 (job đỏ).

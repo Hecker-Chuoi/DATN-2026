@@ -2,7 +2,7 @@
 
 > Thuộc [00 — Danh sách các bước](00_DANH_SACH_CAC_BUOC.md) (**bước 2**). Làm **sau** [02](02_CHUAN_BI_SERVER_UNG_DUNG.md): `datn-app` đã có Docker, Nginx, HTTPS.
 >
-> Kết quả: trên `datn-app` có user `deployer` (nhóm `docker`), thư mục `/home/deployer/datn/` và file **`secrets.env`** (12 khoá, quyền 600) chứa mọi mật khẩu. File này **chỉ nằm trên server + bản sao lưu cá nhân của bạn, không commit**.
+> Kết quả: trên `datn-app` có user `deployer` (nhóm `docker`), thư mục `/home/deployer/datn/` và file **`secrets.env`** (15 khoá, quyền 600) chứa mọi mật khẩu. File này **chỉ nằm trên server + bản sao lưu cá nhân của bạn, không commit**.
 >
 > Quy ước: 🪟 = PowerShell / Git Bash trên **máy Windows**; 🐧 = phiên **SSH vào `datn-app`** (`ubuntu@datn-app:~$`). **Đừng dán lệnh Linux vào PowerShell và ngược lại.**
 
@@ -13,6 +13,7 @@
 3. [Sinh mật khẩu vào `secrets.env`](#3-sinh-mật-khẩu-vào-secretsenv)
 4. [Sao lưu `secrets.env` về máy cá nhân](#4-sao-lưu-secretsenv-về-máy-cá-nhân)
 5. [Gửi mail thật (Gmail) thay cho Mailpit](#5-gửi-mail-thật-gmail-thay-cho-mailpit)
+   - [5b. Tích hợp GitHub (OAuth App)](#5b-tích-hợp-github-oauth-app)
 6. [Đổi mật khẩu về sau](#6-đổi-mật-khẩu-về-sau)
 7. [Không được làm](#7-không-được-làm)
 8. [Xử lý sự cố](#8-xử-lý-sự-cố)
@@ -41,6 +42,7 @@ Hiện mật khẩu đang **viết cứng** trong repo (chỉ hợp cho máy dev
 | `KEYCLOAK_CLIENT_SECRET` | Client `datn-backend` | identity `KEYCLOAK_CLIENT_SECRET`; `make-realm.sh` ghi vào realm trước khi Keycloak import |
 | `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | MinIO; work-service (bucket `work-attachments`) | MinIO `MINIO_ROOT_*`; work `MINIO_ACCESS_KEY/SECRET_KEY` |
 | `MAIL_USERNAME`, `MAIL_PASSWORD` | notification-service gửi email | `MAIL_USERNAME`, `MAIL_PASSWORD` (để **trống** nếu dùng Mailpit) |
+| `GITHUB_CLIENT_SECRET`, `GITHUB_TOKEN_ENCRYPTION_KEY`, `GITHUB_STATE_SECRET` | Tích hợp GitHub của work-service ([5b](#5b-tích-hợp-github-oauth-app)); `GITHUB_CLIENT_SECRET` để trống tới khi có OAuth App | work-service `GITHUB_*` |
 
 Redis và Kafka **không có mật khẩu** (giống dev) vì chỉ truy cập được trong mạng Docker nội bộ `app-net`, không publish cổng ra ngoài.
 
@@ -92,11 +94,14 @@ MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=$(openssl rand -hex 24)
 MAIL_USERNAME=
 MAIL_PASSWORD=
+GITHUB_CLIENT_SECRET=
+GITHUB_TOKEN_ENCRYPTION_KEY=$(openssl rand -hex 32)
+GITHUB_STATE_SECRET=$(openssl rand -hex 32)
 EOF
 sudo install -o deployer -g deployer -m 600 /tmp/secrets.env /home/deployer/datn/secrets.env
 shred -u /tmp/secrets.env
 sudo ls -l /home/deployer/datn/secrets.env           # -rw------- deployer deployer
-sudo grep -c '=' /home/deployer/datn/secrets.env     # 12
+sudo grep -c '=' /home/deployer/datn/secrets.env     # 15
 ```
 
 Mật khẩu admin Keycloak (cần khi đăng nhập Admin Console ở 05): `sudo grep '^KEYCLOAK_ADMIN' /home/deployer/datn/secrets.env`.
@@ -112,7 +117,7 @@ Mất file này **và** volume Postgres thì không còn cách nào biết mật
 ```bash
 mkdir -p secret
 ssh -i <KEY>.pem ubuntu@<ELASTIC_IP> "sudo cat /home/deployer/datn/secrets.env" > secret/datn-secrets.env
-grep -c '=' secret/datn-secrets.env            # 12
+grep -c '=' secret/datn-secrets.env            # 15
 git status --short secret                      # rỗng = đã bị gitignore
 ```
 
@@ -136,6 +141,36 @@ Mặc định compose có **Mailpit**: mail **được giữ lại** chứ khôn
    sudo -u deployer nano /home/deployer/datn/secrets.env
    ```
 4. Deploy lại ([05 §4](05_TRIEN_KHAI_LAN_DAU.md#4-deploy-lần-đầu) hoặc đẩy commit lên `main` cho Actions) để notification-service đọc cấu hình mới.
+
+---
+
+## 5b. Tích hợp GitHub (OAuth App)
+
+Từ khi nhánh `develop` gộp tính năng **tích hợp GitHub** (work-service, migration V11–V16), `work-service` đọc thêm cấu hình GitHub. Thiếu cấu hình thì **service vẫn chạy bình thường** (đã thử: V11–V16 chạy tiếp được trên DB đang ở V10, service `healthy`), chỉ là nút kết nối GitHub chưa dùng được và token GitHub (nếu có) được lưu **không mã hoá**.
+
+| Biến | Nằm ở | Ý nghĩa |
+|---|---|---|
+| `GITHUB_CLIENT_ID` | `public.env` (commit) | Client ID của GitHub OAuth App (không bí mật). Để trống = tắt tính năng |
+| `GITHUB_CLIENT_SECRET` | `secrets.env` | Client Secret của OAuth App. Mặc định trống |
+| `GITHUB_TOKEN_ENCRYPTION_KEY` | `secrets.env` | Khoá mã hoá token GitHub lưu trong DB (AES-GCM). Đã sinh ngẫu nhiên sẵn. **Đổi khoá = token cũ không giải mã được**, người dùng phải kết nối lại |
+| `GITHUB_STATE_SECRET` | `secrets.env` | Khoá ký tham số `state` của OAuth. Đã sinh ngẫu nhiên sẵn |
+| `GITHUB_REDIRECT_URI` | compose (tự sinh) | `https://<APP_HOST>/integrations/github/callback` |
+| `GITHUB_WEBHOOK_URL` | compose (tự sinh) | `https://<APP_HOST>/work/api/v1/work/integrations/github/webhook` (GitHub gọi không kèm JWT; work-service xác thực bằng chữ ký HMAC; gateway và Nginx đã cho qua) |
+
+Muốn bật tính năng (🌐 trên GitHub, 🐧 trên server, 🪟 trong repo):
+
+1. 🌐 GitHub → Settings → Developer settings → **OAuth Apps** → *New OAuth App* (hoặc sửa app đang dùng cho dev, nhưng mỗi app chỉ có **một** callback URL nên nên tạo app riêng cho production):
+   - *Homepage URL*: `https://<APP_HOST>`
+   - *Authorization callback URL*: `https://<APP_HOST>/integrations/github/callback`
+2. Bấm *Generate a new client secret*, chép **Client ID** và **Client Secret**.
+3. 🪟 Điền Client ID vào `infrastructure/prod/public.env` (`GITHUB_CLIENT_ID=...`) rồi commit.
+4. 🐧 Điền Client Secret vào `secrets.env`:
+   ```bash
+   sudo -u deployer nano /home/deployer/datn/secrets.env      # GITHUB_CLIENT_SECRET=<secret>
+   ```
+5. Deploy lại (đẩy commit lên `main`, hoặc [05 §4](05_TRIEN_KHAI_LAN_DAU.md#4-deploy-lần-đầu)) để work-service nạp cấu hình mới. Kiểm tra log không còn dòng cảnh báo `Chưa cấu hình github.token-encryption-key`: `docker logs datn-work-service-1 2>&1 | grep -i github`.
+
+Webhook của từng repo do chính ứng dụng tự đăng ký khi kết nối repo (cần `GITHUB_WEBHOOK_URL` truy cập được từ Internet: đã đúng với `https://<APP_HOST>`).
 
 ---
 
@@ -171,7 +206,7 @@ Mặc định compose có **Mailpit**: mail **được giữ lại** chứ khôn
 ## 9. Checklist
 
 - [ ] `id deployer` có nhóm `docker`; `/home/deployer/datn` quyền 700
-- [ ] `sudo ls -l /home/deployer/datn/secrets.env` → `-rw------- deployer`, `grep -c '='` = 12
+- [ ] `sudo ls -l /home/deployer/datn/secrets.env` → `-rw------- deployer`, `grep -c '='` = 15
 - [ ] Đã chép bản sao về `secret/datn-secrets.env` trên Windows (không bị git thấy)
 
 Xong → [04 — Docker compose production](04_DOCKER_COMPOSE_PRODUCTION.md) (giải thích những gì có trong repo) rồi [05 — Triển khai lần đầu](05_TRIEN_KHAI_LAN_DAU.md).
