@@ -48,7 +48,7 @@ Redis và Kafka **không có mật khẩu** (giống dev) vì chỉ truy cập �
 
 ## 2. Tạo user `deployer` và thư mục dữ liệu
 
-`deployer` là user chỉ dùng để triển khai (Jenkins SSH vào bằng khoá, ở [06](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md)). Nó thuộc nhóm `docker` nên chạy được `docker compose`, **không** có `sudo`. Mọi file dữ liệu của ứng dụng thuộc user này.
+`deployer` là user chỉ dùng để triển khai (GitHub Actions SSH vào bằng khoá riêng, ở [06](06_GITHUB_ACTIONS_CICD.md)). Nó thuộc nhóm `docker` nên chạy được `docker compose`, **không** có `sudo`. Mọi file dữ liệu của ứng dụng thuộc user này.
 
 🐧:
 
@@ -59,7 +59,7 @@ sudo -u deployer install -d -m 700 /home/deployer/datn
 sudo ls -ld /home/deployer/datn                 # drwx------ deployer deployer
 ```
 
-> Ai có quyền `docker` ≈ có quyền root trên máy này. Vì vậy khoá SSH của `deployer` được khoá chặt chỉ chạy `deploy.sh` ([06 §3](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md#3-khoá-ssh-chỉ-chạy-được-deploysh)).
+> Ai có quyền `docker` ≈ có quyền root trên máy này. Vì vậy khoá SSH của `deployer` được khoá chặt chỉ chạy `deploy.sh` ([06 §3](06_GITHUB_ACTIONS_CICD.md#3-cho-khoá-vào-deployer-trên-server-)).
 
 ---
 
@@ -135,7 +135,7 @@ Mặc định compose có **Mailpit**: mail **được giữ lại** chứ khôn
    ```bash
    sudo -u deployer nano /home/deployer/datn/secrets.env
    ```
-4. Deploy lại ([05 §5](05_TRIEN_KHAI_LAN_DAU.md) hoặc Jenkins) để notification-service đọc cấu hình mới.
+4. Deploy lại ([05 §4](05_TRIEN_KHAI_LAN_DAU.md#4-deploy-lần-đầu) hoặc đẩy commit lên `main` cho Actions) để notification-service đọc cấu hình mới.
 
 ---
 

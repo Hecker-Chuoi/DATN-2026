@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════════════════════
 # DATN-2026 — PRODUCTION trên MỘT máy chủ (docker compose): 6 hạ tầng + 5 service Spring Boot + frontend.
 #
-# KHÔNG chạy trực tiếp bằng tay trong lúc vận hành: dùng infrastructure/prod/scripts/deploy.sh (Jenkins gọi qua SSH),
+# KHÔNG chạy trực tiếp bằng tay trong lúc vận hành: dùng infrastructure/prod/scripts/deploy.sh (GitHub Actions gọi qua SSH),
 # script đặt đủ biến DATN_HOME, IMAGE_TAG và hai file env. Chạy tay để thử:
 #   export DATN_HOME=$HOME/datn IMAGE_TAG=<git-sha-7-ký-tự>
 #   docker compose -p datn --env-file infrastructure/prod/public.env --env-file $DATN_HOME/secrets.env \

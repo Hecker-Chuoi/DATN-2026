@@ -1,6 +1,6 @@
 # 02 — Dựng server ứng dụng `datn-app` (Docker + Nginx + HTTPS)
 
-> Thuộc [00 — Danh sách các bước](00_DANH_SACH_CAC_BUOC.md) (**bước 0–1**). Server Jenkins đã có theo [01](01_HUONG_DAN_SETUP_JENKINS.md); tài liệu này dựng **server thứ hai** chỉ để chạy ứng dụng bằng `docker compose`.
+> Thuộc [00 — Danh sách các bước](00_DANH_SACH_CAC_BUOC.md) (**bước 0–1**). Đã có tài khoản Docker Hub / GitHub theo [01](01_CHUAN_BI_TAI_KHOAN.md); tài liệu này dựng **một server** chạy toàn bộ ứng dụng bằng `docker compose` (không còn server Jenkins).
 >
 > Kết quả: EC2 `datn-app` có Docker + Compose, Nginx + chứng chỉ HTTPS cho `app.<domain>` và `sso.<domain>`, sẵn sàng nhận `docker compose up` ở bước sau. Chưa cần repo trên server.
 >
@@ -24,17 +24,9 @@
 
 ## 1. Tạo EC2 `datn-app`
 
-### 1.1. Xem thông số máy Jenkins để làm cho đồng nhất
+### 1.1. Chọn hệ điều hành và kiến trúc
 
-🐧 Trên **`datn-jenkins`**:
-
-```bash
-lsb_release -ds             # ví dụ Ubuntu 24.04.x LTS → server mới dùng CÙNG bản
-dpkg --print-architecture   # amd64 → chọn instance Intel/AMD (t3), KHÔNG chọn Graviton (t4g)
-hostname -I                 # IP private của Jenkins (để đối chiếu)
-```
-
-AWS Console → EC2 → chọn `datn-jenkins` → tab **Networking**: ghi lại **VPC ID**, **Subnet / AZ**; tab **Security**: ghi lại **Security Group** (`sg-0abc...`).
+Ubuntu Server 24.04 LTS, **64-bit x86** (chọn dòng Intel/AMD như `t3`, **không** chọn Graviton `t4g`: image Docker Hub của dự án build cho amd64).
 
 ### 1.2. Launch instance
 
@@ -43,10 +35,10 @@ EC2 → **Launch instance**:
 | Mục | Giá trị |
 |---|---|
 | Name | `datn-app` |
-| AMI | **Ubuntu Server** cùng bản với `datn-jenkins`, 64-bit (x86) |
+| AMI | **Ubuntu Server 24.04 LTS**, 64-bit (x86) |
 | Instance type | `t3.large` (2 vCPU / 8 GB) |
-| Key pair | Dùng lại key pair của `datn-jenkins` |
-| Network settings → Edit | **VPC / Subnet**: cùng với `datn-jenkins`; **Auto-assign public IP**: Enable |
+| Key pair | Tạo mới hoặc dùng key pair có sẵn (file `.pem` để SSH quản trị) |
+| Network settings → Edit | VPC / Subnet mặc định; **Auto-assign public IP**: Enable |
 | Firewall | **Create security group** `datn-app-sg` (rules ở 1.3) |
 | Storage | **50 GiB gp3** (image Docker + dữ liệu Postgres / Kafka / MinIO; không cần 80 GiB như Minikube) |
 | Advanced details → Credit specification | **Unlimited** (dòng `t3`: Spring khởi động liên tục sẽ hết CPU credit) |
@@ -56,7 +48,7 @@ EC2 → **Launch instance**:
 | Type | Port | Source | Để làm gì |
 |---|---|---|---|
 | SSH | 22 | **My IP** | Bạn SSH vào quản trị |
-| SSH | 22 | **Security Group của `datn-jenkins`** | Jenkins SSH sang deploy (bước 6) — chọn theo SG để khỏi sửa khi IP đổi |
+| SSH | 22 | `0.0.0.0/0` | GitHub Actions SSH vào deploy ([06 §4](06_GITHUB_ACTIONS_CICD.md#4-mở-cổng-22-trên-security-group)): IP runner thay đổi nên không khoanh vùng được; làm **sau** khi ứng dụng đã chạy, ban đầu chỉ cần `My IP` |
 | HTTP | 80 | `0.0.0.0/0` | certbot + chuyển hướng HTTPS |
 | HTTPS | 443 | `0.0.0.0/0` | Người dùng vào `app.<domain>`, `sso.<domain>` |
 
@@ -68,20 +60,13 @@ EC2 → **Elastic IPs → Allocate** → **Associate** vào `datn-app`. DNS `app
 
 | | Lấy ở đâu | Dùng cho |
 |---|---|---|
-| **IP private** `172.31.x.x` | EC2 → `datn-app` → Private IPv4 | Jenkins SSH sang deploy: `<APP_HOST_IP>` trong 01 / 06 |
-| **Elastic IP** | mục này | DNS `app.` / `sso.`, bạn SSH từ máy cá nhân |
+| **Elastic IP** (public) | mục này | DNS `app.` / `sso.`, bạn SSH từ máy cá nhân, secret `DEPLOY_HOST` của Actions |
 
 > ⚠️ Dùng `sslip.io` mà **chưa gắn Elastic IP** thì IP public đổi mỗi lần stop/start máy: tên miền, chứng chỉ, `public.env` và image frontend (nhúng URL Keycloak) đều hỏng theo. Gắn Elastic IP **trước** khi đặt tên miền ở mục 5.
 
-### 1.5. Kiểm tra hai máy thấy nhau
+### 1.5. Kiểm tra SSH từ máy bạn
 
-🐧 Từ **`datn-jenkins`**:
-
-```bash
-nc -zv <IP private datn-app> 22      # "succeeded" → mạng + Security Group đúng
-```
-
-`timed out` → kiểm tra cùng VPC chưa và rule 22 từ SG `datn-jenkins`.
+🪟 Git Bash: `ssh -i <KEY>.pem ubuntu@<ELASTIC_IP> hostname`. `timed out` → kiểm tra rule 22 `My IP` ở Security Group (IP nhà mạng của bạn có thể đã đổi).
 
 ---
 
@@ -259,7 +244,7 @@ Lỗi thường gặp: `Timeout during connect` / `Could not resolve` (cổng 80
 
 ## 9. Checklist
 
-- [ ] SSH được vào `datn-app`; từ `datn-jenkins` `nc -zv <IP private> 22` thành công
+- [ ] SSH được vào `datn-app` bằng file `.pem`
 - [ ] `docker run --rm hello-world` chạy bằng `ubuntu`; `docker info` báo `json-file`; `docker compose version` ≥ 2.20
 - [ ] `nslookup app.<domain>` và `sso.<domain>` ra Elastic IP
 - [ ] `sudo certbot renew --dry-run` thành công; `curl -sI https://app.<domain>/` có phản hồi (502 là đúng)

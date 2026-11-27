@@ -19,7 +19,7 @@
 ## 1. Cây thư mục
 
 ```
-Jenkinsfile                                   # test → build/push → SSH deploy (06 §5)
+.github/workflows/ci-cd.yml                  # GitHub Actions: test → build/push → SSH deploy (06)
 frontend/nginx.conf                           # đã thêm client_max_body_size 50m (upload đính kèm)
 infrastructure/
 ├── docker-compose.prod.yml                   # 12 container: 6 hạ tầng + 5 service Spring + frontend
@@ -46,9 +46,9 @@ Các Dockerfile (6 cái) **không đổi**: `frontend/Dockerfile` đã có sẵn
 ## 2. Cách các file ghép với nhau
 
 ```
- máy dev (Windows)                       Jenkins                          server ứng dụng (datn-app)
- ─────────────────                       ───────                          ──────────────────────────
- git push ──────────────────────────────► build-push.sh <sha>
+ máy dev (Windows)                       GitHub Actions                   server ứng dụng (datn-app)
+ ─────────────────                       ──────────────                   ──────────────────────────
+ git push main ─────────────────────────► test (mvn, npm) → build-push.sh <sha>
                                            ├─ đọc public.env (REGISTRY, SSO_HOST)
                                            └─ push 6 image ─► Docker Hub
                                           tar cz docker-compose.prod.yml prod keycloak
@@ -127,11 +127,11 @@ So với Minikube cũ (~2,6 GiB pod + ~1,2 GiB lõi Kubernetes): dư thêm ~1 GB
 **Đã chạy thật trên EC2 `t3.large`** (27/11/2026, domain `sslip.io`, image push Docker Hub, deploy bằng `deploy.sh`):
 
 - `deploy.sh deploy <sha>` từ đầu đến cuối: giải nén gói, `make-realm.sh` (có `jq`), `pull`, `up -d --wait`, smoke test, ghi `current_tag`; chạy lại cùng tag (idempotent); deploy SHA **không tồn tại** → `pull` lỗi → chẩn đoán → **tự rollback** về bản trước, thoát mã 1, 12 container vẫn `healthy`.
-- Đường SSH của Jenkins: user `jenkins` trên `datn-jenkins` → `deployer@<IP private>` với khoá `command="…deploy.sh",no-pty`: `check`, `deploy` (gói qua stdin) chạy được, lệnh lạ bị từ chối.
+- Đường SSH của CI: khoá riêng của Actions → `deployer@<IP public>` từ máy ngoài mạng AWS, `StrictHostKeyChecking=yes`, khoá `command="…deploy.sh",no-pty`: `check` chạy được, lệnh lạ bị từ chối, khoá cũ (Jenkins) bị thu hồi; trước đó đường `deploy` qua stdin cũng đã chạy thật từ một máy khác qua SSH.
 - Nginx máy chủ + certbot (cấp được chứng chỉ sslip.io cho cả `app.` và `sso.`), `https://…/` 200, WebSocket `/notification/ws` **101**, upload 3 MB không bị 413, đăng ký → thư trong Mailpit → xác thực → đăng nhập → tạo workspace (POST không 403).
 - **Hai lỗi thật đã tìm ra và đã sửa** khi chạy lần đầu (ghi ở [05 §10](05_TRIEN_KHAI_LAN_DAU.md#10-xử-lý-sự-cố)): `deploy.sh` thoát im lặng vì thư mục hiện tại của `sudo -u deployer` (đã thêm `cd /`), và Keycloak `AccessDeniedException` vì `realm.json` quyền 600 (đã thêm `chmod 644` trong `make-realm.sh`).
 
-**Chưa chạy:** các stage chạy **bên trong Jenkins UI** (cần đăng nhập admin: Test, Build & push, kích hoạt bằng webhook), đăng nhập Google, gửi mail thật qua SMTP. Danh sách kiểm tra ở [06 §7](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md#7-kịch-bản-kiểm-tra).
+**Chưa chạy:** lượt chạy workflow thật trên GitHub (cần bạn tạo secret + mở cổng 22, [06](06_GITHUB_ACTIONS_CICD.md)), đăng nhập Google, gửi mail thật qua SMTP. Danh sách kiểm tra ở [06 §9](06_GITHUB_ACTIONS_CICD.md#9-kịch-bản-kiểm-tra).
 
 ---
 

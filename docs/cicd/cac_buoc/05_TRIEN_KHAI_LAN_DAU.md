@@ -2,7 +2,7 @@
 
 > Thuộc [00 — Danh sách các bước](00_DANH_SACH_CAC_BUOC.md) (**bước 4**). Làm **sau** [02](02_CHUAN_BI_SERVER_UNG_DUNG.md) (Docker, Nginx, HTTPS), [03](03_SECRET_VA_CAU_HINH.md) (`deployer`, `secrets.env`) và [04 §7](04_DOCKER_COMPOSE_PRODUCTION.md#7-việc-của-bạn-trước-khi-sang-bước-4) (`public.env` đã commit).
 >
-> Nguyên tắc: **deploy tay thành công trước, rồi mới giao cho Jenkins** (bước 5). Tay ở đây vẫn dùng đúng `deploy.sh` mà Jenkins sẽ gọi, để cái bạn thử là cái chạy thật.
+> Nguyên tắc: **deploy tay thành công trước, rồi mới giao cho GitHub Actions** (bước 5). Tay ở đây vẫn dùng đúng `deploy.sh` mà Actions sẽ gọi, để cái bạn thử là cái chạy thật.
 >
 > Kết quả: `https://app.<domain>` mở được, đăng ký → xác thực email → đăng nhập → tạo dự án và công việc, WebSocket `101`, upload file được; đã ghi lại RAM thật.
 >
@@ -37,7 +37,7 @@
 Làm trên máy Windows (có Docker Desktop, Git Bash, repo), không cần server. Ba điều kiện:
 
 1. Repo đang ở **commit có `public.env` đã điền**. `build-push.sh` đọc registry và URL Keycloak từ file đó (frontend **nhúng** `VITE_KEYCLOAK_URL` lúc build, không đổi được khi chạy).
-2. Có **Access Token Docker Hub quyền Read & Write** (cùng loại với credential `dockerhub` của Jenkins).
+2. Có **Access Token Docker Hub quyền Read & Write** (cùng loại với secret `DOCKERHUB_TOKEN` của Actions, [01 §2](01_CHUAN_BI_TAI_KHOAN.md#2-docker-hub-tài-khoản-và-access-token)).
 3. 6 repo Docker Hub sẽ **public** (gói miễn phí chỉ cho 1 repo private): `datn-api-gateway`, `datn-identity-service`, `datn-work-service`, `datn-workspace-service`, `datn-notification-service`, `datn-frontend`. Docker Hub tự tạo repo ở lần push đầu; vào kiểm tra đều `Public`.
 
 🪟 **PowerShell** (đăng nhập tương tác ở đây vì Git Bash dễ treo ở bước nhập mật khẩu):
@@ -271,4 +271,4 @@ Google Cloud Console → Credentials → OAuth client đang dùng → thêm **Au
 - [ ] Đã thử `rollback` (mục 7); cron `backup-postgres.sh` chạy được (mục 8)
 - [ ] Đã ghi lại `<TAG>` đang chạy
 
-Xong → [06 — Nối Jenkins với server ứng dụng](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md).
+Xong → [06 — CI/CD bằng GitHub Actions](06_GITHUB_ACTIONS_CICD.md).

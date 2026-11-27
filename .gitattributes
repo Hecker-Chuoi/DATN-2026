@@ -5,4 +5,3 @@ Dockerfile      text eol=lf
 .dockerignore   text eol=lf
 frontend/nginx.conf         text eol=lf
 infrastructure/prod/**      text eol=lf
-Jenkinsfile                 text eol=lf

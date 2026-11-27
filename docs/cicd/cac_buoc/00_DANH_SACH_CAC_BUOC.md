@@ -1,73 +1,62 @@
-# Danh sách các bước triển khai CI/CD (2 server: Jenkins + ứng dụng bằng docker compose)
+# Danh sách các bước triển khai CI/CD (GitHub Actions + docker compose, một server)
 
-> Hướng đã chốt: **Jenkins + Docker Hub + docker compose**, chạy trên **2 EC2**:
-> - **`datn-jenkins`** (đã có, cài theo [01](01_HUONG_DAN_SETUP_JENKINS.md)): chỉ chạy Jenkins — test, build, push image.
-> - **`datn-app`** (tạo mới, theo [02](02_CHUAN_BI_SERVER_UNG_DUNG.md)): chỉ chạy Docker + Nginx — chạy ứng dụng (6 hạ tầng + 5 service Spring + frontend = 12 container).
+> Hướng đã chốt: **GitHub Actions + Docker Hub + docker compose**, chạy trên **một EC2** (`datn-app`, `t3.large` 2 vCPU / 8 GB): Docker + Nginx + 12 container (6 hạ tầng + 5 service Spring + frontend). **Không còn Jenkins, Kubernetes, Helm.**
 >
-> Jenkins deploy bằng **SSH** sang `datn-app` (user `deployer`, credential `app-server-ssh`) rồi chạy `deploy.sh` → `docker compose pull && up -d --wait`.
+> Actions build + push image lên **Docker Hub**, rồi **SSH** vào `datn-app` (user `deployer`, khoá riêng, bị khoá chặt chỉ chạy được `deploy.sh`) và chạy `deploy.sh` → `docker compose pull && up -d --wait`.
 >
-> Nguyên tắc: **deploy tay thành công trước, rồi mới tự động hoá** (bước 0–4 tay, bước 5–7 tự động).
+> Nguyên tắc: **deploy tay thành công trước, rồi mới tự động hoá** (bước 0–4 tay, bước 5–6 tự động).
 >
-> **Thay đổi so với bản trước:** bỏ Minikube + Helm (đã xoá khỏi nhánh, còn trong lịch sử git: `git show e93a83d:infrastructure/helm/...`). Lý do: ứng dụng chạy trên **một** máy, không cần điều phối container; bỏ được Kubernetes, Ingress, RBAC, Helm chart, ~1,2 GB RAM của lõi Kubernetes và hơn nửa số tài liệu. Đánh đổi: deploy có gián đoạn ngắn từng service (04 §3, mục 10), không tự co giãn.
+> Lịch sử: bản đầu dùng Minikube + Helm (git `e93a83d`), sau đó bỏ Kubernetes để chạy compose, rồi bỏ Jenkins để dùng GitHub Actions (đỡ phải duy trì một server CI và một tài khoản admin nữa).
 
 ## Kiến trúc
 
 ```
- Developer ── git push ──► GitHub ── webhook ──┐
-                                               ▼
-                     ┌─────────────────────────────────────┐
-                     │ EC2 datn-jenkins  (2 vCPU / 8 GB)   │
-                     │  Nginx :443 ─► Jenkins 127.0.0.1:8080│
-                     │  Docker (build image), JDK, Maven, Node
-                     └──────┬──────────────────┬───────────┘
-                docker push │                  │ ssh deployer@<IP private datn-app>
-                            ▼                  ▼   "deploy <tag>" + gói tar.gz (compose, cấu hình)
-                     ┌────────────┐   ┌───────────────────────────────────────────┐
-                     │ Docker Hub │◄──│ EC2 datn-app  (2 vCPU / 8 GB)             │
-                     └────────────┘   │  Nginx :443                               │
-                       pull image     │   ├─ app.<domain> ─► 127.0.0.1:3000 (frontend → api-gateway)
-                                      │   └─ sso.<domain> ─► 127.0.0.1:8080 (keycloak)
-                                      │  docker compose (project "datn"):         │
-                                      │   postgres, keycloak, kafka, redis, minio, mailpit
-                                      │   api-gateway, identity, work, workspace, notification, frontend
-                                      └───────────────────────────────────────────┘
+ Developer ── git push main / PR ──► GitHub Actions (runner ubuntu-latest)
+                                      ├─ test backend (mvn) + build frontend (npm)
+                                      └─ deploy (chỉ main): build 6 image ─► Docker Hub
+                                                            tar (compose + cấu hình) │
+                                         ssh deployer@<IP public> "deploy <sha>"  ◄──┘  (cổng 22 mở cho 0.0.0.0/0, khoá chặt command=)
+                                                │
+                     ┌───────────────────────────▼───────────────────────────────────────┐
+                     │ EC2 datn-app  (2 vCPU / 8 GB)         ◄── pull image ── Docker Hub│
+                     │  Nginx :443                                                       │
+                     │   ├─ app.<domain> ─► 127.0.0.1:3000 (frontend → api-gateway)      │
+                     │   └─ sso.<domain> ─► 127.0.0.1:8080 (keycloak)                    │
+                     │  docker compose (project "datn"):                                 │
+                     │   postgres, keycloak, kafka, redis, minio, mailpit                │
+                     │   api-gateway, identity, work, workspace, notification, frontend  │
+                     └───────────────────────────────────────────────────────────────────┘
 ```
 
 ## Đã xong / cần dọn
 
-- [x] Phần A của [01](01_HUONG_DAN_SETUP_JENKINS.md) (mục 1–8) trên `datn-jenkins`: Jenkins, Docker, Nginx, plugin, Global Tools.
-- [x] Credential `github-token`, `dockerhub`.
-- [x] Cặp khoá `/var/lib/jenkins/.ssh/id_deploy` (+ `.pub`) trên `datn-jenkins` — **giữ lại**, dùng ở bước 5.
-- [x] Trong repo: `docker-compose.prod.yml`, `infrastructure/prod/*`, `Jenkinsfile`, `build-push.sh` (04). **Chỉ còn việc điền tên miền + Docker Hub user** (04 §7).
-- [x] **Dọn** (đã làm khi dựng lại `datn-app` trên máy cũ `datn-minikube`, 27/11/2026): cụm Minikube lúc đó rỗng (chỉ có kube-system) nên xoá an toàn:
-  - 🐧 trên máy cũ: `sudo systemctl disable --now minikube.service && minikube delete --all && sudo rm /etc/systemd/system/minikube.service && sudo systemctl daemon-reload`; `sudo hostnamectl set-hostname datn-app` (Docker, swap, `vm.swappiness`, `ufw`, giới hạn log đã có sẵn từ lần cài trước nên không phải làm lại).
-  - EC2 mới thay vì dùng lại máy cũ: terminate máy cũ, dùng lại Elastic IP cho `datn-app`; Security Group `datn-minikube-sg` → `datn-app-sg` (22 / 80 / 443).
-  - Jenkins: credential `minikube-ssh` → `app-server-ssh` (tạo mới bằng UI hoặc `infrastructure/ci/jenkins-init.groovy`, xoá cái cũ); `known_hosts` có IP private mới: `sudo -u jenkins ssh-keyscan -H <IP private> >> /var/lib/jenkins/.ssh/known_hosts`.
+- [x] Trong repo: `docker-compose.prod.yml`, `infrastructure/prod/*`, `infrastructure/ci/build-push.sh`, `.github/workflows/ci-cd.yml` (04, 06).
+- [x] Đã dựng và chạy thật `datn-app` (xem "Môi trường đã dựng thật" bên dưới).
+- [ ] **Dọn**: server `datn-jenkins` **không còn cần** (Jenkins bị bỏ): stop để khỏi tốn tiền, hoặc terminate khi chắc chắn. Khoá SSH `id_deploy` của Jenkins đã bị thu hồi trên `datn-app` (file `authorized_keys` của `deployer` chỉ còn khoá của Actions).
+- [ ] **Việc bạn phải làm tay** (cần quyền admin GitHub / AWS): 1) tạo 4–5 secret trên GitHub; 2) mở cổng 22 `0.0.0.0/0` ở Security Group; 3) gắn Elastic IP cho `datn-app`; 4) tạo Docker Hub token mới và thu hồi token cũ đã lộ. Chi tiết ở [06 §4–5](06_GITHUB_ACTIONS_CICD.md#4-mở-cổng-22-trên-security-group).
 
 ## Môi trường đã dựng thật (27/11/2026)
 
 | | Giá trị |
 |---|---|
-| `datn-app` | `t3.large`, Ubuntu 24.04, IP private `172.31.34.47`, public `16.179.211.188`, hostname `datn-app` |
-| Tên miền | `app.16-179-211-188.sslip.io`, `sso.16-179-211-188.sslip.io` (HTTPS Let's Encrypt, `https`) |
+| `datn-app` | `t3.large`, Ubuntu 24.04, public `16.179.211.188`, hostname `datn-app` (máy cũ `datn-minikube`: đã gỡ Minikube và dùng lại) |
+| Tên miền | `app.16-179-211-188.sslip.io`, `sso.16-179-211-188.sslip.io` (HTTPS Let's Encrypt) |
 | Registry | `docker.io/yamaaaaaaaa` (6 repo `datn-*`, public), tag đang chạy: `47a74a1` |
-| `datn-jenkins` | `t3.large`, IP private `172.31.45.0`, `https://jenkins.52-62-135-59.sslip.io/` |
-| Đã làm | bước 0–4 (ứng dụng chạy, đăng ký → đăng nhập → tạo workspace qua HTTPS), bước 5 (khoá `deployer`, `known_hosts`, credential `app-server-ssh`), bước 6 một phần (job `smoke-test` và Multibranch `DATN/datn` đã tạo; chưa bấm chạy / chưa webhook), bước 7 đã kiểm chứng kịch bản 4 và 6 + đường deploy từ `datn-jenkins` |
-| Việc tay còn lại | Đăng nhập Jenkins: **Scan Repository Now** + **Build Now** `smoke-test`; webhook GitHub; (tuỳ chọn) đổi `github-token` / `dockerhub` nếu hết hạn. Xem [06 §6](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md#6-job-smoke-test-multibranch-webhook) |
+| Đã làm | bước 0–4: ứng dụng chạy, đăng ký → xác thực email → đăng nhập → tạo workspace qua HTTPS; khoá SSH riêng của Actions đã cài (`authorized_keys` 1 dòng, `command=` khoá chặt) và kiểm chứng từ máy ngoài; workflow đã qua `actionlint`; test backend (148) và build frontend đã chạy xanh |
+| Còn lại | bước 5–6: tạo secret + mở cổng 22, rồi lượt chạy Actions đầu tiên ([06](06_GITHUB_ACTIONS_CICD.md)) |
 
 ## Các bước
 
-| # | Việc | Server / nơi làm | Xong khi |
+| # | Việc | Nơi làm | Xong khi |
 |---|---|---|---|
-| 0 | **[02 §1–3](02_CHUAN_BI_SERVER_UNG_DUNG.md#1-tạo-ec2-datn-app)** — Tạo EC2 `datn-app` (**`t3.large`**, credit Unlimited, **cùng VPC** với `datn-jenkins`, Elastic IP, Security Group: 22 từ máy bạn + SG Jenkins, 80/443 công khai). Chuẩn bị máy: timezone, swap, ufw, cài Docker + Compose, giới hạn log container | `datn-app` | `docker run --rm hello-world` chạy bằng `ubuntu`; `docker compose version` ≥ 2.20 |
+| 0 | **[01](01_CHUAN_BI_TAI_KHOAN.md)** — Tài khoản Docker Hub + Access Token (Read & Write), quyền admin GitHub, Elastic IP, tên miền. **[02 §1–3](02_CHUAN_BI_SERVER_UNG_DUNG.md#1-tạo-ec2-datn-app)** — Tạo EC2 `datn-app` (`t3.large`, Elastic IP, Security Group 22 từ máy bạn + 80/443), chuẩn bị máy (timezone, swap, ufw, giới hạn log), cài Docker + Compose | web + `datn-app` | `docker run --rm hello-world` chạy bằng `ubuntu`; `docker compose version` ≥ 2.20 |
 | 1 | **[02 §4–6](02_CHUAN_BI_SERVER_UNG_DUNG.md#4-cài-nginx-certbot-jq)** — Cài Nginx + certbot + jq; DNS `app.` / `sso.` → Elastic IP; Nginx proxy vào `127.0.0.1:3000` / `:8080`; HTTPS bằng certbot; đặt tên miền vào `public.env` rồi commit | `datn-app` + repo | `certbot renew --dry-run` thành công; `https://app.<domain>/` có phản hồi (502 là đúng lúc này) |
 | 2 | **[03](03_SECRET_VA_CAU_HINH.md)** — Tạo user `deployer` (nhóm `docker`, không `sudo`), `/home/deployer/datn/`, sinh `secrets.env` (12 khoá, quyền 600), sao lưu về máy cá nhân (`secret/`, đã gitignore) | `datn-app`, **không commit** | `secrets.env` có 12 khoá; bản sao lưu có trên Windows |
-| 3 | ✅ **[04](04_DOCKER_COMPOSE_PRODUCTION.md) — ĐÃ LÀM trong repo.** `docker-compose.prod.yml` (12 container, healthcheck, `depends_on` theo chuỗi, `mem_limit`), `prod/` (`public.env`, profile Spring `prod`, init Postgres, Nginx mẫu, `deploy.sh`, `make-realm.sh`, `backup-postgres.sh`), `Jenkinsfile`. Đã chạy thử thật 12/12 container `healthy` từ DB trống (04 §5) | repo | `docker compose config` hợp lệ; việc còn lại của bạn: 04 §7 |
+| 3 | ✅ **[04](04_DOCKER_COMPOSE_PRODUCTION.md) — ĐÃ LÀM trong repo.** `docker-compose.prod.yml` (12 container, healthcheck, `depends_on` theo chuỗi, `mem_limit`), `prod/` (`public.env`, profile Spring `prod`, init Postgres, Nginx mẫu, `deploy.sh`, `make-realm.sh`, `backup-postgres.sh`), workflow Actions | repo | `docker compose config` hợp lệ; việc còn lại của bạn: 04 §7 |
 | 4 | **[05](05_TRIEN_KHAI_LAN_DAU.md)** — `build-push.sh` trên Windows (6 image, tag = git SHA); cài `deploy.sh` lên server; `tar \| ssh ... deploy.sh deploy <tag>`; mở trình duyệt thử; đo RAM; thử `rollback`; cron sao lưu | cả hai | **Mở trình duyệt đăng nhập được**; WebSocket `101`; upload file; không container nào `OOMKilled` sau 30 phút dùng thử |
-| 5 | **[06 §1–4](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md)** — `authorized_keys` của `deployer` (= `id_deploy.pub`) **kèm** `command="/home/deployer/deploy.sh",no-pty` (khoá chỉ chạy được `deploy` / `rollback` / `check`); trên `datn-jenkins` `ssh-keyscan` **IP private** + credential `app-server-ssh` | cả hai | 🐧J `ssh -i id_deploy deployer@<IP private> check` chạy được; lệnh `ls /` bị từ chối |
-| 6 | **[06 §5–6](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md#5-jenkinsfile-trong-repo)** + [01 §10–12](01_HUONG_DAN_SETUP_JENKINS.md#10-tạo-job-multibranch-pipeline) — Sửa `APP_SERVER` trong `Jenkinsfile`; job `smoke-test` (3 stage); Multibranch `DATN/datn`; webhook GitHub | Jenkins + repo | Job `smoke-test` xanh cả 3 stage; push một nhánh thì job tự chạy |
-| 7 | **[06 §7](06_NOI_JENKINS_VOI_SERVER_UNG_DUNG.md#7-kịch-bản-kiểm-tra)** — 6 kịch bản: PR hỏng test, merge `main`, sửa giao diện, deploy lỗi (tự rollback), rollback tay, khoá SSH chặn lệnh lạ | Jenkins + `datn-app` | Push code → pipeline xanh → ứng dụng chạy bản mới |
-| 8 | Vận hành: `datn-jenkins` theo [01 §13](01_HUONG_DAN_SETUP_JENKINS.md#13-bảo-trì) (cron dọn image, 1 executor); `datn-app`: cron `backup-postgres.sh` (05 §8), **không** `docker compose down -v` / `docker volume prune` (02 §7), theo dõi **R8** | cả hai | Có cron chạy, có file backup |
+| 5 | **[06 §2–5](06_GITHUB_ACTIONS_CICD.md#2-khoá-ssh-riêng-cho-actions)** — Sinh khoá SSH riêng cho Actions; `authorized_keys` của `deployer` kèm `command="/home/deployer/deploy.sh",no-pty`; mở cổng 22 `0.0.0.0/0`; tạo secret `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `DEPLOY_SSH_KEY`, `DEPLOY_HOST` (+ `DEPLOY_KNOWN_HOSTS`) | Windows + `datn-app` + GitHub + AWS | 🪟 `ssh -i secret/actions-deploy-key deployer@<IP> check` chạy được, lệnh `ls` bị từ chối; secret đã có trên GitHub |
+| 6 | **[06 §7–9](06_GITHUB_ACTIONS_CICD.md#7-workflow-làm-gì)** — Mở PR (chỉ test), merge `main` (test → build + push → deploy → kiểm tra HTTPS); 7 kịch bản: PR hỏng test, merge `main`, sửa giao diện, deploy lỗi (tự rollback), rollback tay, khoá SSH chặn lệnh lạ, chạy tay nhánh khác | GitHub | Push code → workflow xanh → ứng dụng chạy bản mới |
+| 7 | Vận hành: cron `backup-postgres.sh` (05 §8), **không** `docker compose down -v` / `docker volume prune` (02 §7), theo dõi **R8**, xoay vòng Docker Hub token | `datn-app` | Có cron chạy, có file backup |
 
 ## Ngân sách tài nguyên `datn-app` (2 vCPU / ~7,6 GB)
 
@@ -95,17 +84,16 @@ Các việc tối ưu — **đã làm** thì đánh dấu, mỗi mục ghi nơi 
 - [x] **R5 — Healthcheck + khởi động theo chuỗi** (compose): `start_period: 120s`, `retries: 10` cho Spring; `depends_on … service_healthy` theo chuỗi `identity → work → workspace` (đúng thứ tự migration trên DB trống) và Postgres / Redis / Kafka / MinIO / Keycloak sẵn sàng; notification chờ Kafka (không khởi động được nếu không phân giải được `kafka`).
 - [x] **R6 — Deploy kiểu thay thế, không song song**: `docker compose up -d` chỉ tạo lại container có image mới, từng cái một theo chuỗi `depends_on`; hạ tầng giữ nguyên. **Đánh đổi:** mỗi service gián đoạn vài chục giây lúc được thay; cả đợt deploy ước tính 5–8 phút (**chưa đo**) → ghi trong báo cáo là hạn chế do tài nguyên. Có máy 16 GB thì chạy hai bản song song được.
 - [ ] **R7 — Đo thực tế rồi chỉnh** (bước 4, [05 §6](05_TRIEN_KHAI_LAN_DAU.md#6-đo-ram-và-chỉnh)): `docker stats --no-stream`, `free -h`, `docker inspect ... OOMKilled`; đặt `mem_limit` ≈ mức dùng cao nhất × 1,3.
-- [ ] **R8 — Theo dõi khi vận hành** (bước 8): cột `RestartCount` không tăng; `dmesg -T | grep -i oom` trên host (OOM ở tầng host nguy hiểm hơn OOM của container); `docker system df` cho đĩa. Vẫn OOM thường xuyên dù đã làm R2–R6 → phương án cuối: xin cấp `t3.xlarge`, hoặc tách Keycloak + Kafka sang máy thứ ba.
+- [ ] **R8 — Theo dõi khi vận hành** (bước 7): cột `RestartCount` không tăng; `dmesg -T | grep -i oom` trên host (OOM ở tầng host nguy hiểm hơn OOM của container); `docker system df` cho đĩa. Vẫn OOM thường xuyên dù đã làm R2–R6 → phương án cuối: xin cấp `t3.xlarge`, hoặc tách Keycloak + Kafka sang máy thứ ba.
 
-## Vì sao tách 2 server
+## Vì sao một server
 
-- Tài khoản chỉ được cấp tối đa **2 vCPU / 7,6 GB mỗi EC2** (`t3.large`). Một máy không đủ chạy cả Jenkins (build ~4–5 GB lúc cao điểm) lẫn ứng dụng (~3 GB + đỉnh lúc khởi động) → tách 2 máy.
-- Build nặng (Maven, `docker build`) không làm chậm / OOM ứng dụng; Jenkins lỗi hay đang nâng cấp thì ứng dụng vẫn chạy.
+- Toàn bộ ứng dụng (12 container) dùng khoảng 3 GB RAM lúc rảnh, nên một `t3.large` đủ. Không còn máy build: Actions dùng runner của GitHub (không tốn RAM / đĩa của bạn), image đi qua Docker Hub.
+- Tài khoản chỉ được cấp tối đa `t3.large` (2 vCPU / 7,6 GB); bản Minikube + Jenkins từng phải dùng 2 máy.
 
 ## Lưu ý
 
-- Jenkins SSH sang `datn-app` bằng **IP private** (`172.31.x.x`, không đổi khi stop/start). IP public / Elastic IP chỉ dùng cho DNS `app.` / `sso.` và để bạn SSH vào quản trị.
-- Hai EC2 phải **cùng VPC** (thường là VPC mặc định) thì mới thấy nhau qua IP private.
-- `deployer` thuộc nhóm `docker` (≈ quyền root trên máy `datn-app`) nhưng **không có `sudo`**, và khoá SSH của Jenkins bị khoá chặt bằng `command="…deploy.sh"`; `deploy.sh` thuộc root nên Jenkins không tự sửa được.
-- Muốn tiết kiệm: stop `datn-app` khi không dùng; Docker + `restart: unless-stopped` tự bật lại các container khi máy start (chờ vài phút vì chuỗi khởi động).
-- Bản cũ (Minikube + Helm) còn trong lịch sử git tại commit `e93a83d`.
+- Runner GitHub vào server bằng **IP public** (Elastic IP) và cổng 22 mở cho mọi IP; khoá SSH bị khoá chặt bằng `command="…deploy.sh"`, `deploy.sh` thuộc root nên CI không tự sửa được.
+- `deployer` thuộc nhóm `docker` (≈ quyền root trên máy `datn-app`) nhưng **không có `sudo`**.
+- Muốn tiết kiệm: stop `datn-app` khi không dùng; Docker + `restart: unless-stopped` tự bật lại các container khi máy start (chờ vài phút vì chuỗi khởi động). IP public đổi nếu chưa gắn Elastic IP.
+- Bản cũ (Minikube + Helm) còn trong lịch sử git tại commit `e93a83d`; bản có Jenkins ở `bc02081`.

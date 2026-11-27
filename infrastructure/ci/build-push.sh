@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build + (quét) + push image của DATN-2026 lên Docker Hub.
 # Cách dùng:  bash infrastructure/ci/build-push.sh <tag>        (tag = git SHA ngắn, ví dụ a1b2c3d)
-# Jenkins gọi sau khi đã `docker login` bằng credential `dockerhub` (docs/cicd/cac_buoc/01 §9). Chạy tay được khi Jenkins hỏng.
+# GitHub Actions (.github/workflows/ci-cd.yml) gọi sau khi đã `docker login` bằng secret DOCKERHUB_*. Chạy tay được khi Actions hỏng (docs/cicd/cac_buoc/05 §2).
 #
 # Đọc từ infrastructure/prod/public.env (nơi duy nhất ghi tên miền và registry):
 #   REGISTRY          docker.io/<tài-khoản-dockerhub>          (ghi đè bằng biến môi trường REGISTRY)
