@@ -1,0 +1,56 @@
+{{- if .Values.mailpit.enabled }}
+# Hộp thư giả: notification-service gửi SMTP tới mailpit:1025 (không cần đăng nhập, giống docker-compose).
+# KHÔNG tạo Ingress: ai xem được hộp thư là đọc được link đặt lại mật khẩu của mọi người.
+# Xem thư: kubectl -n datn port-forward svc/mailpit 8025:8025   (qua đường hầm SSH từ máy bạn).
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: mailpit
+spec:
+  selector:
+    app.kubernetes.io/name: mailpit
+  ports:
+    - { name: smtp, port: 1025, targetPort: smtp }
+    - { name: http, port: 8025, targetPort: http }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: mailpit
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mailpit
+  template:
+    metadata:
+      labels:
+        {{- include "platform.podLabels" . | nindent 8 }}
+        app.kubernetes.io/name: mailpit
+    spec:
+      {{- include "platform.podDefaults" . | nindent 6 }}
+      containers:
+        - name: mailpit
+          image: {{ .Values.mailpit.image }}
+          ports:
+            - { name: smtp, containerPort: 1025 }
+            - { name: http, containerPort: 8025 }
+          env:
+            - { name: MP_MAX_MESSAGES, value: {{ .Values.mailpit.maxMessages | quote }} }   # R4: tự xoá thư cũ
+          readinessProbe:
+            tcpSocket: { port: 8025 }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 1025 }
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.mailpit.resources | nindent 12 }}
+{{- end }}

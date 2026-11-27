@@ -1,0 +1,51 @@
+# Minikube trên EC2 2 vCPU / 7,6 GB (cụm được cấp 6 GB RAM, 2 CPU) — R2, R4 trong docs/cicd/cac_buoc/00.
+# Dùng kèm: -f values-minikube.yaml -f ../env-minikube.yaml
+#
+# Nguyên tắc: KHÔNG đặt limit CPU (bị bóp thì Spring/Keycloak khởi động lâu gấp mấy lần). requests.cpu đặt THẤP
+# vì kube-system của Minikube đã chiếm ~0,95 CPU trong 2 CPU của nút; tổng requests.cpu của toàn namespace
+# (platform + app) phải ≤ 1 CPU, nếu vượt pod sẽ kẹt Pending (ResourceQuota ở infrastructure/k8s/namespace-limits.yaml bắt lỗi sớm).
+
+# R2: một Postgres thay vì hai
+postgres:
+  storage: 5Gi
+  config:
+    shared_buffers: 128MB
+    max_connections: "100"
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+# R4: Keycloak giữ limit 1280Mi (repo từng gặp OOMKilled ở 1Gi khi `start` tự build); đổi lại giảm requests
+keycloak:
+  resources:
+    requests: { cpu: 100m, memory: 640Mi }
+    limits: { memory: 1280Mi }
+
+# R4: Kafka heap 384m (cố định), giữ log 72 giờ
+kafka:
+  heapOpts: "-Xms384m -Xmx384m"
+  retentionHours: 72
+  storage: 2Gi
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits: { memory: 768Mi }
+
+# R4: Redis tối đa 64 MB, xoá khoá cũ nhất khi đầy
+redis:
+  maxMemory: 64mb
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 96Mi }
+
+minio:
+  storage: 5Gi
+  resources:
+    requests: { cpu: 25m, memory: 128Mi }
+    limits: { memory: 256Mi }
+
+# R4: Mailpit chỉ để thử. Đặt enabled: false khi đã dùng SMTP thật (Gmail...).
+mailpit:
+  enabled: true
+  resources:
+    requests: { cpu: 5m, memory: 16Mi }
+    limits: { memory: 64Mi }

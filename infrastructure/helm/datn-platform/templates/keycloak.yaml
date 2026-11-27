@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: keycloak
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: keycloak
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate                 # 1 bản, cache local; tắt bản cũ rồi mới bật bản mới (cũng tiết kiệm RAM, R6)
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        {{- include "platform.podLabels" . | nindent 8 }}
+        app.kubernetes.io/name: keycloak
+    spec:
+      {{- include "platform.podDefaults" . | nindent 6 }}
+      initContainers:
+        - name: wait-db
+          image: {{ .Values.waitImage }}
+          command: ["sh", "-c", "until nc -z -w 2 postgres 5432; do echo 'chờ postgres'; sleep 3; done"]
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits: { memory: 32Mi }
+      containers:
+        - name: keycloak
+          image: {{ .Values.keycloak.image }}
+          {{- if .Values.keycloak.importRealm }}
+          args: ["start", "--import-realm"]
+          {{- else }}
+          args: ["start"]
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL, value: "jdbc:postgresql://postgres:5432/{{ .Values.postgres.keycloakDatabase }}" }
+            - name: KC_DB_USERNAME
+              valueFrom:
+                {{- include "platform.secretKey" (dict "root" . "key" "keycloak-db-username") | nindent 16 }}
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                {{- include "platform.secretKey" (dict "root" . "key" "keycloak-db-password") | nindent 16 }}
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                {{- include "platform.secretKey" (dict "root" . "key" "keycloak-admin-username") | nindent 16 }}
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                {{- include "platform.secretKey" (dict "root" . "key" "keycloak-admin-password") | nindent 16 }}
+            # URL công khai CỐ ĐỊNH: token lấy qua http://keycloak:8080 (nội bộ) vẫn mang iss = URL công khai,
+            # nên các service khai issuer-uri công khai + jwk-set-uri nội bộ (02 nghiên cứu §8.1).
+            - { name: KC_HOSTNAME_URL, value: {{ include "platform.ssoUrl" . | quote }} }
+            - { name: KC_HOSTNAME_STRICT, value: "false" }
+            - { name: KC_HTTP_ENABLED, value: "true" }        # TLS kết thúc ở Nginx máy chủ
+            - { name: KC_PROXY_HEADERS, value: xforwarded }
+            - { name: KC_HEALTH_ENABLED, value: "true" }
+            - { name: KC_CACHE, value: local }                # R4: 1 nút, không bật cụm Infinispan
+            - { name: JAVA_OPTS_KC_HEAP, value: {{ .Values.keycloak.heapOpts | quote }} }
+          startupProbe:                                       # lần đầu: tự build + import realm, trên 2 vCPU cho tới 10 phút
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.keycloak.resources | nindent 12 }}
+          {{- if .Values.keycloak.importRealm }}
+          volumeMounts:
+            # --import-realm đọc mọi *.json trong thư mục này, chỉ import khi realm CHƯA tồn tại
+            - name: realm
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          {{- end }}
+      {{- if .Values.keycloak.importRealm }}
+      volumes:
+        - name: realm
+          secret:
+            secretName: {{ .Values.keycloak.realmSecret }}
+      {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"    # cookie + header của Keycloak lớn
+spec:
+  ingressClassName: {{ .Values.ingressClassName }}
+  rules:
+    - host: {{ .Values.global.ssoHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+{{- with .Values.keycloak.adminAllowCidrs }}
+---
+# Admin Console: CHỈ giới hạn IP (không dùng basic auth: console gọi API bằng header Authorization: Bearer).
+# Ingress này khớp /admin dài hơn "/" nên được ưu tiên cho đường dẫn /admin.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak-admin
+  labels:
+    {{- include "platform.labels" $ | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ . | quote }}
+spec:
+  ingressClassName: {{ $.Values.ingressClassName }}
+  rules:
+    - host: {{ $.Values.global.ssoHost | quote }}
+      http:
+        paths:
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+{{- end }}

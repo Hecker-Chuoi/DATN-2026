@@ -1,0 +1,59 @@
+# frontend/nginx.conf có proxy_pass http://api-gateway:8081 (đúng tên Service cùng namespace; nginx phân giải lúc khởi động,
+# Service do chart này tạo nên luôn có). Trên Kubernetes thì Ingress đã chuyển thẳng /identity, /work, /workspace,
+# /notification tới api-gateway, frontend chỉ phục vụ file tĩnh của SPA.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/name: frontend
+spec:
+  selector:
+    app.kubernetes.io/name: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    app.kubernetes.io/name: frontend
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: {{ .Values.rollout.maxSurge }}
+      maxUnavailable: {{ .Values.rollout.maxUnavailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  template:
+    metadata:
+      labels:
+        {{- include "app.podLabels" . | nindent 8 }}
+        app.kubernetes.io/name: frontend
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      containers:
+        - name: app
+          image: {{ include "app.image" (dict "root" . "name" "frontend") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}

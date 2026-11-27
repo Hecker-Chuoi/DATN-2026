@@ -1,0 +1,135 @@
+{{- /* Một template cho 5 service Spring Boot (values.backend): Service + Deployment */ -}}
+{{- range $name, $svc := .Values.backend }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ $name }}
+  ports:
+    - name: http
+      port: {{ $svc.port }}
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+    tier: backend
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:                    # R6: xem values-minikube.yaml (maxSurge 0 = tắt pod cũ rồi mới bật pod mới)
+      maxSurge: {{ $.Values.rollout.maxSurge }}
+      maxUnavailable: {{ $.Values.rollout.maxUnavailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  template:
+    metadata:
+      labels:
+        {{- include "app.podLabels" $ | nindent 8 }}
+        app.kubernetes.io/name: {{ $name }}
+        tier: backend
+      annotations:
+        # Đổi cấu hình thì hash đổi, nên Deployment tự rolling update. Secret KHÔNG nằm trong chart nên đổi Secret
+        # phải chạy tay: kubectl -n datn rollout restart deployment/<tên> (03 §8)
+        checksum/config: {{ $.Files.Get (printf "files/config/%s/application-k8s.yaml" $name) | sha256sum }}
+        checksum/env: {{ include (print $.Template.BasePath "/configmap-env.yaml") $ | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 45
+      securityContext:                # image chạy user 10001 (Dockerfile)
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      {{- if or $svc.waitFor $svc.waitForReady }}
+      initContainers:
+        - name: wait-deps
+          image: {{ $.Values.waitImage }}
+          command:
+            - sh
+            - -c
+            - |
+              {{- range $svc.waitFor }}
+              until nc -z -w 2 {{ (split ":" .)._0 }} {{ (split ":" .)._1 }}; do echo "chờ {{ . }}"; sleep 3; done
+              {{- end }}
+              {{- range $svc.waitForReady }}
+              until wget -q -T 5 -O /dev/null {{ . | quote }}; do echo "chờ {{ . }}"; sleep 3; done
+              {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 5m, memory: 8Mi }
+            limits: { memory: 32Mi }
+      {{- end }}
+      containers:
+        - name: app
+          image: {{ include "app.image" (dict "root" $ "name" $name) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: k8s
+            - name: SPRING_CONFIG_ADDITIONAL_LOCATION
+              value: "optional:file:/config/"
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ $.Values.javaToolOptions | quote }}
+            {{- range $svc.secretEnv }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.secretName }}
+                  key: {{ .key }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: env-config
+          # R5: startupProbe dài vì 5 service khởi động cùng lúc trên 2 vCPU; qua startup mới tới liveness / readiness
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            {{- toYaml $.Values.probes.startup | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            {{- toYaml $.Values.probes.readiness | nindent 12 }}
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            {{- toYaml $.Values.probes.liveness | nindent 12 }}
+          lifecycle:
+            preStop:                        # chờ Endpoints gỡ pod rồi mới tắt (graceful shutdown)
+              exec: { command: ["sh", "-c", "sleep 5"] }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}-config
+        - name: tmp
+          emptyDir: {}
+{{- end }}

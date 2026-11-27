@@ -1,7 +1,7 @@
 # 02 — Nghiên cứu: triển khai CI/CD trên source code DATN-2026
 
 > Mục tiêu: liệt kê **cần những gì** trong repo và trên hạ tầng để có CI/CD **Jenkins → Docker Hub → Helm → Minikube**. Tài liệu chỉ ở mức định hướng (cái gì, đặt ở đâu, bẫy nào), không phải hướng dẫn từng lệnh.
-> Đọc kèm: [01 — Setup Jenkins](01_HUONG_DAN_SETUP_JENKINS.md), [03 — Tổng quan các bước](03_TONG_QUAN_CAC_BUOC_TRIEN_KHAI.md).
+> Đọc kèm: [01 — Setup Jenkins](cac_buoc/01_HUONG_DAN_SETUP_JENKINS.md), [03 — Tổng quan các bước](03_TONG_QUAN_CAC_BUOC_TRIEN_KHAI.md).
 
 ## Mục lục
 1. [Luồng tổng thể](#1-luồng-tổng-thể)
@@ -46,18 +46,18 @@ Hai chart Helm, hai vai trò:
 
 | Hạng mục | Trạng thái | Việc cần làm |
 |---|---|---|
-| Dockerfile 5 backend + frontend | ✅ Có (multi-stage, BuildKit cache; backend chạy user 10001) | Thêm `ARG VITE_KEYCLOAK_URL` cho frontend (§3.3) |
+| Dockerfile 5 backend + frontend | ✅ Có (multi-stage, BuildKit cache; backend chạy user 10001) | ✅ Đã thêm `ARG VITE_KEYCLOAK_URL` cho frontend (§3.3) |
 | `backend/.dockerignore` | ✅ Có | — |
-| Actuator health (`/actuator/health/liveness`, `/readiness`) | ✅ Có, đã mở trong Security | Bật `management.endpoint.health.probes.enabled=true` trong cấu hình k8s |
+| Actuator health (`/actuator/health/liveness`, `/readiness`) | ✅ Có, đã mở trong Security | ✅ Đã bật `management.endpoint.health.probes.enabled=true` trong profile `k8s` |
 | CORS / cookie đọc từ cấu hình (`app.cors.allowed-origins`, `app.cookie.secure`) | ✅ Có | Đặt giá trị theo tên miền thật |
-| `frontend/nginx.conf` proxy tới `api-gateway:8081` | ✅ Có | Đặt tên Service k8s đúng `api-gateway`, cổng 8081 |
-| Cấu hình Spring cho k8s (profile `k8s` hoặc biến môi trường) | ❌ | §7 |
-| Helm chart `datn-platform`, `datn-app` | ❌ (đã xoá, xem §9) | §4 |
-| Script build + push image | ❌ | §3.4 |
+| `frontend/nginx.conf` proxy tới `api-gateway:8081` | ✅ Có | ✅ Service k8s tên `api-gateway`, cổng 8081 (chart `datn-app`) |
+| Cấu hình Spring cho k8s (profile `k8s` hoặc biến môi trường) | ✅ `infrastructure/helm/datn-app/files/config/*/application-k8s.yaml` | §7 |
+| Helm chart `datn-platform`, `datn-app` | ✅ `infrastructure/helm/` (viết lại cho Minikube 2 vCPU / 8 GB, [cac_buoc/04](cac_buoc/04_VIET_HELM_CHART_VA_SCRIPT.md)) | §4 |
+| Script build + push image | ✅ `infrastructure/ci/build-push.sh` | §3.4 |
 | `Jenkinsfile` ở gốc repo | ❌ | §6 |
-| Script deploy trên server Minikube + RBAC cho `deployer` | ❌ | §5 |
+| Script deploy trên server Minikube + RBAC cho `deployer` | ✅ `infrastructure/k8s/deploy.sh`, `rbac-deployer.yaml`, `make-ci-kubeconfig.sh` | §5 |
 | Secret (mật khẩu DB, Keycloak, MinIO, SMTP) | ❌ | Tạo tay bằng `kubectl create secret`, **không** commit |
-| Realm Keycloak cho môi trường mới | ⚠️ Có file export | Sửa redirect URI/web origin theo tên miền; import vào Keycloak trên k8s |
+| Realm Keycloak cho môi trường mới | ✅ `infrastructure/k8s/make-realm-secret.sh` sửa client `datn-backend` (secret, redirect URI, web origin) rồi tạo Secret `keycloak-realm` | Keycloak tự import khi khởi động lần đầu |
 
 Gợi ý cây thư mục mới:
 
@@ -67,15 +67,22 @@ infrastructure/
 ├── ci/
 │   └── build-push.sh               # build + (quét) + push 6 image
 ├── helm/
-│   ├── datn-platform/              # hạ tầng, admin cài 1 lần
+│   ├── env-minikube.yaml           # tên miền, scheme, registry: NƠI DUY NHẤT, cả hai chart đọc qua -f
+│   ├── datn-platform/              # hạ tầng, admin cài 1 lần (Postgres, Keycloak, Kafka, Redis, MinIO, Mailpit)
+│   │   ├── values.yaml
+│   │   ├── values-minikube.yaml    # R2, R4: ngân sách 8 GB
+│   │   └── templates/ (postgres, keycloak, kafka, redis, minio, mailpit)
 │   └── datn-app/                   # ứng dụng, CI đổi image.tag
 │       ├── values.yaml
-│       ├── values-minikube.yaml    # giá trị riêng môi trường (host, URL)
+│       ├── values-minikube.yaml    # R3, R5, R6: JVM, probe, kiểu deploy
 │       ├── files/config/<service>/application-k8s.yaml
 │       └── templates/ (backend.yaml, frontend.yaml, ingress.yaml, configmap-*.yaml)
 └── k8s/
-    ├── namespace.yaml
+    ├── namespace-limits.yaml       # LimitRange + ResourceQuota của namespace datn
     ├── rbac-deployer.yaml          # ServiceAccount + Role cho user deployer
+    ├── make-ci-kubeconfig.sh       # kubeconfig giới hạn quyền cho deployer
+    ├── make-realm-secret.sh        # Secret keycloak-realm từ realm export đã chỉnh
+    ├── set-public-host.sh          # đặt tên miền / registry vào env-minikube.yaml
     └── deploy.sh                   # copy sang server Minikube (/home/deployer/deploy.sh)
 ```
 
@@ -152,13 +159,13 @@ Mỗi thành phần một StatefulSet/Deployment đơn giản 1 replica + PVC (M
 
 | Thành phần | Image gợi ý | Lưu ý |
 |---|---|---|
-| Postgres app (`datn_main_db`) | `postgres:15-alpine` | Dùng chung cho identity/work/workspace/notification |
-| Postgres Keycloak | `postgres:15-alpine` | Tách DB riêng cho Keycloak |
-| Keycloak | `quay.io/keycloak/keycloak:24.0.1` (cùng bản compose của nhóm) | RAM ≥ 1,2 Gi, `KC_HOSTNAME` = URL công khai |
+| Postgres (**một instance**, 2 database) | `postgres:15-alpine` | `datn_main_db` dùng chung cho identity/work/workspace/notification (owner `datn`) và `keycloak` cho Keycloak (owner `kc_user`). Gộp một instance để tiết kiệm RAM trên máy 8 GB (R2, xem [cac_buoc/00](cac_buoc/00_DANH_SACH_CAC_BUOC.md)); nếu có máy lớn thì tách hai StatefulSet như bản cũ |
+| Keycloak | `quay.io/keycloak/keycloak:24.0.1` (cùng bản compose của nhóm) | limit 1280Mi, heap 40%, `KC_HOSTNAME_URL` = URL công khai |
 | Kafka | `apache/kafka:3.8.0` (KRaft, 1 node) | `advertised.listeners` = `kafka:9092` |
 | Redis | `redis:7-alpine` | |
 | MinIO | **không** dùng `minio/minio` (đã bị gỡ khỏi Docker Hub) | Bản cũ dùng `cgr.dev/chainguard/minio` |
-| Mailpit | `axllent/mailpit` | Chỉ để test email |
+| Mailpit | `axllent/mailpit:v1.34.0` | Chỉ để test email, không có Ingress (xem qua `kubectl port-forward`) |
+| pgAdmin | — (bỏ) | Đỡ tốn ~200 MB và không lộ công cụ quản trị DB ra Internet; cần xem DB thì `kubectl exec ... psql` hoặc `port-forward` rồi dùng pgAdmin trên máy bạn |
 
 Có thể dùng chart dựng sẵn (Bitnami, ...) thay vì tự viết, nhưng nhiều image Bitnami miễn phí đã bị chuyển sang `bitnamilegacy` / thu hẹp từ 2025 — kiểm tra trước khi chọn.
 
@@ -198,14 +205,14 @@ API server của Minikube chỉ nghe trên IP nội bộ của server Minikube, 
    # Smoke test: curl https://app.<domain>/identity/actuator/health ... lỗi thì: helm rollback datn-app
    ```
 
-4. **Trong Jenkinsfile**: `tar cz -C infrastructure/helm datn-app | ssh deployer@<MINIKUBE_HOST> "./deploy.sh $TAG"`. Gửi chart theo từng lần deploy đảm bảo chart và image cùng một commit.
+4. **Trong Jenkinsfile**: `tar cz -C infrastructure helm | ssh deployer@<MINIKUBE_HOST> "./deploy.sh $TAG"`. Gửi **cả thư mục `helm/`** (chứ không chỉ `datn-app`) vì `env-minikube.yaml` nằm cạnh hai chart. Gửi chart theo từng lần deploy đảm bảo chart và image cùng một commit.
 5. **Rollback**: `helm history datn-app -n datn` → `helm rollback datn-app <revision> -n datn`. Có thể tạo thêm một job Jenkins "Deploy SHA cũ / Rollback" có tham số.
 
 ---
 
 ## 6. Jenkinsfile
 
-Khung mẫu (Declarative), đặt ở gốc repo. Tên tool/credential khớp với [01 §8–9](01_HUONG_DAN_SETUP_JENKINS.md#8-global-tools-jdk-maven-node).
+Khung mẫu (Declarative), đặt ở gốc repo. Tên tool/credential khớp với [01 §8–9](cac_buoc/01_HUONG_DAN_SETUP_JENKINS.md#8-global-tools-jdk-maven-node).
 
 ```groovy
 pipeline {

@@ -1,0 +1,50 @@
+# Minikube trên EC2 2 vCPU / 7,6 GB (cụm được cấp 6 GB RAM, 2 CPU) — R3, R5, R6 trong docs/cicd/cac_buoc/00.
+# Dùng kèm: -f values-minikube.yaml -f ../env-minikube.yaml --set image.tag=<git-sha>
+#
+# requests.cpu đặt THẤP có chủ ý: kube-system chiếm ~0,95 CPU trong 2 CPU của nút. Tổng requests.cpu (platform + app)
+# phải ≤ 1 CPU, nếu vượt pod kẹt Pending. KHÔNG đặt limit CPU (bị bóp thì Spring khởi động lâu gấp mấy lần).
+# Tổng requests.memory của chart này ≈ 1,6 Gi (+ ~1,6 Gi của datn-platform = ~3,2 Gi, mục tiêu ≤ 4,5 Gi).
+
+# R3: JVM nhỏ gọn. 65% (không phải 70%) vì metaspace + code cache + luồng nằm NGOÀI heap, limit chỉ 512–640Mi;
+# TieredStopAtLevel=1 (chỉ JIT C1) giảm tải CPU khi 5 JVM khởi động cùng lúc trên 2 vCPU và bớt tốn code cache.
+javaToolOptions: "-XX:MaxRAMPercentage=65 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError"
+
+# R6: deploy kiểu THAY THẾ (tắt pod cũ rồi mới bật pod mới), không chạy song song. Mặc định maxSurge 1 sẽ bật thêm
+# pod mới của cả 5 service cùng lúc (cần thêm ~2 Gi RAM) → OOM. Đổi lại mỗi service gián đoạn lúc nó được thay.
+rollout:
+  maxSurge: 0
+  maxUnavailable: 1
+
+# R5: 5 service khởi động cùng lúc trên 2 vCPU mất 3–5 phút → startupProbe cho tới 6 phút (10 giây × 36)
+probes:
+  startup:  { periodSeconds: 10, failureThreshold: 36, timeoutSeconds: 5 }
+  readiness: { periodSeconds: 10, failureThreshold: 3,  timeoutSeconds: 5 }
+  liveness: { periodSeconds: 20, failureThreshold: 5,  timeoutSeconds: 5 }
+
+# R3: requests 256Mi / limit 512Mi cho service nhẹ; work-service (JPA + Kafka + MinIO + Redis) cần dư hơn
+backend:
+  api-gateway:
+    resources:
+      requests: { cpu: 50m, memory: 256Mi }
+      limits: { memory: 512Mi }
+  identity-service:
+    resources:
+      requests: { cpu: 50m, memory: 256Mi }
+      limits: { memory: 512Mi }
+  work-service:
+    resources:
+      requests: { cpu: 50m, memory: 320Mi }
+      limits: { memory: 640Mi }
+  workspace-service:
+    resources:
+      requests: { cpu: 50m, memory: 256Mi }
+      limits: { memory: 512Mi }
+  notification-service:
+    resources:
+      requests: { cpu: 50m, memory: 256Mi }
+      limits: { memory: 512Mi }
+
+frontend:
+  resources:
+    requests: { cpu: 5m, memory: 16Mi }
+    limits: { memory: 64Mi }

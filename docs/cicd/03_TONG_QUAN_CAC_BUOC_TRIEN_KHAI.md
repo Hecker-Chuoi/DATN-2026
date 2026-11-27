@@ -1,6 +1,6 @@
 # 03 — Tổng quan các bước triển khai CI/CD (từ code đến setup)
 
-> Bản đồ tổng quát, mỗi bước chỉ nêu **làm gì** và **xong khi nào**. Chi tiết: [01 — Setup Jenkins](01_HUONG_DAN_SETUP_JENKINS.md), [02 — Nghiên cứu CI/CD trên source code](02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md).
+> Bản đồ tổng quát, mỗi bước chỉ nêu **làm gì** và **xong khi nào**. Chi tiết: [01 — Setup Jenkins](cac_buoc/01_HUONG_DAN_SETUP_JENKINS.md), [02 — Nghiên cứu CI/CD trên source code](02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md).
 >
 > Mô hình: **GitHub → Jenkins (server riêng) → Docker Hub → Helm → Minikube (server riêng)**.
 
@@ -58,7 +58,7 @@ Làm trên nhánh riêng (ví dụ `feat/cicd-jenkins`), thử trên Minikube �
 
 ## Bước 3 — Dựng server Jenkins
 
-Theo **[01 — Phần A](01_HUONG_DAN_SETUP_JENKINS.md#phần-a--cài-jenkins)**: Java 21 + Jenkins LTS → Docker (user `jenkins` vào nhóm `docker`) → Nginx + HTTPS → plugin → bảo mật → Global Tools (`jdk-21`, `maven-3.9`, `node-22`).
+Theo **[01 — Phần A](cac_buoc/01_HUONG_DAN_SETUP_JENKINS.md#phần-a--cài-jenkins)**: Java 21 + Jenkins LTS → Docker (user `jenkins` vào nhóm `docker`) → Nginx + HTTPS → plugin → bảo mật → Global Tools (`jdk-21`, `maven-3.9`, `node-22`).
 
 **Xong khi:** đăng nhập được `https://jenkins.<domain>`, `sudo -u jenkins docker ps` chạy.
 
@@ -66,7 +66,7 @@ Theo **[01 — Phần A](01_HUONG_DAN_SETUP_JENKINS.md#phần-a--cài-jenkins)**
 
 ## Bước 4 — Nối Jenkins với dự án
 
-Theo **[01 — Phần B](01_HUONG_DAN_SETUP_JENKINS.md#phần-b--nối-jenkins-với-dự-án)**:
+Theo **[01 — Phần B](cac_buoc/01_HUONG_DAN_SETUP_JENKINS.md#phần-b--nối-jenkins-với-dự-án)**:
 
 1. Credentials: `github-token`, `dockerhub`, `minikube-ssh` (khoá SSH của `deployer`) + `known_hosts`.
 2. Job `smoke-test` kiểm tra tool, login Docker Hub, SSH + `helm version` sang Minikube.

@@ -8,6 +8,12 @@ RUN npm ci
 
 # Copy source code and build
 COPY . .
+
+# Vite NHÚNG biến VITE_* vào bundle lúc build (không đổi được khi chạy) nên phải truyền bằng --build-arg:
+#   docker build --build-arg VITE_KEYCLOAK_URL=https://sso.<domain> -t datn-frontend frontend/
+# Không truyền thì để rỗng -> App.jsx dùng mặc định http://localhost:8088 (như trước đây).
+ARG VITE_KEYCLOAK_URL=""
+ENV VITE_KEYCLOAK_URL=$VITE_KEYCLOAK_URL
 RUN npm run build
 
 # Stage 2: Serve using Nginx

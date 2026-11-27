@@ -1,0 +1,139 @@
+# R2: MỘT instance Postgres chứa hai database (datn_main_db cho 4 service + keycloak cho Keycloak),
+# mỗi database một user riêng (user app KHÔNG phải superuser). Mật khẩu lấy từ Secret app-secrets.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: postgres
+data:
+  # Image postgres chạy mọi *.sh trong /docker-entrypoint-initdb.d MỘT LẦN khi thư mục dữ liệu còn trống.
+  # Trong lúc chạy, server tạm CHỈ nghe unix socket; cổng TCP 5432 chỉ mở sau khi script xong
+  # => phụ thuộc chờ được bằng `nc -z postgres 5432` (đúng cách các init container bên dưới làm).
+  10-init-databases.sh: |
+    #!/bin/sh
+    set -eu
+    # Biến psql (:"ident" / :'literal') tự quote đúng, không phải nối chuỗi SQL
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres \
+      -v app_user="$APP_DB_USER" -v app_pass="$APP_DB_PASSWORD" -v app_db="$APP_DB_NAME" \
+      -v kc_user="$KC_DB_USER"   -v kc_pass="$KC_DB_PASSWORD"   -v kc_db="$KC_DB_NAME" <<'SQL'
+    CREATE ROLE :"app_user" LOGIN PASSWORD :'app_pass';
+    CREATE ROLE :"kc_user"  LOGIN PASSWORD :'kc_pass';
+    CREATE DATABASE :"app_db" OWNER :"app_user";
+    CREATE DATABASE :"kc_db"  OWNER :"kc_user";
+    -- Mỗi user chỉ vào được database của mình
+    REVOKE CONNECT ON DATABASE :"app_db" FROM PUBLIC;
+    REVOKE CONNECT ON DATABASE :"kc_db"  FROM PUBLIC;
+    SQL
+    # Migration V1 của work-service và workspace-service có CREATE EXTENSION pgcrypto: tạo sẵn bằng superuser
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$APP_DB_NAME" <<'SQL'
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    SQL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: postgres
+spec:
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: pg
+      port: 5432
+      targetPort: pg
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "platform.podLabels" . | nindent 8 }}
+        app.kubernetes.io/name: postgres
+    spec:
+      {{- include "platform.podDefaults" . | nindent 6 }}
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          args:
+            {{- range $k, $v := .Values.postgres.config }}
+            - -c
+            - {{ printf "%s=%v" $k $v | quote }}
+            {{- end }}
+          ports:
+            - name: pg
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                {{- include "platform.secretKey" (dict "root" . "key" "postgres-password") | nindent 16 }}
+            - name: APP_DB_NAME
+              value: {{ .Values.postgres.appDatabase | quote }}
+            - name: APP_DB_USER
+              valueFrom:
+                {{- include "platform.secretKey" (dict "root" . "key" "app-db-username") | nindent 16 }}
+            - name: APP_DB_PASSWORD
+              valueFrom:
+                {{- include "platform.secretKey" (dict "root" . "key" "app-db-password") | nindent 16 }}
+            - name: KC_DB_NAME
+              value: {{ .Values.postgres.keycloakDatabase | quote }}
+            - name: KC_DB_USER
+              valueFrom:
+                {{- include "platform.secretKey" (dict "root" . "key" "keycloak-db-username") | nindent 16 }}
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                {{- include "platform.secretKey" (dict "root" . "key" "keycloak-db-password") | nindent 16 }}
+            # Thư mục con: tránh lỗi initdb khi gốc volume có sẵn lost+found
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          # -h 127.0.0.1 (TCP): pg_isready mặc định hỏi unix socket, mà server tạm lúc chạy script khởi tạo cũng nghe socket
+          # => không có -h thì pod báo Ready sớm, trước khi hai database được tạo xong.
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
+            defaultMode: 493            # = 0755 (viết thập phân: YAML 1.2 hiểu 0755 là số thập phân 755)
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.postgres.storage }}

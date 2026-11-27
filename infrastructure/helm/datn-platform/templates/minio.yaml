@@ -1,0 +1,74 @@
+# MinIO lưu file đính kèm của work-service (bucket work-attachments).
+# Không cần Job tạo bucket: work-service tự tạo khi khởi động (MinioConfig) và file tải về đi qua API
+# /attachments/{id}/download của work-service, nên bucket KHÔNG cần mở chế độ tải ẩn danh như docker-compose
+# và MinIO cũng không có Ingress (không lộ ra Internet).
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: minio
+spec:
+  selector:
+    app.kubernetes.io/name: minio
+  ports:
+    - { name: s3, port: 9000, targetPort: s3 }
+    - { name: console, port: 9001, targetPort: console }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: minio
+spec:
+  serviceName: minio
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minio
+  template:
+    metadata:
+      labels:
+        {{- include "platform.podLabels" . | nindent 8 }}
+        app.kubernetes.io/name: minio
+    spec:
+      {{- include "platform.podDefaults" . | nindent 6 }}
+      securityContext:
+        fsGroup: 65532                      # image Chainguard chạy uid 65532
+      containers:
+        - name: minio
+          image: {{ .Values.minio.image }}
+          args: ["server", "/data", "--console-address", ":9001"]
+          ports:
+            - { name: s3, containerPort: 9000 }
+            - { name: console, containerPort: 9001 }
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                {{- include "platform.secretKey" (dict "root" . "key" "minio-root-user") | nindent 16 }}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                {{- include "platform.secretKey" (dict "root" . "key" "minio-root-password") | nindent 16 }}
+          readinessProbe:
+            httpGet: { path: /minio/health/ready, port: s3 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /minio/health/live, port: s3 }
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.minio.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.minio.storage }}

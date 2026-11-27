@@ -2,7 +2,7 @@
 
 > Jenkins chạy trên **server riêng** (gọi là **server Jenkins**), tách khỏi **server Minikube** đang chạy ứng dụng.
 > Jenkins làm: chạy test → build Docker image → push lên **Docker Hub** → SSH sang server Minikube chạy `helm upgrade` (đổi tag image) → Minikube kéo image mới từ Docker Hub.
-> Đọc kèm: [02 — Nghiên cứu CI/CD trên source code](02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md), [03 — Tổng quan các bước](03_TONG_QUAN_CAC_BUOC_TRIEN_KHAI.md).
+> Đọc kèm: [02 — Nghiên cứu CI/CD trên source code](../02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md), [03 — Tổng quan các bước](../03_TONG_QUAN_CAC_BUOC_TRIEN_KHAI.md).
 >
 > Tài liệu chia 2 phần:
 > - **Phần A (mục 1–8)**: cài Jenkins. Chỉ cần một máy Ubuntu có SSH + `sudo`, chưa cần repo hay Minikube.
@@ -162,15 +162,27 @@ sudo apt-get update && sudo apt-get install -y trivy
 
 ## 5. Nginx + HTTPS trước Jenkins
 
-Cần một tên miền trỏ về IP server Jenkins (bản ghi DNS A). Chưa có tên miền thì dùng tạm `jenkins.<IP-dạng-gạch-ngang>.sslip.io` (ví dụ `jenkins.13-250-1-2.sslip.io`, tự trỏ về `13.250.1.2`) — khi đó chỉ có HTTP.
+Cần một tên miền trỏ về **IP public** của server Jenkins (bản ghi DNS A). Chưa có tên miền thì dùng tạm `jenkins.<IP-dạng-gạch-ngang>.sslip.io` (ví dụ `jenkins.13-250-1-2.sslip.io`, tự trỏ về `13.250.1.2`).
+
+> Trên EC2, IP trong prompt (`ip-172-31-...`) là IP **nội bộ**, không dùng được. IP public lấy bằng `curl -s http://checkip.amazonaws.com`. IP public đổi mỗi lần stop/start instance → nên gắn **Elastic IP**, nếu không thì tên miền sslip.io, chứng chỉ và webhook GitHub đều phải làm lại.
+
+**Security Group** phải mở cổng **80** và **443** cho `0.0.0.0/0` (Let's Encrypt và webhook GitHub gọi từ Internet).
 
 ```bash
 sudo apt-get install -y nginx certbot python3-certbot-nginx
+
+# Chọn MỘT trong hai dòng DOMAIN:
+DOMAIN=jenkins.tenmien-that.com                                              # có tên miền riêng
+DOMAIN="jenkins.$(curl -s http://checkip.amazonaws.com | tr . -).sslip.io"   # chưa có tên miền
+echo "$DOMAIN"
 ```
 
-Tạo `/etc/nginx/sites-available/jenkins` (thay `jenkins.example.com`):
+Tạo `/etc/nginx/sites-available/jenkins`.
 
-```nginx
+> **Không dán nội dung cấu hình thẳng vào terminal**: bash sẽ chạy từng dòng như một lệnh (`upstream: command not found`…). Dán **nguyên khối** lệnh dưới đây, kể cả dòng `EOF` cuối. Giữ `'EOF'` trong nháy đơn, nếu không bash sẽ thay `$host`, `$scheme`… thành chuỗi rỗng.
+
+```bash
+sudo tee /etc/nginx/sites-available/jenkins > /dev/null <<'EOF'
 upstream jenkins_local {
     server 127.0.0.1:8080;
     keepalive 16;
@@ -207,18 +219,32 @@ server {
         proxy_buffering off;          # log build hiển thị trực tiếp
     }
 }
+EOF
 ```
+
+Thay tên mẫu bằng `$DOMAIN`, bật site và kiểm tra:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/jenkins /etc/nginx/sites-enabled/jenkins
+sudo sed -i "s/server_name .*;/server_name $DOMAIN;/" /etc/nginx/sites-available/jenkins
+sudo ln -sf /etc/nginx/sites-available/jenkins /etc/nginx/sites-enabled/jenkins
 sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t && sudo systemctl reload nginx
+sudo nginx -t && sudo systemctl reload nginx     # phải thấy "syntax is ok" + "test is successful"
 
-# Chỉ khi có tên miền thật:
-sudo certbot --nginx -d jenkins.example.com      # tự thêm HTTPS + chuyển hướng 80 -> 443
+curl -I "http://$DOMAIN/login"                   # phải trả 200/403 từ Jenkins; timeout = Security Group chưa mở cổng 80
 ```
 
-> **Chưa có HTTPS** (dùng sslip.io/IP): mật khẩu Jenkins đi dạng chữ thường. Khi đó đặt `deny all;` cho `location /`, chỉ để mở `/github-webhook/`, và vào giao diện bằng SSH tunnel:
+Cấp HTTPS (certbot tự thêm khối 443 và chuyển hướng 80 → 443; lần đầu hỏi email + đồng ý điều khoản):
+
+```bash
+sudo certbot --nginx -d "$DOMAIN"
+```
+
+> **Lỗi thường gặp với certbot:**
+> - `Cannot issue for "jenkins.example.com" ... forbidden by policy`: vẫn đang dùng tên mẫu. Đặt `DOMAIN` rồi chạy lại khối `sed` ở trên trước.
+> - Lỗi `Timeout during connect` / `Connection refused`: cổng 80 chưa mở trong Security Group, hoặc DNS chưa trỏ đúng IP public.
+> - Với sslip.io, Let's Encrypt thường vẫn cấp nhưng có thể dính rate limit (nhiều người dùng chung). Khi đó dùng tạm HTTP như ghi chú dưới.
+
+> **Chưa có HTTPS**: mật khẩu Jenkins đi dạng chữ thường. Khi đó đặt `deny all;` cho `location /`, chỉ để mở `/github-webhook/`, và vào giao diện bằng SSH tunnel:
 > `ssh -L 8080:127.0.0.1:8080 <user>@<JENKINS_HOST>` rồi mở `http://localhost:8080`.
 
 ---
@@ -331,7 +357,7 @@ echo "<nội dung id_deploy.pub>" | sudo tee /home/deployer/.ssh/authorized_keys
 sudo chown -R deployer:deployer /home/deployer/.ssh && sudo chmod 700 /home/deployer/.ssh && sudo chmod 600 /home/deployer/.ssh/authorized_keys
 ```
 
-> `deployer` cần `kubectl` + `helm` (cài trên server Minikube) và một kubeconfig **chỉ có quyền trong namespace của ứng dụng** (ServiceAccount + Role), không dùng kubeconfig admin của minikube. Chi tiết ở [02 §5](02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md#5-deploy-từ-jenkins-sang-minikube).
+> `deployer` cần `kubectl` + `helm` (cài trên server Minikube) và một kubeconfig **chỉ có quyền trong namespace của ứng dụng** (ServiceAccount + Role), không dùng kubeconfig admin của minikube. Chi tiết ở [02 §5](../02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md#5-deploy-từ-jenkins-sang-minikube).
 > Có thể khoá thêm: trong `authorized_keys` thêm tiền tố `command="/home/deployer/deploy.sh",no-port-forwarding,no-pty ` để khoá này chỉ chạy được đúng script deploy.
 
 Kiểm tra từ server Jenkins: `sudo -u jenkins ssh -i /var/lib/jenkins/.ssh/id_deploy deployer@<MINIKUBE_HOST> 'echo ok'`.
@@ -402,7 +428,7 @@ pipeline {
 }
 ```
 
-Cả 3 stage xanh là Jenkins sẵn sàng. `Jenkinsfile` thật của dự án: xem khung mẫu ở [02 §6](02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md#6-jenkinsfile).
+Cả 3 stage xanh là Jenkins sẵn sàng. `Jenkinsfile` thật của dự án: xem khung mẫu ở [02 §6](../02_NGHIEN_CUU_CICD_TREN_SOURCE_CODE.md#6-jenkinsfile).
 
 ---
 
