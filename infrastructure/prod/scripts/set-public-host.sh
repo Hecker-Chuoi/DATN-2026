@@ -34,4 +34,4 @@ echo "== $FILE"
 grep -E '^(SCHEME|APP_HOST|SSO_HOST|REGISTRY|COOKIE_SECURE)=' "$FILE"
 echo
 echo "Cần có DNS: app.$DOMAIN và sso.$DOMAIN cùng trỏ về Elastic IP của server ứng dụng (sslip.io tự phân giải, không cần cấu hình)."
-echo "Giá trị này KHÔNG bí mật, commit được. Commit TRƯỚC khi Jenkins build (frontend nhúng URL Keycloak lúc build)."
+echo "Giá trị này KHÔNG bí mật, commit được. Commit TRƯỚC khi chạy CI build (frontend nhúng URL Keycloak lúc build)."

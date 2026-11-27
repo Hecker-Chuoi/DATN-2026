@@ -5,11 +5,11 @@
 # Lệnh:
 #   deploy <tag>   triển khai git SHA <tag>. STDIN = tar.gz chứa  docker-compose.prod.yml  prod/  keycloak/
 #   rollback       về bản chạy tốt ngay trước (state/previous_tag)
-#   check          in phiên bản docker + trạng thái container (dùng cho job smoke-test của Jenkins)
+#   check          in phiên bản docker + trạng thái container (dùng để kiểm tra kết nối SSH của CI)
 #
-# Jenkins gửi gói theo từng lần deploy để file compose và image luôn cùng một commit:
-#   tar cz -C infrastructure docker-compose.prod.yml prod keycloak | ssh -o BatchMode=yes deployer@<IP-private> "deploy <tag>"
-# Khoá SSH của Jenkins đặt  command="/home/deployer/deploy.sh"  nên lệnh người gọi nằm trong $SSH_ORIGINAL_COMMAND.
+# GitHub Actions gửi gói theo từng lần deploy để file compose và image luôn cùng một commit:
+#   tar cz -C infrastructure docker-compose.prod.yml prod keycloak | ssh -o BatchMode=yes deployer@<IP-public> "deploy <tag>"
+# Khoá SSH của CI (secret DEPLOY_SSH_KEY) đặt  command="/home/deployer/deploy.sh"  nên lệnh người gọi nằm trong $SSH_ORIGINAL_COMMAND.
 # Chạy tay (ví dụ lần đầu):
 #   tar cz -C infrastructure docker-compose.prod.yml prod keycloak | ssh ubuntu@<IP> "sudo -u deployer /home/deployer/deploy.sh deploy <tag>"
 #
@@ -102,7 +102,7 @@ case "$CMD" in
 
   deploy)
     valid_tag "$TAG" || die "Cách dùng: deploy <git-sha 7–40 ký tự hex thường> (nhận: '$TAG')"
-    if [ -t 0 ]; then die "Không có gói trên stdin. Jenkins: tar cz -C infrastructure docker-compose.prod.yml prod keycloak | ssh ... \"deploy <tag>\""; fi
+    if [ -t 0 ]; then die "Không có gói trên stdin. CI: tar cz -C infrastructure docker-compose.prod.yml prod keycloak | ssh ... \"deploy <tag>\""; fi
     [ -f "$DATN_HOME/secrets.env" ] || die "Thiếu $DATN_HOME/secrets.env (docs/cicd/cac_buoc/03)"
     mkdir -p "$STATE" "$REL_ROOT"
 
