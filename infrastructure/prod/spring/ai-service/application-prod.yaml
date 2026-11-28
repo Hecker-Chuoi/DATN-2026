@@ -1,0 +1,38 @@
+# Profile "prod" (docker compose): nạp đè lên application.yaml trong image. ${...} lấy từ biến môi trường của docker-compose.prod.yml.
+# DB (SPRING_DATASOURCE_USERNAME / _PASSWORD), ANTHROPIC_API_KEY và AI_TOOLS_API_KEY cũng do biến môi trường cung cấp (secrets.env).
+server:
+  shutdown: graceful
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  datasource:
+    url: jdbc:postgresql://postgres:5432/datn_main_db
+    hikari:
+      maximum-pool-size: 5       # 6 service dùng chung một Postgres, max_connections=100
+  jpa:
+    show-sql: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+  data:
+    redis:
+      host: redis
+      port: 6379
+ai:
+  agent:
+    work-service-url: http://work-service:8083
+    # application.yaml có khoá mặc định viết cứng trong repo: ghi đè KHÔNG kèm giá trị mặc định để thiếu AI_TOOLS_API_KEY
+    # thì service không khởi động (an toàn hơn là âm thầm dùng khoá ai cũng đọc được trong git).
+    tools-api-key: ${AI_TOOLS_API_KEY}
+    # anthropic-api-key đọc từ ANTHROPIC_API_KEY (trống = service vẫn chạy, chỉ lượt chat báo lỗi)
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+logging:
+  level:
+    com.datn.aiservice: INFO
