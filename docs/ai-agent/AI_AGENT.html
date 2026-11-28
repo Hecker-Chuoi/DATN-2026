@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trợ lý AI DATN-2026</title>
+<meta name="description" content="Tài liệu trợ lý AI (ai-service) của DATN-2026: kiến trúc, bảng tool → endpoint → quyền, hợp đồng SSE, cách chạy, kiểm tra thủ công và các điểm lệch so với kế hoạch.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --bg: #F4F6FA; --surface: #FFFFFF; --surface-2: #F8FAFC; --border: #E2E8F0; --border-strong: #CBD5E1;
+  --text: #0F172A; --muted: #475569; --dim: #64748B;
+  --accent: #2563EB; --accent-soft: #EFF6FF; --accent-ink: #1E40AF;
+  --ok: #047857; --ok-soft: #ECFDF5; --warn: #B45309; --warn-soft: #FFFBEB;
+  --bad: #B91C1C; --bad-soft: #FEF2F2; --violet: #6D28D9; --violet-soft: #F5F3FF;
+  --code-bg: #0F172A; --code-text: #E2E8F0;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(15,23,42,.04), 0 10px 28px -16px rgba(15,23,42,.18);
+  --font-body: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B1120; --surface: #111827; --surface-2: #0F172A; --border: #1F2A3C; --border-strong: #334155;
+    --text: #E5E7EB; --muted: #A3AEC2; --dim: #7C8AA3;
+    --accent: #60A5FA; --accent-soft: rgba(96,165,250,.12); --accent-ink: #BFDBFE;
+    --ok: #34D399; --ok-soft: rgba(52,211,153,.10); --warn: #FBBF24; --warn-soft: rgba(251,191,36,.10);
+    --bad: #F87171; --bad-soft: rgba(248,113,113,.10); --violet: #A78BFA; --violet-soft: rgba(167,139,250,.12);
+    --code-bg: #070B14; --code-text: #E2E8F0;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -16px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B1120; --surface: #111827; --surface-2: #0F172A; --border: #1F2A3C; --border-strong: #334155;
+  --text: #E5E7EB; --muted: #A3AEC2; --dim: #7C8AA3;
+  --accent: #60A5FA; --accent-soft: rgba(96,165,250,.12); --accent-ink: #BFDBFE;
+  --ok: #34D399; --ok-soft: rgba(52,211,153,.10); --warn: #FBBF24; --warn-soft: rgba(251,191,36,.10);
+  --bad: #F87171; --bad-soft: rgba(248,113,113,.10); --violet: #A78BFA; --violet-soft: rgba(167,139,250,.12);
+  --code-bg: #070B14; --code-text: #E2E8F0;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -16px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15.5px/1.7 var(--font-body); }
+a { color: var(--accent); text-underline-offset: 3px; }
+code, kbd { font-family: var(--font-mono); font-size: .86em; }
+:not(pre) > code { background: var(--accent-soft); color: var(--accent-ink); padding: .12em .4em; border-radius: 6px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); color: var(--code-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+pre code { background: none; color: inherit; padding: 0; }
+h1, h2, h3 { line-height: 1.25; letter-spacing: -.01em; }
+h1 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 8px; }
+h2 { font-size: 22px; margin: 44px 0 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+h3 { font-size: 17px; margin: 24px 0 8px; }
+p { margin: 8px 0; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 24px 16px 80px; }
+.lead { color: var(--muted); font-size: 17px; }
+.meta { color: var(--dim); font-size: 13px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 14px 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+.card h4 { margin: 0 0 6px; font-size: 14px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 8px; margin: 14px 0; }
+.callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+.callout.ok { border-color: var(--ok); background: var(--ok-soft); }
+.callout.bad { border-color: var(--bad); background: var(--bad-soft); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 12px 0; background: var(--surface); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--surface-2); font-weight: 600; color: var(--muted); font-size: 13px; }
+tr:last-child td { border-bottom: 0; }
+.tbl { overflow-x: auto; }
+.tag { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
+.tag.read { background: var(--ok-soft); color: var(--ok); }
+.tag.write { background: var(--warn-soft); color: var(--warn); }
+.tag.int { background: var(--violet-soft); color: var(--violet); }
+.tag.ai { background: var(--accent-soft); color: var(--accent-ink); }
+.flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; margin: 14px 0; }
+.flow .box { flex: 1 1 180px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; }
+.flow .box b { display: block; font-size: 14px; margin-bottom: 4px; }
+.flow .arrow { align-self: center; color: var(--dim); font-size: 20px; }
+ol.steps li { margin: 6px 0; }
+.toc { columns: 2; column-gap: 24px; font-size: 14px; }
+.toc a { text-decoration: none; }
+@media (max-width: 720px) { .toc { columns: 1; } h2 { font-size: 20px; } }
+.kbd { font-family: var(--font-mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 6px; padding: 1px 6px; }
+.small { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="meta">DATN-2026 · docs/ai-agent · cập nhật 13/11/2026 · nhánh <code>feat/agent-intergration-v1</code></p>
+<h1>Trợ lý AI cho hệ thống quản lý công việc</h1>
+<p class="lead">Khung chat trong giao diện, dùng <strong>Claude API</strong> (mặc định <code>claude-opus-5-5</code>) với tool use. Trợ lý đọc dữ liệu dự án qua 19 endpoint nội bộ của <code>work-service</code>, mọi thao tác ghi đều phải được người dùng <strong>duyệt</strong> trước khi chạy, và luôn bị giới hạn bởi quyền của chính người đang chat.</p>
+
+<div class="grid">
+  <div class="card"><h4>Module mới</h4><code>backend/ai-service</code> · cổng 8084 (profile <code>tuananh</code>: 9995) · route gateway <code>/ai/**</code></div>
+  <div class="card"><h4>Tool</h4>23 tool: 11 đọc + 8 ghi ở work-service, 4 tool trong ai-service (<code>ask_user</code>, bộ nhớ, tìm hội thoại cũ)</div>
+  <div class="card"><h4>Bảo mật</h4>API key chỉ chứng minh "đây là ai-service"; quyền project vẫn kiểm bằng <code>hasPermission(projectId, userId, key)</code> của người dùng</div>
+  <div class="card"><h4>Dữ liệu</h4>6 bảng <code>ai_*</code> trong <code>datn_main_db</code>, Flyway riêng <code>flyway_ai_schema_history</code>, lưu mỗi tin dạng JSON của Messages API (giữ nguyên thinking + signature)</div>
+</div>
+
+<div class="toc">
+  <a href="#kien-truc">1. Kiến trúc</a><br>
+  <a href="#vong-lap">2. Vòng lặp agent &amp; cơ chế tạm dừng</a><br>
+  <a href="#tool">3. Bảng tool → endpoint → service → quyền</a><br>
+  <a href="#api">4. API REST &amp; hợp đồng SSE</a><br>
+  <a href="#db">5. Cơ sở dữ liệu</a><br>
+  <a href="#frontend">6. Frontend</a><br>
+  <a href="#chay">7. Cài đặt &amp; chạy</a><br>
+  <a href="#kiem-tra">8. Kiểm tra thủ công theo mốc</a><br>
+  <a href="#eval">9. Bộ đánh giá 30 câu</a><br>
+  <a href="#lech">10. Quyết định thiết kế &amp; điểm lệch so với kế hoạch</a><br>
+  <a href="#han-che">11. Hạn chế &amp; việc tiếp theo</a>
+</div>
+
+<!-- ───────────────────────────── 1 ───────────────────────────── -->
+<h2 id="kien-truc">1. Kiến trúc</h2>
+<div class="flow">
+  <div class="box"><b>Frontend</b><code>AiChatPanel</code> gửi tin bằng <code>fetch</code>, đọc SSE từng sự kiện; gửi kèm ngữ cảnh workspace / project / work item đang mở.</div>
+  <div class="arrow">→</div>
+  <div class="box"><b>API Gateway</b>Route <code>/ai/api/**</code> → ai-service (<code>StripPrefix=1</code>). JWT từ header hoặc cookie, relay Bearer. Không buffer SSE.</div>
+  <div class="arrow">→</div>
+  <div class="box"><b>ai-service</b><code>AgentOrchestrator</code> gọi Claude Messages API (không stream, agent tự điều khiển vòng lặp tool), chạy tool READ ngay, tool WRITE/ask_user tạo bản ghi chờ.</div>
+  <div class="arrow">→</div>
+  <div class="box"><b>work-service</b><code>/internal/ai-tools/{tool}</code> + <code>X-API-Key</code> + <code>X-User-Id</code> → <code>AiToolApiKeyFilter</code> → <code>AiToolService</code> kiểm quyền rồi gọi service sẵn có.</div>
+</div>
+<div class="callout">
+<strong>Nguyên tắc định danh:</strong> <code>userId</code> ở mọi nơi là Keycloak <code>sub</code> (lấy từ <code>jwt.getSubject()</code>); không dùng <code>users.id</code> của identity-service. Header <code>X-User-Id</code> và cột <code>user_id</code> của các bảng <code>ai_*</code> đều là <code>sub</code>.
+</div>
+<h3>Gói chính của ai-service (<code>com.datn.aiservice</code>)</h3>
+<div class="tbl"><table>
+<tr><th>Gói / lớp</th><th>Vai trò</th></tr>
+<tr><td><code>agent/AgentOrchestrator</code></td><td>Vòng lặp agent (Phụ lục F của kế hoạch): <code>chat()</code>, <code>resume()</code>, <code>runLoop()</code>; khóa theo hội thoại; kết quả tool gửi lại dạng <code>tool_result</code> theo id của <code>tool_use</code>.</td></tr>
+<tr><td><code>agent/llm/ClaudeLlmClient</code></td><td>Gọi <code>client.beta().messages().create</code> (SDK <code>anthropic-java</code> 3.3.0): system cố định + cache, adaptive thinking với <code>prefix_mismatch_behavior = drop_block</code>, <code>effort</code> theo cấu hình, server-side fallback khi bị từ chối; SDK tự thử lại 429/5xx/529; đổi lỗi thành câu thân thiện.</td></tr>
+<tr><td><code>agent/llm/MessageJson</code></td><td>Tin nhắn ở dạng JSON đúng Messages API; chỉ đổi sang <code>BetaMessageParam</code> lúc gửi, nên tin của model được gửi lại nguyên vẹn.</td></tr>
+<tr><td><code>agent/tool/*</code></td><td><code>AgentTool</code>, <code>ToolRegistry</code> (gom tool Java + tool từ <code>agent-tools.yml</code>, báo lỗi trùng tên, <code>availableFor(ctx)</code>), <code>remote/RemoteAgentTool</code> (một lớp chung cho 19 tool work-service), <code>builtin/*</code> (4 tool nội bộ).</td></tr>
+<tr><td><code>agent/prompt/SystemPromptBuilder</code></td><td>Phần cố định (Phụ lục E) + ngữ cảnh động: thời gian theo múi giờ, workspace/project/work item, tóm tắt hội thoại, khối <code>&lt;user_memory&gt;</code>.</td></tr>
+<tr><td><code>agent/store/*</code></td><td><code>ConversationStore</code> (lưu <code>Content.toJson()</code>), <code>HistoryWindow</code> (cắt theo ngân sách ký tự, không tách cặp call/response, rút gọn functionResponse cũ), <code>ConversationSummarizer</code> (tóm tắt dồn bằng light-model).</td></tr>
+<tr><td><code>service/QuotaService</code></td><td>Đếm lượt/ngày trên Redis (<code>ai:requests:{sub}:{yyyyMMdd}</code>), ghi <code>ai_usage_logs</code>; cả hai fail-safe.</td></tr>
+<tr><td><code>controller/*</code></td><td><code>AgentChatController</code> (hội thoại, tin nhắn, SSE, tương tác), <code>AiMemoryController</code> (bộ nhớ, cài đặt), <code>SseAgentEventSink</code>.</td></tr>
+<tr><td><code>eval/EvalRunner</code></td><td>Bộ đánh giá 30 câu (profile <code>eval</code>).</td></tr>
+</table></div>
+
+<!-- ───────────────────────────── 2 ───────────────────────────── -->
+<h2 id="vong-lap">2. Vòng lặp agent &amp; cơ chế tạm dừng</h2>
+<ol class="steps">
+  <li>Người dùng gửi tin → lưu <code>Content</code> role <code>user</code>. Nếu còn thẻ đang chờ, chúng chuyển <code>EXPIRED</code> và <code>FunctionResponse</code> "Người dùng bỏ qua" được gộp vào cùng tin.</li>
+  <li>Mỗi vòng (tối đa <code>max-iterations</code> = 8): kiểm hạn mức ngày → cắt lịch sử (<code>HistoryWindow</code>) → tóm tắt phần bị cắt nếu có → gọi Claude (system prompt cố định; thời gian, dự án đang mở, bộ nhớ nằm trong khối <code>&lt;context&gt;</code> đầu mỗi tin người dùng) → lưu nguyên tin của model (giữ thinking + signature) → ghi usage.</li>
+  <li>Không có lời gọi hàm → gửi <code>text_delta</code> + <code>done(COMPLETED)</code>.</li>
+  <li>Có lời gọi hàm: tool <span class="tag read">READ</span> chạy ngay (<code>tool_started</code>/<code>tool_finished</code>); tool <span class="tag write">WRITE</span> tạo bản ghi <code>APPROVE_ACTION</code>; <span class="tag int">ask_user</span> tạo <code>ASK_USER</code>. Kết quả READ cùng lượt được lưu dạng <code>READ_RESULT</code> để sau này gửi đủ FunctionResponse đúng thứ tự.</li>
+  <li>Có bản ghi chờ → hội thoại <code>WAITING_INPUT</code>, phát <code>interaction_required</code> cho từng thẻ, <code>done(WAITING_INPUT)</code>.</li>
+  <li>Người dùng duyệt/từ chối/trả lời qua <code>POST …/interactions/{id}</code>: duyệt thì ai-service mới gọi tool (work-service kiểm quyền lại tại thời điểm thực thi); từ chối thì FunctionResponse là "Người dùng đã từ chối". Khi mọi thẻ của lượt đã xử lý → ghi một <code>Content</code> role <code>user</code> gồm đủ FunctionResponse → chạy tiếp vòng lặp.</li>
+</ol>
+<div class="callout warn"><strong>Bẫy bấm hai lần:</strong> bản ghi chờ phải còn <code>PENDING</code> (kiểm ở controller trả 409 và kiểm lại trong khóa của orchestrator). Mỗi hội thoại có một khóa trong bộ nhớ; lượt thứ hai song song nhận <code>error</code> "Hội thoại đang được xử lý".</div>
+
+<!-- ───────────────────────────── 3 ───────────────────────────── -->
+<h2 id="tool">3. Bảng tool → endpoint → service → quyền</h2>
+<p class="small">Đây là sản phẩm của mốc M0 (ENDPOINT_MAP). <code>PermissionKey</code> lấy đúng từ enum thật của work-service. Tool không yêu cầu dự án vẫn kiểm <code>PROJECT_VIEW</code> trên dự án của công việc được nhắc tới.</p>
+<div class="tbl"><table>
+<tr><th>Tool</th><th>Loại</th><th>Endpoint nội bộ</th><th>Service method được gọi lại</th><th>Quyền kiểm</th></tr>
+<tr><td><code>search_work_items</code></td><td><span class="tag read">READ</span></td><td><code>POST /internal/ai-tools/search-work-items</code></td><td><code>WorkItemService.listWorkItems</code> (JPA Specification)</td><td><code>PROJECT_VIEW</code></td></tr>
+<tr><td><code>get_work_item</code></td><td><span class="tag read">READ</span></td><td><code>…/get-work-item</code></td><td><code>WorkItemRepository.findByCode</code> → <code>getWorkItemDetail</code>, <code>WorkItemCommentService.getCommentsTree</code></td><td><code>PROJECT_VIEW</code></td></tr>
+<tr><td><code>get_my_issues</code></td><td><span class="tag read">READ</span></td><td><code>…/get-my-issues</code></td><td><code>listWorkItems(assigneeIds=[user])</code>; không có dự án thì gom theo <code>findByAssigneeId</code></td><td><code>PROJECT_VIEW</code> từng dự án</td></tr>
+<tr><td><code>get_project_metadata</code></td><td><span class="tag read">READ</span></td><td><code>…/get-project-metadata</code></td><td><code>ProjectService.getProjectById</code>, <code>WorkflowService.getProjectStatuses</code>, <code>SprintService.listByProject</code></td><td><code>PROJECT_VIEW</code></td></tr>
+<tr><td><code>list_project_members</code></td><td><span class="tag read">READ</span></td><td><code>…/list-project-members</code></td><td><code>ProjectMemberService.getProjectMembers</code></td><td><code>PROJECT_VIEW</code></td></tr>
+<tr><td><code>list_sprints</code></td><td><span class="tag read">READ</span></td><td><code>…/list-sprints</code></td><td><code>SprintService.listByProject</code></td><td><code>PROJECT_VIEW</code></td></tr>
+<tr><td><code>get_sprint_progress</code></td><td><span class="tag read">READ</span></td><td><code>…/get-sprint-progress</code></td><td><code>SprintService.getById</code> + <code>listWorkItems(sprint, chưa xong)</code></td><td><code>PROJECT_VIEW</code></td></tr>
+<tr><td><code>get_agile_report</code></td><td><span class="tag read">READ</span></td><td><code>…/get-agile-report</code></td><td><code>AgileReportService.getBurndown / getVelocity / getCfd</code></td><td><code>PROJECT_VIEW</code></td></tr>
+<tr><td><code>get_contribution_report</code></td><td><span class="tag read">READ</span></td><td><code>…/get-contribution-report</code></td><td><code>ContributionReportService.getContributionOverview</code></td><td><code>PROJECT_VIEW</code></td></tr>
+<tr><td><code>list_attachments</code></td><td><span class="tag read">READ</span></td><td><code>…/list-attachments</code></td><td><code>WorkItemAttachmentService.getAttachments</code></td><td><code>PROJECT_VIEW</code></td></tr>
+<tr><td><code>read_attachment</code></td><td><span class="tag read">READ</span></td><td><code>…/read-attachment</code></td><td><code>loadAttachmentResource</code> (MinIO) → <code>AttachmentTextExtractor</code> (PDF/DOCX/XLSX/text, ≤ 20.000 ký tự, ≤ 10 MB)</td><td><code>PROJECT_VIEW</code></td></tr>
+<tr><td><code>create_work_item</code></td><td><span class="tag write">WRITE</span></td><td><code>…/create-work-item</code></td><td><code>WorkItemService.createWorkItem</code> (giữ <code>StrictHierarchyValidator</code>, changelog)</td><td><code>ISSUE_CREATE</code> (+ <code>ISSUE_ASSIGN</code> nếu giao cho người khác – service tự kiểm)</td></tr>
+<tr><td><code>create_subtasks</code></td><td><span class="tag write">WRITE</span></td><td><code>…/create-subtasks</code></td><td><code>WorkItemService.createSubtask</code> lần lượt; lỗi từng cái trả trong <code>errors</code></td><td><code>ISSUE_CREATE</code></td></tr>
+<tr><td><code>update_work_item</code></td><td><span class="tag write">WRITE</span></td><td><code>…/update-work-item</code></td><td><code>WorkItemService.updateWorkItem</code> (chỉ trường không null)</td><td><code>ISSUE_EDIT</code></td></tr>
+<tr><td><code>transition_work_item</code></td><td><span class="tag write">WRITE</span></td><td><code>…/transition-work-item</code></td><td><code>WorkflowEngineService.getAvailableTransitions</code> → <code>executeTransition</code></td><td><code>ISSUE_TRANSITION</code></td></tr>
+<tr><td><code>assign_work_item</code></td><td><span class="tag write">WRITE</span></td><td><code>…/assign-work-item</code></td><td><code>updateWorkItem(assigneeId)</code>; tên người → <code>sub</code> qua danh sách thành viên</td><td><code>ISSUE_ASSIGN</code></td></tr>
+<tr><td><code>move_to_sprint</code></td><td><span class="tag write">WRITE</span></td><td><code>…/move-to-sprint</code></td><td><code>SprintService.addItemsToSprint / removeItemsFromSprint</code></td><td><code>SPRINT_MANAGE</code></td></tr>
+<tr><td><code>add_comment</code></td><td><span class="tag write">WRITE</span></td><td><code>…/add-comment</code></td><td><code>WorkItemCommentService.addComment</code></td><td><code>COMMENT_CREATE</code></td></tr>
+<tr><td><code>link_work_items</code></td><td><span class="tag write">WRITE</span></td><td><code>…/link-work-items</code></td><td><code>WorkItemLinkService.createLink</code></td><td><code>ISSUE_EDIT</code> (cả hai dự án nếu khác nhau)</td></tr>
+<tr><td><code>ask_user</code></td><td><span class="tag int">INTERRUPT</span></td><td>—</td><td>Không thực thi; frontend hiện chip lựa chọn</td><td>—</td></tr>
+<tr><td><code>save_memory</code></td><td><span class="tag ai">ai-service</span></td><td>—</td><td><code>MemoryService.save</code>, phát <code>notice</code> "Đã ghi nhớ"</td><td>chỉ dữ liệu của chính user; từ chối khi tắt bộ nhớ</td></tr>
+<tr><td><code>delete_memory</code></td><td><span class="tag ai">ai-service</span></td><td>—</td><td><code>MemoryService.delete</code> (xóa mềm)</td><td>chỉ dữ liệu của chính user</td></tr>
+<tr><td><code>search_past_conversations</code></td><td><span class="tag ai">ai-service</span></td><td>—</td><td><code>AiMessageRepository.searchByUser</code> (ILIKE trên JSON)</td><td>chỉ hội thoại của chính user</td></tr>
+</table></div>
+<h3>Đổi tên → id (<code>AiToolResolver</code>)</h3>
+<ul>
+  <li>Mã <code>AUTH-12</code> → <code>findByCode</code>; bỏ trống mã thì dùng <code>workItemId</code> đang mở trên màn hình.</li>
+  <li>Tên loại / trạng thái: khớp chính xác rồi khớp một phần; không có thì trả lỗi liệt kê các giá trị hợp lệ.</li>
+  <li>Tên người: <code>me</code>/<code>tôi</code> = người đang chat; khớp theo họ tên, username, email; <strong>trùng nhiều người → lỗi 400 liệt kê lựa chọn</strong> để AI chuyển sang <code>ask_user</code>.</li>
+  <li>Sprint: trống hoặc <code>active</code> = sprint đang chạy; <code>backlog</code> = bỏ khỏi sprint.</li>
+</ul>
+<h3>Xác thực lời gọi nội bộ (<code>AiToolApiKeyFilter</code>)</h3>
+<ul>
+  <li>Chỉ áp cho <code>/internal/ai-tools/**</code>; so <code>X-API-Key</code> với <code>ai-tools.api-key</code> bằng <code>MessageDigest.isEqual</code>. Sai/thiếu → 401; thiếu <code>X-User-Id</code> → 400.</li>
+  <li>Dựng <code>Jwt</code> giả chỉ có claim <code>sub</code> và đặt vào SecurityContext, nên <code>SecurityUtils.getCurrentUserId()</code>, <code>ProjectAccessService</code> và changelog ghi đúng người. Jwt giả <strong>không có realm role</strong> → Global ADMIN không được bypass khi đi qua trợ lý (quyết định chủ ý).</li>
+  <li>Gateway không route <code>/internal/**</code> nên trình duyệt không gọi được; endpoint được <code>permitAll</code> trong <code>SecurityConfig</code> vì filter đã bảo vệ.</li>
+</ul>
+
+<!-- ───────────────────────────── 4 ───────────────────────────── -->
+<h2 id="api">4. API REST &amp; hợp đồng SSE</h2>
+<p>Base qua gateway: <code>/ai/api/v1/ai/agent</code>. Mọi API cần JWT của người dùng. Response thường bọc <code>ApiResponse&lt;T&gt;</code>; hai endpoint SSE trả <code>text/event-stream</code>.</p>
+<div class="tbl"><table>
+<tr><th>Method</th><th>Path</th><th>Mô tả</th></tr>
+<tr><td>POST</td><td><code>/conversations</code></td><td>Tạo hội thoại <code>{workspaceId?, projectId?}</code></td></tr>
+<tr><td>GET</td><td><code>/conversations?projectId=</code></td><td>Hội thoại của chính user (bỏ ARCHIVED), mới nhất trước, tối đa 50</td></tr>
+<tr><td>GET</td><td><code>/conversations/{id}/messages</code></td><td>Lịch sử dạng hiển thị: <code>{role, text, tools[{name, summary, ok}], interactions[{type, payload, status, response}]}</code> – tin chỉ chứa FunctionResponse được lọc bỏ</td></tr>
+<tr><td>PATCH</td><td><code>/conversations/{id}</code></td><td><code>{title?, archived?}</code></td></tr>
+<tr><td>POST</td><td><code>/conversations/{id}/messages</code></td><td><strong>SSE.</strong> Body <code>{text (≤4000), context{workspaceId, projectId, workItemId, timezone}}</code></td></tr>
+<tr><td>POST</td><td><code>/conversations/{id}/interactions/{interactionId}</code></td><td><strong>SSE.</strong> ASK_USER: <code>{selectedValues[], freeText?}</code>; APPROVE_ACTION: <code>{approved, editedInput?}</code>; kèm <code>context</code>. 404 nếu không có, 409 nếu đã xử lý</td></tr>
+<tr><td>GET / PATCH / DELETE</td><td><code>/memories</code>, <code>/memories/{id}</code></td><td>Bộ nhớ dài hạn của chính user (xóa mềm)</td></tr>
+<tr><td>GET / PUT</td><td><code>/settings</code></td><td><code>{memoryEnabled, dailyRequestLimit}</code> (PUT chỉ đổi <code>memoryEnabled</code>)</td></tr>
+</table></div>
+<h3>Sự kiện SSE (frontend dựa vào đúng tên này)</h3>
+<div class="tbl"><table>
+<tr><th>event</th><th>data (JSON)</th></tr>
+<tr><td><code>text_delta</code></td><td><code>{ "text" }</code> – một sự kiện cho cả câu trả lời (không stream từng chữ)</td></tr>
+<tr><td><code>tool_started</code></td><td><code>{ "id", "name", "summary" }</code></td></tr>
+<tr><td><code>tool_finished</code></td><td><code>{ "id", "name", "ok" }</code></td></tr>
+<tr><td><code>interaction_required</code></td><td><code>{ "interactionId", "type": "APPROVE_ACTION"|"ASK_USER", "toolName", "summary", "payload" }</code> – payload thẻ duyệt: <code>{summary, args}</code>; payload câu hỏi: input của <code>ask_user</code></td></tr>
+<tr><td><code>notice</code></td><td><code>{ "message" }</code> (vd. "Đã ghi nhớ: …", chạm giới hạn vòng)</td></tr>
+<tr><td><code>done</code></td><td><code>{ "status": "COMPLETED" | "WAITING_INPUT" | "ITERATION_LIMIT" | "CANCELLED" }</code></td></tr>
+<tr><td><code>error</code></td><td><code>{ "message" }</code> – hết lượt ngày, Claude 429/529, hết credit, không nối được work-service…</td></tr>
+</table></div>
+
+<!-- ───────────────────────────── 5 ───────────────────────────── -->
+<h2 id="db">5. Cơ sở dữ liệu (<code>V1__ai_agent_core.sql</code>)</h2>
+<div class="tbl"><table>
+<tr><th>Bảng</th><th>Nội dung</th></tr>
+<tr><td><code>ai_conversations</code></td><td>user_id (sub), workspace_id, project_id, title, <strong>summary + summary_seq</strong> (tóm tắt dồn, seq đã gộp), status ACTIVE | WAITING_INPUT | ARCHIVED</td></tr>
+<tr><td><code>ai_messages</code></td><td>seq, role USER | MODEL, <code>content jsonb</code> = <code>Content.toJson()</code> nguyên bản, token vào/ra</td></tr>
+<tr><td><code>ai_pending_interactions</code></td><td>message_id, call_id, call_index, tool_name, type APPROVE_ACTION | ASK_USER | READ_RESULT, payload, status PENDING | APPROVED | REJECTED | ANSWERED | EXPIRED, response</td></tr>
+<tr><td><code>ai_user_memories</code></td><td>scope GLOBAL | PROJECT, category PREFERENCE | CONTEXT | HABIT, content, deleted_at (xóa mềm)</td></tr>
+<tr><td><code>ai_user_settings</code></td><td>memory_enabled, daily_request_limit (ghi đè hạn mức mặc định)</td></tr>
+<tr><td><code>ai_usage_logs</code></td><td>model, input/output/thinking/cached tokens, cost_usd = 0 (bản miễn phí)</td></tr>
+</table></div>
+<p class="small">Hibernate <code>ddl-auto: validate</code>; cột jsonb map bằng <code>@JdbcTypeCode(SqlTypes.JSON)</code> sang <code>String</code>. Thêm migration mới dùng <code>V2</code>.</p>
+
+<!-- ───────────────────────────── 6 ───────────────────────────── -->
+<h2 id="frontend">6. Frontend</h2>
+<ul>
+  <li><code>src/api.js</code> → <code>aiApi</code>: các API thường qua <code>apiClient</code>; <code>streamMessage</code>/<code>answerInteraction</code> dùng <code>fetch</code> + <code>ReadableStream</code>, tự parse SSE (tách theo dòng trống, đọc <code>event:</code>/<code>data:</code>), gặp 401 thì refresh token một lần rồi thử lại.</li>
+  <li><code>context/AiChatContext.jsx</code>: mở/đóng panel, <code>workItemId</code> đang mở, đăng ký hàm mở <code>WorkItemDetailModal</code> từ mã (ProjectDetailPage đăng ký; ngoài trang dự án thì chỉ báo toast).</li>
+  <li><code>hooks/useAiChat.js</code>: danh sách hội thoại, tin nhắn, gửi/nhận stream, duyệt thẻ, huỷ (<code>AbortController</code>). Gửi tin mới khi còn thẻ chờ → thẻ hiển thị "Đã bỏ qua".</li>
+  <li><code>components/ai/AiChatPanel.jsx</code> (panel phải 400px, luôn mount để giữ hội thoại, nút nổi <em>Trợ lý AI</em>), <code>AiMessage.jsx</code> (chip tool, markdown tối giản, mã <code>AUTH-12</code> thành link), <code>AiApprovalCard.jsx</code> (Duyệt / Bỏ qua / Sửa tham số JSON), <code>AiChoiceChips.jsx</code>, <code>AiMemoryPanel.jsx</code> (tab Bộ nhớ AI).</li>
+  <li>Gắn vào <code>WorkspaceLayout</code>; <code>projectId</code> lấy bằng <code>useMatch('/w/:workspaceId/projects/:projectId/*')</code>.</li>
+</ul>
+
+<!-- ───────────────────────────── 7 ───────────────────────────── -->
+<h2 id="chay">7. Cài đặt &amp; chạy</h2>
+<h3>Khóa</h3>
+<ol class="steps">
+  <li><strong>ANTHROPIC_API_KEY</strong>: tạo tại <a href="https://platform.claude.com">platform.claude.com</a> → Settings → API Keys (cần nạp credit, tối thiểu khoảng $5). Đặt vào <code>ai-service/src/main/resources/ai-secrets.yml</code> (<code>ai.agent.anthropic-api-key</code>, gitignored) hoặc biến môi trường. Model mặc định <code>claude-opus-5-5</code>, việc nhẹ dùng <code>claude-haiku-5-5</code>; đổi <code>ai.agent.model</code> sang <code>claude-sonnet-5-5</code> / <code>claude-haiku-5-5</code> để giảm chi phí.</li>
+  <li><strong>AI_TOOLS_API_KEY</strong>: chuỗi ngẫu nhiên (<code>openssl rand -hex 32</code>), đặt <strong>cùng giá trị</strong> cho ai-service và work-service.</li>
+  <li>Không ghi hai khóa vào file commit. IntelliJ: Run/Debug Configuration → Environment variables. Docker: để trong <code>infrastructure/.env</code> (gitignored).</li>
+</ol>
+<div class="callout warn">Bản miễn phí có thể được Google dùng để cải thiện sản phẩm và hạn mức thấp (vài request/phút, vài trăm/ngày tính theo project Google). Chỉ demo trên dữ liệu mẫu; <code>daily-request-limit-per-user</code> mặc định 40 để chia lượt giữa các thành viên.</div>
+<h3>Chạy từ IntelliJ (mặc định trên máy này)</h3>
+<pre><code># 1. Hạ tầng (DB, Keycloak 9998, Redis, MinIO, Mailpit…)
+cd infrastructure &amp;&amp; docker compose -f docker-compose.tuananh.yml up -d
+
+# 2. Chạy lần lượt từ IDE với VM option  -Dspring.profiles.active=tuananh
+#    api-gateway (9991), identity-service (9992), workspace-service (9997),
+#    work-service (9993)  ← env AI_TOOLS_API_KEY
+#    ai-service   (9995)  ← env ANTHROPIC_API_KEY, AI_TOOLS_API_KEY
+#    ai-service chạy Flyway V1 (tạo 6 bảng ai_*) rồi boot với ddl-auto=validate.
+
+# 3. Frontend
+cd frontend &amp;&amp; npm run dev      # .env.local đã trỏ VITE_GATEWAY_URL=http://127.0.0.1:9991</code></pre>
+<h3>Compile/kiểm tra không cần cài thêm gì</h3>
+<pre><code>cd backend
+export JAVA_HOME="C:\\Users\\anh.nvt\\.jdks\\ms-21.0.12"       # JDK 21 của IntelliJ
+MVN=/c/Users/anh.nvt/.m2/wrapper/dists/apache-maven-3.9.16/56ba1f9f/bin/mvn.cmd
+"$MVN" -q -o -pl ai-service,work-service -am compile          # -o: offline (bỏ khi thêm dependency)
+
+cd ../frontend &amp;&amp; npm run build</code></pre>
+<h3>Cổng &amp; route</h3>
+<div class="tbl"><table>
+<tr><th>Thành phần</th><th>Nhóm (808x)</th><th>Cá nhân <code>tuananh</code> (999x)</th></tr>
+<tr><td>ai-service</td><td>8084</td><td>9995</td></tr>
+<tr><td>Gateway route</td><td colspan="2"><code>/ai/api/**</code>, <code>/ai/actuator/**</code> → ai-service, <code>StripPrefix=1</code> (có trong cả <code>application.yml</code> lẫn <code>application-tuananh.yml</code>)</td></tr>
+<tr><td>Vite / nginx</td><td colspan="2">proxy <code>/ai</code> → gateway; nginx tắt <code>proxy_buffering</code>, <code>proxy_read_timeout 300s</code> cho SSE</td></tr>
+<tr><td>Docker</td><td colspan="2"><code>docker-compose.tuananh.yml --profile app</code> có <code>ai-service</code> (work-service vẫn ở host qua <code>host.docker.internal:9993</code>). Dockerfile mọi service COPY đủ 7 pom.</td></tr>
+</table></div>
+
+<!-- ───────────────────────────── 8 ───────────────────────────── -->
+<h2 id="kiem-tra">8. Kiểm tra thủ công theo mốc</h2>
+<p class="small">Trong phiên thực thi 13/11/2026 Docker không chạy và chưa có <code>GEMINI_API_KEY</code>, nên các bước dưới đây <strong>chưa được chạy</strong>; code đã compile và frontend đã build.</p>
+<h3>M1 – khởi động</h3>
+<pre><code># log ai-service: "Migrating schema ... to version 1 - ai agent core", không có lỗi SchemaManagementException
+curl -s localhost:9995/actuator/health</code></pre>
+<h3>M4 – endpoint nội bộ (gọi thẳng work-service, không qua gateway)</h3>
+<pre><code>curl -s -X POST localhost:9993/internal/ai-tools/get-sprint-progress \
+  -H "X-API-Key: $AI_TOOLS_API_KEY" -H "X-User-Id: &lt;sub của một thành viên&gt;" \
+  -H "Content-Type: application/json" -d '{"projectId":"&lt;uuid dự án&gt;"}'
+# Mong đợi: 200 + JSON sprint; sai khóa → 401; user không thuộc dự án → 403; thiếu projectId → 400</code></pre>
+<h3>M3 – SSE qua gateway</h3>
+<pre><code>TOKEN=&lt;access token của user&gt;
+CID=$(curl -s -X POST localhost:9991/ai/api/v1/ai/agent/conversations -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{"projectId":"&lt;uuid&gt;"}' | jq -r .data.id)
+curl -N -X POST localhost:9991/ai/api/v1/ai/agent/conversations/$CID/messages \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"text":"Sprint hiện tại còn bao nhiêu point?","context":{"projectId":"&lt;uuid&gt;","timezone":"Asia/Ho_Chi_Minh"}}'
+# Mong đợi các sự kiện về lần lượt: tool_started get_sprint_progress → tool_finished → text_delta → done</code></pre>
+<h3>M5–M7 – trên giao diện</h3>
+<ul>
+  <li>Mở một dự án → nút <em>Trợ lý AI</em> góc phải dưới → hỏi "Sprint hiện tại còn bao nhiêu point?": chip tool hiện rồi chuyển dấu tích, câu trả lời có mã công việc bấm được.</li>
+  <li>"Tạo 3 subtask cho AUTH-12" → thẻ duyệt → <em>Duyệt</em> → subtask xuất hiện trên board. Thử <em>Bỏ qua</em>; thử bấm Duyệt hai lần (lần hai báo đã xử lý); gửi tin mới khi thẻ đang chờ (thẻ chuyển "Đã bỏ qua").</li>
+  <li>"Giao việc login cho Nam" khi có nhiều người/việc khớp → chip lựa chọn.</li>
+  <li>"Nhớ giúp tôi là tôi phụ trách backend" → notice "Đã ghi nhớ"; mở hội thoại mới hỏi "tôi phụ trách mảng nào?" → trả lời đúng; tắt bộ nhớ trong tab Bộ nhớ AI rồi hỏi lại → không còn nhớ.</li>
+  <li>Dừng giữa chừng bằng nút vuông → <code>done(CANCELLED)</code>, phần đã nhận được giữ lại.</li>
+</ul>
+
+<!-- ───────────────────────────── 9 ───────────────────────────── -->
+<h2 id="eval">9. Bộ đánh giá 30 câu (M8)</h2>
+<p>Câu hỏi ở <code>ai-service/src/main/resources/eval/questions.yaml</code> (16 đọc, 7 ghi, 2 mơ hồ, 2 bộ nhớ, 3 ngoài phạm vi). Runner chạy orchestrator với Claude thật trên một dự án mẫu (khuyến nghị dự án demo <em>Mộc Coffee</em>), gặp thẻ duyệt thì dừng ở đó và ghi nhận tool đã chọn.</p>
+<pre><code># VM options của ai-service trong IntelliJ (hoặc java -jar ... với các -D tương ứng)
+-Dspring.profiles.active=tuananh,eval
+-Deval.user-id=&lt;Keycloak sub của người chạy&gt;
+-Deval.project-id=&lt;uuid dự án mẫu&gt; -Deval.workspace-id=&lt;uuid workspace&gt;
+-Deval.sample-code=MOC-1          # thay cho {CODE} trong câu hỏi
+-Deval.delay-ms=12000             # giãn cách để không vượt hạn mức/phút
+-Deval.output=eval-results.csv</code></pre>
+<p>CSV gồm: <code>id, question, toolsCalled, expectedTools, toolMatch, askedUser, expectAskUser, askMatch, answerMatch, status, iterations, durationMs, inputTokens, outputTokens</code>. Cuối chạy in tổng kết: tỉ lệ chọn đúng tool, tỉ lệ hỏi lại hợp lý, số vòng trung bình/lớn nhất, thời gian trung bình, tổng token; rồi thoát.</p>
+
+<!-- ───────────────────────────── 10 ───────────────────────────── -->
+<h2 id="lech">10. Quyết định thiết kế &amp; điểm lệch so với kế hoạch</h2>
+<div class="tbl"><table>
+<tr><th>Kế hoạch</th><th>Thực tế / quyết định</th><th>Lý do</th></tr>
+<tr><td><code>ai-service</code> đã có, <code>StoryDraftService</code> dùng Claude</td><td>Module <strong>tạo mới từ đầu</strong>; không có gì để chuyển sang Gemini</td><td>Repo chưa có module này (chỉ trong docs)</td></tr>
+<tr><td>SDK <code>google-genai</code> 2.x</td><td>1.57.0 (bản mới nhất trên Maven Central)</td><td>Không tồn tại 2.x; API giống Phụ lục A</td></tr>
+<tr><td>Jwt giả chỉ có <code>sub</code></td><td>Giữ; <strong>Global ADMIN không bypass</strong> khi đi qua AI</td><td>Đã chốt: AI chỉ làm được điều user làm được trong dự án</td></tr>
+<tr><td><code>read_attachment</code> trả ảnh/PDF base64 cho Gemini</td><td><strong>Text-only</strong>: pdfbox + poi-ooxml trích text; ảnh chỉ trả thông tin tệp</td><td><code>ToolResult</code> kiểu String; base64 10 MB bị cắt vô nghĩa</td></tr>
+<tr><td><code>LlmClient</code>, <code>ConversationStore</code> là interface</td><td>Lớp cụ thể</td><td>Một bản cài, không cần abstraction</td></tr>
+<tr><td>Tiêu đề hội thoại bằng light-model</td><td>Mặc định cắt từ tin đầu; bật <code>ai.agent.title-with-llm</code> mới gọi model</td><td>Tiết kiệm hạn mức miễn phí</td></tr>
+<tr><td>M3 trả 409 khi <code>WAITING_INPUT</code></td><td>Làm thẳng hành vi M6: thẻ chờ chuyển EXPIRED, trả lời "Người dùng bỏ qua"</td><td>Tránh viết hai lần</td></tr>
+<tr><td><code>daily-request-limit-per-user: 200</code></td><td>40</td><td>Hạn mức miễn phí tính theo project Google, một câu hỏi tốn 2–5 request</td></tr>
+<tr><td>Bảng <code>ai_conversations</code></td><td>Thêm <code>summary_seq</code></td><td>Tóm tắt dồn không lặp lại phần đã tóm tắt</td></tr>
+<tr><td>Script seed dự án mẫu cho M8</td><td>Chưa làm; dùng dự án demo có sẵn + tham số <code>-Deval.*</code></td><td>Seed đầy đủ (project, role, status, type, item) tốn công hơn giá trị mang lại</td></tr>
+<tr><td>Build bằng <code>mvn</code> CLI</td><td>Maven 3.9.16 từ wrapper + JDK 21 của IntelliJ (xem mục 7)</td><td>Máy không có Maven trên PATH</td></tr>
+</table></div>
+
+<!-- ───────────────────────────── 11 ───────────────────────────── -->
+<h2 id="han-che">11. Hạn chế &amp; việc tiếp theo</h2>
+<ul>
+  <li>Chưa stream từng chữ (mỗi vòng một <code>text_delta</code>); có thể nâng cấp bằng <code>client.beta().messages().createStreaming</code>.</li>
+  <li>Khóa hội thoại trong bộ nhớ → chỉ đúng khi chạy một instance ai-service.</li>
+  <li>Bỏ giao việc ("none") chưa hỗ trợ vì <code>UpdateWorkItemRequest</code> bỏ qua <code>assigneeId = null</code>; trợ lý sẽ hướng dẫn làm trên giao diện.</li>
+  <li><code>search_past_conversations</code> dùng ILIKE trên JSON – đủ cho demo, không phải tìm kiếm ngữ nghĩa (giai đoạn 3: embedding).</li>
+  <li>Cần chạy toàn bộ kịch bản mục 8 và bộ đánh giá mục 9 khi có khóa Claude và hạ tầng; ghi kết quả vào <code>PLAN.md</code> (Nhật ký thay đổi).</li>
+</ul>
+
+<p class="meta">Tài liệu liên quan: <code>docs/ai-agent/PLAN.md</code> (kế hoạch gốc, checklist, nhật ký thực thi), <code>backend/ai-service/src/main/resources/agent-tools.yml</code> (định nghĩa 19 tool), <code>CLAUDE.md</code> (ghi chú cho người phát triển).</p>
+</div>
+</body>
+</html>

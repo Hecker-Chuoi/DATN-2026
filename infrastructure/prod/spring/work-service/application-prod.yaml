@@ -40,6 +40,10 @@ app:
       url: http://workspace-service:8087
     notification:
       url: http://notification-service:9994
+# Khoá nội bộ cho ai-service gọi /internal/ai-tools/** (cùng giá trị AI_TOOLS_API_KEY với ai-service).
+# Ghi đè KHÔNG kèm giá trị mặc định: application.yaml có khoá mặc định viết cứng trong repo, không được dùng ở production.
+ai-tools:
+  api-key: ${AI_TOOLS_API_KEY}
 management:
   endpoint:
     health:

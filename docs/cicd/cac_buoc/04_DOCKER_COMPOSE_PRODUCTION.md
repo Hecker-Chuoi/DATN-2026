@@ -22,9 +22,9 @@
 .github/workflows/ci-cd.yml                  # GitHub Actions: test → build/push → SSH deploy (06)
 frontend/nginx.conf                           # đã thêm client_max_body_size 50m (upload đính kèm)
 infrastructure/
-├── docker-compose.prod.yml                   # 12 container: 6 hạ tầng + 5 service Spring + frontend
+├── docker-compose.prod.yml                   # 13 container: 6 hạ tầng + 6 service Spring + frontend
 ├── ci/
-│   └── build-push.sh                         # build + (quét) + push 6 image; đọc registry / SSO_HOST từ public.env
+│   └── build-push.sh                         # build + (quét) + push 7 image; đọc registry / SSO_HOST từ public.env
 ├── prod/
 │   ├── public.env                            # tên miền, scheme, registry, SMTP: NƠI DUY NHẤT (commit)
 │   ├── postgres/10-init-databases.sh         # 2 database, 2 user, pgcrypto (chạy một lần khi volume trống)
@@ -50,7 +50,7 @@ Các Dockerfile (6 cái) **không đổi**: `frontend/Dockerfile` đã có sẵn
  ─────────────────                       ──────────────                   ──────────────────────────
  git push main ─────────────────────────► test (mvn, npm) → build-push.sh <sha>
                                            ├─ đọc public.env (REGISTRY, SSO_HOST)
-                                           └─ push 6 image ─► Docker Hub
+                                           └─ push 7 image ─► Docker Hub
                                           tar cz docker-compose.prod.yml prod keycloak
                                            └─ ssh deployer@… "deploy <sha>" ─► deploy.sh
                                                                                ├─ giải nén → ~/datn/releases/<sha>/
@@ -85,23 +85,33 @@ Dữ liệu bền nằm ở **3 volume có tên**: `datn_postgres_data`, `datn_k
 7. **Một Postgres, hai database** (`datn_main_db` owner `datn`, `keycloak` owner `kc_user`), user ứng dụng **không phải superuser**. Migration V1 của work / workspace có `CREATE EXTENSION pgcrypto` → script khởi tạo tạo sẵn bằng superuser.
 8. **Realm Keycloak**: `make-realm.sh` chèn client secret (từ `secrets.env`) và redirect URI / web origin (từ `public.env`) vào bản export, giữ nguyên cấu hình Google. Keycloak chạy `start --import-realm`: **chỉ import khi realm chưa tồn tại**, sửa `realm.json` về sau không có tác dụng (sửa trong Admin Console).
 9. **Upload 50 MB**: container frontend và Nginx máy chủ đều `client_max_body_size 50m` (nginx mặc định chỉ 1 MB; ở bản Minikube Ingress đứng trước nên không bị).
-10. **Deploy kiểu thay thế, có gián đoạn ngắn**: `docker compose up -d` chỉ tạo lại container có image mới (5 service + frontend; hạ tầng giữ nguyên). Mỗi service tắt rồi bật nên có khoảng gián đoạn vài chục giây, kéo dài hơn vì chuỗi `depends_on`. Chấp nhận được cho đồ án; muốn không gián đoạn cần chạy 2 bản song song (tốn thêm ~2 GB RAM) → không làm.
+10. **Deploy kiểu thay thế, có gián đoạn ngắn**: `docker compose up -d` chỉ tạo lại container có image mới (6 service + frontend; hạ tầng giữ nguyên). Mỗi service tắt rồi bật nên có khoảng gián đoạn vài chục giây, kéo dài hơn vì chuỗi `depends_on`. Chấp nhận được cho đồ án; muốn không gián đoạn cần chạy 2 bản song song (tốn thêm ~2 GB RAM) → không làm.
 11. **`app.cluster.redis-enabled: true`** giữ nguyên trong profile `prod` của work / notification: một instance vẫn chạy bình thường, Redis có sẵn nên không cần tắt.
 12. **JVM**: `-XX:MaxRAMPercentage=65 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError`; heap tính theo `mem_limit` của container. `ExitOnOutOfMemoryError` + `restart: unless-stopped` = hết bộ nhớ thì container tự khởi động lại thay vì treo. Keycloak **không** thêm `-XX:+UseSerialGC` (`kc.sh` đã chọn ParallelGC, hai cờ cùng lúc làm JVM không khởi động) và heap 40% (50% từng bị OOMKilled / sát limit).
 
 13. **Tích hợp GitHub của work-service** (đến từ `develop`, migration V11–V16): `work-service` đọc `github.*`; compose truyền `GITHUB_CLIENT_ID` (từ `public.env`), `GITHUB_CLIENT_SECRET` / `GITHUB_TOKEN_ENCRYPTION_KEY` / `GITHUB_STATE_SECRET` (từ `secrets.env`), `GITHUB_REDIRECT_URI` và `GITHUB_WEBHOOK_URL` (tự sinh từ `APP_HOST`). Mọi biến đều có thể trống: service vẫn chạy (đã thử nâng cấp DB từ V10 lên V16, `healthy`), chỉ chưa dùng được GitHub. Endpoint webhook `/work/api/v1/work/integrations/github/webhook` được gateway và work-service cho qua không JWT (xác thực bằng chữ ký HMAC), Nginx / frontend nginx không cần sửa. Cách bật: [03 §5b](03_SECRET_VA_CAU_HINH.md#5b-tích-hợp-github-oauth-app).
 
+14. **Trợ lý AI (`ai-service`)** (đến từ `develop`, nhánh `feat/agent-intergration-v2`; Spring Boot cổng 8084, gọi Claude API): đã đưa vào compose (container thứ 13, `mem_limit` 640m) cùng các sửa cần thiết để chạy production:
+    - **Thiếu actuator**: `ai-service/pom.xml` không có `spring-boot-starter-actuator` nên không có `/actuator/health/readiness`; đã thêm dependency (5 service kia đã có) để `healthcheck` và smoke test `/ai/actuator/health` dùng được.
+    - **Profile `prod` riêng** (`prod/spring/ai-service/application-prod.yaml`): DB `postgres:5432/datn_main_db` (Flyway riêng `flyway_ai_schema_history`, bảng `ai_*`), Redis `redis`, JWT như các service khác, `ai.agent.work-service-url: http://work-service:8083` (gọi thẳng work-service qua mạng Docker, **không** qua gateway).
+    - **Route gateway**: profile `prod` của api-gateway **thay thế toàn bộ** danh sách route nên phải thêm `ai-service` (`/ai/api/**`, `/ai/actuator/**`, `StripPrefix=1`); thiếu thì mọi lời gọi `/ai/**` trả 401/404.
+    - **SSE**: lượt chat là `POST` trả `text/event-stream`. Nginx máy chủ có `location /ai/` với `proxy_buffering off`, `proxy_read_timeout 360s` (không thì sự kiện bị gom lại, giao diện đứng); `frontend/nginx.conf` cũng có `/ai/` tương tự.
+    - **Lỗi 403 tiềm ẩn đã sửa trong `frontend/nginx.conf`**: khối `/ai/` do `develop` thêm đặt `X-Forwarded-Proto $scheme` (trong container là `http`), khiến gateway tưởng trình duyệt ở `http://` trong lúc `Origin` là `https://`, `POST` bị 403 (đúng lỗi đã ghi ở các khối khác); đã đổi sang `$datn_forwarded_proto` / `$datn_forwarded_host` như các khối còn lại.
+    - **Khoá nội bộ**: `AI_TOOLS_API_KEY` dùng chung ai-service ↔ work-service (`/internal/ai-tools/**`). Repo có khoá mặc định viết cứng ở hai file `application.yaml`; profile `prod` của cả hai ghi đè **không kèm mặc định** và compose đặt `AI_TOOLS_API_KEY` là biến **bắt buộc** (`${AI_TOOLS_API_KEY:?...}`), nên thiếu khoá thì deploy dừng sớm và tự rollback thay vì chạy với khoá công khai. `ANTHROPIC_API_KEY` thì tuỳ chọn. Chi tiết: [03 §5c](03_SECRET_VA_CAU_HINH.md#5c-trợ-lý-ai-ai-service-claude-api).
+    - Dockerfile của `ai-service` (do nhóm viết) chạy bằng **root**, không như 5 service còn lại (user 10001); chưa sửa vì không ảnh hưởng chạy, nên cân nhắc đồng bộ sau.
+
 ---
 
 ## 4. Ngân sách RAM
 
-Máy `t3.large` có ~7,6 GB; HĐH + Docker + Nginx chiếm ~0,8 GB. Cột "Đo thử" là RAM thật khi **cả 12 container đã lên và rảnh** (Docker Desktop trên máy dev, JVM giống hệt; số trên EC2 sẽ hơi khác, đo lại ở [05 §6](05_TRIEN_KHAI_LAN_DAU.md#6-đo-ram-và-chỉnh)):
+Máy `t3.large` có ~7,6 GB; HĐH + Docker + Nginx chiếm ~0,8 GB. Cột "Đo thử" là RAM thật khi **cả 12 container (chưa có ai-service) đã lên và rảnh** (Docker Desktop trên máy dev, JVM giống hệt; số trên EC2 sẽ hơi khác, đo lại ở [05 §6](05_TRIEN_KHAI_LAN_DAU.md#6-đo-ram-và-chỉnh)):
 
 | Container | `mem_limit` | Đo thử |
 |---|---|---|
 | keycloak | 1280m | ~893 MiB |
 | kafka (`-Xms384m -Xmx384m`, giữ log 72 giờ) | 768m | ~313 MiB |
 | work-service | 768m | ~415 MiB |
+| ai-service | 640m | ~288 MiB |
 | notification-service | 640m | ~330 MiB |
 | workspace-service | 640m | ~320 MiB |
 | identity-service | 640m | ~257 MiB |
@@ -111,7 +121,7 @@ Máy `t3.large` có ~7,6 GB; HĐH + Docker + Nginx chiếm ~0,8 GB. Cột "Đo t
 | redis (`maxmemory 64mb`, `allkeys-lru`) | 96m | ~8 MiB |
 | mailpit (giữ tối đa 200 thư) | 64m | ~16 MiB |
 | frontend (nginx) | 64m | ~15 MiB |
-| **Tổng** | **6,3 GB (giới hạn, không ai dùng hết cùng lúc)** | **≈ 3,0 GiB** (máy dev) / **≈ 2,2 GiB** (EC2, đo ngay sau khi deploy xong, xem 00) |
+| **Tổng (13 container)** | **6,9 GB (giới hạn, không ai dùng hết cùng lúc)** | **≈ 3,0 GiB** (máy dev, 12 container) → **≈ 3,3 GiB** với ai-service (máy dev); **≈ 2,2 GiB** (EC2, 12 container, đo ngay sau khi deploy xong, xem 00) |
 
 So với Minikube cũ (~2,6 GiB pod + ~1,2 GiB lõi Kubernetes): dư thêm ~1 GB. Lúc khởi động nhiều JVM chạy cùng lúc nên đỉnh RAM và CPU cao hơn mức rảnh, chuỗi `depends_on` giúp dàn ra.
 
@@ -132,6 +142,8 @@ So với Minikube cũ (~2,6 GiB pod + ~1,2 GiB lõi Kubernetes): dư thêm ~1 GB
 - Đường SSH của CI: khoá riêng của Actions → `deployer@<IP public>` từ máy ngoài mạng AWS, `StrictHostKeyChecking=yes`, khoá `command="…deploy.sh",no-pty`: `check` chạy được, lệnh lạ bị từ chối, khoá cũ (Jenkins) bị thu hồi; trước đó đường `deploy` qua stdin cũng đã chạy thật từ một máy khác qua SSH.
 - Nginx máy chủ + certbot (cấp được chứng chỉ sslip.io cho cả `app.` và `sso.`), `https://…/` 200, WebSocket `/notification/ws` **101**, upload 3 MB không bị 413, đăng ký → thư trong Mailpit → xác thực → đăng nhập → tạo workspace (POST không 403).
 - **Hai lỗi thật đã tìm ra và đã sửa** khi chạy lần đầu (ghi ở [05 §10](05_TRIEN_KHAI_LAN_DAU.md#10-xử-lý-sự-cố)): `deploy.sh` thoát im lặng vì thư mục hiện tại của `sudo -u deployer` (đã thêm `cd /`), và Keycloak `AccessDeniedException` vì `realm.json` quyền 600 (đã thêm `chmod 644` trong `make-realm.sh`).
+
+**Kiểm chứng riêng cho `ai-service` và code mới từ `develop`** (28/11/2026, máy dev, 7 image build bằng đúng Dockerfile trong repo, **nâng cấp** stack đang chạy bản cũ lên bản mới): **13/13 container `healthy`** (ai-service lên sau ~22 giây, Flyway `flyway_ai_schema_history` áp dụng V1–V2); smoke `/identity|work|workspace|ai/actuator/health` đều 200; `POST /ai/...` kèm `Origin: https://…` + `X-Forwarded-Proto: https` chưa đăng nhập trả **401** (không phải 403); đăng ký → xác thực → đăng nhập → `POST` tạo hội thoại AI **200**; gửi tin khi chưa có `ANTHROPIC_API_KEY` trả ngay một sự kiện SSE `error` rõ ràng (không treo); khoá mặc định trong repo bị work-service từ chối **401**, khoá thật được nhận; `/work/internal/ai-tools/**` qua gateway không tới được. Migration work-service V11–V16 chạy tiếp trên DB đang ở V10, service `healthy`. **Chưa thử** gọi Claude thật (cần `ANTHROPIC_API_KEY`) và luồng GitHub thật (cần OAuth App).
 
 **Chưa chạy:** lượt chạy workflow thật trên GitHub (cần bạn tạo secret + mở cổng 22, [06](06_GITHUB_ACTIONS_CICD.md)), đăng nhập Google, gửi mail thật qua SMTP. Danh sách kiểm tra ở [06 §9](06_GITHUB_ACTIONS_CICD.md#9-kịch-bản-kiểm-tra).
 

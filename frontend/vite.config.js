@@ -12,12 +12,13 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       port: 5173,
-      // Proxy /identity/**, /work/**, /workspace/** và /notification/** tới API Gateway khi dev
+      // Proxy /identity/**, /work/**, /workspace/**, /ai/** và /notification/** tới API Gateway khi dev
       // (tránh CORS, giống reverse-proxy production).
       proxy: {
         '/identity': { target: gateway, changeOrigin: true },
         '/work': { target: gateway, changeOrigin: true },
         '/workspace': { target: gateway, changeOrigin: true },
+        '/ai': { target: gateway, changeOrigin: true },
         // Có dấu "/" cuối để không nuốt route giao diện /notifications; ws: true cho WebSocket /notification/ws
         '/notification/': { target: gateway, changeOrigin: true, ws: true },
       },

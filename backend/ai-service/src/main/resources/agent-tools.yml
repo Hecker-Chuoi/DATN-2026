@@ -1,0 +1,299 @@
+# Tool của work-service: mỗi mục = một endpoint POST /internal/ai-tools/{path}.
+# ai-service tự gửi kèm projectId/workItemId từ ngữ cảnh trang, model không cần truyền.
+# summary: mẫu câu hiện trên chip/thẻ duyệt; {field} = tham số, {count} = số phần tử mảng đầu tiên.
+tools:
+
+  # ─── ĐỌC ──────────────────────────────────────────────────────────────────
+  - name: search_work_items
+    kind: READ
+    path: search-work-items
+    requiresProject: true
+    description: >
+      Tìm công việc trong dự án đang mở theo từ khóa, loại, trạng thái, người được giao, độ ưu tiên hoặc sprint.
+      Dùng khi người dùng hỏi "có task nào về…", "việc của Nam", "bug chưa xử lý", "backlog còn gì".
+      Trả về tối đa 20 công việc (code, summary, type, status, assignee, priority, storyPoints, dueDate, sprint) kèm totalFound.
+    summary: "Tìm công việc {keyword}"
+    parameters:
+      type: object
+      properties:
+        keyword: { type: string, description: "Từ khóa trong tiêu đề/mô tả (tùy chọn)" }
+        typeName: { type: string, description: "Tên loại: Epic, Story, Task, Bug, Subtask…" }
+        statusName: { type: string, description: "Tên trạng thái chính xác, ví dụ To Do, In Progress, Done" }
+        statusCategory: { type: string, enum: [TODO, IN_PROGRESS, DONE], description: "Nhóm trạng thái, dùng khi không biết tên trạng thái" }
+        assigneeName: { type: string, description: "Tên người được giao; \"me\" = người đang chat; \"unassigned\" = chưa giao" }
+        priority: { type: string, enum: [LOWEST, LOW, MEDIUM, HIGH, HIGHEST] }
+        sprintName: { type: string, description: "Tên sprint; \"backlog\" = chưa vào sprint nào; \"active\" = sprint đang chạy" }
+        limit: { type: integer, description: "Số kết quả tối đa (mặc định 20)" }
+
+  - name: get_work_item
+    kind: READ
+    path: get-work-item
+    requiresProject: false
+    description: >
+      Xem chi tiết một công việc theo mã (ví dụ AUTH-12) hoặc công việc đang mở nếu bỏ trống mã:
+      mô tả, trạng thái, người giao, story point, ngày hạn, subtask, các bước chuyển trạng thái khả dụng, 5 bình luận mới nhất.
+    summary: "Xem công việc {code}"
+    parameters:
+      type: object
+      properties:
+        code: { type: string, description: "Mã công việc, ví dụ AUTH-12. Bỏ trống = công việc đang mở trên màn hình" }
+
+  - name: get_my_issues
+    kind: READ
+    path: get-my-issues
+    requiresProject: false
+    description: >
+      Danh sách công việc đang được giao cho chính người dùng (trong dự án đang mở, hoặc mọi dự án nếu chưa mở dự án).
+      Mặc định chỉ gồm việc chưa xong; truyền statusCategory=DONE để xem việc đã xong.
+      Dùng khi hỏi "việc của tôi", "hôm nay tôi làm gì", "tôi còn bao nhiêu task".
+    summary: "Xem công việc của bạn"
+    parameters:
+      type: object
+      properties:
+        statusCategory: { type: string, enum: [TODO, IN_PROGRESS, DONE], description: "Lọc theo nhóm trạng thái (tùy chọn)" }
+        limit: { type: integer, description: "Số kết quả tối đa (mặc định 20)" }
+
+  - name: get_project_metadata
+    kind: READ
+    path: get-project-metadata
+    requiresProject: true
+    description: >
+      Thông tin dự án đang mở: tên, mã (key), trưởng dự án, số thành viên, các loại công việc, danh sách trạng thái,
+      các sprint và trạng thái của chúng. Gọi trước khi tạo/sửa công việc nếu chưa biết tên loại hay trạng thái hợp lệ.
+    summary: "Xem thông tin dự án"
+    parameters:
+      type: object
+      properties: {}
+
+  - name: list_project_members
+    kind: READ
+    path: list-project-members
+    requiresProject: true
+    description: >
+      Danh sách thành viên dự án (tên, username, email, vai trò). Dùng để tìm đúng người khi giao việc hoặc khi người dùng hỏi ai trong dự án.
+    summary: "Xem thành viên dự án"
+    parameters:
+      type: object
+      properties: {}
+
+  - name: list_sprints
+    kind: READ
+    path: list-sprints
+    requiresProject: true
+    description: >
+      Danh sách sprint của dự án kèm trạng thái (FUTURE, ACTIVE, CLOSED), ngày bắt đầu/kết thúc, số việc và story point.
+    summary: "Xem danh sách sprint"
+    parameters:
+      type: object
+      properties:
+        state: { type: string, enum: [FUTURE, ACTIVE, CLOSED], description: "Lọc theo trạng thái (tùy chọn)" }
+
+  - name: get_sprint_progress
+    kind: READ
+    path: get-sprint-progress
+    requiresProject: true
+    description: >
+      Tiến độ một sprint: tổng story point, point đã xong và còn lại, số việc theo nhóm trạng thái, số ngày còn lại,
+      và danh sách việc chưa xong. Bỏ trống sprintName để lấy sprint đang chạy.
+    summary: "Xem tiến độ sprint {sprintName}"
+    parameters:
+      type: object
+      properties:
+        sprintName: { type: string, description: "Tên sprint; bỏ trống = sprint đang chạy" }
+
+  - name: get_agile_report
+    kind: READ
+    path: get-agile-report
+    requiresProject: true
+    description: >
+      Báo cáo agile: burndown (theo sprint), velocity (các sprint đã đóng) hoặc cfd (cumulative flow).
+      Dùng khi hỏi về tốc độ nhóm, sprint có kịp không, xu hướng tồn đọng.
+    summary: "Xem báo cáo {reportType}"
+    parameters:
+      type: object
+      properties:
+        reportType: { type: string, enum: [burndown, velocity, cfd] }
+        sprintName: { type: string, description: "Sprint cần xem (burndown/cfd); bỏ trống = sprint đang chạy" }
+      required: [reportType]
+
+  - name: get_contribution_report
+    kind: READ
+    path: get-contribution-report
+    requiresProject: true
+    description: >
+      Báo cáo đóng góp của từng thành viên: điểm, số việc hoàn thành, tỉ lệ đúng hạn, số lần bị mở lại, cảnh báo.
+      Dùng khi hỏi "ai làm nhiều nhất", "đóng góp sprint này".
+    summary: "Xem báo cáo đóng góp"
+    parameters:
+      type: object
+      properties:
+        sprintName: { type: string, description: "Tên sprint; bỏ trống = toàn dự án" }
+
+  - name: list_attachments
+    kind: READ
+    path: list-attachments
+    requiresProject: false
+    description: >
+      Liệt kê tệp đính kèm của một công việc (tên, kích thước, loại, người tải lên).
+    summary: "Xem tệp đính kèm của {code}"
+    parameters:
+      type: object
+      properties:
+        code: { type: string, description: "Mã công việc; bỏ trống = công việc đang mở" }
+
+  - name: read_attachment
+    kind: READ
+    path: read-attachment
+    requiresProject: false
+    description: >
+      Đọc nội dung văn bản của một tệp đính kèm (PDF, DOCX, XLSX, TXT/CSV/MD/JSON; tối đa 20.000 ký tự).
+      Ảnh chỉ trả về thông tin tệp. Dùng khi người dùng hỏi "tóm tắt tài liệu đính kèm".
+    summary: "Đọc tệp {fileName}"
+    parameters:
+      type: object
+      properties:
+        code: { type: string, description: "Mã công việc; bỏ trống = công việc đang mở" }
+        fileName: { type: string, description: "Tên tệp (khớp một phần cũng được); bỏ trống nếu chỉ có một tệp" }
+
+  # ─── GHI (luôn qua thẻ duyệt) ─────────────────────────────────────────────
+  - name: create_work_item
+    kind: WRITE
+    path: create-work-item
+    requiresProject: true
+    description: >
+      Tạo một công việc mới (Epic/Story/Task/Bug) trong dự án đang mở. Chỉ chạy sau khi người dùng duyệt.
+      Nếu chưa chắc tên loại/người/sprint, gọi get_project_metadata hoặc list_project_members trước.
+    summary: "Tạo {typeName}: {summary}"
+    parameters:
+      type: object
+      properties:
+        typeName: { type: string, description: "Tên loại công việc, ví dụ Task, Bug, Story, Epic" }
+        summary: { type: string, description: "Tiêu đề" }
+        description: { type: string }
+        priority: { type: string, enum: [LOWEST, LOW, MEDIUM, HIGH, HIGHEST] }
+        assigneeName: { type: string, description: "Tên người được giao hoặc \"me\"" }
+        parentCode: { type: string, description: "Mã công việc cha (Epic cho Story/Task, Story/Task cho Subtask)" }
+        sprintName: { type: string }
+        storyPoints: { type: number }
+        startDate: { type: string, description: "yyyy-MM-dd" }
+        dueDate: { type: string, description: "yyyy-MM-dd" }
+      required: [typeName, summary]
+
+  - name: create_subtasks
+    kind: WRITE
+    path: create-subtasks
+    requiresProject: true
+    description: >
+      Tạo nhiều subtask cho một công việc cha. Chỉ chạy sau khi người dùng duyệt. Tạo lần lượt; nếu một subtask lỗi
+      thì trả về danh sách đã tạo và lỗi.
+    summary: "Tạo {count} subtask cho {parentCode}"
+    parameters:
+      type: object
+      properties:
+        parentCode: { type: string, description: "Mã công việc cha, ví dụ AUTH-12" }
+        subtasks:
+          type: array
+          items:
+            type: object
+            properties:
+              summary: { type: string }
+              description: { type: string }
+              assigneeName: { type: string, description: "Tên người được giao hoặc \"me\" (tùy chọn)" }
+              priority: { type: string, enum: [LOWEST, LOW, MEDIUM, HIGH, HIGHEST] }
+              dueDate: { type: string, description: "yyyy-MM-dd" }
+            required: [summary]
+      required: [parentCode, subtasks]
+
+  - name: update_work_item
+    kind: WRITE
+    path: update-work-item
+    requiresProject: false
+    description: >
+      Sửa thông tin một công việc: tiêu đề, mô tả, độ ưu tiên, story point, ngày bắt đầu/hạn, loại. Không đổi trạng thái
+      (dùng transition_work_item) hay người được giao (dùng assign_work_item). Chỉ chạy sau khi duyệt.
+    summary: "Cập nhật {code}"
+    parameters:
+      type: object
+      properties:
+        code: { type: string, description: "Mã công việc; bỏ trống = công việc đang mở" }
+        summary: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [LOWEST, LOW, MEDIUM, HIGH, HIGHEST] }
+        storyPoints: { type: number }
+        startDate: { type: string, description: "yyyy-MM-dd" }
+        dueDate: { type: string, description: "yyyy-MM-dd" }
+        typeName: { type: string }
+
+  - name: transition_work_item
+    kind: WRITE
+    path: transition-work-item
+    requiresProject: false
+    description: >
+      Chuyển trạng thái một công việc theo workflow (ví dụ sang In Progress, Done). Chỉ các bước chuyển hợp lệ từ trạng thái
+      hiện tại mới được chấp nhận; nếu không hợp lệ, công cụ trả về danh sách bước khả dụng. Chỉ chạy sau khi duyệt.
+    summary: "Chuyển {code} sang {targetStatus}"
+    parameters:
+      type: object
+      properties:
+        code: { type: string, description: "Mã công việc; bỏ trống = công việc đang mở" }
+        targetStatus: { type: string, description: "Tên trạng thái đích hoặc tên bước chuyển" }
+        comment: { type: string, description: "Ghi chú kèm theo (tùy chọn)" }
+        resolution: { type: string, description: "Kết luận khi đóng (DONE, WONT_DO, DUPLICATE…) (tùy chọn)" }
+      required: [targetStatus]
+
+  - name: assign_work_item
+    kind: WRITE
+    path: assign-work-item
+    requiresProject: false
+    description: >
+      Giao một công việc cho một thành viên dự án, cho chính mình ("me") hoặc bỏ giao ("none"). Chỉ chạy sau khi duyệt.
+    summary: "Giao {code} cho {assigneeName}"
+    parameters:
+      type: object
+      properties:
+        code: { type: string, description: "Mã công việc; bỏ trống = công việc đang mở" }
+        assigneeName: { type: string, description: "Tên/username/email thành viên, \"me\" hoặc \"none\"" }
+      required: [assigneeName]
+
+  - name: move_to_sprint
+    kind: WRITE
+    path: move-to-sprint
+    requiresProject: true
+    description: >
+      Đưa một hoặc nhiều công việc vào một sprint, hoặc trả về backlog (sprintName = "backlog"). Chỉ chạy sau khi duyệt.
+    summary: "Chuyển {count} công việc vào {sprintName}"
+    parameters:
+      type: object
+      properties:
+        codes: { type: array, items: { type: string }, description: "Danh sách mã công việc" }
+        sprintName: { type: string, description: "Tên sprint đích hoặc \"backlog\"" }
+      required: [codes, sprintName]
+
+  - name: add_comment
+    kind: WRITE
+    path: add-comment
+    requiresProject: false
+    description: >
+      Thêm bình luận vào một công việc, đứng tên người dùng đang chat. Chỉ chạy sau khi duyệt.
+    summary: "Bình luận vào {code}"
+    parameters:
+      type: object
+      properties:
+        code: { type: string, description: "Mã công việc; bỏ trống = công việc đang mở" }
+        body: { type: string, description: "Nội dung bình luận" }
+      required: [body]
+
+  - name: link_work_items
+    kind: WRITE
+    path: link-work-items
+    requiresProject: false
+    description: >
+      Tạo liên kết giữa hai công việc: BLOCKS (nguồn chặn đích), RELATES_TO, DUPLICATES, CAUSES. Chỉ chạy sau khi duyệt.
+    summary: "Liên kết {sourceCode} {linkType} {targetCode}"
+    parameters:
+      type: object
+      properties:
+        sourceCode: { type: string, description: "Mã công việc nguồn" }
+        targetCode: { type: string, description: "Mã công việc đích" }
+        linkType: { type: string, enum: [BLOCKS, RELATES_TO, DUPLICATES, CAUSES] }
+      required: [sourceCode, targetCode, linkType]

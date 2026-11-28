@@ -2,7 +2,7 @@
 # Hướng dẫn: docs/cicd/cac_buoc/06_GITHUB_ACTIONS_CICD.md
 #
 # - Pull request: chỉ chạy test + build frontend (không đụng tới secret, không deploy).
-# - Push vào main: test -> build + push 6 image (tag = git SHA 7 ký tự) -> deploy -> kiểm tra qua HTTPS.
+# - Push vào main: test -> build + push 7 image (tag = git SHA 7 ký tự) -> deploy -> kiểm tra qua HTTPS.
 # - Chạy tay (Actions > CI/CD > Run workflow): tick "deploy" để build + deploy một nhánh khác main (vd để thử).
 #
 # Secret cần tạo (Settings > Secrets and variables > Actions): DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, DEPLOY_SSH_KEY,
@@ -41,7 +41,7 @@ jobs:
           java-version: "21"
           cache: maven
       # Bỏ các *ApplicationTests (@SpringBootTest contextLoads): chúng cần Postgres / Keycloak thật.
-      # Còn lại là unit test thuần (540 test: work 344, workspace 48, notification 148; xanh với JDK 21).
+      # Còn lại là unit test thuần (549 test: work 344, workspace 48, notification 148, ai-service 9; xanh với JDK 21).
       - name: mvn verify
         working-directory: backend
         run: mvn -B -ntp verify '-Dtest=!*ApplicationTests' -Dsurefire.failIfNoSpecifiedTests=false
@@ -145,7 +145,7 @@ jobs:
         run: echo "$DH_TOKEN" | docker login -u "$DH_USER" --password-stdin
 
       # build-push.sh đọc REGISTRY và SSO_HOST từ infrastructure/prod/public.env (frontend nhúng URL Keycloak lúc build)
-      - name: Build + push 6 image
+      - name: Build + push 7 image
         run: bash infrastructure/ci/build-push.sh "$TAG"
 
       # Khoá SSH trên server bị khoá chặt bằng command="/home/deployer/deploy.sh": chỉ chạy được deploy | rollback | check.

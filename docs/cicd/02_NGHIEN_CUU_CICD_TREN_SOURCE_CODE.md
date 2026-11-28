@@ -21,7 +21,7 @@
 ```
 git push main ─► GitHub Actions (runner ubuntu-latest)
                    │ 1. Test backend (mvn verify) + build frontend         ← mọi PR / mọi lần push
-                   │ 2. docker build 6 image, tag = git SHA 7 ký tự
+                   │ 2. docker build 7 image, tag = git SHA 7 ký tự
                    │ 3. docker push ─────────────► Docker Hub
                    │ 4. tar (compose + cấu hình) | ssh deployer@datn-app "deploy <sha>"
                    ▼
@@ -38,7 +38,7 @@ git push main ─► GitHub Actions (runner ubuntu-latest)
 
 Một file compose, hai nhóm dịch vụ:
 - **Hạ tầng có trạng thái** (Postgres, Keycloak, Kafka, Redis, MinIO, Mailpit): dữ liệu nằm trong volume có tên. `up -d` chỉ tạo lại container khi **image / cấu hình của nó đổi**; deploy ứng dụng thường ngày không đụng tới.
-- **Ứng dụng** (5 service Spring Boot + frontend): image đổi mỗi lần deploy (tag = SHA).
+- **Ứng dụng** (6 service Spring Boot + frontend): image đổi mỗi lần deploy (tag = SHA).
 
 ---
 
@@ -77,7 +77,7 @@ Cây thư mục: xem [cac_buoc/04 §1](cac_buoc/04_DOCKER_COMPOSE_PRODUCTION.md#
 | notification-service | `backend/` | `backend/notification-service/Dockerfile` | `<DOCKERHUB_USER>/datn-notification-service` |
 | frontend | `frontend/` | `frontend/Dockerfile` | `<DOCKERHUB_USER>/datn-frontend` |
 
-> Build context backend **phải** là `backend/` (Dockerfile COPY đủ 6 pom vì parent pom liệt kê mọi module). Thêm module mới thì sửa cả các Dockerfile còn lại.
+> Build context backend **phải** là `backend/` (Dockerfile COPY đủ 7 pom (kể cả ai-service) vì parent pom liệt kê mọi module). Thêm module mới thì sửa cả các Dockerfile còn lại.
 
 ### 3.2. Chiến lược tag
 
@@ -90,10 +90,10 @@ Cây thư mục: xem [cac_buoc/04 §1](cac_buoc/04_DOCKER_COMPOSE_PRODUCTION.md#
 
 ### 3.4. Script build + push
 
-`infrastructure/ci/build-push.sh <tag>` lặp qua 6 service: `docker build` → (tuỳ chọn) `trivy image` chỉ báo cáo → `docker push`. Để trong script thay vì viết thẳng trong workflow: chạy tay được khi Actions hỏng, dễ test. Ý cần nhớ:
+`infrastructure/ci/build-push.sh <tag>` lặp qua 7 service: `docker build` → (tuỳ chọn) `trivy image` chỉ báo cáo → `docker push`. Để trong script thay vì viết thẳng trong workflow: chạy tay được khi Actions hỏng, dễ test. Ý cần nhớ:
 - `DOCKER_BUILDKIT=1` (Dockerfile backend dùng `RUN --mount=type=cache`).
 - `docker login` bằng **Access Token** (secret `DOCKERHUB_TOKEN`), `docker logout` khi xong.
-- Runner của GitHub là máy mới mỗi lần nên **không có cache layer**: 5 image backend build lại Maven mỗi lần (đo thực tế trên runner: cả 6 image 134 giây). Tối ưu sau: `docker/build-push-action` + `cache-from: type=gha`, hoặc chỉ build service có thay đổi.
+- Runner của GitHub là máy mới mỗi lần nên **không có cache layer**: 6 image backend build lại Maven mỗi lần (đo thực tế trên runner: khi còn 6 image: 134 giây). Tối ưu sau: `docker/build-push-action` + `cache-from: type=gha`, hoặc chỉ build service có thay đổi.
 
 ### 3.5. Docker Hub
 
@@ -153,10 +153,12 @@ Chi tiết và lệnh: [cac_buoc/06](cac_buoc/06_GITHUB_ACTIONS_CICD.md).
 11. **Docker Hub**: luôn `docker login` trước khi build (image nền `maven`, `eclipse-temurin`, `node`, `nginx` cũng kéo từ Docker Hub) để tránh `toomanyrequests`.
 12. **Line ending**: script `.sh`, Dockerfile, `infrastructure/prod/**` phải là LF (đã khai trong `.gitattributes`). `deploy.sh` còn tự bỏ `\r` khỏi file `.sh/.env/.yml/.yaml` trong gói, phòng gói tạo trên Windows.
 13. **Image MinIO**: `minio/minio` đã bị gỡ khỏi Docker Hub → dùng `cgr.dev/chainguard/minio:latest` (giống compose dev của nhóm); healthcheck `mc ready local`.
-14. **CI chạy test không có DB**: `mvn verify` trần đỏ ở `IdentityServiceApplicationTests.contextLoads` (cần Postgres); workflow bỏ `*ApplicationTests` (còn 540 unit test (work 344, workspace 48, notification 148), xanh với JDK 21). `npm run lint` có ~190 lỗi sẵn nên chạy với `continue-on-error`; `npm run build` xanh. Đã chạy thử cả hai trong container `maven:3.9.9-eclipse-temurin-21-alpine` / `node:22-alpine` trước khi đưa vào workflow.
+14. **CI chạy test không có DB**: `mvn verify` trần đỏ ở `IdentityServiceApplicationTests.contextLoads` (cần Postgres); workflow bỏ `*ApplicationTests` (còn 549 unit test (work 344, workspace 48, notification 148, ai-service 9), xanh với JDK 21). `npm run lint` có ~190 lỗi sẵn nên chạy với `continue-on-error`; `npm run build` xanh. Đã chạy thử cả hai trong container `maven:3.9.9-eclipse-temurin-21-alpine` / `node:22-alpine` trước khi đưa vào workflow.
 15. **`sudo -u deployer` giữ thư mục hiện tại của người gọi** (`/home/ubuntu`, deployer không vào được): `deploy.sh` có `cd /` ở đầu, nếu không `find` / `docker compose` lỗi rồi `set -e` thoát im lặng.
 16. **File bind-mount cho container chạy user khác root phải đọc được**: `realm.json` sinh với quyền 600 thì Keycloak (uid 1000 trong container) báo `AccessDeniedException`; `make-realm.sh` đặt `chmod 644` (thư mục `~/datn` vẫn 700).
-
+17. **Thêm service mới (ví dụ `ai-service`) thì phải sửa 7 chỗ**, quên một chỗ là deploy hỏng hoặc service không tới được. Đã làm đủ cho `ai-service`; lần sau đối chiếu danh sách này: (1) Dockerfile của **mọi** service COPY thêm pom của module mới (develop đã làm); (2) `infrastructure/ci/build-push.sh` thêm tên vào `SERVICES` và nhánh `case` (nếu không thì image không được build / push); (3) `prod/spring/<service>/application-prod.yaml` mới (DB, Redis, JWT, URL nội bộ); (4) **route** ở `prod/spring/api-gateway/application-prod.yaml` (danh sách route trong profile thay thế toàn bộ, xem bẫy 2); (5) container + `healthcheck` + `depends_on` + `mem_limit` trong `docker-compose.prod.yml`; (6) secret mới ở `secrets.env` (compose dùng `:?` cho biến bắt buộc); (7) nếu service trả SSE / WebSocket thì thêm `location` tắt `proxy_buffering` ở **cả** Nginx máy chủ (`prod/nginx/datn-app.conf`) và `frontend/nginx.conf`. Và service phải có `spring-boot-starter-actuator` (probe readiness).
+18. **Khối `location` mới trong `frontend/nginx.conf` phải dùng `$datn_forwarded_proto` / `$datn_forwarded_host`**, không dùng `$scheme` / `$host`: trong container `$scheme` luôn là `http`, gateway thấy `X-Forwarded-Proto: http` trong lúc `Origin` là `https://app.<domain>` nên mọi `POST` bị 403 (đã gặp với khối `/ai/` mới của develop, đã sửa).
+19. **Khoá bí mật có giá trị mặc định trong `application.yaml` bị commit lên git** là lỗ hổng: khoá nội bộ `AI_TOOLS_API_KEY` mặc định ở hai file; ghi đè ở profile `prod` **không kèm mặc định** và bắt buộc đặt trong `secrets.env` (compose `:?`). Quét secret trong diff mỗi lần merge lớn (`git diff <cũ> <mới> | grep -iE "api[_-]?key|secret|password|BEGIN .*PRIVATE"`).
 ---
 
 ## 7. Vì sao compose + GitHub Actions

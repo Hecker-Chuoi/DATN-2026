@@ -2,7 +2,7 @@
 
 > Thuộc [00 — Danh sách các bước](00_DANH_SACH_CAC_BUOC.md) (**bước 5–6**). Làm **sau** [05](05_TRIEN_KHAI_LAN_DAU.md): ứng dụng đã chạy bằng tay qua `deploy.sh`.
 >
-> Kết quả: PR chạy test; push / merge vào `main` → test → build + push 6 image → SSH sang server chạy `deploy.sh` → kiểm tra qua HTTPS; lỗi thì tự về bản trước. Workflow ở [`.github/workflows/ci-cd.yml`](../../../.github/workflows/ci-cd.yml).
+> Kết quả: PR chạy test; push / merge vào `main` → test → build + push 7 image → SSH sang server chạy `deploy.sh` → kiểm tra qua HTTPS; lỗi thì tự về bản trước. Workflow ở [`.github/workflows/ci-cd.yml`](../../../.github/workflows/ci-cd.yml).
 >
 > Quy ước: 🪟 = Git Bash trên **máy Windows** (ở `D:\DATN-2026`); 🐧 = phiên **SSH vào server ứng dụng** (`ubuntu@datn-app:~$`); 🌐 = bấm trên web (GitHub / AWS). **Đừng dán lệnh Linux vào PowerShell và ngược lại.**
 
@@ -30,7 +30,7 @@
                     ├─ job frontend  : npm ci, lint (không chặn), build
                     └─ job deploy (chỉ main hoặc chạy tay có tick "deploy"):
                          1. docker login Docker Hub (secret DOCKERHUB_*)
-                         2. build-push.sh <sha7>   ─► Docker Hub (6 image)
+                         2. build-push.sh <sha7>   ─► Docker Hub (7 image)
                          3. tar cz (compose + prod/ + keycloak/) | ssh deployer@<IP public> "deploy <sha7>"
                                                                    └─► server: deploy.sh → pull + up -d --wait + smoke test
                          4. curl https://app.<domain>/identity/actuator/health
@@ -137,7 +137,7 @@ Workflow tự **kiểm tra đủ secret** ở đầu job deploy và báo `Thiế
 
 | Job | Việc |
 |---|---|
-| `backend` | JDK 21 (Temurin), `mvn -B -ntp verify '-Dtest=!*ApplicationTests'` (540 unit test; bỏ các `*ApplicationTests` vì cần DB thật), tải báo cáo surefire |
+| `backend` | JDK 21 (Temurin), `mvn -B -ntp verify '-Dtest=!*ApplicationTests'` (549 unit test; bỏ các `*ApplicationTests` vì cần DB thật), tải báo cáo surefire |
 | `frontend` | Node 22, `npm ci`, `npm run lint` (**chỉ cảnh báo**: code còn ~190 lỗi lint sẵn), `npm run build` (chặn nếu lỗi) |
 | `deploy` | kiểm tra secret → `TAG = git rev-parse --short=7 HEAD` → **cấu hình SSH + thử `ssh ... check` ngay** (sai khoá / IP / cổng 22 thì dừng **trước** khi build, in lý do) → `docker login` → `build-push.sh $TAG` → `tar | ssh ... "deploy $TAG"` → `curl https://<APP_HOST>/identity/actuator/health` (tối đa 2 phút) → `docker logout` |
 
@@ -163,14 +163,14 @@ Hành vi cần biết:
 | # | Kịch bản | Kết quả mong đợi |
 |---|---|---|
 | 1 | Mở PR có test hỏng | `backend` đỏ trên PR, **không** build / push / deploy |
-| 2 | Merge vào `main` | Test xanh → 6 image `<sha>` trên Docker Hub → `deploy.sh` in `✅` → bước HTTPS `OK` → 🐧 `deploy.sh check` báo tag `<sha>` |
+| 2 | Merge vào `main` | Test xanh → 7 image `<sha>` trên Docker Hub → `deploy.sh` in `✅` → bước HTTPS `OK` → 🐧 `deploy.sh check` báo tag `<sha>` |
 | 3 | Sửa giao diện nhỏ rồi merge | Thay đổi hiện trên `https://<APP_HOST>` (gián đoạn ngắn lúc container được thay, [04 §3 mục 10](04_DOCKER_COMPOSE_PRODUCTION.md)) |
 | 4 | Deploy bản cố ý lỗi (service không khởi động, ví dụ sai biến môi trường) | `up --wait` hết hạn / smoke test lỗi → **tự về bản trước**, job đỏ, ứng dụng vẫn chạy |
 | 5 | Rollback tay | 🐧 `sudo -u deployer /home/deployer/deploy.sh rollback` |
 | 6 | Khoá chặt | 🪟 `ssh -i secret/actions-deploy-key deployer@<IP> "ls /"` bị từ chối (mục 3) |
 | 7 | Chạy tay nhánh khác | Actions → CI/CD → Run workflow, chọn nhánh, tick `deploy` → deploy nhánh đó |
 
-**Đã kiểm chứng thật** (27/11/2026): file workflow qua `actionlint` (không lỗi); `mvn verify` (540 test) và `npm run build` chạy xanh trong container JDK 21 / Node 22; khoá SSH riêng của Actions đăng nhập được vào `deployer@<IP public>` từ máy ngoài mạng AWS với `StrictHostKeyChecking=yes`, `check` chạy được, lệnh `ls` bị từ chối, khoá cũ của Jenkins bị từ chối; cơ chế `deploy` qua SSH (gói stdin, `no-pty`), tự rollback khi SHA không tồn tại, smoke test, tất cả ở [04 §5](04_DOCKER_COMPOSE_PRODUCTION.md#5-đã-kiểm-chứng-gì-chưa-kiểm-chứng-gì). **Lượt chạy thật đầu tiên trên GitHub** (27/11/2026, commit `0678483` trên `main`): `Test backend` xanh (75 s), `Lint + build frontend` xanh (31 s), `Build + push 6 image` xanh (134 s, 6 image `0678483` có trên Docker Hub), nhưng bước **Deploy đỏ: `Host key verification failed.` (exit 255)**. Phía server log chỉ có một dòng `Connection closed by <IP runner> [preauth]` (client tự ngắt trước khi xác thực): ứng dụng **không bị đụng tới**, vẫn chạy bản cũ. Nguyên nhân: runner không tìm thấy dấu vân tay của server ứng với đúng giá trị `DEPLOY_HOST` trong `known_hosts` (secret `DEPLOY_KNOWN_HOSTS` ghi theo IP, còn `DEPLOY_HOST` được nhập kiểu khác hoặc có ký tự thừa; hoặc dán sai nội dung). Đã sửa trong workflow: (1) bỏ khoảng trắng thừa của `DEPLOY_HOST`; (2) dựng lại `known_hosts` bằng cách gắn **đúng `DEPLOY_HOST`** vào phần `<kiểu khoá> <khoá>` của secret, nên không phụ thuộc secret ghi IP hay tên máy (đã thử: host dạng tên DNS vẫn qua bước kiểm tra dấu vân tay); (3) thêm bước **Kiểm tra kết nối SSH** chạy **trước** khi build, in lý do thất bại. **Chưa kiểm chứng lại trên GitHub** sau bản sửa này.
+**Đã kiểm chứng thật** (27/11/2026): file workflow qua `actionlint` (không lỗi); `mvn verify` (549 test) và `npm run build` chạy xanh trong container JDK 21 / Node 22; khoá SSH riêng của Actions đăng nhập được vào `deployer@<IP public>` từ máy ngoài mạng AWS với `StrictHostKeyChecking=yes`, `check` chạy được, lệnh `ls` bị từ chối, khoá cũ của Jenkins bị từ chối; cơ chế `deploy` qua SSH (gói stdin, `no-pty`), tự rollback khi SHA không tồn tại, smoke test, tất cả ở [04 §5](04_DOCKER_COMPOSE_PRODUCTION.md#5-đã-kiểm-chứng-gì-chưa-kiểm-chứng-gì). **Lượt chạy thật đầu tiên trên GitHub** (27/11/2026, commit `0678483` trên `main`): `Test backend` xanh (75 s), `Lint + build frontend` xanh (31 s), `Build + push 6 image` xanh (134 s, 6 image `0678483` có trên Docker Hub), nhưng bước **Deploy đỏ: `Host key verification failed.` (exit 255)**. Phía server log chỉ có một dòng `Connection closed by <IP runner> [preauth]` (client tự ngắt trước khi xác thực): ứng dụng **không bị đụng tới**, vẫn chạy bản cũ. Nguyên nhân: runner không tìm thấy dấu vân tay của server ứng với đúng giá trị `DEPLOY_HOST` trong `known_hosts` (secret `DEPLOY_KNOWN_HOSTS` ghi theo IP, còn `DEPLOY_HOST` được nhập kiểu khác hoặc có ký tự thừa; hoặc dán sai nội dung). Đã sửa trong workflow: (1) bỏ khoảng trắng thừa của `DEPLOY_HOST`; (2) dựng lại `known_hosts` bằng cách gắn **đúng `DEPLOY_HOST`** vào phần `<kiểu khoá> <khoá>` của secret, nên không phụ thuộc secret ghi IP hay tên máy (đã thử: host dạng tên DNS vẫn qua bước kiểm tra dấu vân tay); (3) thêm bước **Kiểm tra kết nối SSH** chạy **trước** khi build, in lý do thất bại. **Chưa kiểm chứng lại trên GitHub** sau bản sửa này.
 
 ---
 

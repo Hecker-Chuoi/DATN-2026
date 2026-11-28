@@ -1,5 +1,7 @@
 package com.datn.workservice.config;
 
+import com.datn.workservice.security.AiToolApiKeyFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -14,6 +16,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 import java.util.Collection;
@@ -28,15 +31,24 @@ import java.util.stream.Stream;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    /** Khóa dùng chung với ai-service; rỗng = từ chối mọi request /internal/ai-tools/**. */
+    @Value("${ai-tools.api-key:}")
+    private String aiToolsApiKey;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Webhook GitHub không có JWT: xác thực bằng chữ ký HMAC (GitHubWebhookSignatureValidator).
                         .requestMatchers("/actuator/**", "/public/**", "/api/v1/work/integrations/github/webhook").permitAll()
+                        // Nhóm /internal/ai-tools/** không dùng JWT: AiToolApiKeyFilter kiểm X-API-Key
+                        // và đặt user = X-User-Id. Gateway không route /internal/** nên trình duyệt không gọi được.
+                        .requestMatchers("/internal/ai-tools/**").permitAll()
                         .anyRequest().authenticated()
                 )
+                .addFilterBefore(new AiToolApiKeyFilter(aiToolsApiKey), BearerTokenAuthenticationFilter.class)
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
                         .jwtAuthenticationConverter(keycloakJwtAuthenticationConverter())));
 

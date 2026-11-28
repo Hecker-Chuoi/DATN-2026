@@ -20,7 +20,7 @@
 
 | Thứ | Để làm gì | Ai tạo |
 |---|---|---|
-| Tài khoản **Docker Hub** + 1 Access Token (Read & Write) | Actions push 6 image `datn-*` | bạn |
+| Tài khoản **Docker Hub** + 1 Access Token (Read & Write) | Actions push 7 image `datn-*` | bạn |
 | Quyền **admin** repo GitHub | Tạo secret của Actions (Write không đủ) | chủ repo |
 | 1 **EC2** `t3.large` (2 vCPU / 8 GB), Ubuntu 24.04, kèm **Elastic IP** | Chạy toàn bộ ứng dụng | bạn |
 | **Tên miền** (hoặc `sslip.io`) trỏ về Elastic IP: `app.<domain>`, `sso.<domain>` | HTTPS cho ứng dụng và Keycloak | bạn |
@@ -40,7 +40,7 @@
    | Access permissions | **Read & Write** (không cần *Delete*) |
 
 3. **Chép token ngay**: Docker Hub chỉ hiện một lần. Token này sẽ dán vào secret `DOCKERHUB_TOKEN` ở [06](06_GITHUB_ACTIONS_CICD.md); **không** dán vào chat, file trong repo hay ảnh chụp màn hình.
-4. 6 repo `datn-api-gateway`, `datn-identity-service`, `datn-work-service`, `datn-workspace-service`, `datn-notification-service`, `datn-frontend` tự tạo ở lần push đầu và mặc định **public** (gói miễn phí chỉ cho 1 repo private). Server kéo image public không cần đăng nhập.
+4. 7 repo `datn-api-gateway`, `datn-identity-service`, `datn-work-service`, `datn-workspace-service`, `datn-notification-service`, `datn-ai-service`, `datn-frontend` tự tạo ở lần push đầu và mặc định **public** (gói miễn phí chỉ cho 1 repo private). Server kéo image public không cần đăng nhập.
 
 > Token lộ ra ngoài (ảnh chụp, tin nhắn, commit) thì vào Docker Hub **Revoke** ngay rồi tạo token khác.
 
@@ -59,7 +59,7 @@
 
 Chi tiết tạo máy ở [02 §1](02_CHUAN_BI_SERVER_UNG_DUNG.md#1-tạo-ec2-datn-app). Hai điểm phải quyết **trước**:
 
-- **Cỡ máy**: tài khoản chỉ được cấp tối đa `t3.large` (2 vCPU / 7,6 GB); toàn bộ 12 container + HĐH dùng khoảng 3 GB lúc rảnh ([04 §4](04_DOCKER_COMPOSE_PRODUCTION.md#4-ngân-sách-ram)).
+- **Cỡ máy**: tài khoản chỉ được cấp tối đa `t3.large` (2 vCPU / 7,6 GB); toàn bộ 13 container + HĐH dùng khoảng 3 GB lúc rảnh ([04 §4](04_DOCKER_COMPOSE_PRODUCTION.md#4-ngân-sách-ram)).
 - **Elastic IP**: gắn **trước** khi chọn tên miền. IP public thường đổi mỗi lần stop/start máy, kéo theo tên miền `sslip.io`, chứng chỉ HTTPS, `public.env` và image frontend (nhúng URL Keycloak) hỏng cùng lúc.
 - **Cổng 22 phải mở ra Internet** vì runner của GitHub có IP thay đổi ([06 §4](06_GITHUB_ACTIONS_CICD.md#4-mở-cổng-22-trên-security-group)).
 

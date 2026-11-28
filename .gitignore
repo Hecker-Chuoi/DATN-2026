@@ -34,4 +34,7 @@ docs/deployment
 
 # Bí mật GitHub cục bộ của work-service
 **/github-secrets.yml
+**/ai-secrets.yml
 secret/
+docs/report/tham_khao/B21DCCN341-Hoàng Đình Hiệp.pdf
+docs/report/docx/3_2_PHAN_TICH_HE_THONG.docx
