@@ -110,27 +110,16 @@ Chúng em xin chân thành cảm ơn!
 | Bảng 3.2 | Bảng yêu cầu phi chức năng | |
 | Bảng 3.3 | Danh sách Actor | |
 | Bảng 3.4 | Danh sách Use Case | |
-| Bảng 3.5 | Kịch bản thành viên gửi yêu cầu "Tạm hoàn thành" | |
-| Bảng 3.6 | Kịch bản liên kết công việc bị chặn vòng lặp | |
-| Bảng 3.7 | Kịch bản tùy biến trạng thái và quy trình của dự án | |
-| Bảng 3.8 | Kịch bản hoàn tất giai đoạn | |
-| Bảng 3.9 | Kịch bản tạo dự án từ mẫu | |
-| Bảng 3.10 | Kịch bản mời thành viên vào dự án | |
-| Bảng 3.11 | Kịch bản phân quyền trong không gian làm việc và dự án | |
-| Bảng 3.12 | Kịch bản quản lý loại công việc tùy biến theo ngành | |
-| Bảng 3.13 | Kịch bản vòng đời giai đoạn | |
-| Bảng 3.14 | Kịch bản tính điểm đóng góp | |
-| Bảng 3.15 | Kịch bản tích hợp GitHub | |
-| Bảng 3.16 | Công nghệ và trách nhiệm của từng dịch vụ | |
-| Bảng 3.17 | Định tuyến tại cổng giao tiếp API | |
-| Bảng 3.18 | Các nhóm dữ liệu theo dịch vụ | |
-| Bảng 3.19 | Nhóm phân quyền và thành viên | |
-| Bảng 3.20 | Nhóm dự án, loại công việc, trạng thái và quy trình | |
-| Bảng 3.21 | Nhóm công việc và tùy biến | |
-| Bảng 3.22 | Nhóm giai đoạn, bảng tiến độ, đóng góp và tiến độ | |
-| Bảng 3.23 | Nhóm mẫu dự án, thông báo và GitHub | |
-| Bảng 3.24 | Nhóm giao diện lập trình theo dịch vụ | |
-| Bảng 3.25 | Chức năng giao diện lập trình của dịch vụ thông báo | |
+| Bảng 3.5 | Công nghệ và trách nhiệm của từng dịch vụ | |
+| Bảng 3.6 | Định tuyến tại cổng giao tiếp API | |
+| Bảng 3.7 | Các nhóm dữ liệu theo dịch vụ | |
+| Bảng 3.8 | Nhóm phân quyền và thành viên | |
+| Bảng 3.9 | Nhóm dự án, loại công việc, trạng thái và quy trình | |
+| Bảng 3.10 | Nhóm công việc và tùy biến | |
+| Bảng 3.11 | Nhóm giai đoạn, bảng tiến độ, đóng góp và tiến độ | |
+| Bảng 3.12 | Nhóm mẫu dự án, thông báo và GitHub | |
+| Bảng 3.13 | Nhóm giao diện lập trình theo dịch vụ | |
+| Bảng 3.14 | Chức năng giao diện lập trình của dịch vụ thông báo | |
 | Bảng 4.1 | Môi trường và công cụ | |
 | Bảng 4.2 | Các công việc của quy trình CI/CD | |
 | Bảng 4.3 | Thống kê nhóm chức năng và số test case hệ thống | |

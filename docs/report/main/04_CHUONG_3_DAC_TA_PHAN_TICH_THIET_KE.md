@@ -94,307 +94,158 @@ Ba vai trò dự án là mặc định; quản trị viên dự án có thể t�
 | UC02 | Đăng nhập, quên và đặt lại mật khẩu | Khách vãng lai |
 | UC03 | Quản lý hồ sơ cá nhân | Người dùng |
 | UC04 | Quản lý người dùng hệ thống | Quản trị hệ thống |
-| UC05 | Quản lý không gian làm việc và thành viên | Chủ sở hữu, Quản trị viên |
-| UC06 | Trả lời lời mời | Người dùng |
-| UC07 | Tạo dự án (trống hoặc từ mẫu) | Thành viên không gian làm việc |
-| UC08 | Quản lý thành viên và quyền dự án | Quản trị viên dự án |
-| UC09 | Cấu hình loại công việc, trạng thái, quy trình, trường tùy chỉnh | Quản trị viên dự án |
-| UC10 | Tạo và chỉnh sửa công việc | Thành viên dự án |
-| UC11 | Giao và hủy giao công việc | Thành viên dự án |
-| UC12 | Liên kết công việc | Thành viên dự án |
-| UC13 | Chuyển trạng thái công việc | Thành viên dự án |
-| UC14 | Gửi yêu cầu "Tạm hoàn thành" | Thành viên dự án |
-| UC15 | Xác nhận hoặc từ chối hoàn thành | Quản trị viên dự án |
-| UC16 | Bình luận, nhắc tên, đính kèm tệp | Thành viên dự án |
-| UC17 | Lập kế hoạch giai đoạn trên kho việc | Quản trị viên dự án |
-| UC18 | Bắt đầu và hoàn tất giai đoạn | Quản trị viên dự án |
-| UC19 | Làm việc trên bảng tiến độ | Thành viên dự án |
-| UC20 | Xem tiến độ (biểu đồ tiến độ, năng suất, luồng trạng thái) | Mọi thành viên dự án |
-| UC21 | Xem và điều chỉnh đóng góp | Thành viên; quản trị viên |
-| UC22 | Quản lý dự án mẫu (lưu, xem trước, nhân bản) | Quản trị viên dự án |
-| UC23 | Nhận và quản lý thông báo | Người dùng |
-| UC24 | Cài đặt thông báo, tắt tiếng dự án | Người dùng |
-| UC25 | Tích hợp GitHub | Quản trị viên dự án |
+| UC05 | Quản lý không gian làm việc, thành viên và lời mời | Chủ sở hữu, Quản trị viên, Người dùng |
+| UC06 | Tạo và cấu hình dự án (dự án trống hoặc từ mẫu; loại công việc, trạng thái, quy trình, trường tùy chỉnh) | Thành viên không gian làm việc, Quản trị viên dự án |
+| UC07 | Quản lý thành viên và quyền trong dự án | Quản trị viên dự án |
+| UC08 | Tạo, chỉnh sửa và giao công việc | Thành viên dự án |
+| UC09 | Liên kết công việc | Thành viên dự án |
+| UC10 | Chuyển trạng thái và xác nhận hoàn thành | Thành viên dự án, Quản trị viên dự án |
+| UC11 | Bình luận, nhắc tên, đính kèm tệp | Thành viên dự án |
+| UC12 | Quản lý giai đoạn (lập kế hoạch, bắt đầu, hoàn tất) | Quản trị viên dự án |
+| UC13 | Bảng tiến độ và báo cáo tiến độ | Mọi thành viên dự án |
+| UC14 | Nhận thông báo | Người dùng |
+| UC15 | Tích hợp GitHub | Quản trị viên dự án |
 
 **Hình 3.1: Biểu đồ Use Case tổng quan**
 
 ```mermaid
 flowchart LR
-    KV(["Khách vãng lai"]) --- UC1["Đăng ký, đăng nhập"]
-    ND(["Người dùng"]) --- UC2["Trả lời lời mời, quản lý hồ sơ"]
-    QTHT(["Quản trị hệ thống"]) --- UC3["Quản lý người dùng"]
-    QTKG(["Quản trị viên<br/>không gian làm việc"]) --- UC4["Quản lý không gian và thành viên"]
-    TVKG(["Thành viên<br/>không gian làm việc"]) --- UC5["Tạo dự án, dự án từ mẫu"]
-    QTDA(["Quản trị viên dự án"]) --- UC6["Cấu hình loại, trạng thái, quy trình"]
-    QTDA --- UC7["Quản lý thành viên, quyền"]
-    QTDA --- UC8["Giai đoạn, duyệt hoàn thành"]
-    QTDA --- UC9["Mẫu dự án, GitHub"]
-    TVDA(["Thành viên dự án"]) --- UC10["Tạo, sửa, giao, liên kết, chuyển trạng thái"]
-    TVDA --- UC11["Bảng tiến độ, bình luận"]
-    TVDA --- UC12["Tiến độ, đóng góp, thông báo"]
+    KV(["Khách vãng lai"]) --- UC1["UC01, UC02<br/>Đăng ký, đăng nhập"]
+    ND(["Người dùng"]) --- UC2["UC03, UC14<br/>Hồ sơ, thông báo"]
+    QTHT(["Quản trị hệ thống"]) --- UC3["UC04<br/>Quản lý người dùng"]
+    QTKG(["Chủ sở hữu,<br/>Quản trị viên không gian"]) --- UC4["UC05<br/>Không gian, thành viên, lời mời"]
+    TVKG(["Thành viên<br/>không gian làm việc"]) --- UC5["UC06<br/>Tạo dự án"]
+    QTDA(["Quản trị viên dự án"]) --- UC5
+    QTDA --- UC6["UC07, UC12<br/>Thành viên, quyền, giai đoạn"]
+    QTDA --- UC7["UC15<br/>Tích hợp GitHub"]
+    TVDA(["Thành viên dự án"]) --- UC8["UC08, UC09, UC11<br/>Công việc, liên kết, bình luận"]
+    TVDA --- UC9["UC10<br/>Chuyển trạng thái, xác nhận hoàn thành"]
+    TVDA --- UC10["UC13<br/>Bảng tiến độ, báo cáo"]
 ```
 
 ### 3.1.5. Một số Use Case tính năng chính
 
-Các Use Case dưới đây được nhóm theo sáu bài toán của Chương 2, trọng tâm là quản trị dự án và công việc.
+Phần này mô tả kịch bản chi tiết của chín nhóm chức năng quan trọng: UC01, UC02, UC06, UC08, UC09, UC10, UC13, UC14 và UC15.
 
-#### a) Xác thực và phân quyền
-
-**UC05. Quản lý thành viên không gian làm việc**
+**UC01. Đăng ký, xác thực thư điện tử**
 
 | Mục | Nội dung |
 | :--- | :--- |
-| Actor | Chủ sở hữu, Quản trị viên không gian làm việc |
-| Điều kiện trước | Có bậc Quản trị viên trở lên |
-| Luồng chính | 1. Chọn "Mời thành viên", nhập người cần mời và vai trò (Quản trị viên, Thành viên hoặc Khách). 2. Hệ thống tạo lời mời chờ trả lời, chưa thêm người đó vào. 3. Người được mời chấp nhận thì mới trở thành thành viên. 4. Quản trị viên có thể đổi vai trò hoặc xóa thành viên. |
-| Luồng thay thế | Chỉ Chủ sở hữu mới cấp hoặc thu hồi vai trò Chủ sở hữu, xóa hoặc khôi phục không gian làm việc. |
-| Ngoại lệ | Rời đi, bị xóa hoặc bị hạ bậc khi là Chủ sở hữu cuối cùng thì bị từ chối. Người ngoài truy cập nhận "không tìm thấy". |
+| Tên Use Case | Đăng ký, xác thực thư điện tử |
+| Tác nhân | Khách vãng lai |
+| Mô tả | Khách tạo tài khoản mới và xác thực địa chỉ thư điện tử để được đăng nhập |
+| Điều kiện trước | Khách chưa có tài khoản; có địa chỉ thư điện tử nhận được thư |
+| Điều kiện sau | Tài khoản được kích hoạt, đăng nhập được |
+| Luồng sự kiện chính | 1. Khách mở trang đăng ký, nhập tên đăng nhập, thư điện tử, mật khẩu, họ tên.<br>2. Hệ thống kiểm tra dữ liệu hợp lệ, tên đăng nhập và thư điện tử chưa được dùng.<br>3. Hệ thống tạo tài khoản ở trạng thái chờ xác thực (chưa đăng nhập được).<br>4. Hệ thống gửi thư chứa liên kết xác thực dùng một lần.<br>5. Khách mở thư, bấm liên kết.<br>6. Hệ thống kiểm tra mã còn hiệu lực, kích hoạt tài khoản và báo thành công. |
+| Ngoại lệ | 2a. Dữ liệu không hợp lệ, tên đăng nhập hoặc thư điện tử đã tồn tại: báo lỗi, giữ nguyên biểu mẫu.<br>6a. Mã sai, hết hạn hoặc đã dùng: báo lỗi và cho gửi lại thư xác thực.<br>Sau bước 3, nếu khách đăng nhập khi chưa xác thực: hệ thống từ chối và nhắc xác thực thư. |
 
-**UC08. Quản lý thành viên và quyền trong dự án**
-
-| Mục | Nội dung |
-| :--- | :--- |
-| Actor | Quản trị viên dự án |
-| Luồng chính | 1. Mời thành viên vào dự án, chọn vai trò (Quản trị viên, Thành viên, Người xem hoặc vai trò tự tạo). 2. Người được mời chấp nhận thì được phân vai. 3. Quản trị viên mở ma trận quyền, bật hoặc tắt từng quyền của một vai trò (ví dụ cho Người xem được giao việc). |
-| Ngoại lệ | Không xóa được trưởng dự án hoặc quản trị viên cuối cùng. Vai trò thuộc dự án khác bị từ chối. Người chưa có vai trò chỉ thấy "không có quyền". |
-
-#### b) Quản trị dự án và công việc
-
-**UC09a. Quản lý loại công việc**
+**UC02. Đăng nhập, quên và đặt lại mật khẩu**
 
 | Mục | Nội dung |
 | :--- | :--- |
-| Actor | Quản trị viên dự án |
-| Luồng chính | 1. Mở trang cấu hình loại công việc. 2. Thêm loại mới (tên, mã, màu, biểu tượng, mức phân cấp 1, 0 hoặc -1) hoặc sửa, xóa loại có sẵn. 3. Loại mới dùng được ngay khi tạo công việc. |
-| Ngoại lệ | Tên hoặc mã trùng; mức phân cấp ngoài 1, 0, -1; đổi mức của loại đã có việc; đổi hoặc xóa loại cuối cùng của một mức; xóa loại đang có việc dùng (hệ thống báo số việc và yêu cầu chuyển loại trước). |
+| Tên Use Case | Đăng nhập, quên và đặt lại mật khẩu |
+| Tác nhân | Khách vãng lai |
+| Mô tả | Đăng nhập bằng tài khoản của hệ thống hoặc tài khoản Google; lấy lại mật khẩu qua thư |
+| Điều kiện trước | Đã có tài khoản (đã xác thực thư, hoặc có tài khoản Google) |
+| Điều kiện sau | Phiên đăng nhập được thiết lập; người dùng vào danh sách không gian làm việc |
+| Luồng sự kiện chính | 1. Khách nhập tên đăng nhập hoặc thư điện tử và mật khẩu.<br>2. Hệ thống xác thực với máy chủ định danh.<br>3. Hệ thống cấp mã truy cập và mã gia hạn, lưu mã truy cập vào cookie chỉ gửi qua giao thức web.<br>4. Giao diện chuyển tới danh sách không gian làm việc. |
+| Luồng thay thế | A. Đăng nhập Google: khách bấm "Đăng nhập bằng Google", được chuyển sang Google để đồng ý, quay về hệ thống; lần đầu hệ thống tự tạo tài khoản (không cần xác thực thư) rồi cấp phiên.<br>B. Quên mật khẩu: khách nhập thư điện tử, hệ thống gửi liên kết đặt lại có hiệu lực 30 phút, khách mở liên kết và nhập mật khẩu mới, hệ thống cập nhật và yêu cầu đăng nhập lại. |
+| Ngoại lệ | 2a. Sai thông tin: báo lỗi, không cấp mã.<br>2b. Tài khoản chưa xác thực thư: từ chối kèm hướng dẫn xác thực.<br>Trong phiên: mã truy cập hết hạn thì giao diện tự dùng mã gia hạn để xin mã mới; mã gia hạn hết hạn thì yêu cầu đăng nhập lại.<br>B1. Liên kết đặt lại hết hạn hoặc đã dùng: báo lỗi, cho yêu cầu lại. |
 
-**UC09b. Quản lý trạng thái**
-
-| Mục | Nội dung |
-| :--- | :--- |
-| Actor | Quản trị viên dự án |
-| Luồng chính | 1. Thêm trạng thái (tên, màu, nhóm Cần làm, Đang làm hoặc Hoàn thành) hoặc sửa, xóa. 2. Gom trạng thái vào cột của bảng tiến độ. |
-| Ngoại lệ | Tên trùng (không phân biệt hoa thường); xóa hoặc đổi nhóm của trạng thái cuối cùng trong nhóm; xóa trạng thái đang có việc dùng. Khi xóa được thì các bước chuyển và liên kết cột liên quan bị xóa theo. |
-
-**UC09c. Cấu hình quy trình và bước chuyển**
+**UC06. Tạo và cấu hình dự án**
 
 | Mục | Nội dung |
 | :--- | :--- |
-| Actor | Quản trị viên dự án |
-| Luồng chính | 1. Tạo bước chuyển giữa hai trạng thái, đặt tên. 2. Thêm điều kiện (chỉ người được giao, chỉ người tạo, cần một quyền), bộ kiểm tra (bắt buộc kết quả xử lý, mọi việc con phải xong…), việc tự động sau chuyển. 3. Gán quy trình cho từng loại công việc. |
-| Ngoại lệ | Thiếu đích hoặc tên; đích trùng nguồn; trạng thái không thuộc dự án; trùng cặp nguồn–đích; trùng tên bước trong quy trình. |
+| Tên Use Case | Tạo và cấu hình dự án |
+| Tác nhân | Thành viên không gian làm việc (tạo), Quản trị viên dự án (cấu hình) |
+| Mô tả | Tạo dự án mới, trống hoặc từ dự án mẫu; sau đó tùy biến loại công việc, trạng thái, quy trình, trường tùy chỉnh theo ngành |
+| Điều kiện trước | Người dùng có bậc Thành viên trở lên trong không gian làm việc |
+| Điều kiện sau | Dự án mới sẵn sàng; người tạo là Quản trị viên dự án |
+| Luồng sự kiện chính (tạo từ mẫu) | 1. Người dùng chọn "Tạo dự án", chuyển sang tab chọn mẫu.<br>2. Hệ thống hiển thị thư viện mẫu; người dùng chọn một mẫu.<br>3. Hệ thống dựng bản xem trước (tổng quan, trạng thái và quy trình, giai đoạn và công việc, phân quyền) và kết quả kiểm tra toàn vẹn của mẫu.<br>4. Người dùng tùy chỉnh nhanh: đổi tên trạng thái và loại công việc; đổi tên hoặc bỏ giai đoạn; đổi tiêu đề hoặc bỏ công việc (bỏ việc cha thì việc con bị bỏ theo). Các tùy chỉnh được giữ lại khi quay lại xem mẫu.<br>5. Người dùng nhập tên, mã dự án, ngày bắt đầu và bấm tạo.<br>6. Hệ thống tính độ dời ngày so với mốc gốc của mẫu, nhân bản dự án trong một giao dịch, áp các tùy chỉnh, dời mọi mốc thời gian, đặt lại tiến độ công việc.<br>7. Hệ thống kiểm tra toàn vẹn kết quả, báo số bản ghi đã tạo và chuyển vào dự án mới. |
+| Luồng thay thế | A. Tạo dự án trống: người dùng nhập tên, mã, loại dự án (theo chu kỳ, bảng liên tục, nghiệp vụ doanh nghiệp), trưởng dự án, khung thời gian; hệ thống gieo sẵn 3 loại công việc, 3 trạng thái, quy trình ba bước, bảng tiến độ và ba vai trò.<br>B. Cấu hình sau khi tạo: quản trị viên thêm, sửa, xóa loại công việc (mức phân cấp 1, 0, -1); thêm, sửa, xóa trạng thái và chọn nhóm; tạo bước chuyển, gắn điều kiện, bộ kiểm tra, việc sau chuyển; gán quy trình theo loại; tạo nhãn, thành phần, phiên bản phát hành; hệ thống kiểm tra các ràng buộc giữ cấu hình luôn hợp lệ. |
+| Ngoại lệ | 3a. Mẫu có lỗi toàn vẹn: khóa nút dùng mẫu.<br>5a. Mã dự án trùng hoặc không hợp lệ, ngày kết thúc trước ngày bắt đầu: báo lỗi.<br>6a. Lỗi giữa chừng: hoàn tác toàn bộ, không để dự án dở dang.<br>B1. Tên hoặc mã trùng; đổi mức của loại đã có việc; xóa loại hoặc trạng thái cuối cùng của mức hoặc nhóm; xóa loại hoặc trạng thái đang có việc dùng; bước chuyển có đích trùng nguồn hoặc trùng cặp: hệ thống từ chối kèm lý do. |
 
-**UC09d. Quản lý nhãn, thành phần, phiên bản và trường tùy chỉnh**
-
-| Mục | Nội dung |
-| :--- | :--- |
-| Actor | Quản trị viên dự án |
-| Luồng chính | Tạo nhãn (thẻ màu), thành phần (có người phụ trách), phiên bản phát hành (ngày phát hành); gán vào công việc. Trường tùy chỉnh: định nghĩa trường theo loại công việc, giá trị lưu trong công việc. |
-| Ghi chú | Hiện hệ thống lưu và nhân bản được giá trị trường tùy chỉnh nhưng chưa có giao diện để người dùng tự tạo định nghĩa mới. |
-
-**UC12. Liên kết công việc**
+**UC08. Tạo, chỉnh sửa và giao công việc**
 
 | Mục | Nội dung |
 | :--- | :--- |
-| Actor | Thành viên dự án |
-| Luồng chính | 1. Mở công việc nguồn, chọn "Thêm liên kết". 2. Chọn loại (chặn, gây ra, trùng lặp, liên quan) và công việc đích. 3. Hệ thống lưu một liên kết, hiển thị hai chiều ở hai việc, ghi nhật ký cả hai đầu. |
-| Luồng thay thế | Liên kết "trùng lặp": việc nguồn tự sang Hoàn thành với kết quả "Trùng lặp" (người không phải quản trị viên chỉ tạo yêu cầu "Tạm hoàn thành"). Liên kết "chặn": báo cho người thực hiện việc bị chặn. |
-| Ngoại lệ | Tự liên kết; việc đã xóa; cha–con ruột; chặn giữa hạng mục lớn và công việc con; liên kết đã tồn tại; liên kết tạo vòng lặp phụ thuộc (kèm chu trình cụ thể). |
+| Tên Use Case | Tạo, chỉnh sửa và giao công việc |
+| Tác nhân | Thành viên dự án |
+| Mô tả | Tạo công việc (hạng mục lớn, công việc, yêu cầu, sự cố hoặc công việc con), chỉnh sửa thuộc tính và giao cho người thực hiện |
+| Điều kiện trước | Thành viên có quyền tạo (và quyền giao việc khi giao cho người khác) |
+| Điều kiện sau | Công việc được lưu với mã mới, ghi nhật ký; người được giao nhận thông báo |
+| Luồng sự kiện chính | 1. Thành viên mở kho việc hoặc bảng tiến độ, bấm "Tạo công việc".<br>2. Chọn loại, nhập tiêu đề; có thể nhập mô tả, mức ưu tiên, điểm ước lượng, hạn chót, công việc cha, giai đoạn, nhãn, thành phần, trường tùy chỉnh.<br>3. Hệ thống kiểm tra quyền và quan hệ cha–con theo ma trận ba tầng.<br>4. Hệ thống cấp mã công việc (ví dụ MOC-12), đặt trạng thái khởi tạo (trạng thái đầu của nhóm Cần làm), xếp thẻ vào cuối danh sách, lưu và ghi nhật ký.<br>5. Thành viên chọn người thực hiện; hệ thống kiểm tra người đó thuộc dự án, lưu, ghi lịch sử người thực hiện và gửi thông báo.<br>6. Khi chỉnh sửa, hệ thống ghi từng trường thay đổi vào nhật ký (giá trị cũ, mới, người đổi, thời điểm). |
+| Luồng thay thế | Kéo thả đổi thứ tự: chỉ cập nhật đúng thẻ được kéo. Hủy giao: chọn "chưa giao". Tạo công việc con ngay trong chi tiết công việc cha. |
+| Ngoại lệ | 2a. Thiếu tiêu đề hoặc quá 500 ký tự: báo lỗi.<br>3a. Hạng mục lớn có cha; công việc con không có cha hoặc cha không phải công việc mức 0; cha khác dự án hoặc đã xóa: từ chối.<br>3b. Thiếu quyền tạo: từ chối.<br>5a. Giao cho người ngoài dự án, hoặc giao cho người khác khi thiếu quyền giao việc: từ chối.<br>6a. Hai người cùng sửa một thẻ: báo xung đột, giao diện tải lại thẻ. |
 
-**UC13. Chuyển trạng thái công việc**
-
-| Mục | Nội dung |
-| :--- | :--- |
-| Actor | Thành viên dự án (có quyền chuyển trạng thái) |
-| Điều kiện trước | Đã đăng nhập, là thành viên dự án, công việc tồn tại |
-| Luồng chính | 1. Mở chi tiết công việc. 2. Hệ thống liệt kê các bước chuyển hợp lệ từ trạng thái hiện tại, đã lọc theo điều kiện. 3. Chọn một bước. 4. Hệ thống kiểm tra bộ kiểm tra, việc chặn, việc con chưa xong. 5. Đổi trạng thái, chạy các việc tự động sau chuyển, ghi nhật ký, lan truyền lên việc cha, ghi sổ đóng góp. |
-| Luồng thay thế | Đích thuộc nhóm Hoàn thành và người dùng không phải quản trị viên: tạo yêu cầu "Tạm hoàn thành", giữ nguyên trạng thái (UC14). Kéo thẻ sang cột khác trên bảng tiến độ cũng đi qua đúng luồng này. |
-| Ngoại lệ | Không có bước chuyển hợp lệ; còn việc chặn hoặc việc con chưa xong; thiếu quyền; thẻ vừa bị người khác sửa; cột đã đạt giới hạn việc đang làm. |
-| Kết quả | Công việc ở trạng thái mới, có nhật ký và thông báo. |
-
-**UC17. Lập kế hoạch giai đoạn trên kho việc**
+**UC09. Liên kết công việc**
 
 | Mục | Nội dung |
 | :--- | :--- |
-| Actor | Quản trị viên dự án (quyền quản lý giai đoạn) |
-| Luồng chính | 1. Tạo giai đoạn (tên, mục tiêu, ngày bắt đầu và kết thúc dự kiến). 2. Kéo công việc từ kho việc vào giai đoạn; việc con tự đi theo cha. 3. Sắp xếp thứ tự bằng kéo thả. |
-| Ngoại lệ | Ngày kết thúc không sau ngày bắt đầu; thêm hoặc bớt việc ở giai đoạn đã đóng; kéo riêng một công việc con. |
+| Tên Use Case | Liên kết công việc |
+| Tác nhân | Thành viên dự án |
+| Mô tả | Nối hai công việc theo quan hệ chặn, gây ra, trùng lặp hoặc liên quan |
+| Điều kiện trước | Hai công việc tồn tại, chưa bị xóa |
+| Điều kiện sau | Liên kết được lưu, hiển thị hai chiều ở cả hai công việc |
+| Luồng sự kiện chính | 1. Thành viên mở công việc nguồn, chọn "Thêm liên kết".<br>2. Chọn loại liên kết và công việc đích.<br>3. Hệ thống kiểm tra các điều kiện hợp lệ (không tự liên kết, không với việc đã xóa, không giữa cha và con ruột, không chặn trực tiếp giữa hạng mục lớn và công việc con, chưa tồn tại).<br>4. Với liên kết chặn hoặc gây ra, hệ thống kiểm tra vòng lặp phụ thuộc bằng cách tìm đường đi từ đích về nguồn.<br>5. Hệ thống lưu một liên kết, ghi nhật ký ở cả hai công việc, hiển thị theo chiều tương ứng ("chặn tiến độ của", "bị chặn tiến độ bởi", …).<br>6. Với liên kết chặn, hệ thống thông báo cho người thực hiện việc bị chặn. |
+| Luồng thay thế | Liên kết "trùng lặp": việc nguồn chuyển sang Hoàn thành với kết quả "Trùng lặp"; nếu người thao tác không phải quản trị viên thì chỉ tạo yêu cầu "Tạm hoàn thành". Gỡ liên kết: xóa liên kết, ghi nhật ký. |
+| Ngoại lệ | 3a. Vi phạm một điều kiện hợp lệ: từ chối kèm lý do.<br>4a. Liên kết tạo vòng lặp (ví dụ MOC-1 chặn MOC-2, MOC-2 chặn MOC-3, thêm MOC-3 chặn MOC-1): từ chối và báo chu trình MOC-1 → MOC-2 → MOC-3 → MOC-1. |
 
-**UC18. Bắt đầu và hoàn tất giai đoạn**
-
-| Mục | Nội dung |
-| :--- | :--- |
-| Actor | Quản trị viên dự án |
-| Luồng chính (bắt đầu) | Chọn "Bắt đầu" ở giai đoạn đứng đầu kế hoạch; bảng tiến độ chỉ hiện việc của giai đoạn này. |
-| Ngoại lệ (bắt đầu) | Đã có giai đoạn đang chạy; thiếu ngày kết thúc; giai đoạn rỗng chưa xác nhận; còn giai đoạn dự kiến đứng trước. |
-| Luồng chính (hoàn tất) | 1. Chọn "Hoàn tất". 2. Hệ thống cho biết số việc xong và chưa xong. 3. Chọn nơi chuyển việc chưa xong (kho việc hoặc giai đoạn chưa đóng). 4. Hệ thống lưu bản chụp, chuyển việc, đóng giai đoạn, đóng băng số liệu đóng góp, gửi thông báo. |
-| Ngoại lệ (hoàn tất) | Giai đoạn chưa chạy; đích là giai đoạn đã đóng, khác dự án hoặc chính giai đoạn đang đóng. |
-
-#### c) Quản lý đóng góp và tiến độ
-
-**UC15. Xác nhận hoặc từ chối hoàn thành**
+**UC10. Chuyển trạng thái và xác nhận hoàn thành**
 
 | Mục | Nội dung |
 | :--- | :--- |
-| Actor | Quản trị viên dự án |
-| Điều kiện trước | Có yêu cầu chờ duyệt |
-| Luồng chính | 1. Mở danh sách "Chờ xác nhận" hoặc chi tiết công việc. 2. Chọn Xác nhận. 3. Hệ thống chạy lại bước chuyển đã lưu, đưa việc sang Hoàn thành. 4. Ghi điểm cho người thực hiện (tính trễ hạn theo ngày gửi). 5. Thông báo cho người gửi. |
-| Luồng thay thế | Từ chối (kèm lý do tùy chọn): công việc giữ nguyên, người gửi nhận thông báo. Người gửi hoặc quản trị viên có thể rút lại yêu cầu. |
-| Ngoại lệ | Người gọi không phải quản trị viên; quy trình không còn đường tới Hoàn thành. |
+| Tên Use Case | Chuyển trạng thái và xác nhận hoàn thành |
+| Tác nhân | Thành viên dự án; Quản trị viên dự án (xác nhận) |
+| Mô tả | Đưa công việc qua các trạng thái theo quy trình; việc đưa vào nhóm Hoàn thành phải được quản trị viên xác nhận |
+| Điều kiện trước | Người dùng có quyền chuyển trạng thái; có bước chuyển hợp lệ từ trạng thái hiện tại |
+| Điều kiện sau | Công việc ở trạng thái mới, hoặc có yêu cầu "Tạm hoàn thành" chờ duyệt |
+| Luồng sự kiện chính | 1. Thành viên mở chi tiết công việc (hoặc kéo thẻ sang cột khác).<br>2. Hệ thống liệt kê các bước chuyển hợp lệ từ trạng thái hiện tại, đã lọc theo điều kiện.<br>3. Thành viên chọn một bước chuyển (có thể kèm kết quả xử lý, bình luận).<br>4. Hệ thống kiểm tra bộ kiểm tra, việc chặn chưa xong, việc con chưa xong, giới hạn việc đang làm của cột đích.<br>5. Hệ thống đổi trạng thái, chạy các việc tự động sau chuyển, ghi nhật ký.<br>6. Hệ thống lan truyền lên công việc cha (mở lại hoặc tự bắt đầu), ghi sổ đóng góp, gửi thông báo. |
+| Luồng thay thế | A. Đích thuộc nhóm Hoàn thành và người dùng không phải quản trị viên: hệ thống tạo yêu cầu "Tạm hoàn thành", giữ nguyên trạng thái, báo cho quản trị viên.<br>A1. Quản trị viên chọn Xác nhận: hệ thống chạy lại bước chuyển đã lưu, đưa việc sang Hoàn thành, ghi điểm cho người thực hiện (tính trễ hạn theo ngày gửi), báo người gửi.<br>A2. Quản trị viên chọn Từ chối (kèm lý do): công việc giữ nguyên, báo người gửi.<br>A3. Người gửi hoặc quản trị viên rút lại yêu cầu; yêu cầu tự hủy nếu trạng thái công việc bị đổi trước khi duyệt.<br>B. Người dùng là quản trị viên: đổi sang Hoàn thành ngay và ghi điểm. |
+| Ngoại lệ | 2a. Không có bước chuyển hợp lệ: báo quy trình không có đường đi.<br>4a. Còn việc chặn hoặc việc con chưa xong, thiếu thông tin bắt buộc: từ chối kèm lý do.<br>4b. Cột đích đã đạt giới hạn việc đang làm: chặn thẻ đi vào.<br>4c. Mở lại việc thuộc giai đoạn đã đóng: từ chối.<br>3a. Thẻ vừa bị người khác sửa: báo xung đột, tải lại.<br>A1a. Người xác nhận không phải quản trị viên: từ chối. Quy trình không còn đường tới Hoàn thành: báo lỗi, đề nghị từ chối hoặc chỉnh quy trình. |
 
-**UC20 và UC21. Xem tiến độ và đóng góp**
-
-| Mục | Nội dung |
-| :--- | :--- |
-| Actor | Mọi thành viên dự án; quản trị viên điều chỉnh đóng góp |
-| Luồng chính | 1. Mở trang Báo cáo. 2. Chọn giai đoạn (hoặc toàn bộ quá trình). 3. Xem biểu đồ tiến độ chu kỳ, năng suất làm việc, biểu đồ luồng trạng thái. 4. Mở tab đóng góp: tổng điểm, tỷ lệ, số việc hoàn thành, tỷ lệ đúng hạn, số lần bị mở lại; xem sổ ghi công từng dòng. |
-| Luồng thay thế | Quản trị viên điều chỉnh điểm thủ công (ghi thành một dòng mới trong sổ, không sửa dòng cũ) và xuất báo cáo ra tệp. |
-| Ghi chú | Giai đoạn đã đóng đọc từ bản chụp; giai đoạn đang chạy dựng từ nhật ký thay đổi. |
-
-#### d) Mẫu dự án, thông báo, GitHub
-
-**UC07. Tạo dự án từ mẫu**
+**UC13. Bảng tiến độ và báo cáo tiến độ**
 
 | Mục | Nội dung |
 | :--- | :--- |
-| Actor | Thành viên không gian làm việc |
-| Luồng chính | 1. Chọn mẫu trong thư viện, xem bản xem trước (tổng quan, quy trình, giai đoạn và công việc, phân quyền) và kết quả kiểm tra toàn vẹn. 2. Tùy chỉnh nhanh: đổi tên trạng thái, loại công việc; đổi tên hoặc bỏ giai đoạn; đổi tiêu đề hoặc bỏ công việc. 3. Nhập tên, mã, ngày bắt đầu. 4. Hệ thống nhân bản trong một giao dịch, dời mọi mốc thời gian theo ngày bắt đầu mới. |
-| Ngoại lệ | Mẫu có lỗi toàn vẹn thì khóa nút dùng mẫu; lỗi giữa chừng thì hoàn tác toàn bộ. |
-| Kết quả | Dự án mới giống mẫu, giai đoạn ở trạng thái dự kiến, công việc được đặt lại tiến độ, chưa có thành viên khác. |
+| Tên Use Case | Bảng tiến độ và báo cáo tiến độ |
+| Tác nhân | Mọi thành viên dự án |
+| Mô tả | Theo dõi công việc trên bảng theo cột và xem các biểu đồ tiến độ của giai đoạn hoặc toàn bộ quá trình |
+| Điều kiện trước | Là thành viên dự án; dự án có bảng tiến độ |
+| Điều kiện sau | Người dùng nắm được tiến độ; các thao tác trên bảng được lưu |
+| Luồng sự kiện chính | 1. Thành viên mở "Bảng tiến độ": hệ thống hiển thị thẻ theo cột (bảng theo chu kỳ chỉ hiện việc của giai đoạn đang chạy; bảng liên tục hiện toàn bộ việc), kèm số việc của từng cột so với giới hạn, thanh đếm ngược của giai đoạn.<br>2. Thành viên lọc, chia thành các phân làn theo hạng mục lớn, người thực hiện hoặc mức ưu tiên.<br>3. Thành viên kéo thẻ: trong cùng cột thì đổi thứ tự; sang cột khác thì thực hiện bước chuyển trạng thái (UC10).<br>4. Thành viên mở trang "Báo cáo", chọn giai đoạn (hoặc toàn bộ quá trình).<br>5. Hệ thống hiển thị biểu đồ tiến độ chu kỳ (đường lý tưởng, đường thực tế, thay đổi phạm vi), năng suất làm việc, biểu đồ luồng trạng thái. |
+| Luồng thay thế | Giai đoạn đã đóng: số liệu đọc từ bản chụp lưu lúc đóng. Giai đoạn đang chạy: hệ thống phát lại nhật ký thay đổi để dựng biểu đồ ngay giữa giai đoạn. Báo cáo còn có phần đóng góp theo thành viên (tổng điểm, tỷ lệ đúng hạn, số lần bị mở lại). |
+| Ngoại lệ | 1a. Bảng theo chu kỳ chưa có giai đoạn đang chạy: bảng trống kèm lời mời sang kho việc.<br>1b. Công việc có trạng thái chưa gán cột nào: cảnh báo, không âm thầm ẩn.<br>3a. Không có bước chuyển tới cột đích: cột bị vô hiệu hóa, hoặc thẻ trượt về chỗ cũ kèm lý do.<br>5a. Giai đoạn thiếu ngày bắt đầu hoặc kết thúc: không dựng được biểu đồ tiến độ. |
 
-**UC23 và UC24. Nhận và cài đặt thông báo**
-
-| Mục | Nội dung |
-| :--- | :--- |
-| Actor | Người dùng |
-| Luồng chính | 1. Một sự kiện phát sinh (được giao việc, bị nhắc tên, lời mời, việc sắp đến hạn…). 2. Chuông cập nhật số chưa đọc ngay. 3. Mở bảng, bấm vào thông báo: đánh dấu đã đọc và chuyển tới công việc hoặc trang liên quan. |
-| Luồng thay thế | Thông báo "Cần xử lý" (lời mời, yêu cầu hoàn thành) nằm ở tab riêng, tự chuyển "Đã xử lý" khi được giải quyết. Người dùng bật tắt theo nhóm và kênh, tắt tiếng từng dự án; một số loại bắt buộc không tắt được. |
-
-**UC25. Tích hợp GitHub**
+**UC14. Nhận thông báo**
 
 | Mục | Nội dung |
 | :--- | :--- |
-| Actor | Quản trị viên dự án (dự án phần mềm) |
-| Luồng chính | 1. Bấm "Kết nối với GitHub", cấp quyền OAuth. 2. Chọn kho và nhánh chính; hệ thống đăng ký kênh nhận sự kiện. 3. Khi có yêu cầu hợp nhất chứa mã công việc, hệ thống gắn vào công việc và tự chuyển trạng thái theo cấu hình. 4. Có thể đồng bộ Issue về làm công việc, tạo Issue từ công việc. |
-| Ngoại lệ | Người thao tác trên GitHub chưa liên kết tài khoản thì chỉ gắn liên kết, không chuyển trạng thái; gộp yêu cầu hợp nhất không có từ khóa đóng việc thì giữ trạng thái. |
+| Tên Use Case | Nhận thông báo |
+| Tác nhân | Người dùng; hệ thống tự động |
+| Mô tả | Người dùng nhận thông báo về các thay đổi liên quan đến mình, trong ứng dụng và qua thư điện tử |
+| Điều kiện trước | Người dùng đã đăng nhập; trình duyệt đã kết nối kênh thời gian thực |
+| Điều kiện sau | Thông báo được lưu, hiển thị trên chuông; việc "Cần xử lý" được đánh dấu cho đến khi giải quyết |
+| Luồng sự kiện chính | 1. Một sự kiện phát sinh (được giao việc, bị nhắc tên, lời mời, yêu cầu hoàn thành, việc sắp đến hạn…).<br>2. Hệ thống ghi sự kiện cùng giao dịch với nghiệp vụ, rồi gửi sang dịch vụ thông báo.<br>3. Dịch vụ thông báo bỏ người thực hiện thao tác, áp cài đặt cá nhân, dựng nội dung, lưu thông báo (bỏ trùng).<br>4. Hệ thống đẩy thông báo tới trình duyệt người nhận; số trên chuông tăng ngay không cần tải lại trang; với việc quan trọng gửi thêm thư điện tử.<br>5. Người dùng mở bảng thông báo, bấm vào một thông báo: hệ thống đánh dấu đã đọc và chuyển tới công việc hoặc trang liên quan. |
+| Luồng thay thế | Thông báo "Cần xử lý" (lời mời, yêu cầu hoàn thành) nằm ở tab riêng và tự chuyển "Đã xử lý" khi được giải quyết, kể cả do người khác giải quyết. Người dùng lọc theo nhóm, đọc tất cả, xóa (hoàn tác trong 5 giây). Cài đặt: bật tắt theo nhóm và kênh (ứng dụng, thư), tắt tiếng từng dự án; một số loại bắt buộc không tắt được. Công việc nhắc hạn chạy lúc 08:00 mỗi ngày. |
+| Ngoại lệ | 2a. Dịch vụ thông báo hoặc Kafka tạm ngừng: sự kiện chờ và được xử lý khi chạy lại, không mất.<br>3a. Sự kiện giao lặp: bỏ qua nhờ khóa chống trùng.<br>4a. Mất kết nối kênh thời gian thực: giao diện hiện "đang kết nối lại" và tự nối lại.<br>5a. Công việc được nhắc đến không còn tồn tại: báo không tìm thấy. |
+
+**UC15. Tích hợp GitHub**
+
+| Mục | Nội dung |
+| :--- | :--- |
+| Tên Use Case | Tích hợp GitHub |
+| Tác nhân | Quản trị viên dự án (kết nối); lập trình viên (làm việc trên GitHub) |
+| Mô tả | Liên kết dự án phần mềm với kho GitHub để công việc và mã nguồn đồng bộ với nhau |
+| Điều kiện trước | Người dùng là quản trị viên dự án và có tài khoản GitHub |
+| Điều kiện sau | Dự án liên kết với kho; sự kiện GitHub cập nhật công việc |
+| Luồng sự kiện chính | 1. Quản trị viên mở tab GitHub của dự án, bấm "Kết nối với GitHub".<br>2. Hệ thống chuyển sang trang cấp quyền của GitHub kèm tham số trao đổi được ký.<br>3. Sau khi đồng ý, GitHub trả về; hệ thống kiểm tra tham số, đổi lấy token và lưu đã mã hóa.<br>4. Quản trị viên chọn kho, nhánh chính và các tùy chọn tự động (tự chuyển sang đang xem xét, tự đóng khi gộp, đóng Issue khi hoàn thành, từ khóa đóng việc).<br>5. Hệ thống đăng ký kênh nhận sự kiện với khóa bí mật, có thể đồng bộ các Issue đang mở về làm công việc.<br>6. Lập trình viên mở yêu cầu hợp nhất có tên nhánh, tiêu đề hoặc mô tả chứa mã công việc (ví dụ MOC-12): hệ thống xác thực chữ ký, gắn yêu cầu hợp nhất vào công việc và chuyển sang đang xem xét.<br>7. Khi yêu cầu hợp nhất được gộp vào nhánh chính và mô tả có từ khóa đóng việc (Closes, Fixes, Hoàn thành…): hệ thống chuyển công việc sang Hoàn thành. |
+| Luồng thay thế | Chiều ngược lại: công việc sang Hoàn thành thì Issue tương ứng được đóng; đổi người thực hiện thì đồng bộ sang GitHub. Từ công việc, người dùng tạo Issue GitHub bằng một nút và nhận gợi ý tên nhánh chứa mã. Quản trị viên có thể ngắt kết nối. |
+| Ngoại lệ | 3a. Tham số trao đổi sai người hoặc sai dự án: từ chối.<br>6a. Sự kiện sai chữ ký: bỏ qua.<br>6b. Yêu cầu hợp nhất vào nhánh khác nhánh chính: chỉ gắn liên kết, không đổi trạng thái.<br>7a. Gộp không có từ khóa đóng việc: giữ nguyên trạng thái (tránh hoàn thành sớm khi việc cần nhiều yêu cầu hợp nhất).<br>7b. Người thao tác trên GitHub chưa liên kết tài khoản, hoặc không có bước chuyển phù hợp: chỉ cập nhật liên kết.<br>7c. Người thao tác không phải quản trị viên: chỉ tạo yêu cầu "Tạm hoàn thành". |
 
 ## 3.2. Phân tích hệ thống
 
-### 3.2.1. Một số kịch bản chính
-
-**Bảng 3.5: Kịch bản thành viên gửi yêu cầu "Tạm hoàn thành"**
-
-| Bước | Tác nhân | Hành động | Phản hồi của hệ thống |
-| :-: | :--- | :--- | :--- |
-| 1 | Bình (thành viên) | Chọn trạng thái Hoàn thành cho MOC-5 | Kiểm tra điều kiện, bộ kiểm tra, việc chặn, việc con |
-| 2 | Hệ thống | Xác định Bình không có quyền xác nhận | Tạo yêu cầu chờ duyệt, giữ nguyên trạng thái, ghi nhật ký |
-| 3 | Hệ thống | Phát sự kiện | Thông báo "Yêu cầu xác nhận hoàn thành" tới quản trị viên dự án |
-| 4 | An (quản trị viên) | Chọn Xác nhận | MOC-5 sang Hoàn thành, ghi điểm cho người thực hiện |
-| 5 | Hệ thống | Thông báo kết quả | Bình nhận thông báo "Được xác nhận hoàn thành" |
-| Ngoại lệ | An | Từ chối kèm lý do | MOC-5 giữ nguyên; Bình nhận thông báo kèm lý do |
-
-**Bảng 3.6: Kịch bản liên kết công việc bị chặn vòng lặp**
-
-| Bước | Hành động | Phản hồi |
-| :-: | :--- | :--- |
-| 1 | An liên kết "MOC-1 chặn MOC-2" | Chấp nhận |
-| 2 | An liên kết "MOC-2 chặn MOC-3" | Chấp nhận |
-| 3 | An liên kết "MOC-3 chặn MOC-1" | Từ chối, báo chu trình MOC-1 → MOC-2 → MOC-3 → MOC-1 |
-| 4 | Bình chuyển MOC-2 sang Hoàn thành khi MOC-1 chưa xong | Từ chối vì còn việc chặn chưa xong |
-
-**Bảng 3.7: Kịch bản tùy biến trạng thái và quy trình của dự án**
-
-| Bước | Hành động | Phản hồi |
-| :-: | :--- | :--- |
-| 1 | An thêm trạng thái "Đang duyệt mã" vào nhóm Đang làm | Chấp nhận (tên chưa trùng) |
-| 2 | An thêm bước chuyển Đang làm → Đang duyệt mã → Hoàn thành, gán cho loại "sự cố" | Chấp nhận; "công việc" vẫn đi đường ngắn |
-| 3 | An xóa trạng thái "Hoàn thành" (trạng thái cuối cùng của nhóm) | Từ chối: nhóm phải còn ít nhất một trạng thái |
-| 4 | An xóa trạng thái đang có việc dùng | Từ chối, nêu số việc đang dùng |
-
-**Bảng 3.8: Kịch bản hoàn tất giai đoạn**
-
-| Bước | Hành động | Phản hồi |
-| :-: | :--- | :--- |
-| 1 | An chọn "Hoàn tất" ở giai đoạn đang chạy | Hiện số việc xong, chưa xong và hộp chọn đích |
-| 2 | An chọn chuyển việc dang dở sang giai đoạn kế | Kiểm tra đích hợp lệ |
-| 3 | An xác nhận | Lưu bản chụp, chuyển việc chưa xong (việc con đi theo cha), việc đã xong giữ nguyên giai đoạn cũ |
-| 4 | Hệ thống | Đóng giai đoạn, đóng băng số liệu đóng góp, phát thông báo |
-| 5 | An mở tiến độ | Báo cáo giai đoạn vừa đóng đọc từ bản chụp |
-
-**Bảng 3.9: Kịch bản tạo dự án từ mẫu**
-
-| Bước | Hành động | Phản hồi |
-| :-: | :--- | :--- |
-| 1 | An chọn mẫu "Xây dựng cửa hàng F&B" | Hiện bản xem trước và kết quả kiểm tra toàn vẹn |
-| 2 | An bỏ công việc "Thuê mặt bằng", đổi tên một công việc | Các việc con của việc bị bỏ cũng bị bỏ theo |
-| 3 | An nhập tên, mã MOC, ngày bắt đầu hôm nay | Hệ thống tính độ dời ngày |
-| 4 | An tạo dự án | Nhân bản trong một giao dịch, kiểm tra lại kết quả, báo số bản ghi đã tạo |
-
-**Bảng 3.10: Kịch bản mời thành viên vào dự án**
-
-| Bước | Tác nhân | Hành động | Phản hồi |
-| :-: | :--- | :--- | :--- |
-| 1 | An | Chọn người cần mời và vai trò | Tạo lời mời chờ trả lời, chưa thêm vào dự án |
-| 2 | Hệ thống | Phát thông báo và thư điện tử | Chi nhận được lời mời |
-| 3 | Chi | Chấp nhận | Tạo phân vai, đóng lời mời, báo cho An |
-| Ngoại lệ | Chi | Từ chối | Lời mời đóng, không thêm vào dự án |
-
-**Bảng 3.11: Kịch bản phân quyền trong không gian làm việc và dự án**
-
-| Bước | Tác nhân | Hành động | Phản hồi của hệ thống |
-| :-: | :--- | :--- | :--- |
-| 1 | Chi (người ngoài) | Mở đường dẫn của một không gian làm việc | "Không tìm thấy" (không cho biết không gian đó có thật) |
-| 2 | Chi (Khách) | Bấm tạo dự án | Từ chối: cần từ bậc Thành viên |
-| 3 | Bình (Thành viên không gian) | Tạo dự án | Chấp nhận; Bình là người tạo nên được gán Quản trị viên dự án |
-| 4 | Bình (Thành viên dự án) | Tạo giai đoạn | Từ chối: thiếu quyền quản lý giai đoạn |
-| 5 | An (Quản trị viên không gian làm việc) | Mở dự án của Bình | Được vào với toàn quyền, dù chưa có vai trò trong dự án |
-| 6 | An (Chủ sở hữu cuối cùng) | Rời không gian làm việc | Từ chối: phải còn ít nhất một Chủ sở hữu |
-
-**Bảng 3.12: Kịch bản quản lý loại công việc tùy biến theo ngành**
-
-| Bước | Hành động | Phản hồi |
-| :-: | :--- | :--- |
-| 1 | An thêm loại "Yêu cầu khách hàng" mức 0 | Chấp nhận; dùng được khi tạo việc, có thể thuộc hạng mục lớn và có việc con |
-| 2 | An thêm loại thứ hai trùng tên | Từ chối: tên đã tồn tại |
-| 3 | An đổi mức của loại "Công việc" đã có 20 việc | Từ chối: loại đã có dữ liệu |
-| 4 | An xóa loại "Công việc con" (loại duy nhất của mức -1) | Từ chối: luôn còn ít nhất một loại mỗi mức |
-| 5 | An xóa loại "Yêu cầu khách hàng" đang có 3 việc | Từ chối, nêu số việc; sau khi chuyển 3 việc sang loại khác thì xóa được |
-| 6 | Bình tạo công việc con và chọn cha là hạng mục lớn | Từ chối: công việc con phải thuộc công việc mức 0 |
-
-**Bảng 3.13: Kịch bản vòng đời giai đoạn**
-
-| Bước | Hành động | Phản hồi |
-| :-: | :--- | :--- |
-| 1 | An tạo "Giai đoạn 1" và "Giai đoạn 2", kéo việc vào | Cả hai ở trạng thái dự kiến |
-| 2 | An bắt đầu "Giai đoạn 2" | Từ chối: phải bắt đầu giai đoạn đứng đầu kế hoạch trước |
-| 3 | An bắt đầu "Giai đoạn 1" (đã có ngày kết thúc) | Giai đoạn 1 đang chạy; bảng tiến độ chỉ hiện việc của giai đoạn này |
-| 4 | An bắt đầu "Giai đoạn 2" khi Giai đoạn 1 đang chạy | Từ chối: chỉ một giai đoạn đang chạy |
-| 5 | An hoàn tất Giai đoạn 1, chuyển việc dang dở sang Giai đoạn 2 | Việc đã xong giữ nguyên Giai đoạn 1, việc chưa xong sang Giai đoạn 2 (việc con đi theo cha) |
-| 6 | An thêm việc vào Giai đoạn 1 đã đóng | Từ chối: giai đoạn đã đóng không sửa được |
-
-**Bảng 3.14: Kịch bản tính điểm đóng góp**
-
-| Bước | Hành động | Điểm ghi vào sổ |
-| :-: | :--- | :--- |
-| 1 | Bình hoàn thành việc 5 điểm đúng hạn (đã được An xác nhận) | +5,0 cho Bình, ghi chú "Đúng hạn" |
-| 2 | Bình hoàn thành việc 5 điểm trễ 2 ngày | +4,0, ghi chú "Trễ 2 ngày (-20%)" |
-| 3 | Bình báo xong việc 5 điểm trễ 7 ngày | +2,5 (phạt tối đa 50%) |
-| 4 | Việc ở bước 1 bị mở lại | -5,0 (dòng "mở lại" bù điểm đã cộng) |
-| 5 | Bình hoàn thành lại việc đó đúng hạn | +5,0, ghi chú "Hoàn thành lại" |
-| 6 | Việc cha có hai việc con hoàn thành | Điểm tính ở các việc con; việc cha tính 0 để không trùng |
-| 7 | An điều chỉnh tay +1,0 cho Bình | Thêm một dòng điều chỉnh mới, không sửa dòng cũ |
-
-**Bảng 3.15: Kịch bản tích hợp GitHub**
-
-| Bước | Tác nhân | Hành động | Phản hồi của hệ thống |
-| :-: | :--- | :--- | :--- |
-| 1 | An | Kết nối kho GitHub, chọn nhánh chính | Lưu kho, đăng ký kênh nhận sự kiện |
-| 2 | Bình (đã liên kết tài khoản GitHub) | Mở yêu cầu hợp nhất có tên nhánh chứa MOC-12 | Gắn yêu cầu hợp nhất vào MOC-12; chuyển MOC-12 sang đang xem xét |
-| 3 | Bình | Gộp yêu cầu, mô tả có "Closes MOC-12" | MOC-12 chuyển sang Hoàn thành (nếu Bình là quản trị viên) hoặc chỉ tạo yêu cầu "Tạm hoàn thành" |
-| 4 | Bình | Gộp yêu cầu khác chỉ nhắc MOC-13, không có từ khóa đóng | Chỉ gắn liên kết, MOC-13 giữ trạng thái |
-| 5 | An | Chuyển MOC-14 sang Hoàn thành trên bảng | Issue GitHub liên kết với MOC-14 được đóng |
-
-### 3.2.2. Phân tích luồng nghiệp vụ chính
+### 3.2.1. Phân tích luồng nghiệp vụ chính
 
 **Hình 3.2: Luồng chuyển trạng thái và xác nhận hoàn thành**
 
@@ -561,7 +412,7 @@ flowchart TD
     CV --> GH["GitHub"]
 ```
 
-**Bảng 3.16: Công nghệ và trách nhiệm của từng dịch vụ**
+**Bảng 3.5: Công nghệ và trách nhiệm của từng dịch vụ**
 
 | Dịch vụ | Cổng | Trách nhiệm | Công nghệ chính |
 | :--- | :-: | :--- | :--- |
@@ -572,7 +423,7 @@ flowchart TD
 | Dịch vụ thông báo | 9994 | Nhận sự kiện, lưu và đẩy thông báo, gửi thư điện tử | Spring Kafka, WebSocket, Redis |
 | Giao diện | 5173 | Giao diện người dùng | React 19, Vite 8 |
 
-**Bảng 3.17: Định tuyến tại cổng giao tiếp API**
+**Bảng 3.6: Định tuyến tại cổng giao tiếp API**
 
 | Đường dẫn công khai | Dịch vụ đích |
 | :--- | :--- |
@@ -793,7 +644,7 @@ Các lớp xử lý nghiệp vụ tương ứng: kiểm tra phân cấp, máy tr
 
 Hệ thống dùng một cơ sở dữ liệu PostgreSQL chung; mỗi dịch vụ sở hữu một nhóm bảng, cấu trúc được quản lý theo phiên bản bằng công cụ chuyển đổi cấu trúc (riêng dịch vụ định danh do khung ORM tự tạo).
 
-**Bảng 3.18: Các nhóm dữ liệu theo dịch vụ**
+**Bảng 3.7: Các nhóm dữ liệu theo dịch vụ**
 
 | Dịch vụ | Dữ liệu |
 | :--- | :--- |
@@ -837,7 +688,7 @@ erDiagram
 
 Các thực thể được mô tả theo từng nhóm bài toán của Chương 2. Mọi thực thể thuộc dự án đều có mã định danh duy nhất; các cột người dùng lưu mã người dùng thống nhất toàn hệ thống.
 
-**Bảng 3.19: Nhóm phân quyền và thành viên**
+**Bảng 3.8: Nhóm phân quyền và thành viên**
 
 | Thực thể | Thuộc tính chính | Ràng buộc |
 | :--- | :--- | :--- |
@@ -849,7 +700,7 @@ Các thực thể được mô tả theo từng nhóm bài toán của Chương 
 | Phân vai | Dự án, người dùng, vai trò | Người không có dòng phân vai thì không có quyền gì (trừ khi là trưởng dự án, người tạo hoặc quản trị không gian) |
 | Lời mời dự án | Dự án, người được mời, người mời, vai trò dự án, trạng thái, thời điểm trả lời | Một lời mời chờ cho mỗi người và mỗi dự án |
 
-**Bảng 3.20: Nhóm dự án, loại công việc, trạng thái và quy trình**
+**Bảng 3.9: Nhóm dự án, loại công việc, trạng thái và quy trình**
 
 | Thực thể | Thuộc tính chính | Ràng buộc |
 | :--- | :--- | :--- |
@@ -860,7 +711,7 @@ Các thực thể được mô tả theo từng nhóm bài toán của Chương 
 | Bước chuyển | Quy trình, trạng thái nguồn (rỗng nếu là bước khởi tạo), trạng thái đích, tên, điều kiện, bộ kiểm tra, việc sau chuyển (dạng JSON) | Đích khác nguồn; không trùng cặp nguồn–đích; tên không trùng trong quy trình |
 | Sơ đồ quy trình | Dự án; ánh xạ loại công việc → quy trình | Mỗi loại một quy trình |
 
-**Bảng 3.21: Nhóm công việc và tùy biến**
+**Bảng 3.10: Nhóm công việc và tùy biến**
 
 | Thực thể | Thuộc tính chính | Ràng buộc |
 | :--- | :--- | :--- |
@@ -875,7 +726,7 @@ Các thực thể được mô tả theo từng nhóm bài toán của Chương 
 | Định nghĩa trường tùy chỉnh | Dự án, khóa trường, tên, kiểu dữ liệu (văn bản, số, chọn một, chọn nhiều, ngày, người dùng, ô đánh dấu, đường dẫn), danh sách lựa chọn, quy tắc kiểm tra, danh sách loại công việc áp dụng | Khóa trường không trùng trong dự án |
 | Bộ lọc đã lưu | Dự án, tên, mô tả, điều kiện lọc, chủ sở hữu, cờ dùng chung | |
 
-**Bảng 3.22: Nhóm giai đoạn, bảng tiến độ, đóng góp và tiến độ**
+**Bảng 3.11: Nhóm giai đoạn, bảng tiến độ, đóng góp và tiến độ**
 
 | Thực thể | Thuộc tính chính | Ràng buộc |
 | :--- | :--- | :--- |
@@ -889,7 +740,7 @@ Các thực thể được mô tả theo từng nhóm bài toán của Chương 
 | Sổ ghi công | Dự án, giai đoạn, công việc, người được ghi nhận, điểm (dương hoặc âm), loại (hoàn thành, mở lại, xóa, điều chỉnh), ghi chú, người thao tác, thời điểm | Chỉ thêm, không sửa, không xóa |
 | Bản chụp đóng góp | Giai đoạn, người dùng, tổng điểm, tỷ lệ đóng góp, số việc hoàn thành, số bình luận, số sự cố báo cáo, tỷ lệ đúng hạn, số lần bị mở lại | Mỗi cặp giai đoạn–người dùng duy nhất |
 
-**Bảng 3.23: Nhóm mẫu dự án, thông báo và GitHub**
+**Bảng 3.12: Nhóm mẫu dự án, thông báo và GitHub**
 
 | Thực thể | Thuộc tính chính | Ràng buộc |
 | :--- | :--- | :--- |
@@ -908,7 +759,7 @@ Các ràng buộc quan trọng ở tầng cơ sở dữ liệu: mỗi dự án t
 
 Giao diện lập trình theo chuẩn REST, dữ liệu JSON, phản hồi được bọc thống nhất; lỗi dùng mã HTTP chuẩn: 400 (dữ liệu hoặc quy tắc không hợp lệ), 401 (chưa xác thực), 403 (không đủ quyền), 404 (không tìm thấy hoặc không được biết là có), 409 (xung đột, ví dụ hai người cùng sửa một thẻ hoặc đã có giai đoạn đang chạy).
 
-**Bảng 3.24: Nhóm giao diện lập trình theo dịch vụ**
+**Bảng 3.13: Nhóm giao diện lập trình theo dịch vụ**
 
 | Dịch vụ | Nhóm chức năng |
 | :--- | :--- |
@@ -953,7 +804,7 @@ Dịch vụ thông báo độc lập, gồm các thành phần: bộ nhận sự
 
 Dữ liệu gồm ba nhóm: thông báo (mục 3.3.3), cài đặt thông báo theo nhóm và kênh của từng người, và danh sách dự án bị tắt tiếng.
 
-**Bảng 3.25: Chức năng giao diện lập trình của dịch vụ thông báo**
+**Bảng 3.14: Chức năng giao diện lập trình của dịch vụ thông báo**
 
 | Chức năng | Mô tả |
 | :--- | :--- |
