@@ -36,6 +36,13 @@ spring:
             - Path=/notification/api/**,/notification/ws/**
           filters:
             - StripPrefix=1
+        # Trợ lý AI (ai-service). Phản hồi SSE (text/event-stream) đi qua gateway không bị buffer; Nginx máy chủ + frontend cũng tắt buffering ở /ai/
+        - id: ai-service
+          uri: http://ai-service:8084
+          predicates:
+            - Path=/ai/api/**,/ai/actuator/**
+          filters:
+            - StripPrefix=1
       # CorsWebFilter (app.cors.*) VÀ globalcors đều đang chạy; list gốc chỉ có localhost nên phải đè cả hai,
       # nếu không request ghi / WebSocket từ https://app.<domain> bị 403 khi gateway không thấy header X-Forwarded-*.
       globalcors:

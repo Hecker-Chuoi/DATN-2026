@@ -28,12 +28,12 @@
 
 1. **Dockerfile**: đủ 6; frontend có `ARG VITE_KEYCLOAK_URL`.
 2. **Cấu hình Spring cho production**: `infrastructure/prod/spring/*/application-prod.yaml` (DB, Keycloak issuer / jwk, Kafka, Redis, MinIO, route gateway, CORS…).
-3. **`infrastructure/docker-compose.prod.yml`**: 6 hạ tầng + 5 service + frontend, healthcheck, `depends_on` theo chuỗi, `mem_limit`; `infrastructure/prod/` (`public.env`, init Postgres, Nginx mẫu, `deploy.sh`, `make-realm.sh`, `backup-postgres.sh`).
-4. **Script**: `infrastructure/ci/build-push.sh` (build + push 6 image).
+3. **`infrastructure/docker-compose.prod.yml`**: 6 hạ tầng + 6 service + frontend, healthcheck, `depends_on` theo chuỗi, `mem_limit`; `infrastructure/prod/` (`public.env`, init Postgres, Nginx mẫu, `deploy.sh`, `make-realm.sh`, `backup-postgres.sh`).
+4. **Script**: `infrastructure/ci/build-push.sh` (build + push 7 image).
 5. **Workflow** `.github/workflows/ci-cd.yml`: test → build / push → deploy → kiểm tra HTTPS.
 6. Đặt tên miền + Docker Hub user: `bash infrastructure/prod/scripts/set-public-host.sh <domain> https <user>` rồi commit.
 
-**Xong khi:** `docker compose config` hợp lệ; workflow qua `actionlint`; (đã thử) 12 container `healthy` bằng image build local ([cac_buoc/04 §5](cac_buoc/04_DOCKER_COMPOSE_PRODUCTION.md#5-đã-kiểm-chứng-gì-chưa-kiểm-chứng-gì)).
+**Xong khi:** `docker compose config` hợp lệ; workflow qua `actionlint`; (đã thử) 13 container `healthy` bằng image build local ([cac_buoc/04 §5](cac_buoc/04_DOCKER_COMPOSE_PRODUCTION.md#5-đã-kiểm-chứng-gì-chưa-kiểm-chứng-gì)).
 
 ---
 
@@ -41,17 +41,17 @@
 
 1. Cài Docker + Compose (giới hạn log container), Nginx, certbot, jq ([cac_buoc/02](cac_buoc/02_CHUAN_BI_SERVER_UNG_DUNG.md)).
 2. DNS `app.` / `sso.` → Elastic IP; Nginx proxy vào `127.0.0.1:3000` (frontend) và `127.0.0.1:8080` (Keycloak); HTTPS bằng certbot.
-3. Tạo user `deployer` (nhóm `docker`), `~/datn/secrets.env` (15 khoá ngẫu nhiên), sao lưu về máy cá nhân ([cac_buoc/03](cac_buoc/03_SECRET_VA_CAU_HINH.md)).
+3. Tạo user `deployer` (nhóm `docker`), `~/datn/secrets.env` (17 khoá), sao lưu về máy cá nhân ([cac_buoc/03](cac_buoc/03_SECRET_VA_CAU_HINH.md)).
 
-**Xong khi:** `certbot renew --dry-run` thành công; `secrets.env` có 15 khoá.
+**Xong khi:** `certbot renew --dry-run` thành công; `secrets.env` có 17 khoá.
 
 ---
 
 ## Bước 3 — Deploy tay lần đầu ([cac_buoc/05](cac_buoc/05_TRIEN_KHAI_LAN_DAU.md))
 
-Build + push 6 image từ máy Windows (`build-push.sh <sha>`); cài `deploy.sh` lên server; `tar | ssh ... deploy.sh deploy <sha>`; mở `https://app.<domain>` dùng thử.
+Build + push 7 image từ máy Windows (`build-push.sh <sha>`); cài `deploy.sh` lên server; `tar | ssh ... deploy.sh deploy <sha>`; mở `https://app.<domain>` dùng thử.
 
-**Xong khi:** `https://app.<domain>` chạy (đăng ký, đăng nhập, tạo dự án, WebSocket, upload); `deploy.sh check` thấy 12 container `healthy`.
+**Xong khi:** `https://app.<domain>` chạy (đăng ký, đăng nhập, tạo dự án, WebSocket, upload); `deploy.sh check` thấy 13 container `healthy`.
 
 ---
 
@@ -70,7 +70,7 @@ Build + push 6 image từ máy Windows (`build-push.sh <sha>`); cài `deploy.sh`
 | # | Kịch bản | Kết quả mong đợi |
 |---|---|---|
 | 1 | Mở PR có test hỏng | Actions báo đỏ trên PR, **không** build / push / deploy |
-| 2 | Merge vào `main` | Test xanh → 6 image `<sha>` trên Docker Hub → `deploy.sh` in `✅` → bước kiểm tra HTTPS `OK` |
+| 2 | Merge vào `main` | Test xanh → 7 image `<sha>` trên Docker Hub → `deploy.sh` in `✅` → bước kiểm tra HTTPS `OK` |
 | 3 | Sửa giao diện nhỏ rồi merge | Thay đổi hiện trên `https://app.<domain>` (gián đoạn ngắn lúc container được thay) |
 | 4 | Deploy bản cố ý lỗi (service không khởi động) | `up --wait` hết hạn / smoke test lỗi → **tự về bản trước**, job đỏ, ứng dụng vẫn chạy |
 | 5 | Rollback tay | `sudo -u deployer /home/deployer/deploy.sh rollback` |

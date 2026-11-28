@@ -110,27 +110,16 @@ Chúng em xin chân thành cảm ơn!
 | Bảng 3.2 | Bảng yêu cầu phi chức năng | |
 | Bảng 3.3 | Danh sách Actor | |
 | Bảng 3.4 | Danh sách Use Case | |
-| Bảng 3.5 | Kịch bản thành viên gửi yêu cầu "Tạm hoàn thành" | |
-| Bảng 3.6 | Kịch bản liên kết công việc bị chặn vòng lặp | |
-| Bảng 3.7 | Kịch bản tùy biến trạng thái và quy trình của dự án | |
-| Bảng 3.8 | Kịch bản hoàn tất giai đoạn | |
-| Bảng 3.9 | Kịch bản tạo dự án từ mẫu | |
-| Bảng 3.10 | Kịch bản mời thành viên vào dự án | |
-| Bảng 3.11 | Kịch bản phân quyền trong không gian làm việc và dự án | |
-| Bảng 3.12 | Kịch bản quản lý loại công việc tùy biến theo ngành | |
-| Bảng 3.13 | Kịch bản vòng đời giai đoạn | |
-| Bảng 3.14 | Kịch bản tính điểm đóng góp | |
-| Bảng 3.15 | Kịch bản tích hợp GitHub | |
-| Bảng 3.16 | Công nghệ và trách nhiệm của từng dịch vụ | |
-| Bảng 3.17 | Định tuyến tại cổng giao tiếp API | |
-| Bảng 3.18 | Các nhóm dữ liệu theo dịch vụ | |
-| Bảng 3.19 | Nhóm phân quyền và thành viên | |
-| Bảng 3.20 | Nhóm dự án, loại công việc, trạng thái và quy trình | |
-| Bảng 3.21 | Nhóm công việc và tùy biến | |
-| Bảng 3.22 | Nhóm giai đoạn, bảng tiến độ, đóng góp và tiến độ | |
-| Bảng 3.23 | Nhóm mẫu dự án, thông báo và GitHub | |
-| Bảng 3.24 | Nhóm giao diện lập trình theo dịch vụ | |
-| Bảng 3.25 | Chức năng giao diện lập trình của dịch vụ thông báo | |
+| Bảng 3.5 | Công nghệ và trách nhiệm của từng dịch vụ | |
+| Bảng 3.6 | Định tuyến tại cổng giao tiếp API | |
+| Bảng 3.7 | Các nhóm dữ liệu theo dịch vụ | |
+| Bảng 3.8 | Nhóm phân quyền và thành viên | |
+| Bảng 3.9 | Nhóm dự án, loại công việc, trạng thái và quy trình | |
+| Bảng 3.10 | Nhóm công việc và tùy biến | |
+| Bảng 3.11 | Nhóm giai đoạn, bảng tiến độ, đóng góp và tiến độ | |
+| Bảng 3.12 | Nhóm mẫu dự án, thông báo và GitHub | |
+| Bảng 3.13 | Nhóm giao diện lập trình theo dịch vụ | |
+| Bảng 3.14 | Chức năng giao diện lập trình của dịch vụ thông báo | |
 | Bảng 4.1 | Môi trường và công cụ | |
 | Bảng 4.2 | Các công việc của quy trình CI/CD | |
 | Bảng 4.3 | Thống kê nhóm chức năng và số test case hệ thống | |
@@ -156,21 +145,22 @@ Chúng em xin chân thành cảm ơn!
 | :--- | :--- | :-: |
 | Hình 1.1 | Kiến trúc Microservice của hệ thống (nên thêm vào mục 1.2.1, có thể dùng lại Hình 3.10) | |
 | Hình 3.1 | Biểu đồ Use Case tổng quan | |
-| Hình 3.2 | Luồng chuyển trạng thái và xác nhận hoàn thành | |
-| Hình 3.3 | Luồng hoàn tất giai đoạn | |
-| Hình 3.4 | Luồng tạo dự án từ mẫu | |
-| Hình 3.5 | Luồng phát và nhận thông báo | |
-| Hình 3.6 | Luồng xét quyền trong không gian làm việc và dự án | |
-| Hình 3.7 | Luồng kiểm tra khi cấu hình loại công việc và trạng thái | |
-| Hình 3.8 | Luồng tính điểm đóng góp | |
-| Hình 3.9 | Luồng GitHub khi có yêu cầu hợp nhất | |
-| Hình 3.10 | Tổng quan kiến trúc hệ thống | |
-| Hình 3.11 | Sơ đồ lớp: dự án, công việc, loại, trạng thái, quy trình | |
-| Hình 3.12 | Sơ đồ lớp: giai đoạn, bảng tiến độ, hoàn thành, đóng góp | |
-| Hình 3.13 | Sơ đồ lớp: không gian làm việc, phân quyền, lời mời | |
-| Hình 3.14 | Sơ đồ lớp: mẫu dự án, thông báo, GitHub | |
-| Hình 3.15 | Sơ đồ thực thể và quan hệ của dịch vụ công việc | |
-| Hình 3.16 | Sơ đồ điều hướng màn hình | |
+| Hình 3.2 | Sơ đồ tuần tự đăng ký, xác thực thư điện tử | |
+| Hình 3.3 | Sơ đồ tuần tự đăng nhập, quên và đặt lại mật khẩu | |
+| Hình 3.4 | Sơ đồ tuần tự tạo dự án từ mẫu và cấu hình dự án | |
+| Hình 3.5 | Sơ đồ tuần tự tạo, chỉnh sửa và giao công việc | |
+| Hình 3.6 | Sơ đồ tuần tự liên kết công việc | |
+| Hình 3.7 | Sơ đồ tuần tự chuyển trạng thái và xác nhận hoàn thành | |
+| Hình 3.8 | Sơ đồ tuần tự bảng tiến độ và báo cáo tiến độ | |
+| Hình 3.9 | Sơ đồ tuần tự nhận thông báo | |
+| Hình 3.10 | Sơ đồ tuần tự tích hợp GitHub | |
+| Hình 3.11 | Tổng quan kiến trúc hệ thống | |
+| Hình 3.12 | Sơ đồ lớp: dự án, công việc, loại, trạng thái, quy trình | |
+| Hình 3.13 | Sơ đồ lớp: giai đoạn, bảng tiến độ, hoàn thành, đóng góp | |
+| Hình 3.14 | Sơ đồ lớp: không gian làm việc, phân quyền, lời mời | |
+| Hình 3.15 | Sơ đồ lớp: mẫu dự án, thông báo, GitHub | |
+| Hình 3.16 | Sơ đồ thực thể và quan hệ của dịch vụ công việc | |
+| Hình 3.17 | Sơ đồ điều hướng màn hình | |
 | Hình 4.1 | Quy trình CI/CD và kiến trúc máy chủ triển khai | |
 | Hình 4.2 | Trang giới thiệu | |
 | Hình 4.3 | Đăng ký và đăng nhập | |

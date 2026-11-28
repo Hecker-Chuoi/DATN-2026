@@ -7,7 +7,7 @@
 #   REGISTRY          docker.io/<tài-khoản-dockerhub>          (ghi đè bằng biến môi trường REGISTRY)
 #   VITE_KEYCLOAK_URL <scheme>://<SSO_HOST>  — Vite NHÚNG URL này vào bundle frontend lúc build (02 nghiên cứu §3.3)
 # Biến môi trường tuỳ chọn:
-#   SERVICES          danh sách service cần build (mặc định cả 6)
+#   SERVICES          danh sách service cần build (mặc định cả 7)
 #   EXTRA_TAG         gắn thêm một tag phụ (ví dụ main). deploy.sh luôn chạy theo TAG (SHA), không theo tag phụ.
 #   TRIVY_EXIT_CODE   0 (mặc định) = quét chỉ báo cáo; 1 = chặn khi có lỗ hổng HIGH/CRITICAL đã có bản vá
 set -euo pipefail
@@ -28,7 +28,7 @@ if [ -z "${VITE_KEYCLOAK_URL:-}" ]; then
   VITE_KEYCLOAK_URL="$SCHEME://$SSO_HOST"
 fi
 
-SERVICES="${SERVICES:-api-gateway identity-service work-service workspace-service notification-service frontend}"
+SERVICES="${SERVICES:-api-gateway identity-service work-service workspace-service notification-service ai-service frontend}"
 TRIVY_EXIT_CODE="${TRIVY_EXIT_CODE:-0}"
 SOURCE_URL="${SOURCE_URL:-}"
 export DOCKER_BUILDKIT=1                     # Dockerfile backend dùng RUN --mount=type=cache
@@ -39,7 +39,7 @@ echo "== Registry: $REGISTRY | tag: $TAG | VITE_KEYCLOAK_URL: $VITE_KEYCLOAK_URL
 for s in $SERVICES; do
   case "$s" in
     frontend) ctx=frontend; file=frontend/Dockerfile; extra=(--build-arg "VITE_KEYCLOAK_URL=$VITE_KEYCLOAK_URL") ;;
-    api-gateway|identity-service|work-service|workspace-service|notification-service) ctx=backend; file="backend/$s/Dockerfile"; extra=() ;;
+    api-gateway|identity-service|work-service|workspace-service|notification-service|ai-service) ctx=backend; file="backend/$s/Dockerfile"; extra=() ;;
     *) echo "Service không hợp lệ: $s"; exit 1 ;;
   esac
   [ -f "$file" ] || { echo "Không có $file"; exit 1; }
