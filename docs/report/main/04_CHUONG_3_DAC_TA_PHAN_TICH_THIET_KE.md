@@ -245,141 +245,316 @@ Phần này mô tả kịch bản chi tiết của chín nhóm chức năng quan
 
 ## 3.2. Phân tích hệ thống
 
-### 3.2.1. Phân tích luồng nghiệp vụ chính
+Mỗi Use Case ở mục 3.1.5 được phân tích bằng một sơ đồ tuần tự và các bước của quy trình.
 
-**Hình 3.2: Luồng chuyển trạng thái và xác nhận hoàn thành**
+**- Đăng ký, xác thực thư điện tử (UC01)**
+
+**Hình 3.2: Sơ đồ tuần tự đăng ký, xác thực thư điện tử**
 
 ```mermaid
-flowchart TD
-    A["Thành viên chọn bước chuyển"] --> B{"Hợp lệ: đúng quy trình,<br/>thỏa điều kiện, bộ kiểm tra,<br/>không còn việc chặn, việc con?"}
-    B -- "Không" --> X["Báo lỗi kèm lý do"]
-    B -- "Có" --> C{"Đích là nhóm Hoàn thành<br/>và không phải quản trị viên?"}
-    C -- "Không" --> D["Đổi trạng thái, ghi nhật ký,<br/>lan truyền lên việc cha"]
-    C -- "Có" --> E["Tạo yêu cầu Tạm hoàn thành<br/>giữ nguyên trạng thái"]
-    E --> F{"Quản trị viên xử lý"}
-    F -- "Xác nhận" --> G["Hoàn thành, ghi điểm đóng góp"]
-    F -- "Từ chối" --> H["Giữ nguyên, báo người gửi"]
-    D --> I["Phát thông báo"]
-    G --> I
-    H --> I
+sequenceDiagram
+    actor K as Khách vãng lai
+    participant GD as Frontend
+    participant DD as identity-service
+    participant TB as notification-service
+    K->>GD: Nhập thông tin đăng ký
+    GD->>DD: Gửi yêu cầu đăng ký
+    DD->>DD: Kiểm tra dữ liệu, tên đăng nhập, thư điện tử chưa dùng
+    DD->>DD: Tạo tài khoản ở trạng thái chờ xác thực
+    DD->>TB: Yêu cầu gửi thư xác thực kèm mã dùng một lần
+    TB-->>K: Thư chứa liên kết xác thực
+    DD-->>GD: Đăng ký thành công, chờ xác thực
+    K->>GD: Mở liên kết xác thực trong thư
+    GD->>DD: Gửi mã xác thực
+    DD->>DD: Kiểm tra mã còn hiệu lực, kích hoạt tài khoản
+    DD-->>GD: Xác thực thành công
 ```
 
-**Hình 3.3: Luồng hoàn tất giai đoạn**
+Quy trình đăng ký, xác thực thư điện tử:
+
+1. Nhập thông tin: Khách nhập tên đăng nhập, thư điện tử, mật khẩu, họ tên. Sau đó, Hệ thống kiểm tra dữ liệu hợp lệ và tên đăng nhập, thư điện tử chưa được dùng.
+2. Tạo tài khoản: Hệ thống tạo tài khoản ở trạng thái chờ xác thực. Sau đó, Hệ thống gửi thư chứa liên kết xác thực dùng một lần.
+3. Xác thực: Khách mở thư và bấm liên kết. Sau đó, Hệ thống kiểm tra mã còn hiệu lực và kích hoạt tài khoản.
+4. Kết quả: Hệ thống thông báo xác thực thành công, khách đăng nhập được. Sau đó, quy trình kết thúc. Nếu mã sai, hết hạn hoặc đã dùng thì Hệ thống báo lỗi và cho gửi lại thư xác thực.
+
+**- Đăng nhập, quên và đặt lại mật khẩu (UC02)**
+
+**Hình 3.3: Sơ đồ tuần tự đăng nhập, quên và đặt lại mật khẩu**
+
+```mermaid
+sequenceDiagram
+    actor K as Khách vãng lai
+    participant GD as Frontend
+    participant GW as api-gateway
+    participant DD as identity-service
+    participant KC as Keycloak
+    K->>GD: Nhập tên đăng nhập và mật khẩu
+    GD->>GW: Yêu cầu đăng nhập
+    GW->>DD: Chuyển tiếp yêu cầu
+    DD->>KC: Xác thực tài khoản
+    KC-->>DD: Mã truy cập và mã gia hạn
+    DD-->>GD: Trả mã, đặt cookie chỉ gửi qua giao thức web
+    GD-->>K: Chuyển tới danh sách không gian làm việc
+    K->>GD: Chọn quên mật khẩu, nhập thư điện tử
+    GD->>DD: Yêu cầu đặt lại mật khẩu
+    DD-->>K: Thư chứa liên kết có hiệu lực 30 phút
+    K->>GD: Mở liên kết, nhập mật khẩu mới
+    GD->>DD: Gửi mật khẩu mới kèm mã
+    DD->>KC: Cập nhật mật khẩu
+    DD-->>GD: Đặt lại thành công
+```
+
+Quy trình đăng nhập, quên và đặt lại mật khẩu:
+
+1. Đăng nhập: Khách nhập tên đăng nhập hoặc thư điện tử và mật khẩu. Sau đó, Hệ thống xác thực với máy chủ định danh.
+2. Cấp phiên: Hệ thống cấp mã truy cập, mã gia hạn và đặt cookie. Sau đó, Giao diện chuyển tới danh sách không gian làm việc. Mã hết hạn thì giao diện tự dùng mã gia hạn xin mã mới.
+3. Đăng nhập Google (thay thế): Khách bấm đăng nhập bằng Google. Sau đó, Hệ thống chuyển sang Google, nhận kết quả, tự tạo tài khoản nếu là lần đầu rồi cấp phiên.
+4. Quên mật khẩu: Khách nhập thư điện tử. Sau đó, Hệ thống gửi liên kết đặt lại có hiệu lực 30 phút.
+5. Đặt mật khẩu mới: Khách mở liên kết và nhập mật khẩu mới. Sau đó, Hệ thống cập nhật mật khẩu và yêu cầu đăng nhập lại; quy trình kết thúc. Sai thông tin hoặc tài khoản chưa xác thực thì Hệ thống từ chối kèm lý do.
+
+**- Tạo và cấu hình dự án (UC06)**
+
+**Hình 3.4: Sơ đồ tuần tự tạo dự án từ mẫu và cấu hình dự án**
+
+```mermaid
+sequenceDiagram
+    actor ND as Thành viên không gian
+    actor QT as Quản trị viên dự án
+    participant GD as Frontend
+    participant CV as work-service
+    ND->>GD: Chọn tạo dự án, chọn mẫu
+    GD->>CV: Xem trước mẫu
+    CV-->>GD: Bản xem trước và kết quả kiểm tra toàn vẹn
+    ND->>GD: Tùy chỉnh nhanh, nhập tên, mã, ngày bắt đầu
+    GD->>CV: Một yêu cầu gồm mẫu, thông tin dự án, các tùy chỉnh
+    CV->>CV: Kiểm tra toàn vẹn mẫu
+    CV->>CV: Nhân bản trong một giao dịch, áp tùy chỉnh, dời mốc thời gian
+    CV->>CV: Kiểm tra toàn vẹn kết quả
+    CV-->>GD: Dự án mới, số bản ghi đã tạo
+    QT->>GD: Mở cấu hình loại công việc, trạng thái, quy trình
+    GD->>CV: Thêm, sửa hoặc xóa loại công việc, trạng thái, bước chuyển
+    CV->>CV: Kiểm tra ràng buộc giữ cấu hình hợp lệ
+    CV-->>GD: Lưu thành công hoặc từ chối kèm lý do
+```
+
+Quy trình tạo và cấu hình dự án:
+
+1. Chọn mẫu: Thành viên chọn tạo dự án và chọn một mẫu. Sau đó, Hệ thống hiển thị bản xem trước và kết quả kiểm tra toàn vẹn của mẫu.
+2. Tùy chỉnh nhanh: Thành viên đổi tên trạng thái, loại công việc; đổi tên hoặc bỏ giai đoạn, công việc. Sau đó, Hệ thống ghi nhớ các tùy chỉnh trên giao diện.
+3. Nhập thông tin: Thành viên nhập tên, mã dự án, ngày bắt đầu và bấm tạo. Sau đó, Hệ thống tính độ dời ngày so với mốc gốc của mẫu.
+4. Nhân bản: Hệ thống nhân bản trong một giao dịch, áp tùy chỉnh, dời mọi mốc thời gian và đặt lại tiến độ công việc. Sau đó, Hệ thống kiểm tra toàn vẹn kết quả.
+5. Kết quả: Hệ thống báo số bản ghi đã tạo và chuyển vào dự án mới. Lỗi giữa chừng thì Hệ thống hoàn tác toàn bộ.
+6. Cấu hình: Quản trị viên thêm, sửa, xóa loại công việc, trạng thái, bước chuyển. Sau đó, Hệ thống kiểm tra các ràng buộc (không xóa loại hoặc trạng thái cuối cùng của mức hoặc nhóm, không xóa mục đang có việc dùng…) rồi lưu hoặc từ chối kèm lý do; quy trình kết thúc.
+
+**- Tạo, chỉnh sửa và giao công việc (UC08)**
+
+**Hình 3.5: Sơ đồ tuần tự tạo, chỉnh sửa và giao công việc**
+
+```mermaid
+sequenceDiagram
+    actor TV as Thành viên dự án
+    participant GD as Frontend
+    participant CV as work-service
+    participant HM as Outbox
+    TV->>GD: Bấm tạo công việc, chọn loại, nhập tiêu đề và thuộc tính
+    GD->>CV: Gửi yêu cầu tạo công việc
+    CV->>CV: Kiểm tra quyền tạo và quan hệ cha con theo ba tầng
+    CV->>CV: Cấp mã, đặt trạng thái khởi tạo, xếp thẻ vào cuối danh sách
+    CV->>CV: Lưu công việc, ghi nhật ký
+    CV-->>GD: Công việc mới kèm mã
+    TV->>GD: Chọn người thực hiện
+    GD->>CV: Yêu cầu giao việc
+    CV->>CV: Kiểm tra quyền giao việc, người được giao thuộc dự án
+    CV->>CV: Lưu, ghi lịch sử người thực hiện
+    CV->>HM: Ghi sự kiện được giao việc cùng giao dịch
+    CV-->>GD: Giao việc thành công
+```
+
+Quy trình tạo, chỉnh sửa và giao công việc:
+
+1. Tạo công việc: Thành viên chọn loại và nhập tiêu đề cùng các thuộc tính (mô tả, ưu tiên, điểm, hạn, cha, giai đoạn, nhãn…). Sau đó, Hệ thống kiểm tra quyền tạo và quan hệ cha con theo ma trận ba tầng.
+2. Lưu: Hệ thống cấp mã công việc, đặt trạng thái khởi tạo, xếp thẻ vào cuối danh sách. Sau đó, Hệ thống lưu và ghi nhật ký.
+3. Giao việc: Thành viên chọn người thực hiện. Sau đó, Hệ thống kiểm tra quyền giao việc và người được giao thuộc dự án, rồi lưu và ghi lịch sử người thực hiện.
+4. Thông báo: Hệ thống ghi sự kiện cùng giao dịch để báo cho người được giao.
+5. Chỉnh sửa: Thành viên sửa thuộc tính. Sau đó, Hệ thống ghi từng trường thay đổi vào nhật ký; hai người cùng sửa một thẻ thì Hệ thống báo xung đột và giao diện tải lại. Quy trình kết thúc.
+
+**- Liên kết công việc (UC09)**
+
+**Hình 3.6: Sơ đồ tuần tự liên kết công việc**
+
+```mermaid
+sequenceDiagram
+    actor TV as Thành viên dự án
+    participant GD as Frontend
+    participant CV as work-service
+    participant HM as Outbox
+    TV->>GD: Mở công việc nguồn, thêm liên kết
+    TV->>GD: Chọn loại liên kết và công việc đích
+    GD->>CV: Yêu cầu tạo liên kết
+    CV->>CV: Kiểm tra điều kiện hợp lệ của liên kết
+    CV->>CV: Với liên kết chặn hoặc gây ra, tìm đường đi từ đích về nguồn
+    alt Có đường đi, tạo vòng lặp
+        CV-->>GD: Từ chối, báo chu trình
+    else Không có đường đi
+        CV->>CV: Lưu một liên kết, ghi nhật ký ở cả hai công việc
+        CV->>HM: Liên kết chặn thì ghi sự kiện báo người thực hiện việc bị chặn
+        CV-->>GD: Liên kết hiển thị hai chiều
+    end
+```
+
+Quy trình liên kết công việc:
+
+1. Chọn liên kết: Thành viên mở công việc nguồn, chọn thêm liên kết, chọn loại và công việc đích. Sau đó, Hệ thống kiểm tra điều kiện hợp lệ (không tự liên kết, không với việc đã xóa, không giữa cha và con ruột, không chặn trực tiếp giữa hạng mục lớn và công việc con, chưa tồn tại).
+2. Kiểm tra vòng lặp: Với liên kết chặn hoặc gây ra, Hệ thống tìm đường đi từ đích về nguồn trong các liên kết đã có. Sau đó, nếu có đường đi thì Hệ thống từ chối và báo chu trình.
+3. Lưu: Nếu không có đường đi, Hệ thống lưu một liên kết và ghi nhật ký ở cả hai công việc.
+4. Kết quả: Hệ thống hiển thị liên kết theo chiều tương ứng ở mỗi công việc và, với liên kết chặn, báo cho người thực hiện việc bị chặn. Quy trình kết thúc. Với liên kết trùng lặp, Hệ thống còn chuyển việc nguồn sang Hoàn thành hoặc tạo yêu cầu "Tạm hoàn thành".
+
+**- Chuyển trạng thái và xác nhận hoàn thành (UC10)**
+
+**Hình 3.7: Sơ đồ tuần tự chuyển trạng thái và xác nhận hoàn thành**
+
+```mermaid
+sequenceDiagram
+    actor TV as Thành viên dự án
+    actor QT as Quản trị viên dự án
+    participant GD as Frontend
+    participant CV as work-service
+    participant HM as Outbox
+    TV->>GD: Mở chi tiết công việc hoặc kéo thẻ sang cột khác
+    GD->>CV: Lấy các bước chuyển hợp lệ
+    CV-->>GD: Danh sách bước chuyển đã lọc theo điều kiện
+    TV->>GD: Chọn bước chuyển
+    GD->>CV: Yêu cầu chuyển trạng thái
+    CV->>CV: Kiểm tra bộ kiểm tra, việc chặn, việc con, giới hạn việc đang làm
+    alt Đích là nhóm Hoàn thành và người dùng không phải quản trị viên
+        CV->>CV: Tạo yêu cầu Tạm hoàn thành, giữ nguyên trạng thái
+        CV->>HM: Ghi sự kiện báo quản trị viên
+        CV-->>GD: Đã gửi yêu cầu chờ xác nhận
+        QT->>GD: Xem danh sách chờ, chọn xác nhận hoặc từ chối
+        GD->>CV: Quyết định
+        CV->>CV: Xác nhận thì chạy lại bước chuyển, đổi trạng thái, ghi điểm đóng góp
+        CV->>HM: Ghi sự kiện báo người gửi
+    else Các trường hợp còn lại
+        CV->>CV: Đổi trạng thái, chạy việc sau chuyển, ghi nhật ký
+        CV->>CV: Lan truyền lên việc cha, ghi sổ đóng góp
+        CV->>HM: Ghi sự kiện thông báo
+        CV-->>GD: Trạng thái mới
+    end
+```
+
+Quy trình chuyển trạng thái và xác nhận hoàn thành:
+
+1. Chọn bước chuyển: Thành viên mở chi tiết công việc hoặc kéo thẻ sang cột khác. Sau đó, Hệ thống liệt kê các bước chuyển hợp lệ từ trạng thái hiện tại, đã lọc theo điều kiện.
+2. Kiểm tra: Thành viên chọn một bước. Sau đó, Hệ thống kiểm tra bộ kiểm tra, việc chặn chưa xong, việc con chưa xong, giới hạn việc đang làm của cột đích.
+3. Đổi trạng thái: Nếu đích không phải nhóm Hoàn thành, hoặc người dùng là quản trị viên, Hệ thống đổi trạng thái, chạy các việc tự động sau chuyển, ghi nhật ký, lan truyền lên việc cha, ghi sổ đóng góp và gửi thông báo.
+4. Tạm hoàn thành: Nếu đích là nhóm Hoàn thành và người dùng không phải quản trị viên, Hệ thống tạo yêu cầu "Tạm hoàn thành", giữ nguyên trạng thái và báo cho quản trị viên.
+5. Xác nhận: Quản trị viên xem danh sách chờ và chọn Xác nhận hoặc Từ chối. Sau đó, Hệ thống với Xác nhận thì chạy lại bước chuyển, đưa việc sang Hoàn thành và ghi điểm cho người thực hiện; với Từ chối thì giữ nguyên công việc.
+6. Kết quả: Hệ thống báo cho người gửi yêu cầu. Quy trình kết thúc.
+
+**- Bảng tiến độ và báo cáo tiến độ (UC13)**
+
+**Hình 3.8: Sơ đồ tuần tự bảng tiến độ và báo cáo tiến độ**
+
+```mermaid
+sequenceDiagram
+    actor TV as Thành viên dự án
+    participant GD as Frontend
+    participant CV as work-service
+    TV->>GD: Mở bảng tiến độ
+    GD->>CV: Lấy dữ liệu bảng
+    CV-->>GD: Cột, thẻ, số việc từng cột so với giới hạn
+    TV->>GD: Kéo thẻ sang cột khác
+    GD->>CV: Yêu cầu kéo thẻ
+    CV->>CV: Thực hiện bước chuyển trạng thái, kiểm tra giới hạn việc đang làm
+    CV-->>GD: Thẻ ở cột mới hoặc báo lý do từ chối
+    TV->>GD: Mở báo cáo, chọn giai đoạn
+    GD->>CV: Lấy biểu đồ tiến độ, năng suất, luồng trạng thái
+    alt Giai đoạn đã đóng
+        CV->>CV: Đọc số liệu từ bản chụp lưu lúc đóng
+    else Giai đoạn đang chạy
+        CV->>CV: Phát lại nhật ký thay đổi để dựng số liệu theo ngày
+    end
+    CV-->>GD: Dữ liệu các biểu đồ
+```
+
+Quy trình bảng tiến độ và báo cáo tiến độ:
+
+1. Mở bảng: Thành viên mở bảng tiến độ. Sau đó, Hệ thống hiển thị thẻ theo cột, số việc từng cột so với giới hạn và thanh đếm ngược của giai đoạn.
+2. Kéo thẻ: Thành viên kéo thẻ. Sau đó, Hệ thống đổi thứ tự nếu cùng cột, hoặc thực hiện bước chuyển trạng thái nếu sang cột khác; không hợp lệ thì thẻ trượt về chỗ cũ kèm lý do.
+3. Mở báo cáo: Thành viên mở trang báo cáo và chọn giai đoạn hoặc toàn bộ quá trình. Sau đó, Hệ thống xác định nguồn số liệu.
+4. Dựng số liệu: Giai đoạn đã đóng thì Hệ thống đọc từ bản chụp; giai đoạn đang chạy thì Hệ thống phát lại nhật ký thay đổi.
+5. Kết quả: Hệ thống hiển thị biểu đồ tiến độ chu kỳ, năng suất làm việc, biểu đồ luồng trạng thái. Sau đó, quy trình kết thúc.
+
+**- Nhận thông báo (UC14)**
+
+**Hình 3.9: Sơ đồ tuần tự nhận thông báo**
+
+```mermaid
+sequenceDiagram
+    actor ND as Người dùng
+    participant CV as work-service
+    participant HM as Outbox
+    participant KF as Kafka
+    participant TB as notification-service
+    participant GD as Browser
+    CV->>HM: Lưu nghiệp vụ và ghi sự kiện cùng giao dịch
+    HM->>KF: Tiến trình nền đẩy sự kiện mỗi giây
+    KF->>TB: Giao sự kiện
+    TB->>TB: Bỏ người thao tác, áp cài đặt cá nhân, dựng nội dung, lưu và bỏ trùng
+    TB-->>GD: Đẩy thông báo qua kênh thời gian thực
+    TB-->>ND: Thư điện tử với việc quan trọng
+    ND->>GD: Mở bảng thông báo, bấm vào một thông báo
+    GD->>TB: Đánh dấu đã đọc
+    GD-->>ND: Chuyển tới công việc hoặc trang liên quan
+```
+
+Quy trình nhận thông báo:
+
+1. Phát sinh sự kiện: Một thao tác (giao việc, nhắc tên, lời mời, yêu cầu hoàn thành…) xảy ra. Sau đó, Hệ thống ghi sự kiện cùng giao dịch với nghiệp vụ.
+2. Vận chuyển: Một tiến trình nền đẩy sự kiện lên Kafka mỗi giây. Sau đó, Dịch vụ thông báo nhận sự kiện.
+3. Xử lý: Dịch vụ thông báo bỏ người thao tác, áp cài đặt cá nhân, dựng nội dung tiếng Việt, lưu thông báo và bỏ sự kiện trùng.
+4. Đẩy tới người dùng: Hệ thống đẩy thông báo tới trình duyệt người nhận, số trên chuông tăng ngay; với việc quan trọng gửi thêm thư điện tử.
+5. Đọc thông báo: Người dùng mở bảng và bấm vào thông báo. Sau đó, Hệ thống đánh dấu đã đọc và chuyển tới công việc liên quan; quy trình kết thúc. Thông báo "Cần xử lý" tự chuyển sang "Đã xử lý" khi việc được giải quyết.
+
+**- Tích hợp GitHub (UC15)**
+
+**Hình 3.10: Sơ đồ tuần tự tích hợp GitHub**
 
 ```mermaid
 sequenceDiagram
     actor QT as Quản trị viên dự án
-    participant HT as Hệ thống
-    participant TB as Dịch vụ thông báo
-    QT->>HT: Hoàn tất giai đoạn, chọn nơi chuyển việc dang dở
-    HT->>HT: Phân loại việc xong, chưa xong theo nhóm trạng thái
-    HT->>HT: Lưu bản chụp số liệu
-    HT->>HT: Chuyển việc chưa xong, giữ nguyên việc đã xong
-    HT->>HT: Đóng giai đoạn, đóng băng số liệu đóng góp
-    HT->>TB: Sự kiện giai đoạn hoàn tất
-    HT-->>QT: Kết quả
-```
-
-**Hình 3.4: Luồng tạo dự án từ mẫu**
-
-```mermaid
-sequenceDiagram
-    actor ND as Người dùng
-    participant GD as Giao diện
-    participant HT as Dịch vụ công việc
-    ND->>GD: Xem trước mẫu, tùy chỉnh nhanh
-    ND->>GD: Nhập tên, mã, ngày bắt đầu
-    GD->>HT: Một yêu cầu gồm mẫu, thông tin dự án, các tùy chỉnh
-    HT->>HT: Kiểm tra toàn vẹn mẫu
-    HT->>HT: Nhân bản, áp tùy chỉnh, dời mốc thời gian
-    HT->>HT: Kiểm tra toàn vẹn kết quả
-    HT-->>GD: Dự án mới
-```
-
-**Hình 3.5: Luồng phát và nhận thông báo**
-
-```mermaid
-sequenceDiagram
-    actor ND as Người dùng
-    participant CV as Dịch vụ công việc
-    participant HM as Hộp thư sự kiện
-    participant KF as Kafka
-    participant TB as Dịch vụ thông báo
-    participant TD as Trình duyệt người nhận
-    ND->>CV: Thao tác nghiệp vụ, ví dụ giao việc
-    CV->>HM: Lưu dữ liệu và ghi sự kiện cùng giao dịch
-    HM->>KF: Tiến trình nền đẩy sự kiện mỗi giây
-    KF->>TB: Giao sự kiện
-    TB->>TB: Lưu thông báo, bỏ trùng
-    TB-->>TD: Đẩy qua WebSocket, chuông tăng số
-    TB-->>TD: Thư điện tử với việc quan trọng
-```
-
-**Hình 3.6: Luồng xét quyền trong không gian làm việc và dự án**
-
-```mermaid
-flowchart TD
-    A["Yêu cầu thao tác"] --> B{"Quản trị hệ thống?"}
-    B -- "Có" --> OK["Cho phép"]
-    B -- "Không" --> C{"Là thành viên không gian làm việc?"}
-    C -- "Không" --> N["Không tìm thấy"]
-    C -- "Có" --> D{"Thao tác ở cấp không gian?"}
-    D -- "Có" --> E{"Đủ bậc tối thiểu?"}
-    E -- "Có" --> OK
-    E -- "Không" --> F["Từ chối"]
-    D -- "Không, ở cấp dự án" --> G{"Trưởng dự án, người tạo, hoặc<br/>Quản trị viên, Chủ sở hữu không gian?"}
-    G -- "Có" --> OK
-    G -- "Không" --> H{"Có vai trò trong dự án<br/>và vai trò đó có quyền?"}
-    H -- "Có" --> OK
-    H -- "Không" --> F
-```
-
-**Hình 3.7: Luồng kiểm tra khi cấu hình loại công việc và trạng thái**
-
-```mermaid
-flowchart TD
-    A["Quản trị viên sửa hoặc xóa<br/>loại công việc hoặc trạng thái"] --> B{"Tên hoặc mã bị trùng?"}
-    B -- "Có" --> X["Từ chối"]
-    B -- "Không" --> C{"Là loại hoặc trạng thái cuối cùng<br/>của mức hoặc nhóm?"}
-    C -- "Có" --> X
-    C -- "Không" --> D{"Đang có công việc dùng?"}
-    D -- "Có" --> X
-    D -- "Không" --> E["Cho phép<br/>xóa kèm bước chuyển và liên kết cột liên quan"]
-```
-
-**Hình 3.8: Luồng tính điểm đóng góp**
-
-```mermaid
-flowchart TD
-    A["Công việc chuyển vào nhóm Hoàn thành"] --> B{"Có người thực hiện?"}
-    B -- "Không" --> W["Chưa ghi điểm, cảnh báo trên giao diện"]
-    B -- "Có" --> C{"Có việc con?"}
-    C -- "Có" --> P0["Điểm gốc = 0"]
-    C -- "Không" --> P1["Điểm gốc = điểm ước lượng"]
-    P0 --> D{"Trễ hạn tính theo ngày gửi yêu cầu?"}
-    P1 --> D
-    D -- "Không" --> G["Ghi điểm gốc"]
-    D -- "Có" --> H["Trừ 10 phần trăm mỗi ngày trễ, tối đa 50 phần trăm"]
-    H --> G
-    G --> S["Thêm một dòng vào sổ ghi công"]
-```
-
-**Hình 3.9: Luồng GitHub khi có yêu cầu hợp nhất**
-
-```mermaid
-sequenceDiagram
     actor LT as Lập trình viên
+    participant GD as Frontend
+    participant CV as work-service
     participant GH as GitHub
-    participant HT as Hệ thống
-    LT->>GH: Mở yêu cầu hợp nhất, tên nhánh chứa MOC-12
-    GH->>HT: Sự kiện yêu cầu hợp nhất, kèm chữ ký
-    HT->>HT: Xác thực chữ ký, nhận ra mã MOC-12
-    HT->>HT: Gắn yêu cầu hợp nhất vào công việc
-    HT->>HT: Chuyển sang đang xem xét qua máy trạng thái
+    QT->>GD: Bấm kết nối với GitHub
+    GD->>CV: Xin địa chỉ cấp quyền
+    CV-->>GD: Địa chỉ kèm tham số trao đổi được ký
+    GD->>GH: Chuyển sang trang cấp quyền
+    GH-->>GD: Quay về kèm mã
+    GD->>CV: Gửi mã và tham số trao đổi
+    CV->>CV: Kiểm tra tham số, lưu token đã mã hóa
+    QT->>GD: Chọn kho, nhánh chính, các tùy chọn tự động
+    GD->>CV: Kết nối kho
+    CV->>GH: Đăng ký kênh nhận sự kiện kèm khóa bí mật
+    LT->>GH: Mở yêu cầu hợp nhất, tên nhánh chứa mã công việc
+    GH->>CV: Sự kiện kèm chữ ký
+    CV->>CV: Xác thực chữ ký, nhận ra mã, gắn vào công việc
+    CV->>CV: Chuyển công việc sang đang xem xét qua máy trạng thái
     LT->>GH: Gộp yêu cầu, mô tả có từ khóa đóng việc
-    GH->>HT: Sự kiện đã gộp
-    HT->>HT: Có từ khóa thì chuyển sang Hoàn thành, theo quy tắc xác nhận
+    GH->>CV: Sự kiện đã gộp
+    CV->>CV: Chuyển công việc sang Hoàn thành theo quy tắc xác nhận
+    CV->>GH: Công việc hoàn thành thì đóng Issue tương ứng
 ```
+
+Quy trình tích hợp GitHub:
+
+1. Cấp quyền: Quản trị viên bấm kết nối với GitHub. Sau đó, Hệ thống chuyển sang trang cấp quyền kèm tham số trao đổi được ký.
+2. Lưu token: GitHub trả về mã. Sau đó, Hệ thống kiểm tra tham số, đổi lấy token và lưu đã mã hóa.
+3. Chọn kho: Quản trị viên chọn kho, nhánh chính và các tùy chọn tự động. Sau đó, Hệ thống đăng ký kênh nhận sự kiện kèm khóa bí mật và có thể đồng bộ các Issue đang mở.
+4. Mở yêu cầu hợp nhất: Lập trình viên mở yêu cầu hợp nhất có mã công việc. Sau đó, Hệ thống xác thực chữ ký, gắn yêu cầu vào công việc và chuyển sang đang xem xét.
+5. Gộp: Lập trình viên gộp yêu cầu vào nhánh chính. Sau đó, nếu mô tả có từ khóa đóng việc thì Hệ thống chuyển công việc sang Hoàn thành theo quy tắc xác nhận; nếu không thì chỉ giữ liên kết.
+6. Kết quả: Công việc hoàn thành thì Hệ thống đóng Issue tương ứng trên GitHub. Quy trình kết thúc.
 
 ## 3.3. Thiết kế hệ thống
 
@@ -387,7 +562,7 @@ sequenceDiagram
 
 Hệ thống theo kiến trúc Microservice: giao diện, cổng giao tiếp API, bốn dịch vụ nghiệp vụ và hạ tầng dùng chung.
 
-**Hình 3.10: Tổng quan kiến trúc hệ thống**
+**Hình 3.11: Tổng quan kiến trúc hệ thống**
 
 ```mermaid
 flowchart TD
@@ -438,7 +613,7 @@ Các dịch vụ giao tiếp theo hai cách. **Đồng bộ:** dịch vụ công
 
 Các sơ đồ dưới đây thể hiện thực thể chính và quan hệ theo đúng các giải pháp ở Chương 2: dự án và công việc, giai đoạn và đóng góp, phân quyền, rồi mẫu dự án, thông báo và GitHub.
 
-**Hình 3.11: Sơ đồ lớp: dự án, công việc, loại, trạng thái, quy trình**
+**Hình 3.12: Sơ đồ lớp: dự án, công việc, loại, trạng thái, quy trình**
 
 ```mermaid
 classDiagram
@@ -501,7 +676,7 @@ classDiagram
     CongViec "*" --> "0..1" PhienBan
 ```
 
-**Hình 3.12: Sơ đồ lớp: giai đoạn, bảng tiến độ, hoàn thành, đóng góp**
+**Hình 3.13: Sơ đồ lớp: giai đoạn, bảng tiến độ, hoàn thành, đóng góp**
 
 ```mermaid
 classDiagram
@@ -555,7 +730,7 @@ classDiagram
     CongViec "1" --> "*" SoGhiCong
 ```
 
-**Hình 3.13: Sơ đồ lớp: không gian làm việc, phân quyền, lời mời**
+**Hình 3.14: Sơ đồ lớp: không gian làm việc, phân quyền, lời mời**
 
 ```mermaid
 classDiagram
@@ -590,7 +765,7 @@ classDiagram
     DuAn "1" --> "*" LoiMoi
 ```
 
-**Hình 3.14: Sơ đồ lớp: mẫu dự án, thông báo, GitHub**
+**Hình 3.15: Sơ đồ lớp: mẫu dự án, thông báo, GitHub**
 
 ```mermaid
 classDiagram
@@ -653,7 +828,7 @@ Hệ thống dùng một cơ sở dữ liệu PostgreSQL chung; mỗi dịch v�
 | Dịch vụ công việc | Dự án; vai trò, bảng quyền, phân vai, lời mời dự án; công việc, loại, liên kết, bình luận, tệp đính kèm, nhật ký, nhãn, thành phần, phiên bản, trường tùy chỉnh, bộ lọc đã lưu; trạng thái, quy trình, bước chuyển, sơ đồ quy trình; giai đoạn, bảng tiến độ, cột, phân làn, bản chụp báo cáo; yêu cầu hoàn thành, sổ ghi công, bản chụp đóng góp; lịch sử nhân bản; tài khoản và kho GitHub, liên kết GitHub; hộp thư sự kiện |
 | Dịch vụ thông báo | Thông báo; cài đặt thông báo; dự án bị tắt tiếng |
 
-**Hình 3.15: Sơ đồ thực thể và quan hệ của dịch vụ công việc**
+**Hình 3.16: Sơ đồ thực thể và quan hệ của dịch vụ công việc**
 
 ```mermaid
 erDiagram
@@ -774,7 +949,7 @@ Việc đẩy thông báo xuống trình duyệt dùng WebSocket với giao th�
 
 Giao diện là ứng dụng một trang, điều hướng như sau:
 
-**Hình 3.16: Sơ đồ điều hướng màn hình**
+**Hình 3.17: Sơ đồ điều hướng màn hình**
 
 ```mermaid
 flowchart TD

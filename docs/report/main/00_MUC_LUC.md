@@ -108,7 +108,6 @@
 - 3.1.5. Một số Use Case tính năng chính
 
 ### 3.2. Phân tích hệ thống
-- 3.2.1. Phân tích luồng nghiệp vụ chính
 
 ### 3.3. Thiết kế hệ thống
 - 3.3.1. Thiết kế kiến trúc hệ thống
